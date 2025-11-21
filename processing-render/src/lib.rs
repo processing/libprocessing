@@ -226,7 +226,7 @@ pub fn create_surface(
             },
             handle_wrapper,
             CommandBuffer::default(),
-            // this doesn't do anything but makes it easier to fetch the render layer for
+            // this doesn't do anything but makes it easier to fetch the processing-render layer for
             // meshes to be drawn to this window
             render_layer.clone(),
         ));
@@ -388,7 +388,7 @@ pub fn flush(window_entity: Entity) -> Result<()> {
 }
 
 pub fn end_draw(window_entity: Entity) -> Result<()> {
-    // since we are ending the draw, set the camera to write to the output render target
+    // since we are ending the draw, set the camera to write to the output processing-render target
     app_mut(|app| {
         camera_mut!(app, window_entity).output_mode = CameraOutputMode::Write {
             blend_state: None,

@@ -8,7 +8,7 @@ name = "processing"
 crate-type = ["cdylib"]
 
 [dependencies]
-renderer = { path = "../render" }
+renderer = { path = "../processing-render" }
 bevy = { workspace = true }
 
 [build-dependencies]
