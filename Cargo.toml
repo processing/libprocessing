@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["ffi","renderer"]
+members = ["ffi", "render"]
 
 [workspace.dependencies]
 bevy = { version = "0.17", no-default-features = true, features = [

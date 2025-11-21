@@ -1,5 +1,5 @@
 [package]
-name = "ffi"
+name = "processing-ffi"
 version = "0.1.0"
 edition = "2024"
 
@@ -8,7 +8,7 @@ name = "processing"
 crate-type = ["cdylib"]
 
 [dependencies]
-renderer = { path = "../renderer" }
+renderer = { path = "../render" }
 bevy = { workspace = true }
 
 [build-dependencies]
