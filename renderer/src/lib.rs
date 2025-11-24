@@ -182,10 +182,20 @@ pub fn create_surface(
     let (raw_window_handle, raw_display_handle) = {
         use raw_window_handle::{WaylandDisplayHandle, WaylandWindowHandle};
 
-        let window_handle_ptr = unsafe { NonNull::new_unchecked(window_handle as *mut c_void) };
+        if window_handle == 0 {
+            return Err(error::ProcessingError::HandleError(
+                HandleError::Unavailable,
+            ));
+        }
+        let window_handle_ptr = NonNull::new(window_handle as *mut c_void).unwrap();
         let window = WaylandWindowHandle::new(window_handle_ptr);
 
-        let display_handle_ptr = unsafe { NonNull::new_unchecked(display_handle as *mut c_void) };
+        if display_handle == 0 {
+            return Err(error::ProcessingError::HandleError(
+                HandleError::Unavailable,
+            ));
+        }
+        let display_handle_ptr = NonNull::new(display_handle as *mut c_void).unwrap();
         let display = WaylandDisplayHandle::new(display_handle_ptr);
 
         (
