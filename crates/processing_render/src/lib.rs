@@ -448,7 +448,7 @@ pub fn flush(window_entity: Entity) -> Result<()> {
 }
 
 pub fn end_draw(window_entity: Entity) -> Result<()> {
-    // since we are ending the draw, set the camera to write to the output processing_render target
+    // since we are ending the draw, set the camera to write to the output render target
     app_mut(|app| {
         camera_mut!(app, window_entity).output_mode = CameraOutputMode::Write {
             blend_state: None,
