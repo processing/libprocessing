@@ -4,7 +4,7 @@ use std::{
     panic,
 };
 
-use renderer::error::ProcessingError;
+use processing::prelude::error::ProcessingError;
 
 thread_local! {
     static LAST_ERROR: RefCell<Option<CString>> = RefCell::new(None);

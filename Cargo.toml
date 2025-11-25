@@ -1,9 +1,30 @@
+[package]
+name = "processing"
+version = "0.1.0"
+edition = "2024"
+
 [workspace]
 resolver = "3"
-members = ["processing-ffi", "processing-render"]
+members = ["crates/*"]
 
 [workspace.dependencies]
 bevy = { version = "0.17", no-default-features = true, features = [
     "bevy_render",
     "bevy_color",
 ] }
+processing = { path = "." }
+processing_render = { path = "crates/processing_render" }
+
+[dependencies]
+bevy = { workspace = true }
+processing_render = { workspace = true }
+
+[dev-dependencies]
+glfw = "0.60"
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+glfw = { version = "0.60", features = ["wayland"] }
+
+[[example]]
+name = "rectangle"
+path = "examples/rectangle.rs"
