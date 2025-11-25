@@ -47,7 +47,7 @@ impl GlfwContext {
 
     #[cfg(target_os = "linux")]
     pub fn get_display(&self) -> u64 {
-        self.window.get_wayland_display() as u64
+        self.glfw.get_wayland_display() as u64
     }
 
     pub fn poll_events(&mut self) -> bool {
