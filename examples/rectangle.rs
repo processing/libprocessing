@@ -22,7 +22,8 @@ fn sketch() -> error::Result<()> {
     init()?;
 
     let window_handle = glfw_ctx.get_window();
-    let surface = create_surface(window_handle, 400, 400, 1.0)?;
+    let display_handle = glfw_ctx.get_display();
+    let surface = create_surface(window_handle, display_handle, 400, 400, 1.0)?;
 
     while glfw_ctx.poll_events() {
         begin_draw(surface)?;

@@ -40,6 +40,11 @@ impl GlfwContext {
         self.window.get_wayland_window() as u64
     }
 
+    #[cfg(not(target_os = "linux"))]
+    pub fn get_display(&self) -> u64 {
+        0
+    }
+
     #[cfg(target_os = "linux")]
     pub fn get_display(&self) -> u64 {
         self.window.get_wayland_display() as u64

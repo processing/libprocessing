@@ -378,7 +378,7 @@ pub fn init() -> Result<()> {
                 DefaultPlugins
                     .build()
                     .disable::<bevy::log::LogPlugin>()
-                    .disable::<bevy::winit::WinitPlugin>()  // Disable winit completely for GLFW/FFI mode
+                    .disable::<bevy::winit::WinitPlugin>()
                     .disable::<bevy::render::pipelined_rendering::PipelinedRenderingPlugin>()
                     .set(WindowPlugin {
                         primary_window: None,
