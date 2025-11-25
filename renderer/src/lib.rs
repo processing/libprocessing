@@ -1,7 +1,7 @@
 pub mod error;
 pub mod render;
 
-use std::{cell::RefCell, num::NonZero, sync::OnceLock};
+use std::{cell::RefCell, ffi::c_void, num::NonZero, ptr::NonNull, sync::OnceLock};
 
 use bevy::{
     app::{App, AppExit},
@@ -95,6 +95,7 @@ impl HasDisplayHandle for GlfwWindow {
 /// actually create the surface.
 pub fn create_surface(
     window_handle: u64,
+    display_handle: u64,
     width: u32,
     height: u32,
     scale_factor: f32,
@@ -132,7 +133,7 @@ pub fn create_surface(
             }
         };
 
-        let window = AppKitWindowHandle::new(std::ptr::NonNull::new(ns_view_ptr).unwrap());
+        let window = AppKitWindowHandle::new(NonNull::new(ns_view_ptr).unwrap());
         let display = AppKitDisplayHandle::new();
         (
             RawWindowHandle::AppKit(window),
@@ -178,8 +179,30 @@ pub fn create_surface(
     };
 
     #[cfg(target_os = "linux")]
-    let (raw_window_handle, raw_display_handle) =
-        { todo!("implement linux raw window handle conversion") };
+    let (raw_window_handle, raw_display_handle) = {
+        use raw_window_handle::{WaylandDisplayHandle, WaylandWindowHandle};
+
+        if window_handle == 0 {
+            return Err(error::ProcessingError::HandleError(
+                HandleError::Unavailable,
+            ));
+        }
+        let window_handle_ptr = NonNull::new(window_handle as *mut c_void).unwrap();
+        let window = WaylandWindowHandle::new(window_handle_ptr);
+
+        if display_handle == 0 {
+            return Err(error::ProcessingError::HandleError(
+                HandleError::Unavailable,
+            ));
+        }
+        let display_handle_ptr = NonNull::new(display_handle as *mut c_void).unwrap();
+        let display = WaylandDisplayHandle::new(display_handle_ptr);
+
+        (
+            RawWindowHandle::Wayland(window),
+            RawDisplayHandle::Wayland(display),
+        )
+    };
 
     let glfw_window = GlfwWindow {
         window_handle: raw_window_handle,
