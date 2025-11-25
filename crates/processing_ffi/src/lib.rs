@@ -1,5 +1,5 @@
 use bevy::prelude::Entity;
-use renderer::render::command::DrawCommand;
+use renderer::command::DrawCommand;
 
 use crate::color::Color;
 
