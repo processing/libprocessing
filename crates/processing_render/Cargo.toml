@@ -1,5 +1,5 @@
 [package]
-name = "renderer"
+name = "processing_render"
 version = "0.1.0"
 edition = "2024"
 

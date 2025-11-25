@@ -6,8 +6,9 @@ use std::{cell::RefCell, ffi::c_void, num::NonZero, ptr::NonNull, sync::OnceLock
 use bevy::{
     app::{App, AppExit},
     asset::AssetEventSystems,
-    camera::{CameraOutputMode, RenderTarget, visibility::RenderLayers},
+    camera::{CameraOutputMode, CameraProjection, RenderTarget, visibility::RenderLayers},
     log::tracing_subscriber,
+    math::Vec3A,
     prelude::*,
     window::{RawHandleWrapper, Window, WindowRef, WindowResolution, WindowWrapper},
 };
@@ -26,7 +27,7 @@ use crate::{
 static IS_INIT: OnceLock<()> = OnceLock::new();
 
 thread_local! {
-    static APP: OnceLock<RefCell<App>> = OnceLock::default();
+    static APP: RefCell<Option<App>> = RefCell::new(None);
 }
 
 #[derive(Resource, Default)]
@@ -35,24 +36,95 @@ struct WindowCount(u32);
 #[derive(Component)]
 pub struct Flush;
 
+/// Custom orthographic projection for Processing's coordinate system.
+/// Origin at top-left, Y-axis down, in pixel units (aka screen space).
+#[derive(Debug, Clone, Reflect)]
+#[reflect(Default)]
+pub struct ProcessingProjection {
+    pub width: f32,
+    pub height: f32,
+    pub near: f32,
+    pub far: f32,
+}
+
+impl Default for ProcessingProjection {
+    fn default() -> Self {
+        Self {
+            width: 1.0,
+            height: 1.0,
+            near: 0.0,
+            far: 1000.0,
+        }
+    }
+}
+
+impl CameraProjection for ProcessingProjection {
+    fn get_clip_from_view(&self) -> Mat4 {
+        Mat4::orthographic_rh(
+            0.0,
+            self.width,
+            self.height, // bottom = height
+            0.0, // top = 0
+            self.near,
+            self.far,
+        )
+    }
+
+    fn get_clip_from_view_for_sub(&self, _sub_view: &bevy::camera::SubCameraView) -> Mat4 {
+        // TODO: implement sub-view support if needed (probably not)
+        self.get_clip_from_view()
+    }
+
+    fn update(&mut self, width: f32, height: f32) {
+        self.width = width;
+        self.height = height;
+    }
+
+    fn far(&self) -> f32 {
+        self.far
+    }
+
+    fn get_frustum_corners(&self, z_near: f32, z_far: f32) -> [Vec3A; 8] {
+        // order: bottom-right, top-right, top-left, bottom-left for near, then far
+        let near_center = Vec3A::new(self.width / 2.0, self.height / 2.0, z_near);
+        let far_center = Vec3A::new(self.width / 2.0, self.height / 2.0, z_far);
+
+        let half_width = self.width / 2.0;
+        let half_height = self.height / 2.0;
+
+        [
+            // near plane
+            near_center + Vec3A::new(half_width, half_height, 0.0),   // bottom-right
+            near_center + Vec3A::new(half_width, -half_height, 0.0),  // top-right
+            near_center + Vec3A::new(-half_width, -half_height, 0.0), // top-left
+            near_center + Vec3A::new(-half_width, half_height, 0.0),  // bottom-left
+            // far plane
+            far_center + Vec3A::new(half_width, half_height, 0.0),    // bottom-right
+            far_center + Vec3A::new(half_width, -half_height, 0.0),   // top-right
+            far_center + Vec3A::new(-half_width, -half_height, 0.0),  // top-left
+            far_center + Vec3A::new(-half_width, half_height, 0.0),   // bottom-left
+        ]
+    }
+}
+
 fn app<T>(cb: impl FnOnce(&App) -> Result<T>) -> Result<T> {
-    let res = APP.with(|app_lock| {
-        let app = app_lock
-            .get()
-            .ok_or_else(|| error::ProcessingError::AppAccess)?
-            .borrow();
-        cb(&app)
+    let res = APP.with(|app_cell| {
+        let app_borrow = app_cell.borrow();
+        let app = app_borrow
+            .as_ref()
+            .ok_or_else(|| error::ProcessingError::AppAccess)?;
+        cb(app)
     })?;
     Ok(res)
 }
 
 fn app_mut<T>(cb: impl FnOnce(&mut App) -> Result<T>) -> Result<T> {
-    let res = APP.with(|app_lock| {
-        let mut app = app_lock
-            .get()
-            .ok_or_else(|| error::ProcessingError::AppAccess)?
-            .borrow_mut();
-        cb(&mut app)
+    let res = APP.with(|app_cell| {
+        let mut app_borrow = app_cell.borrow_mut();
+        let app = app_borrow
+            .as_mut()
+            .ok_or_else(|| error::ProcessingError::AppAccess)?;
+        cb(app)
     })?;
     Ok(res)
 }
@@ -99,7 +171,7 @@ pub fn create_surface(
     width: u32,
     height: u32,
     scale_factor: f32,
-) -> Result<u64> {
+) -> Result<Entity> {
     #[cfg(target_os = "macos")]
     let (raw_window_handle, raw_display_handle) = {
         use raw_window_handle::{AppKitDisplayHandle, AppKitWindowHandle};
@@ -237,36 +309,24 @@ pub fn create_surface(
             // - origin at top-left
             // - x increases to the right, y increases downward
             // - coordinate units are in screen pixels
-            let half_width = width as f32 / 2.0;
-            let half_height = height as f32 / 2.0;
-
-            let projection = OrthographicProjection {
-                near: -1000.0,
-                far: 1000.0,
-                viewport_origin: Vec2::new(0.0, 0.0), // top left
-                scaling_mode: bevy::camera::ScalingMode::Fixed {
-                    width: width as f32,
-                    height: height as f32,
-                },
-                scale: 1.0,
-                ..OrthographicProjection::default_3d()
-            };
-
             parent.spawn((
                 Camera3d::default(),
                 Camera {
                     target: RenderTarget::Window(WindowRef::Entity(window_entity)),
                     ..default()
                 },
-                Projection::Orthographic(projection),
-                // position camera to match coordinate system
-                Transform::from_xyz(half_width, -half_height, 999.0)
-                    .looking_at(Vec3::new(half_width, -half_height, 0.0), Vec3::Y),
+                Projection::custom(ProcessingProjection {
+                    width: width as f32,
+                    height: height as f32,
+                    near: 0.0,
+                    far: 1000.0,
+                }),
+                Transform::from_xyz(0.0, 0.0, 999.9),
                 render_layer,
             ));
         });
 
-        Ok(window_entity.to_bits())
+        Ok(window_entity)
     })?;
 
     Ok(entity_id)
@@ -300,7 +360,7 @@ pub fn resize_surface(window_entity: Entity, width: u32, height: u32) -> Result<
 pub fn init() -> Result<()> {
     setup_tracing()?;
     let is_init = IS_INIT.get().is_some();
-    let thread_has_app = APP.with(|app_lock| app_lock.get().is_some());
+    let thread_has_app = APP.with(|app_cell| app_cell.borrow().is_some());
     if is_init && !thread_has_app {
         return Err(error::ProcessingError::AppAccess);
     }
@@ -309,8 +369,8 @@ pub fn init() -> Result<()> {
         return Ok(());
     }
 
-    APP.with(|app_lock| {
-        app_lock.get_or_init(|| {
+    APP.with(|app_cell| {
+        if app_cell.borrow().is_none() {
             IS_INIT.get_or_init(|| ());
             let mut app = App::new();
 
@@ -339,8 +399,8 @@ pub fn init() -> Result<()> {
             // so we don't need to call `app.run()`
             app.finish();
             app.cleanup();
-            RefCell::new(app)
-        });
+            *app_cell.borrow_mut() = Some(app);
+        }
     });
 
     Ok(())
@@ -416,7 +476,17 @@ pub fn exit(exit_code: u8) -> Result<()> {
         // one final update to process the exit message
         app.update();
         Ok(())
-    })
+    })?;
+
+
+    // we need to drop the app in a deterministic manner to ensure resourcse are cleaned up
+    // otherwise we'll get wgpu graphics backend errors on exit
+    APP.with(|app_cell| {
+        let app = app_cell.borrow_mut().take();
+        drop(app);
+    });
+
+    Ok(())
 }
 
 pub fn background_color(window_entity: Entity, color: Color) -> Result<()> {
