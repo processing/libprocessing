@@ -14,4 +14,10 @@ pub enum ProcessingError {
     HandleError(#[from] raw_window_handle::HandleError),
     #[error("Invalid window handle provided")]
     InvalidWindowHandle,
+    #[error("Image not found")]
+    ImageNotFound,
+    #[error("Unsupported texture format")]
+    UnsupportedTextureFormat,
+    #[error("Invalid argument: {0}")]
+    InvalidArgument(String),
 }

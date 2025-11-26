@@ -3992,6 +3992,8 @@ name = "processing_render"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "crossbeam-channel",
+ "half",
  "lyon",
  "objc2 0.6.3",
  "objc2-app-kit 0.3.2",

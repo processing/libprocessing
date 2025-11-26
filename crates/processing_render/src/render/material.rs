@@ -3,6 +3,7 @@ use bevy::{prelude::*, render::alpha::AlphaMode};
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct MaterialKey {
     pub transparent: bool,
+    pub background_image: Option<Handle<Image>>,
 }
 
 impl MaterialKey {
@@ -11,6 +12,7 @@ impl MaterialKey {
             base_color: Color::WHITE,
             unlit: true,
             cull_mode: None,
+            base_color_texture: self.background_image.clone(),
             alpha_mode: if self.transparent {
                 AlphaMode::Blend
             } else {

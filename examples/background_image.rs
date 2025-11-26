@@ -1,5 +1,6 @@
 mod glfw;
 
+use bevy::prelude::Color;
 use glfw::GlfwContext;
 use processing::prelude::*;
 use processing_render::render::command::DrawCommand;
@@ -24,20 +25,12 @@ fn sketch() -> error::Result<()> {
     let window_handle = glfw_ctx.get_window();
     let display_handle = glfw_ctx.get_display();
     let surface = surface_create(window_handle, display_handle, 400, 400, 1.0)?;
+    let image = image_load("images/logo.png")?;
 
     while glfw_ctx.poll_events() {
         begin_draw(surface)?;
 
-        record_command(
-            surface,
-            DrawCommand::Rect {
-                x: 10.0,
-                y: 10.0,
-                w: 100.0,
-                h: 100.0,
-                radii: [0.0, 0.0, 0.0, 0.0],
-            },
-        )?;
+        record_command(surface, DrawCommand::BackgroundImage(image))?;
 
         end_draw(surface)?;
     }
