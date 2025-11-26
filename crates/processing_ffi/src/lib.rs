@@ -1,5 +1,7 @@
-use bevy::prelude::Entity;
-use bevy::render::render_resource::{Extent3d, TextureFormat};
+use bevy::{
+    prelude::Entity,
+    render::render_resource::{Extent3d, TextureFormat},
+};
 use processing::prelude::*;
 
 use crate::color::Color;

@@ -2,7 +2,8 @@ pub mod error;
 pub mod image;
 pub mod render;
 
-use bevy::render::render_resource::{Extent3d, TextureFormat};
+use std::{cell::RefCell, ffi::c_void, num::NonZero, path::PathBuf, ptr::NonNull, sync::OnceLock};
+
 use bevy::{
     app::{App, AppExit},
     asset::AssetEventSystems,
@@ -10,6 +11,7 @@ use bevy::{
     log::tracing_subscriber,
     math::Vec3A,
     prelude::*,
+    render::render_resource::{Extent3d, TextureFormat},
     window::{RawHandleWrapper, Window, WindowRef, WindowResolution, WindowWrapper},
 };
 use raw_window_handle::{
@@ -17,8 +19,6 @@ use raw_window_handle::{
     RawWindowHandle, WindowHandle,
 };
 use render::{activate_cameras, clear_transient_meshes, flush_draw_commands};
-use std::path::PathBuf;
-use std::{cell::RefCell, ffi::c_void, num::NonZero, ptr::NonNull, sync::OnceLock};
 use tracing::debug;
 
 use crate::{

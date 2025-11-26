@@ -1,19 +1,29 @@
-use crate::error::{ProcessingError, Result};
-use bevy::asset::io::embedded::GetAssetServer;
-use bevy::asset::{RenderAssetUsages, handle_internal_asset_events, LoadState};
-use bevy::ecs::entity::EntityHashMap;
-use bevy::ecs::system::{RunSystemOnce, SystemState};
-use bevy::prelude::*;
-use bevy::render::render_asset::{AssetExtractionSystems, RenderAssets};
-use bevy::render::render_resource::{
-    Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, Extent3d, MapMode, PollType,
-    TexelCopyBufferInfo, TexelCopyBufferLayout, Texture, TextureDimension, TextureFormat,
-};
-use bevy::render::renderer::{RenderDevice, RenderQueue};
-use bevy::render::texture::GpuImage;
-use bevy::render::{Extract, ExtractSchedule, MainWorld};
-use half::f16;
 use std::path::PathBuf;
+
+use bevy::{
+    asset::{
+        LoadState, RenderAssetUsages, handle_internal_asset_events, io::embedded::GetAssetServer,
+    },
+    ecs::{
+        entity::EntityHashMap,
+        system::{RunSystemOnce, SystemState},
+    },
+    prelude::*,
+    render::{
+        Extract, ExtractSchedule, MainWorld,
+        render_asset::{AssetExtractionSystems, RenderAssets},
+        render_resource::{
+            Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, Extent3d, MapMode,
+            PollType, TexelCopyBufferInfo, TexelCopyBufferLayout, Texture, TextureDimension,
+            TextureFormat,
+        },
+        renderer::{RenderDevice, RenderQueue},
+        texture::GpuImage,
+    },
+};
+use half::f16;
+
+use crate::error::{ProcessingError, Result};
 
 pub struct PImagePlugin;
 
@@ -101,18 +111,14 @@ pub fn create(
 }
 
 pub fn load(world: &mut World, path: PathBuf) -> Result<Entity> {
-    fn load_inner(
-        In(path): In<PathBuf>,
-        world: &mut World,
-    ) -> Result<Entity> {
+    fn load_inner(In(path): In<PathBuf>, world: &mut World) -> Result<Entity> {
         let handle = world.get_asset_server().load(path);
         while let LoadState::Loading = world.get_asset_server().load_state(&handle) {
             world
                 .run_system_once(handle_internal_asset_events)
                 .expect("Failed to run internal asset events system");
         }
-        let images = world
-            .resource::<Assets<Image>>();
+        let images = world.resource::<Assets<Image>>();
         let image = images
             .get(&handle)
             .ok_or_else(|| ProcessingError::ImageNotFound)?;
@@ -308,4 +314,3 @@ pub fn destroy(world: &mut World, entity: Entity) -> Result<()> {
         .run_system_cached_with(destroy_inner, entity)
         .expect("Failed to run destroy system")
 }
-

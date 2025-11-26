@@ -1,7 +1,7 @@
 pub mod command;
+pub mod material;
 pub mod mesh_builder;
 pub mod primitive;
-pub mod material;
 
 use bevy::{
     camera::visibility::RenderLayers,
@@ -13,8 +13,7 @@ use command::{CommandBuffer, DrawCommand};
 use material::MaterialKey;
 use primitive::{TessellationMode, empty_mesh};
 
-use crate::{Flush, SurfaceSize, render::primitive::rect};
-use crate::image::PImage;
+use crate::{Flush, SurfaceSize, image::PImage, render::primitive::rect};
 
 #[derive(Component)]
 #[relationship(relationship_target = TransientMeshes)]
