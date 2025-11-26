@@ -100,12 +100,21 @@ fn simple_rect(mesh: &mut Mesh, x: f32, y: f32, w: f32, h: f32, color: Color) {
         }
     }
 
+    if let Some(VertexAttributeValues::Float32x2(uvs)) =
+        mesh.attribute_mut(Mesh::ATTRIBUTE_UV_0)
+    {
+        uvs.push([0.0, 0.0]); // tl 
+        uvs.push([1.0, 0.0]); // tr 
+        uvs.push([1.0, 1.0]); // br 
+        uvs.push([0.0, 1.0]); // bl 
+    }
+
     if let Some(Indices::U32(indices)) = mesh.indices_mut() {
-        indices.push(base_idx);
+        indices.push(base_idx + 0);
         indices.push(base_idx + 1);
         indices.push(base_idx + 2);
 
-        indices.push(base_idx);
+        indices.push(base_idx + 0);
         indices.push(base_idx + 2);
         indices.push(base_idx + 3);
     }

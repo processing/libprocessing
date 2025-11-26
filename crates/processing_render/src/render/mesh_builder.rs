@@ -45,6 +45,12 @@ impl<'a> MeshBuilder<'a> {
             normals.push([0.0, 0.0, 1.0]); // flat normal for 2d
         }
 
+        if let Some(VertexAttributeValues::Float32x2(uvs)) =
+            self.mesh.attribute_mut(Mesh::ATTRIBUTE_UV_0)
+        {
+            uvs.push([0.0, 0.0]);
+        }
+
         id
     }
 

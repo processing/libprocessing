@@ -26,7 +26,7 @@ pub extern "C" fn processing_init() {
 /// - window_handle is a valid GLFW window pointer.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_create_surface(
+pub extern "C" fn processing_surface_create(
     window_handle: u64,
     display_handle: u64,
     width: u32,
@@ -34,7 +34,7 @@ pub extern "C" fn processing_create_surface(
     scale_factor: f32,
 ) -> u64 {
     error::clear_error();
-    error::check(|| create_surface(window_handle, display_handle, width, height, scale_factor))
+    error::check(|| surface_create(window_handle, display_handle, width, height, scale_factor))
         .map(|e| e.to_bits())
         .unwrap_or(0)
 }
@@ -42,27 +42,27 @@ pub extern "C" fn processing_create_surface(
 /// Destroy the surface associated with the given window ID.
 ///
 /// SAFETY:
-/// - Init and create_surface have been called.
-/// - window_id is a valid ID returned from create_surface.
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_destroy_surface(window_id: u64) {
+pub extern "C" fn processing_surface_destroy(window_id: u64) {
     error::clear_error();
     let window_entity = Entity::from_bits(window_id);
-    error::check(|| destroy_surface(window_entity));
+    error::check(|| surface_destroy(window_entity));
 }
 
 /// Update window size when resized.
 ///
 /// SAFETY:
-/// - Init and create_surface have been called.
-/// - window_id is a valid ID returned from create_surface.
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_resize_surface(window_id: u64, width: u32, height: u32) {
+pub extern "C" fn processing_surface_resize(window_id: u64, width: u32, height: u32) {
     error::clear_error();
     let window_entity = Entity::from_bits(window_id);
-    error::check(|| resize_surface(window_entity, width, height));
+    error::check(|| surface_resize(window_entity, width, height));
 }
 
 /// Set the background color for the given window.
@@ -126,8 +126,8 @@ pub extern "C" fn processing_exit(exit_code: u8) {
 /// Set the fill color.
 ///
 /// SAFETY:
-/// - Init and create_surface have been called.
-/// - window_id is a valid ID returned from create_surface.
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_set_fill(window_id: u64, r: f32, g: f32, b: f32, a: f32) {
@@ -140,8 +140,8 @@ pub extern "C" fn processing_set_fill(window_id: u64, r: f32, g: f32, b: f32, a:
 /// Set the stroke color.
 ///
 /// SAFETY:
-/// - Init and create_surface have been called.
-/// - window_id is a valid ID returned from create_surface.
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_set_stroke_color(window_id: u64, r: f32, g: f32, b: f32, a: f32) {
@@ -154,8 +154,8 @@ pub extern "C" fn processing_set_stroke_color(window_id: u64, r: f32, g: f32, b:
 /// Set the stroke weight.
 ///
 /// SAFETY:
-/// - Init and create_surface have been called.
-/// - window_id is a valid ID returned from create_surface.
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_set_stroke_weight(window_id: u64, weight: f32) {
@@ -167,8 +167,8 @@ pub extern "C" fn processing_set_stroke_weight(window_id: u64, weight: f32) {
 /// Disable fill for subsequent shapes.
 ///
 /// SAFETY:
-/// - Init and create_surface have been called.
-/// - window_id is a valid ID returned from create_surface.
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_no_fill(window_id: u64) {
@@ -180,8 +180,8 @@ pub extern "C" fn processing_no_fill(window_id: u64) {
 /// Disable stroke for subsequent shapes.
 ///
 /// SAFETY:
-/// - Init and create_surface have been called.
-/// - window_id is a valid ID returned from create_surface.
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_no_stroke(window_id: u64) {
@@ -193,8 +193,8 @@ pub extern "C" fn processing_no_stroke(window_id: u64) {
 /// Draw a rectangle.
 ///
 /// SAFETY:
-/// - Init and create_surface have been called.
-/// - window_id is a valid ID returned from create_surface.
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_rect(
