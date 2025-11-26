@@ -3,11 +3,7 @@ pub mod material;
 pub mod mesh_builder;
 pub mod primitive;
 
-use bevy::{
-    camera::visibility::RenderLayers,
-    ecs::system::SystemParam,
-    prelude::*,
-};
+use bevy::{camera::visibility::RenderLayers, ecs::system::SystemParam, prelude::*};
 use command::{CommandBuffer, DrawCommand};
 use material::MaterialKey;
 use primitive::{TessellationMode, empty_mesh};

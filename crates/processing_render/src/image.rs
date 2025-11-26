@@ -4,10 +4,7 @@ use bevy::{
     asset::{
         LoadState, RenderAssetUsages, handle_internal_asset_events, io::embedded::GetAssetServer,
     },
-    ecs::{
-        entity::EntityHashMap,
-        system::RunSystemOnce,
-    },
+    ecs::{entity::EntityHashMap, system::RunSystemOnce},
     prelude::*,
     render::{
         ExtractSchedule, MainWorld,
@@ -119,9 +116,7 @@ pub fn load(world: &mut World, path: PathBuf) -> Result<Entity> {
                 .expect("Failed to run internal asset events system");
         }
         let images = world.resource::<Assets<Image>>();
-        let image = images
-            .get(&handle)
-            .ok_or(ProcessingError::ImageNotFound)?;
+        let image = images.get(&handle).ok_or(ProcessingError::ImageNotFound)?;
 
         let size = image.texture_descriptor.size;
         let texture_format = image.texture_descriptor.format;
