@@ -6,7 +6,6 @@ pub mod primitive;
 use bevy::{
     camera::visibility::RenderLayers,
     ecs::system::SystemParam,
-    mesh::{Indices, VertexAttributeValues},
     prelude::*,
 };
 use command::{CommandBuffer, DrawCommand};

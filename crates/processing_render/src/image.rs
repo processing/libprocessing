@@ -6,11 +6,11 @@ use bevy::{
     },
     ecs::{
         entity::EntityHashMap,
-        system::{RunSystemOnce, SystemState},
+        system::RunSystemOnce,
     },
     prelude::*,
     render::{
-        Extract, ExtractSchedule, MainWorld,
+        ExtractSchedule, MainWorld,
         render_asset::{AssetExtractionSystems, RenderAssets},
         render_resource::{
             Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, Extent3d, MapMode,
@@ -121,7 +121,7 @@ pub fn load(world: &mut World, path: PathBuf) -> Result<Entity> {
         let images = world.resource::<Assets<Image>>();
         let image = images
             .get(&handle)
-            .ok_or_else(|| ProcessingError::ImageNotFound)?;
+            .ok_or(ProcessingError::ImageNotFound)?;
 
         let size = image.texture_descriptor.size;
         let texture_format = image.texture_descriptor.format;

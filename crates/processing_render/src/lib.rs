@@ -2,7 +2,7 @@ pub mod error;
 pub mod image;
 pub mod render;
 
-use std::{cell::RefCell, ffi::c_void, num::NonZero, path::PathBuf, ptr::NonNull, sync::OnceLock};
+use std::{cell::RefCell, num::NonZero, path::PathBuf, ptr::NonNull, sync::OnceLock};
 
 use bevy::{
     app::{App, AppExit},
