@@ -18,4 +18,6 @@ pub enum ProcessingError {
     ImageNotFound,
     #[error("Unsupported texture format")]
     UnsupportedTextureFormat,
+    #[error("Invalid argument: {0}")]
+    InvalidArgument(String),
 }
