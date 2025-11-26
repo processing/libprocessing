@@ -27,10 +27,10 @@ bevy = { workspace = true }
 processing_render = { workspace = true }
 
 [dev-dependencies]
-glfw = "0.59.0"
+glfw = "0.60.0"
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
-glfw = { version = "0.59.0", features = ["wayland"] }
+glfw = { version = "0.60.0", features = ["wayland"] }
 
 [[example]]
 name = "rectangle"
