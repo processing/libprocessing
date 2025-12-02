@@ -31,7 +31,7 @@ processing_render = { workspace = true }
 glfw = "0.60.0"
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
-glfw = { version = "0.60.0", default-features = false, features = ["src-build", "static-link", "wayland", "x11", "native-handles"] }
+glfw = { version = "0.60.0", features = ["wayland"] }
 
 [[example]]
 name = "rectangle"
