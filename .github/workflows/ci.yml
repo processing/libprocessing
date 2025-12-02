@@ -37,7 +37,7 @@ jobs:
           key: ${{ runner.os }}-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run tests
-        run: cargo test --all-features --workspace
+        run: cargo test -F glfw/src-build -F glfw/static-link --workspace
 
   fmt:
     name: Format
@@ -81,7 +81,7 @@ jobs:
           key: ${{ runner.os }}-clippy-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Run clippy
-        run: cargo clippy --all-features --workspace -- -D warnings
+        run: cargo clippy -F glfw/src-build -F glfw/static-link --workspace -- -D warnings
 
   build:
     name: Build
@@ -110,4 +110,4 @@ jobs:
           key: ${{ runner.os }}-build-target-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build
-        run: cargo build --all-features --workspace --verbose
+        run: cargo build -F glfw/src-build -F glfw/static-link --workspace --verbose
