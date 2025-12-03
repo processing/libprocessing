@@ -248,7 +248,7 @@ pub extern "C" fn processing_rect(
 /// - data is a valid pointer to data_len bytes of RGBA pixel data.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_image_create(
+pub unsafe extern "C" fn processing_image_create(
     width: u32,
     height: u32,
     data: *const u8,
@@ -279,7 +279,7 @@ pub extern "C" fn processing_image_create(
 /// Note: This function is currently synchronous but Bevy's asset loading is async.
 /// The image may not be immediately available. This needs to be improved.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_image_load(path: *const std::ffi::c_char) -> u64 {
+pub unsafe extern "C" fn processing_image_load(path: *const std::ffi::c_char) -> u64 {
     error::clear_error();
 
     // SAFETY: Caller guarantees path is a valid C string
@@ -318,7 +318,7 @@ pub extern "C" fn processing_image_resize(image_id: u64, new_width: u32, new_hei
 /// - buffer_len must equal width * height of the image.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_image_load_pixels(
+pub unsafe extern "C" fn processing_image_load_pixels(
     image_id: u64,
     buffer: *mut Color,
     buffer_len: usize,
