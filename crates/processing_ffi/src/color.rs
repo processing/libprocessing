@@ -1,4 +1,4 @@
-use bevy::color::LinearRgba;
+use bevy::color::{LinearRgba, Srgba};
 
 /// A sRGB (?) color
 #[repr(C)]
@@ -18,7 +18,18 @@ impl From<Color> for bevy::color::Color {
 
 impl From<LinearRgba> for Color {
     fn from(lin: LinearRgba) -> Self {
-        let srgb = bevy::color::Color::srgba(lin.red, lin.green, lin.blue, lin.alpha);
+        let srgb: Srgba = lin.into();
         srgb.into()
+    }
+}
+
+impl From<Srgba> for Color {
+    fn from(srgb: Srgba) -> Self {
+        Color {
+            r: srgb.red,
+            g: srgb.green,
+            b: srgb.blue,
+            a: srgb.alpha,
+        }
     }
 }
