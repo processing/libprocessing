@@ -243,7 +243,7 @@ pub extern "C" fn processing_rect(
 
 /// Create an image from raw pixel data.
 ///
-/// SAFETY:
+/// # Safety
 /// - Init has been called.
 /// - data is a valid pointer to data_len bytes of RGBA pixel data.
 /// - This is called from the same thread as init.
@@ -271,7 +271,7 @@ pub unsafe extern "C" fn processing_image_create(
 
 /// Load an image from a file path.
 ///
-/// SAFETY:
+/// # Safety
 /// - Init has been called.
 /// - path is a valid null-terminated C string.
 /// - This is called from the same thread as init.
@@ -311,7 +311,7 @@ pub extern "C" fn processing_image_resize(image_id: u64, new_width: u32, new_hei
 
 /// Load pixels from an image into a caller-provided buffer.
 ///
-/// SAFETY:
+/// # Safety
 /// - Init and image_create have been called.
 /// - image_id is a valid ID returned from image_create.
 /// - buffer is a valid pointer to at least buffer_len Color elements.
