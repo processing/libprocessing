@@ -2,6 +2,8 @@ use bevy::prelude::*;
 
 #[derive(Debug, Clone)]
 pub enum DrawCommand {
+    BackgroundColor(Color),
+    BackgroundImage(Entity),
     Fill(Color),
     NoFill,
     StrokeColor(Color),

@@ -1,17 +1,22 @@
 pub mod command;
 pub mod material;
 pub mod mesh_builder;
-mod primitive;
+pub mod primitive;
 
 use bevy::{camera::visibility::RenderLayers, ecs::system::SystemParam, prelude::*};
 use command::{CommandBuffer, DrawCommand};
 use material::MaterialKey;
 use primitive::{TessellationMode, empty_mesh};
 
-use crate::{Flush, render::primitive::rect};
+use crate::{Flush, SurfaceSize, image::PImage, render::primitive::rect};
 
 #[derive(Component)]
-pub struct TransientMesh;
+#[relationship(relationship_target = TransientMeshes)]
+pub struct BelongsToSurface(pub Entity);
+
+#[derive(Component, Default)]
+#[relationship_target(relationship = BelongsToSurface)]
+pub struct TransientMeshes(Vec<Entity>);
 
 #[derive(SystemParam)]
 pub struct RenderContext<'w, 's> {
@@ -73,9 +78,12 @@ impl RenderState {
 
 pub fn flush_draw_commands(
     mut ctx: RenderContext,
-    mut query: Query<(Entity, &mut CommandBuffer, &RenderLayers), With<Flush>>,
+    mut surfaces: Query<(Entity, &mut CommandBuffer, &RenderLayers, &SurfaceSize), With<Flush>>,
+    p_images: Query<&PImage>,
 ) {
-    for (surface_entity, mut cmd_buffer, render_layers) in query.iter_mut() {
+    for (surface_entity, mut cmd_buffer, render_layers, SurfaceSize(width, height)) in
+        surfaces.iter_mut()
+    {
         let draw_commands = std::mem::take(&mut cmd_buffer.commands);
         ctx.batch.render_layers = render_layers.clone();
         ctx.batch.surface_entity = Some(surface_entity);
@@ -116,6 +124,54 @@ pub fn flush_draw_commands(
                         )
                     });
                 }
+                DrawCommand::BackgroundColor(color) => {
+                    add_fill(&mut ctx, |mesh, _| {
+                        rect(
+                            mesh,
+                            0.0,
+                            0.0,
+                            *width as f32,
+                            *height as f32,
+                            [0.0; 4],
+                            color,
+                            TessellationMode::Fill,
+                        )
+                    });
+                }
+                DrawCommand::BackgroundImage(entity) => {
+                    let Some(p_image) = p_images.get(entity).ok() else {
+                        warn!("Could not find PImage for entity {:?}", entity);
+                        continue;
+                    };
+
+                    // force flush current batch before changing material
+                    flush_batch(&mut ctx);
+
+                    let material_key = MaterialKey {
+                        transparent: false,
+                        background_image: Some(p_image.handle.clone()),
+                    };
+
+                    ctx.batch.material_key = Some(material_key);
+                    ctx.batch.current_mesh = Some(empty_mesh());
+
+                    // we're reusing rect to draw the fullscreen quad but don't need to track
+                    // a fill here and can just pass white manually
+                    if let Some(ref mut mesh) = ctx.batch.current_mesh {
+                        rect(
+                            mesh,
+                            0.0,
+                            0.0,
+                            *width as f32,
+                            *height as f32,
+                            [0.0; 4],
+                            Color::WHITE,
+                            TessellationMode::Fill,
+                        )
+                    }
+
+                    flush_batch(&mut ctx);
+                }
             }
         }
 
@@ -142,20 +198,16 @@ pub fn activate_cameras(
 
 pub fn clear_transient_meshes(
     mut commands: Commands,
-    surfaces: Query<&Children, With<Flush>>,
-    transient_meshes: Query<(), With<TransientMesh>>,
+    surfaces: Query<&TransientMeshes, With<Flush>>,
 ) {
-    // for all flushing surfaces, despawn all transient meshes that rendered in a previous frame
-    for children in surfaces.iter() {
-        for child in children.iter() {
-            if transient_meshes.contains(child) {
-                commands.entity(child).despawn();
-            }
+    for transient_meshes in surfaces.iter() {
+        for &mesh_entity in transient_meshes.0.iter() {
+            commands.entity(mesh_entity).despawn();
         }
     }
 }
 
-fn spawn_mesh(ctx: &mut RenderContext, mesh: Mesh, z_offset: Option<f32>) {
+fn spawn_mesh(ctx: &mut RenderContext, mesh: Mesh, z_offset: f32) {
     let Some(material_key) = &ctx.batch.material_key else {
         return;
     };
@@ -166,22 +218,13 @@ fn spawn_mesh(ctx: &mut RenderContext, mesh: Mesh, z_offset: Option<f32>) {
     let mesh_handle = ctx.meshes.add(mesh);
     let material_handle = ctx.materials.add(material_key.to_material());
 
-    let components = (
+    ctx.commands.spawn((
         Mesh3d(mesh_handle),
         MeshMaterial3d(material_handle),
-        TransientMesh,
+        BelongsToSurface(surface_entity),
+        Transform::from_xyz(0.0, 0.0, z_offset),
         ctx.batch.render_layers.clone(),
-    );
-
-    let mesh_id = if let Some(z) = z_offset {
-        ctx.commands
-            .spawn((components, Transform::from_xyz(0.0, 0.0, z)))
-            .id()
-    } else {
-        ctx.commands.spawn(components).id()
-    };
-
-    ctx.commands.entity(surface_entity).add_child(mesh_id);
+    ));
 }
 
 fn add_fill(ctx: &mut RenderContext, tessellate: impl FnOnce(&mut Mesh, Color)) {
@@ -190,6 +233,7 @@ fn add_fill(ctx: &mut RenderContext, tessellate: impl FnOnce(&mut Mesh, Color)) 
     };
     let material_key = MaterialKey {
         transparent: ctx.state.fill_is_transparent(),
+        background_image: None,
     };
 
     // when the material changes, flush the current batch
@@ -212,6 +256,7 @@ fn add_stroke(ctx: &mut RenderContext, tessellate: impl FnOnce(&mut Mesh, Color,
     let stroke_weight = ctx.state.stroke_weight;
     let material_key = MaterialKey {
         transparent: ctx.state.stroke_is_transparent(),
+        background_image: None,
     };
 
     // when the material changes, flush the current batch
@@ -231,7 +276,7 @@ fn flush_batch(ctx: &mut RenderContext) {
     if let Some(mesh) = ctx.batch.current_mesh.take() {
         // we defensively apply a small z-offset based on draw_index to preserve painter's algorithm
         let z_offset = ctx.batch.draw_index as f32 * 0.001;
-        spawn_mesh(ctx, mesh, Some(z_offset));
+        spawn_mesh(ctx, mesh, z_offset);
         ctx.batch.draw_index += 1;
     }
     ctx.batch.material_key = None;

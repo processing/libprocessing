@@ -1,7 +1,8 @@
 pub mod error;
+pub mod image;
 pub mod render;
 
-use std::{cell::RefCell, ffi::c_void, num::NonZero, ptr::NonNull, sync::OnceLock};
+use std::{cell::RefCell, ffi::c_void, num::NonZero, path::PathBuf, ptr::NonNull, sync::OnceLock};
 
 use bevy::{
     app::{App, AppExit},
@@ -10,6 +11,7 @@ use bevy::{
     log::tracing_subscriber,
     math::Vec3A,
     prelude::*,
+    render::render_resource::{Extent3d, TextureFormat},
     window::{RawHandleWrapper, Window, WindowRef, WindowResolution, WindowWrapper},
 };
 use raw_window_handle::{
@@ -35,6 +37,9 @@ struct WindowCount(u32);
 
 #[derive(Component)]
 pub struct Flush;
+
+#[derive(Component)]
+pub struct SurfaceSize(u32, u32);
 
 /// Custom orthographic projection for Processing's coordinate system.
 /// Origin at top-left, Y-axis down, in pixel units (aka screen space).
@@ -154,7 +159,7 @@ impl HasDisplayHandle for GlfwWindow {
 /// Currently, this just creates a bevy window with the given parameters and
 /// stores the raw window handle for later use by the renderer, which will
 /// actually create the surface.
-pub fn create_surface(
+pub fn surface_create(
     window_handle: u64,
     display_handle: u64,
     width: u32,
@@ -287,6 +292,7 @@ pub fn create_surface(
             // this doesn't do anything but makes it easier to fetch the render layer for
             // meshes to be drawn to this window
             render_layer.clone(),
+            SurfaceSize(width, height),
         ));
 
         let window_entity = window.id();
@@ -318,7 +324,7 @@ pub fn create_surface(
     Ok(entity_id)
 }
 
-pub fn destroy_surface(window_entity: Entity) -> Result<()> {
+pub fn surface_destroy(window_entity: Entity) -> Result<()> {
     app_mut(|app| {
         if app.world_mut().get::<Window>(window_entity).is_some() {
             app.world_mut().despawn(window_entity);
@@ -330,14 +336,17 @@ pub fn destroy_surface(window_entity: Entity) -> Result<()> {
 }
 
 /// Update window size when resized.
-pub fn resize_surface(window_entity: Entity, width: u32, height: u32) -> Result<()> {
+pub fn surface_resize(window_entity: Entity, width: u32, height: u32) -> Result<()> {
     app_mut(|app| {
         if let Some(mut window) = app.world_mut().get_mut::<Window>(window_entity) {
             window.resolution.set_physical_resolution(width, height);
-            Ok(())
         } else {
-            Err(error::ProcessingError::WindowNotFound)
-        }
+            return Err(error::ProcessingError::WindowNotFound);
+        };
+        app.world_mut()
+            .entity_mut(window_entity)
+            .insert(SurfaceSize(width, height));
+        Ok(())
     })
 }
 
@@ -502,4 +511,34 @@ pub fn record_command(window_entity: Entity, cmd: DrawCommand) -> Result<()> {
 
         Ok(())
     })
+}
+
+/// Create a new image with given size and data.
+pub fn image_create(
+    size: Extent3d,
+    data: Vec<u8>,
+    texture_format: TextureFormat,
+) -> Result<Entity> {
+    app_mut(|app| Ok(image::create(app.world_mut(), size, data, texture_format)))
+}
+
+/// Load an image from disk.
+pub fn image_load(path: &str) -> Result<Entity> {
+    let path = PathBuf::from(path);
+    app_mut(|app| image::load(app.world_mut(), path))
+}
+
+/// Resize an existing image to new size.
+pub fn image_resize(entity: Entity, new_size: Extent3d) -> Result<()> {
+    app_mut(|app| image::resize(app.world_mut(), entity, new_size))
+}
+
+/// Read back image data from GPU to CPU.
+pub fn image_load_pixels(entity: Entity) -> Result<Vec<LinearRgba>> {
+    app_mut(|app| image::load_pixels(app.world_mut(), entity))
+}
+
+/// Destroy an existing image and free its resources.
+pub fn image_destroy(entity: Entity) -> Result<()> {
+    app_mut(|app| image::destroy(app.world_mut(), entity))
 }
