@@ -16,7 +16,7 @@ type_complexity = "allow"
 too_many_arguments = "allow"
 
 [workspace.dependencies]
-bevy = { version = "0.17", no-default-features = true, features = [
+bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", no-default-features = true, features = [
     "bevy_render",
     "bevy_color",
 ] }
