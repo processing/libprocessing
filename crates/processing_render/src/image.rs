@@ -107,6 +107,57 @@ pub fn create(
         .expect("Failed to run new PImage system")
 }
 
+pub fn load_start(world: &mut World, path: PathBuf) -> Handle<Image> {
+    world.get_asset_server().load(path)
+}
+
+pub fn is_loaded(world: &World, handle: &Handle<Image>) -> bool {
+    matches!(
+        world.get_asset_server().load_state(handle),
+        LoadState::Loaded
+    )
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn from_handle(world: &mut World, handle: Handle<Image>) -> Result<Entity> {
+    fn from_handle_inner(In(handle): In<Handle<Image>>, world: &mut World) -> Result<Entity> {
+        let images = world.resource::<Assets<Image>>();
+        let image = images.get(&handle).ok_or(ProcessingError::ImageNotFound)?;
+
+        let size = image.texture_descriptor.size;
+        let texture_format = image.texture_descriptor.format;
+        let pixel_size = match texture_format {
+            TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => 4usize,
+            TextureFormat::Rgba16Float => 8,
+            TextureFormat::Rgba32Float => 16,
+            _ => panic!("Unsupported texture format for readback"),
+        };
+        let readback_buffer_size = size.width * size.height * pixel_size as u32;
+
+        let render_device = world.resource::<RenderDevice>();
+        let readback_buffer = render_device.create_buffer(&BufferDescriptor {
+            label: Some("PImage Readback Buffer"),
+            size: readback_buffer_size as u64,
+            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        Ok(world
+            .spawn(PImage {
+                handle: handle.clone(),
+                readback_buffer,
+                pixel_size,
+                texture_format,
+                size,
+            })
+            .id())
+    }
+
+    world
+        .run_system_cached_with(from_handle_inner, handle)
+        .expect("Failed to run from_handle system")
+}
+
 pub fn load(world: &mut World, path: PathBuf) -> Result<Entity> {
     fn load_inner(In(path): In<PathBuf>, world: &mut World) -> Result<Entity> {
         let handle = world.get_asset_server().load(path);

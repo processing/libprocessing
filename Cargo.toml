@@ -36,3 +36,13 @@ glfw = { version = "0.60.0", features = ["wayland"] }
 [[example]]
 name = "rectangle"
 path = "examples/rectangle.rs"
+
+[[example]]
+name = "background_image"
+path = "examples/background_image.rs"
+
+[profile.wasm-release]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1

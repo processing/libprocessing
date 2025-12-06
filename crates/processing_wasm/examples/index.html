@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Processing</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a1a1a;
+        }
+        canvas {
+            border: 1px solid #333;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas" width="600" height="600"></canvas>
+    <script type="module">
+        import init, * as p from '../../../target/wasm/processing_wasm.js';
+
+        async function main() {
+            await init();
+            await p.init();
+            const surface = p.createSurface('canvas', 600, 600);
+
+            const bgImage = await p.loadImage('images/logo.png');
+
+            let frame = 0;
+
+            function draw() {
+                try {
+                    p.beginDraw(surface);
+                    p.backgroundImage(surface, bgImage);
+
+                    const x = 250 + Math.sin(frame * 0.02) * 200;
+                    p.fill(surface, 0.9, 0.1, 0.3, 1.0);
+                    p.rect(surface, x, 50, 100, 100, 20, 20, 20, 20);
+
+                    p.endDraw(surface);
+
+                    frame++;
+                } catch (e) {
+                    console.error('Draw error:', e);
+                }
+
+                requestAnimationFrame(draw);
+            }
+
+            draw();
+        }
+
+        main().catch(console.error);
+    </script>
+</body>
+</html>

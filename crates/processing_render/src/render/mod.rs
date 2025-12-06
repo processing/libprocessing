@@ -275,7 +275,7 @@ fn add_stroke(ctx: &mut RenderContext, tessellate: impl FnOnce(&mut Mesh, Color,
 fn flush_batch(ctx: &mut RenderContext) {
     if let Some(mesh) = ctx.batch.current_mesh.take() {
         // we defensively apply a small z-offset based on draw_index to preserve painter's algorithm
-        let z_offset = ctx.batch.draw_index as f32 * 0.001;
+        let z_offset = -(ctx.batch.draw_index as f32 * 0.001);
         spawn_mesh(ctx, mesh, z_offset);
         ctx.batch.draw_index += 1;
     }

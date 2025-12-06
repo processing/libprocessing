@@ -4376,6 +4376,7 @@ dependencies = [
  "bevy",
  "crossbeam-channel",
  "half",
+ "js-sys",
  "lyon",
  "objc2 0.6.3",
  "objc2-app-kit 0.3.2",
@@ -4383,7 +4384,23 @@ dependencies = [
  "thiserror 2.0.17",
  "tracing",
  "tracing-subscriber",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
  "windows 0.58.0",
+]
+
+[[package]]
+name = "processing_wasm"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "console_error_panic_hook",
+ "js-sys",
+ "processing_render",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -5691,6 +5708,7 @@ dependencies = [
  "smallvec",
  "static_assertions",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "web-sys",
  "wgpu-core",
  "wgpu-hal",

@@ -2,7 +2,10 @@ pub mod error;
 pub mod image;
 pub mod render;
 
-use std::{cell::RefCell, ffi::c_void, num::NonZero, path::PathBuf, ptr::NonNull, sync::OnceLock};
+use std::{cell::RefCell, num::NonZero, path::PathBuf, ptr::NonNull, sync::OnceLock};
+
+#[cfg(any(target_os = "linux", target_arch = "wasm32"))]
+use std::ffi::c_void;
 
 use bevy::{
     app::{App, AppExit},
@@ -267,6 +270,22 @@ pub fn surface_create(
         )
     };
 
+    #[cfg(target_arch = "wasm32")]
+    let (raw_window_handle, raw_display_handle) = {
+        use raw_window_handle::{WebCanvasWindowHandle, WebDisplayHandle};
+
+        // window_handle is a pointer to HtmlCanvasElement DOM obj
+        let canvas_ptr = window_handle as *mut c_void;
+        let canvas = NonNull::new(canvas_ptr).ok_or(error::ProcessingError::InvalidWindowHandle)?;
+
+        let window = WebCanvasWindowHandle::new(canvas);
+        let display = WebDisplayHandle::new();
+        (
+            RawWindowHandle::WebCanvas(window),
+            RawDisplayHandle::Web(display),
+        )
+    };
+
     let glfw_window = GlfwWindow {
         window_handle: raw_window_handle,
         display_handle: raw_display_handle,
@@ -324,6 +343,38 @@ pub fn surface_create(
     Ok(entity_id)
 }
 
+/// Create a WebGPU surface from a canvas element ID
+#[cfg(target_arch = "wasm32")]
+pub fn surface_create_from_canvas(
+    canvas_id: &str,
+    width: u32,
+    height: u32,
+) -> Result<Entity> {
+    use wasm_bindgen::JsCast;
+    use web_sys::HtmlCanvasElement;
+
+    // find the canvas elelment
+    let web_window = web_sys::window().ok_or(error::ProcessingError::InvalidWindowHandle)?;
+    let document = web_window
+        .document()
+        .ok_or(error::ProcessingError::InvalidWindowHandle)?;
+    let canvas = document
+        .get_element_by_id(canvas_id)
+        .ok_or(error::ProcessingError::InvalidWindowHandle)?
+        .dyn_into::<HtmlCanvasElement>()
+        .map_err(|_| error::ProcessingError::InvalidWindowHandle)?;
+
+    // box and leak the canvas to ensure the pointer remains valid
+    // TODO: this is maybe gross, let's find a better way to manage the lifetime
+    let canvas_box = Box::new(canvas);
+    let canvas_ptr = Box::into_raw(canvas_box) as u64;
+
+    // TODO: not sure if this is right to force here
+    let scale_factor = 1.0;
+
+    surface_create(canvas_ptr, 0, width, height, scale_factor)
+}
+
 pub fn surface_destroy(window_entity: Entity) -> Result<()> {
     app_mut(|app| {
         if app.world_mut().get::<Window>(window_entity).is_some() {
@@ -350,10 +401,42 @@ pub fn surface_resize(window_entity: Entity, width: u32, height: u32) -> Result<
     })
 }
 
-/// Initialize the app, if not already initialized. Must be called from the main thread and cannot
-/// be called concurrently from multiple threads.
-pub fn init() -> Result<()> {
-    setup_tracing()?;
+fn create_app() -> App {
+    let mut app = App::new();
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let plugins = DefaultPlugins
+        .build()
+        .disable::<bevy::log::LogPlugin>()
+        .disable::<bevy::winit::WinitPlugin>()
+        .disable::<bevy::render::pipelined_rendering::PipelinedRenderingPlugin>()
+        .set(WindowPlugin {
+            primary_window: None,
+            exit_condition: bevy::window::ExitCondition::DontExit,
+            ..default()
+        });
+
+    #[cfg(target_arch = "wasm32")]
+    let plugins = DefaultPlugins
+        .build()
+        .disable::<bevy::log::LogPlugin>()
+        .disable::<bevy::winit::WinitPlugin>()
+        .disable::<bevy::audio::AudioPlugin>()
+        .set(WindowPlugin {
+            primary_window: None,
+            exit_condition: bevy::window::ExitCondition::DontExit,
+            ..default()
+        });
+
+    app.add_plugins(plugins);
+    app.init_resource::<WindowCount>();
+    app.add_systems(First, (clear_transient_meshes, activate_cameras))
+        .add_systems(Update, flush_draw_commands.before(AssetEventSystems));
+
+    app
+}
+
+fn is_already_init() -> Result<bool> {
     let is_init = IS_INIT.get().is_some();
     let thread_has_app = APP.with(|app_cell| app_cell.borrow().is_some());
     if is_init && !thread_has_app {
@@ -361,42 +444,63 @@ pub fn init() -> Result<()> {
     }
     if is_init && thread_has_app {
         debug!("App already initialized");
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+fn set_app(app: App) {
+    APP.with(|app_cell| {
+        IS_INIT.get_or_init(|| ());
+        *app_cell.borrow_mut() = Some(app);
+    });
+}
+
+/// Initialize the app, if not already initialized. Must be called from the main thread and cannot
+/// be called concurrently from multiple threads.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn init() -> Result<()> {
+    setup_tracing()?;
+    if is_already_init()? {
         return Ok(());
     }
 
-    APP.with(|app_cell| {
-        if app_cell.borrow().is_none() {
-            IS_INIT.get_or_init(|| ());
-            let mut app = App::new();
+    let mut app = create_app();
+    app.finish();
+    app.cleanup();
+    set_app(app);
 
-            app.add_plugins(
-                DefaultPlugins
-                    .build()
-                    .disable::<bevy::log::LogPlugin>()
-                    .disable::<bevy::winit::WinitPlugin>()
-                    .disable::<bevy::render::pipelined_rendering::PipelinedRenderingPlugin>()
-                    .set(WindowPlugin {
-                        primary_window: None,
-                        exit_condition: bevy::window::ExitCondition::DontExit,
-                        ..default()
-                    }),
-            );
+    Ok(())
+}
 
-            // resources
-            app.init_resource::<WindowCount>();
+/// Initialize the app asynchronously
+#[cfg(target_arch = "wasm32")]
+pub async fn init() -> Result<()> {
+    use bevy::app::PluginsState;
 
-            // rendering
-            app.add_systems(First, (clear_transient_meshes, activate_cameras))
-                .add_systems(Update, flush_draw_commands.before(AssetEventSystems));
+    setup_tracing()?;
+    if is_already_init()? {
+        return Ok(());
+    }
 
-            // this does not mean, as one might imagine, that the app is "done", but rather is part
-            // of bevy's plugin lifecycle prior to "starting" the app. we are manually driving the app
-            // so we don't need to call `app.run()`
-            app.finish();
-            app.cleanup();
-            *app_cell.borrow_mut() = Some(app);
-        }
-    });
+    let mut app = create_app();
+
+    // we need to avoid blocking the main thread while waiting for plugins to initialize
+    while app.plugins_state() == PluginsState::Adding {
+        // yield to event loop
+        wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |resolve, _| {
+            web_sys::window()
+                .unwrap()
+                .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 0)
+                .unwrap();
+        }))
+        .await
+        .unwrap();
+    }
+
+    app.finish();
+    app.cleanup();
+    set_app(app);
 
     Ok(())
 }
@@ -496,8 +600,12 @@ pub fn background_color(window_entity: Entity, color: Color) -> Result<()> {
 }
 
 fn setup_tracing() -> Result<()> {
-    let subscriber = tracing_subscriber::FmtSubscriber::new();
-    tracing::subscriber::set_global_default(subscriber)?;
+    // TODO: figure out wasm compatible tracing subscriber
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let subscriber = tracing_subscriber::FmtSubscriber::new();
+        tracing::subscriber::set_global_default(subscriber)?;
+    }
     Ok(())
 }
 
@@ -522,10 +630,44 @@ pub fn image_create(
     app_mut(|app| Ok(image::create(app.world_mut(), size, data, texture_format)))
 }
 
-/// Load an image from disk.
 pub fn image_load(path: &str) -> Result<Entity> {
     let path = PathBuf::from(path);
     app_mut(|app| image::load(app.world_mut(), path))
+}
+
+#[cfg(target_arch = "wasm32")]
+pub async fn image_load(path: &str) -> Result<Entity> {
+    use bevy::prelude::{Handle, Image};
+
+    let path = PathBuf::from(path);
+
+    let handle: Handle<Image> = app_mut(|app| Ok(image::load_start(app.world_mut(), path)))?;
+
+    // poll until loaded, yielding to event loop
+    loop {
+        let is_loaded = app_mut(|app| Ok(image::is_loaded(app.world(), &handle)))?;
+        if is_loaded {
+            break;
+        }
+
+        // yield to let fetch complete
+        wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |resolve, _| {
+            web_sys::window()
+                .unwrap()
+                .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 0)
+                .unwrap();
+        }))
+        .await
+        .unwrap();
+
+        // run an update to process asset events
+        app_mut(|app| {
+            app.update();
+            Ok(())
+        })?;
+    }
+
+    app_mut(|app| image::from_handle(app.world_mut(), handle))
 }
 
 /// Resize an existing image to new size.
