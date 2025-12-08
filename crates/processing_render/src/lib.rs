@@ -345,11 +345,7 @@ pub fn surface_create(
 
 /// Create a WebGPU surface from a canvas element ID
 #[cfg(target_arch = "wasm32")]
-pub fn surface_create_from_canvas(
-    canvas_id: &str,
-    width: u32,
-    height: u32,
-) -> Result<Entity> {
+pub fn surface_create_from_canvas(canvas_id: &str, width: u32, height: u32) -> Result<Entity> {
     use wasm_bindgen::JsCast;
     use web_sys::HtmlCanvasElement;
 
@@ -630,6 +626,7 @@ pub fn image_create(
     app_mut(|app| Ok(image::create(app.world_mut(), size, data, texture_format)))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn image_load(path: &str) -> Result<Entity> {
     let path = PathBuf::from(path);
     app_mut(|app| image::load(app.world_mut(), path))
