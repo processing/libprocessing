@@ -21,6 +21,7 @@ bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", no-default
     "bevy_color",
 ] }
 processing = { path = "." }
+processing_pyo3 = { path = "crates/processing_pyo3" }
 processing_render = { path = "crates/processing_render" }
 
 [dependencies]

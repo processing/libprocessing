@@ -1,0 +1,19 @@
+[package]
+name = "processing_pyo3"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[lib]
+name = "pycessing"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = "0.27.0"
+processing = { workspace = true }
+glfw = "0.60.0"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+glfw = { version = "0.60.0", features = ["wayland"] }

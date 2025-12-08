@@ -15,7 +15,7 @@ mod pycessing {
 
         let window_handle = glfw_ctx.get_window();
         let display_handle = glfw_ctx.get_display();
-        let surface = create_surface(window_handle, display_handle, width, height, 1.0).unwrap();
+        let surface = surface_create(window_handle, display_handle, width, height, 1.0).unwrap();
 
         while glfw_ctx.poll_events() {
             begin_draw(surface).unwrap();

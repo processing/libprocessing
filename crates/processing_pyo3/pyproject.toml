@@ -11,3 +11,6 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dynamic = ["version"]
+
+[tool.maturin]
+manifest-path = "Cargo.toml"
