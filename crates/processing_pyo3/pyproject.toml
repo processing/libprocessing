@@ -12,5 +12,8 @@ classifiers = [
 ]
 dynamic = ["version"]
 
+[dependency-groups]
+dev = ["maturin>=1.10,<2.0"]
+
 [tool.maturin]
 manifest-path = "Cargo.toml"
