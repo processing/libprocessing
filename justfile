@@ -4,7 +4,7 @@ default:
 py-build:
     cd crates/processing_pyo3 && uv run maturin develop
 
-py-run file:
+py-run file: py-build
     cd crates/processing_pyo3 && uv run python ../../{{file}}
 
 wasm-build:
