@@ -1,8 +1,8 @@
 use bevy::prelude::Entity;
 use processing_render::{
-    begin_draw, end_draw, exit, flush, image_create, image_destroy, image_load, image_load_pixels,
-    image_resize, init, record_command, render::command::DrawCommand, surface_create_from_canvas,
-    surface_destroy, surface_resize,
+    exit, graphics_begin_draw, graphics_end_draw, graphics_flush, graphics_record_command,
+    image_create, image_destroy, image_load, image_readback, image_resize, init,
+    render::command::DrawCommand, surface_create_from_canvas, surface_destroy, surface_resize,
 };
 use wasm_bindgen::prelude::*;
 
@@ -38,7 +38,7 @@ pub fn js_surface_resize(surface_id: u64, width: u32, height: u32) -> Result<(),
 #[wasm_bindgen(js_name = "background")]
 pub fn js_background_color(surface_id: u64, r: f32, g: f32, b: f32, a: f32) -> Result<(), JsValue> {
     let color = bevy::color::Color::srgba(r, g, b, a);
-    check(record_command(
+    check(graphics_record_command(
         Entity::from_bits(surface_id),
         DrawCommand::BackgroundColor(color),
     ))
@@ -46,7 +46,7 @@ pub fn js_background_color(surface_id: u64, r: f32, g: f32, b: f32, a: f32) -> R
 
 #[wasm_bindgen(js_name = "backgroundImage")]
 pub fn js_background_image(surface_id: u64, image_id: u64) -> Result<(), JsValue> {
-    check(record_command(
+    check(graphics_record_command(
         Entity::from_bits(surface_id),
         DrawCommand::BackgroundImage(Entity::from_bits(image_id)),
     ))
@@ -54,17 +54,17 @@ pub fn js_background_image(surface_id: u64, image_id: u64) -> Result<(), JsValue
 
 #[wasm_bindgen(js_name = "beginDraw")]
 pub fn js_begin_draw(surface_id: u64) -> Result<(), JsValue> {
-    check(begin_draw(Entity::from_bits(surface_id)))
+    check(graphics_begin_draw(Entity::from_bits(surface_id)))
 }
 
 #[wasm_bindgen(js_name = "flush")]
 pub fn js_flush(surface_id: u64) -> Result<(), JsValue> {
-    check(flush(Entity::from_bits(surface_id)))
+    check(graphics_flush(Entity::from_bits(surface_id)))
 }
 
 #[wasm_bindgen(js_name = "endDraw")]
 pub fn js_end_draw(surface_id: u64) -> Result<(), JsValue> {
-    check(end_draw(Entity::from_bits(surface_id)))
+    check(graphics_end_draw(Entity::from_bits(surface_id)))
 }
 
 #[wasm_bindgen(js_name = "exit")]
@@ -75,7 +75,7 @@ pub fn js_exit(exit_code: u8) -> Result<(), JsValue> {
 #[wasm_bindgen(js_name = "fill")]
 pub fn js_fill(surface_id: u64, r: f32, g: f32, b: f32, a: f32) -> Result<(), JsValue> {
     let color = bevy::color::Color::srgba(r, g, b, a);
-    check(record_command(
+    check(graphics_record_command(
         Entity::from_bits(surface_id),
         DrawCommand::Fill(color),
     ))
@@ -84,7 +84,7 @@ pub fn js_fill(surface_id: u64, r: f32, g: f32, b: f32, a: f32) -> Result<(), Js
 #[wasm_bindgen(js_name = "stroke")]
 pub fn js_stroke(surface_id: u64, r: f32, g: f32, b: f32, a: f32) -> Result<(), JsValue> {
     let color = bevy::color::Color::srgba(r, g, b, a);
-    check(record_command(
+    check(graphics_record_command(
         Entity::from_bits(surface_id),
         DrawCommand::StrokeColor(color),
     ))
@@ -92,7 +92,7 @@ pub fn js_stroke(surface_id: u64, r: f32, g: f32, b: f32, a: f32) -> Result<(), 
 
 #[wasm_bindgen(js_name = "strokeWeight")]
 pub fn js_stroke_weight(surface_id: u64, weight: f32) -> Result<(), JsValue> {
-    check(record_command(
+    check(graphics_record_command(
         Entity::from_bits(surface_id),
         DrawCommand::StrokeWeight(weight),
     ))
@@ -100,7 +100,7 @@ pub fn js_stroke_weight(surface_id: u64, weight: f32) -> Result<(), JsValue> {
 
 #[wasm_bindgen(js_name = "noFill")]
 pub fn js_no_fill(surface_id: u64) -> Result<(), JsValue> {
-    check(record_command(
+    check(graphics_record_command(
         Entity::from_bits(surface_id),
         DrawCommand::NoFill,
     ))
@@ -108,7 +108,7 @@ pub fn js_no_fill(surface_id: u64) -> Result<(), JsValue> {
 
 #[wasm_bindgen(js_name = "noStroke")]
 pub fn js_no_stroke(surface_id: u64) -> Result<(), JsValue> {
-    check(record_command(
+    check(graphics_record_command(
         Entity::from_bits(surface_id),
         DrawCommand::NoStroke,
     ))
@@ -126,7 +126,7 @@ pub fn js_rect(
     br: f32,
     bl: f32,
 ) -> Result<(), JsValue> {
-    check(record_command(
+    check(graphics_record_command(
         Entity::from_bits(surface_id),
         DrawCommand::Rect {
             x,
@@ -168,8 +168,8 @@ pub fn js_image_resize(image_id: u64, new_width: u32, new_height: u32) -> Result
 }
 
 #[wasm_bindgen(js_name = "loadPixels")]
-pub fn js_image_load_pixels(image_id: u64) -> Result<Vec<f32>, JsValue> {
-    let colors = check(image_load_pixels(Entity::from_bits(image_id)))?;
+pub fn js_image_readback(image_id: u64) -> Result<Vec<f32>, JsValue> {
+    let colors = check(image_readback(Entity::from_bits(image_id)))?;
 
     let mut result = Vec::with_capacity(colors.len() * 4);
     for color in colors {

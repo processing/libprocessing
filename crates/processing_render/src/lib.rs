@@ -4,17 +4,16 @@ pub mod image;
 pub mod render;
 mod surface;
 
-#[cfg(any(target_os = "linux", target_arch = "wasm32"))]
-use std::ffi::c_void;
 use std::{cell::RefCell, num::NonZero, path::PathBuf, sync::OnceLock};
 
 use bevy::{
     app::{App, AppExit},
     asset::AssetEventSystems,
-    log::tracing_subscriber,
     prelude::*,
     render::render_resource::{Extent3d, TextureFormat},
 };
+#[cfg(not(target_arch = "wasm32"))]
+use bevy::log::tracing_subscriber;
 use render::{activate_cameras, clear_transient_meshes, flush_draw_commands};
 use tracing::debug;
 

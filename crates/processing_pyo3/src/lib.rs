@@ -19,9 +19,9 @@ mod processing {
         let surface = surface_create(window_handle, display_handle, width, height, 1.0).unwrap();
 
         while glfw_ctx.poll_events() {
-            begin_draw(surface).unwrap();
+            graphics_begin_draw(surface).unwrap();
 
-            record_command(
+            graphics_record_command(
                 surface,
                 DrawCommand::Rect {
                     x: 10.0,
@@ -33,7 +33,7 @@ mod processing {
             )
             .unwrap();
 
-            end_draw(surface).unwrap();
+            graphics_end_draw(surface).unwrap();
         }
 
         Ok("OK".to_string())

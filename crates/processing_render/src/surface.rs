@@ -6,6 +6,8 @@
 //!
 //! In Bevy, we can consider a surface to be a [`RenderTarget`], which is either a window or a
 //! texture.
+#[cfg(any(target_os = "linux", target_arch = "wasm32"))]
+use std::ffi::c_void;
 use std::ptr::NonNull;
 
 use bevy::{
@@ -188,6 +190,24 @@ pub fn create(
             (
                 RawWindowHandle::Wayland(window),
                 RawDisplayHandle::Wayland(display),
+            )
+        };
+
+        #[cfg(target_arch = "wasm32")]
+        let (raw_window_handle, raw_display_handle) = {
+            use raw_window_handle::{WebCanvasWindowHandle, WebDisplayHandle};
+
+            // For WASM, window_handle is a pointer to an HtmlCanvasElement
+            if window_handle == 0 {
+                return Err(error::ProcessingError::InvalidWindowHandle);
+            }
+            let canvas_ptr = NonNull::new(window_handle as *mut c_void).unwrap();
+            let window = WebCanvasWindowHandle::new(canvas_ptr.cast());
+            let display = WebDisplayHandle::new();
+
+            (
+                RawWindowHandle::WebCanvas(window),
+                RawDisplayHandle::Web(display),
             )
         };
 
