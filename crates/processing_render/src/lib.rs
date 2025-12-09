@@ -6,14 +6,14 @@ mod surface;
 
 use std::{cell::RefCell, num::NonZero, path::PathBuf, sync::OnceLock};
 
+#[cfg(not(target_arch = "wasm32"))]
+use bevy::log::tracing_subscriber;
 use bevy::{
     app::{App, AppExit},
     asset::AssetEventSystems,
     prelude::*,
     render::render_resource::{Extent3d, TextureFormat},
 };
-#[cfg(not(target_arch = "wasm32"))]
-use bevy::log::tracing_subscriber;
 use render::{activate_cameras, clear_transient_meshes, flush_draw_commands};
 use tracing::debug;
 
