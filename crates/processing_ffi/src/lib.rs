@@ -76,7 +76,9 @@ pub extern "C" fn processing_surface_resize(window_id: u64, width: u32, height: 
 pub extern "C" fn processing_background_color(window_id: u64, color: Color) {
     error::clear_error();
     let window_entity = Entity::from_bits(window_id);
-    error::check(|| record_command(window_entity, DrawCommand::BackgroundColor(color.into())));
+    error::check(|| {
+        graphics_record_command(window_entity, DrawCommand::BackgroundColor(color.into()))
+    });
 }
 
 /// Set the background image for the given window.
@@ -90,7 +92,9 @@ pub extern "C" fn processing_background_image(window_id: u64, image_id: u64) {
     error::clear_error();
     let window_entity = Entity::from_bits(window_id);
     let image_entity = Entity::from_bits(image_id);
-    error::check(|| record_command(window_entity, DrawCommand::BackgroundImage(image_entity)));
+    error::check(|| {
+        graphics_record_command(window_entity, DrawCommand::BackgroundImage(image_entity))
+    });
 }
 
 /// Begins the draw for the given window.
@@ -102,7 +106,7 @@ pub extern "C" fn processing_background_image(window_id: u64, image_id: u64) {
 pub extern "C" fn processing_begin_draw(window_id: u64) {
     error::clear_error();
     let window_entity = Entity::from_bits(window_id);
-    error::check(|| begin_draw(window_entity));
+    error::check(|| graphics_begin_draw(window_entity));
 }
 
 /// Flushes recorded draw commands for the given window.
@@ -114,7 +118,7 @@ pub extern "C" fn processing_begin_draw(window_id: u64) {
 pub extern "C" fn processing_flush(window_id: u64) {
     error::clear_error();
     let window_entity = Entity::from_bits(window_id);
-    error::check(|| flush(window_entity));
+    error::check(|| graphics_flush(window_entity));
 }
 
 /// Ends the draw for the given window and presents the frame.
@@ -126,7 +130,7 @@ pub extern "C" fn processing_flush(window_id: u64) {
 pub extern "C" fn processing_end_draw(window_id: u64) {
     error::clear_error();
     let window_entity = Entity::from_bits(window_id);
-    error::check(|| end_draw(window_entity));
+    error::check(|| graphics_end_draw(window_entity));
 }
 
 /// Shuts down internal resources with given exit code, but does *not* terminate the process.
@@ -151,7 +155,7 @@ pub extern "C" fn processing_set_fill(window_id: u64, r: f32, g: f32, b: f32, a:
     error::clear_error();
     let window_entity = Entity::from_bits(window_id);
     let color = bevy::color::Color::srgba(r, g, b, a);
-    error::check(|| record_command(window_entity, DrawCommand::Fill(color)));
+    error::check(|| graphics_record_command(window_entity, DrawCommand::Fill(color)));
 }
 
 /// Set the stroke color.
@@ -165,7 +169,7 @@ pub extern "C" fn processing_set_stroke_color(window_id: u64, r: f32, g: f32, b:
     error::clear_error();
     let window_entity = Entity::from_bits(window_id);
     let color = bevy::color::Color::srgba(r, g, b, a);
-    error::check(|| record_command(window_entity, DrawCommand::StrokeColor(color)));
+    error::check(|| graphics_record_command(window_entity, DrawCommand::StrokeColor(color)));
 }
 
 /// Set the stroke weight.
@@ -178,7 +182,7 @@ pub extern "C" fn processing_set_stroke_color(window_id: u64, r: f32, g: f32, b:
 pub extern "C" fn processing_set_stroke_weight(window_id: u64, weight: f32) {
     error::clear_error();
     let window_entity = Entity::from_bits(window_id);
-    error::check(|| record_command(window_entity, DrawCommand::StrokeWeight(weight)));
+    error::check(|| graphics_record_command(window_entity, DrawCommand::StrokeWeight(weight)));
 }
 
 /// Disable fill for subsequent shapes.
@@ -191,7 +195,7 @@ pub extern "C" fn processing_set_stroke_weight(window_id: u64, weight: f32) {
 pub extern "C" fn processing_no_fill(window_id: u64) {
     error::clear_error();
     let window_entity = Entity::from_bits(window_id);
-    error::check(|| record_command(window_entity, DrawCommand::NoFill));
+    error::check(|| graphics_record_command(window_entity, DrawCommand::NoFill));
 }
 
 /// Disable stroke for subsequent shapes.
@@ -204,7 +208,7 @@ pub extern "C" fn processing_no_fill(window_id: u64) {
 pub extern "C" fn processing_no_stroke(window_id: u64) {
     error::clear_error();
     let window_entity = Entity::from_bits(window_id);
-    error::check(|| record_command(window_entity, DrawCommand::NoStroke));
+    error::check(|| graphics_record_command(window_entity, DrawCommand::NoStroke));
 }
 
 /// Draw a rectangle.
@@ -228,7 +232,7 @@ pub extern "C" fn processing_rect(
     error::clear_error();
     let window_entity = Entity::from_bits(window_id);
     error::check(|| {
-        record_command(
+        graphics_record_command(
             window_entity,
             DrawCommand::Rect {
                 x,
@@ -318,7 +322,7 @@ pub extern "C" fn processing_image_resize(image_id: u64, new_width: u32, new_hei
 /// - buffer_len must equal width * height of the image.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn processing_image_load_pixels(
+pub unsafe extern "C" fn processing_image_readback(
     image_id: u64,
     buffer: *mut Color,
     buffer_len: usize,
@@ -326,7 +330,7 @@ pub unsafe extern "C" fn processing_image_load_pixels(
     error::clear_error();
     let image_entity = Entity::from_bits(image_id);
     error::check(|| {
-        let colors = image_load_pixels(image_entity)?;
+        let colors = image_readback(image_entity)?;
 
         // Validate buffer size
         if colors.len() != buffer_len {

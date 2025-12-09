@@ -8,8 +8,8 @@ pub enum ProcessingError {
     AppAccess,
     #[error("Error initializing tracing: {0}")]
     Tracing(#[from] tracing::subscriber::SetGlobalDefaultError),
-    #[error("Window not found")]
-    WindowNotFound,
+    #[error("Surface not found")]
+    SurfaceNotFound,
     #[error("Handle error: {0}")]
     HandleError(#[from] raw_window_handle::HandleError),
     #[error("Invalid window handle provided")]
@@ -20,4 +20,8 @@ pub enum ProcessingError {
     UnsupportedTextureFormat,
     #[error("Invalid argument: {0}")]
     InvalidArgument(String),
+    #[error("Graphics not found")]
+    GraphicsNotFound,
+    #[error("Invalid entity")]
+    InvalidEntity,
 }

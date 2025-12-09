@@ -8,14 +8,14 @@ use command::{CommandBuffer, DrawCommand};
 use material::MaterialKey;
 use primitive::{TessellationMode, empty_mesh};
 
-use crate::{Flush, SurfaceSize, image::PImage, render::primitive::rect};
+use crate::{Flush, graphics::SurfaceSize, image::Image, render::primitive::rect};
 
 #[derive(Component)]
 #[relationship(relationship_target = TransientMeshes)]
-pub struct BelongsToSurface(pub Entity);
+pub struct BelongsToGraphics(pub Entity);
 
 #[derive(Component, Default)]
-#[relationship_target(relationship = BelongsToSurface)]
+#[relationship_target(relationship = BelongsToGraphics)]
 pub struct TransientMeshes(Vec<Entity>);
 
 #[derive(SystemParam)]
@@ -33,7 +33,7 @@ struct BatchState {
     material_key: Option<MaterialKey>,
     draw_index: u32,
     render_layers: RenderLayers,
-    surface_entity: Option<Entity>,
+    graphics_entity: Option<Entity>,
 }
 
 #[derive(Debug)]
@@ -78,15 +78,15 @@ impl RenderState {
 
 pub fn flush_draw_commands(
     mut ctx: RenderContext,
-    mut surfaces: Query<(Entity, &mut CommandBuffer, &RenderLayers, &SurfaceSize), With<Flush>>,
-    p_images: Query<&PImage>,
+    mut graphics: Query<(Entity, &mut CommandBuffer, &RenderLayers, &SurfaceSize), With<Flush>>,
+    p_images: Query<&Image>,
 ) {
-    for (surface_entity, mut cmd_buffer, render_layers, SurfaceSize(width, height)) in
-        surfaces.iter_mut()
+    for (graphics_entity, mut cmd_buffer, render_layers, SurfaceSize(width, height)) in
+        graphics.iter_mut()
     {
         let draw_commands = std::mem::take(&mut cmd_buffer.commands);
         ctx.batch.render_layers = render_layers.clone();
-        ctx.batch.surface_entity = Some(surface_entity);
+        ctx.batch.graphics_entity = Some(graphics_entity);
         ctx.batch.draw_index = 0; // Reset draw index for each flush
 
         for cmd in draw_commands {
@@ -179,20 +179,9 @@ pub fn flush_draw_commands(
     }
 }
 
-pub fn activate_cameras(
-    mut cameras: Query<&mut Camera>,
-    mut surfaces: Query<&Children, With<Flush>>,
-) {
-    for mut camera in cameras.iter_mut() {
-        camera.is_active = false;
-    }
-
-    for children in surfaces.iter_mut() {
-        for child in children.iter() {
-            if let Ok(mut camera) = cameras.get_mut(child) {
-                camera.is_active = true;
-            }
-        }
+pub fn activate_cameras(mut cameras: Query<(&mut Camera, Option<&Flush>)>) {
+    for (mut camera, flush) in cameras.iter_mut() {
+        camera.is_active = flush.is_some();
     }
 }
 
@@ -211,7 +200,7 @@ fn spawn_mesh(ctx: &mut RenderContext, mesh: Mesh, z_offset: f32) {
     let Some(material_key) = &ctx.batch.material_key else {
         return;
     };
-    let Some(surface_entity) = ctx.batch.surface_entity else {
+    let Some(surface_entity) = ctx.batch.graphics_entity else {
         return;
     };
 
@@ -221,7 +210,7 @@ fn spawn_mesh(ctx: &mut RenderContext, mesh: Mesh, z_offset: f32) {
     ctx.commands.spawn((
         Mesh3d(mesh_handle),
         MeshMaterial3d(material_handle),
-        BelongsToSurface(surface_entity),
+        BelongsToGraphics(surface_entity),
         Transform::from_xyz(0.0, 0.0, z_offset),
         ctx.batch.render_layers.clone(),
     ));

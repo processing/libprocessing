@@ -3,9 +3,10 @@ use pyo3::prelude::*;
 
 #[pymodule]
 mod processing {
-    use crate::glfw::GlfwContext;
     use processing::prelude::*;
     use pyo3::prelude::*;
+
+    use crate::glfw::GlfwContext;
 
     /// create surface
     #[pyfunction]
