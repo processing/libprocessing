@@ -83,7 +83,7 @@ pub fn create(
     scale_factor: f32,
 ) -> Result<Entity> {
     fn create_inner(
-        In((window_handle, _display_handle, width, height, scale_factor)): In<(
+        In((window_handle, display_handle, width, height, scale_factor)): In<(
             u64,
             u64,
             u32,
