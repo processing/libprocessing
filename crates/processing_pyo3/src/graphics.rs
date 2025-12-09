@@ -1,8 +1,6 @@
 use bevy::prelude::Entity;
 use processing::prelude::*;
-use pyo3::exceptions::PyRuntimeError;
-use pyo3::prelude::*;
-use pyo3::types::PyAny;
+use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyAny};
 
 use crate::glfw::GlfwContext;
 
@@ -16,8 +14,8 @@ pub struct Graphics {
 impl Graphics {
     #[new]
     pub fn new(width: u32, height: u32) -> PyResult<Self> {
-        let glfw_ctx = GlfwContext::new(width, height)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let glfw_ctx =
+            GlfwContext::new(width, height).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         init().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
@@ -65,10 +63,26 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn rect(&self, x: f32, y: f32, w: f32, h: f32, tl: f32, tr: f32, br: f32, bl: f32) -> PyResult<()> {
+    pub fn rect(
+        &self,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        tl: f32,
+        tr: f32,
+        br: f32,
+        bl: f32,
+    ) -> PyResult<()> {
         graphics_record_command(
             self.surface,
-            DrawCommand::Rect { x, y, w, h, radii: [tl, tr, br, bl] },
+            DrawCommand::Rect {
+                x,
+                y,
+                w,
+                h,
+                radii: [tl, tr, br, bl],
+            },
         )
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
@@ -84,12 +98,12 @@ impl Graphics {
 
             if let Some(ref draw) = draw_fn {
                 Python::attach(|py| {
-                    draw.call0(py).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+                    draw.call0(py)
+                        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
                 })?;
             }
 
-            graphics_end_draw(self.surface)
-                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+            graphics_end_draw(self.surface).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         }
         Ok(())
     }
@@ -108,7 +122,12 @@ fn parse_color(args: &[f32]) -> PyResult<(f32, f32, f32, f32)> {
             Ok((v, v, v, args[1] / 255.0))
         }
         3 => Ok((args[0] / 255.0, args[1] / 255.0, args[2] / 255.0, 1.0)),
-        4 => Ok((args[0] / 255.0, args[1] / 255.0, args[2] / 255.0, args[3] / 255.0)),
+        4 => Ok((
+            args[0] / 255.0,
+            args[1] / 255.0,
+            args[2] / 255.0,
+            args[3] / 255.0,
+        )),
         _ => Err(PyRuntimeError::new_err("color requires 1-4 arguments")),
     }
 }
