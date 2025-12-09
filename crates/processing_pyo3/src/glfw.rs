@@ -58,9 +58,8 @@ impl GlfwContext {
         self.glfw.poll_events();
 
         for (_, event) in glfw::flush_messages(&self.events) {
-            match event {
-                WindowEvent::Close => return false,
-                _ => {}
+            if event == WindowEvent::Close {
+                return false;
             }
         }
 

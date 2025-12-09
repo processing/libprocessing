@@ -1,3 +1,5 @@
+#![cfg(target_arch = "wasm32")]
+
 use bevy::prelude::Entity;
 use processing_render::{
     exit, graphics_begin_draw, graphics_end_draw, graphics_flush, graphics_record_command,
