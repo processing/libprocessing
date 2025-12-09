@@ -1,3 +1,13 @@
+//! # processing_pyo3
+//!
+//! A Python module that exposes libprocessing using pyo3.
+
+//! In processing4 Java, the sketch runs implicitly inside a class that extends PApplet and
+//! executes main. This means that all PAplet methods can be called directly without an explicit
+//! receiver.
+//!
+//! To allow Python users to create a similar experience, we provide module-level
+//! functions that forward to a singleton Graphics object behind the scenes.
 mod glfw;
 mod graphics;
 
