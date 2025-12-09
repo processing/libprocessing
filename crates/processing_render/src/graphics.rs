@@ -615,7 +615,9 @@ mod tests {
         };
         let clip_matrix = proj.get_clip_from_view();
         // Check some values in the matrix to ensure it's correct
-        assert_eq!(clip_matrix.w_axis.z, -2.0 / (1000.0 - 0.1));
+        // In [0,1] depth orthographic projection, w_axis.z = -near/(far-near)
+        let expected = -0.1 / (1000.0 - 0.1);
+        assert!((clip_matrix.w_axis.z - expected).abs() < 1e-6);
     }
 
     #[test]
