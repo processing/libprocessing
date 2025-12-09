@@ -7,6 +7,11 @@ Prototype for python bindings to libprocessing
 ### Install venv and maturin 
 Follow these [installation instructions](https://pyo3.rs/v0.27.2/getting-started.html)
 
+#### macOS
+```bash
+brew install glfw
+```
+
 ### Running code
 ```
 $ maturin develop
