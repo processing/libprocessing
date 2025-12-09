@@ -364,7 +364,7 @@ pub fn update_region(
             &data,
             TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(bytes_per_row.try_into().unwrap()),
+                bytes_per_row: Some(bytes_per_row),
                 rows_per_image: None,
             },
             Extent3d {
