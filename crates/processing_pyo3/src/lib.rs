@@ -7,12 +7,12 @@
 //! receiver.
 //!
 //! To allow Python users to create a similar experience, we provide module-level
-//! functions that forward to a singleton Graphics object behind the scenes.
+//! functions that forward to a singleton Graphics object bepub(crate) pub(crate) hind the scenes.
 mod glfw;
 mod graphics;
 
 use graphics::{Graphics, get_graphics, get_graphics_mut};
-use pyo3::{prelude::*, types::PyAny};
+use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyAny};
 
 #[pymodule]
 fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -40,7 +40,25 @@ fn size(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<()> {
 #[pyfunction]
 #[pyo3(pass_module, signature = (draw_fn=None))]
 fn run(module: &Bound<'_, PyModule>, draw_fn: Option<Py<PyAny>>) -> PyResult<()> {
-    get_graphics_mut(module)?.run(draw_fn)
+    loop {
+        {
+            let mut graphics = get_graphics_mut(module)?;
+            if !graphics.surface.poll_events() {
+                break;
+            }
+            graphics.begin_draw()?;
+        }
+
+        if let Some(ref draw) = draw_fn {
+            Python::attach(|py| {
+                draw.call0(py)
+                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+            })?;
+        }
+
+        get_graphics(module)?.end_draw()?;
+    }
+    Ok(())
 }
 
 #[pyfunction]
