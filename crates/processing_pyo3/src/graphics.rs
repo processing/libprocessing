@@ -1,13 +1,38 @@
 use bevy::prelude::Entity;
 use processing::prelude::*;
-use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyAny};
+use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
 use crate::glfw::GlfwContext;
 
 #[pyclass(unsendable)]
-pub struct Graphics {
+pub struct Surface {
+    entity: Entity,
     glfw_ctx: GlfwContext,
-    surface: Entity,
+}
+
+#[pymethods]
+impl Surface {
+    pub fn poll_events(&mut self) -> bool {
+        self.glfw_ctx.poll_events()
+    }
+}
+
+impl Drop for Surface {
+    fn drop(&mut self) {
+        let _ = surface_destroy(self.entity);
+    }
+}
+
+#[pyclass(unsendable)]
+pub struct Graphics {
+    entity: Entity,
+    pub surface: Surface,
+}
+
+impl Drop for Graphics {
+    fn drop(&mut self) {
+        let _ = graphics_destroy(self.entity);
+    }
 }
 
 #[pymethods]
@@ -24,42 +49,53 @@ impl Graphics {
         let surface = surface_create(window_handle, display_handle, width, height, 1.0)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
-        Ok(Self { glfw_ctx, surface })
+        let surface = Surface {
+            entity: surface,
+            glfw_ctx,
+        };
+
+        let graphics = graphics_create(surface.entity, width, height)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+
+        Ok(Self {
+            entity: graphics,
+            surface,
+        })
     }
 
     pub fn background(&self, args: Vec<f32>) -> PyResult<()> {
         let (r, g, b, a) = parse_color(&args)?;
         let color = bevy::color::Color::srgba(r, g, b, a);
-        graphics_record_command(self.surface, DrawCommand::BackgroundColor(color))
+        graphics_record_command(self.entity, DrawCommand::BackgroundColor(color))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn fill(&self, args: Vec<f32>) -> PyResult<()> {
         let (r, g, b, a) = parse_color(&args)?;
         let color = bevy::color::Color::srgba(r, g, b, a);
-        graphics_record_command(self.surface, DrawCommand::Fill(color))
+        graphics_record_command(self.entity, DrawCommand::Fill(color))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn no_fill(&self) -> PyResult<()> {
-        graphics_record_command(self.surface, DrawCommand::NoFill)
+        graphics_record_command(self.entity, DrawCommand::NoFill)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn stroke(&self, args: Vec<f32>) -> PyResult<()> {
         let (r, g, b, a) = parse_color(&args)?;
         let color = bevy::color::Color::srgba(r, g, b, a);
-        graphics_record_command(self.surface, DrawCommand::StrokeColor(color))
+        graphics_record_command(self.entity, DrawCommand::StrokeColor(color))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn no_stroke(&self) -> PyResult<()> {
-        graphics_record_command(self.surface, DrawCommand::NoStroke)
+        graphics_record_command(self.entity, DrawCommand::NoStroke)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn stroke_weight(&self, weight: f32) -> PyResult<()> {
-        graphics_record_command(self.surface, DrawCommand::StrokeWeight(weight))
+        graphics_record_command(self.entity, DrawCommand::StrokeWeight(weight))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
@@ -75,7 +111,7 @@ impl Graphics {
         bl: f32,
     ) -> PyResult<()> {
         graphics_record_command(
-            self.surface,
+            self.entity,
             DrawCommand::Rect {
                 x,
                 y,
@@ -87,25 +123,12 @@ impl Graphics {
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn run(&mut self, draw_fn: Option<Py<PyAny>>) -> PyResult<()> {
-        loop {
-            if !self.glfw_ctx.poll_events() {
-                break;
-            }
+    pub fn begin_draw(&self) -> PyResult<()> {
+        graphics_begin_draw(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
 
-            graphics_begin_draw(self.surface)
-                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-
-            if let Some(ref draw) = draw_fn {
-                Python::attach(|py| {
-                    draw.call0(py)
-                        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
-                })?;
-            }
-
-            graphics_end_draw(self.surface).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        }
-        Ok(())
+    pub fn end_draw(&self) -> PyResult<()> {
+        graphics_end_draw(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 }
 
