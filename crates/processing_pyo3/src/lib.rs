@@ -11,9 +11,8 @@
 mod glfw;
 mod graphics;
 
-use graphics::{get_graphics, get_graphics_mut, Graphics};
-use pyo3::prelude::*;
-use pyo3::types::PyAny;
+use graphics::{Graphics, get_graphics, get_graphics_mut};
+use pyo3::{prelude::*, types::PyAny};
 
 #[pymodule]
 fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -82,6 +81,16 @@ fn stroke_weight(module: &Bound<'_, PyModule>, weight: f32) -> PyResult<()> {
 
 #[pyfunction]
 #[pyo3(pass_module, signature = (x, y, w, h, tl=0.0, tr=0.0, br=0.0, bl=0.0))]
-fn rect(module: &Bound<'_, PyModule>, x: f32, y: f32, w: f32, h: f32, tl: f32, tr: f32, br: f32, bl: f32) -> PyResult<()> {
+fn rect(
+    module: &Bound<'_, PyModule>,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    tl: f32,
+    tr: f32,
+    br: f32,
+    bl: f32,
+) -> PyResult<()> {
     get_graphics(module)?.rect(x, y, w, h, tl, tr, br, bl)
 }

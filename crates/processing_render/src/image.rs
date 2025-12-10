@@ -1,3 +1,6 @@
+//! An image in Processing is a 2D texture that can be used for rendering.
+//!
+//! It can be created from raw pixel data, loaded from disk, resized, and read back to CPU memory.
 use std::path::PathBuf;
 
 use bevy::{
@@ -11,8 +14,8 @@ use bevy::{
         render_asset::{AssetExtractionSystems, RenderAssets},
         render_resource::{
             Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, Extent3d, MapMode,
-            PollType, TexelCopyBufferInfo, TexelCopyBufferLayout, Texture, TextureDimension,
-            TextureFormat,
+            Origin3d, PollType, TexelCopyBufferInfo, TexelCopyBufferLayout, TexelCopyTextureInfo,
+            Texture, TextureDimension, TextureFormat,
         },
         renderer::{RenderDevice, RenderQueue},
         texture::GpuImage,
@@ -22,32 +25,35 @@ use half::f16;
 
 use crate::error::{ProcessingError, Result};
 
-pub struct PImagePlugin;
+pub struct ImagePlugin;
 
-impl Plugin for PImagePlugin {
+impl Plugin for ImagePlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<PImageTextures>();
+        app.init_resource::<ImageTextures>();
 
         let render_app = app.sub_app_mut(bevy::render::RenderApp);
         render_app.add_systems(ExtractSchedule, sync_textures.after(AssetExtractionSystems));
     }
 }
 
+// In Bevy, `Image` is a `RenderResource`, which means its descriptor is stored in the main world
+// but its GPU texture is stored in the render world. To avoid tedious lookups or the need to
+// explicitly reference the render world, we store a mapping of `PImage` entities to their
+// corresponding GPU `Texture` in the main world. This is as bit hacky, but it simplifies the API.
 #[derive(Resource, Deref, DerefMut, Default)]
-struct PImageTextures(EntityHashMap<Texture>);
+pub struct ImageTextures(EntityHashMap<Texture>);
 
 #[derive(Component)]
-pub struct PImage {
-    pub handle: Handle<Image>,
+pub struct Image {
+    pub handle: Handle<bevy::image::Image>,
     readback_buffer: Buffer,
-    pixel_size: usize,
-    texture_format: TextureFormat,
-    size: Extent3d,
+    pub texture_format: TextureFormat,
+    pub size: Extent3d,
 }
 
 fn sync_textures(mut main_world: ResMut<MainWorld>, gpu_images: Res<RenderAssets<GpuImage>>) {
-    main_world.resource_scope(|world, mut p_image_textures: Mut<PImageTextures>| {
-        let mut p_images = world.query_filtered::<(Entity, &PImage), Changed<PImage>>();
+    main_world.resource_scope(|world, mut p_image_textures: Mut<ImageTextures>| {
+        let mut p_images = world.query_filtered::<(Entity, &Image), Changed<Image>>();
         for (entity, p_image) in p_images.iter(world) {
             if let Some(gpu_image) = gpu_images.get(&p_image.handle) {
                 p_image_textures.insert(entity, gpu_image.texture.clone());
@@ -62,13 +68,13 @@ pub fn create(
     data: Vec<u8>,
     texture_format: TextureFormat,
 ) -> Entity {
-    fn new_inner(
+    fn create_inner(
         In((size, data, texture_format)): In<(Extent3d, Vec<u8>, TextureFormat)>,
         mut commands: Commands,
-        mut images: ResMut<Assets<Image>>,
+        mut images: ResMut<Assets<bevy::image::Image>>,
         render_device: Res<RenderDevice>,
     ) -> Entity {
-        let image = Image::new(
+        let image = bevy::image::Image::new(
             size,
             TextureDimension::D2,
             data,
@@ -77,41 +83,35 @@ pub fn create(
         );
 
         let handle = images.add(image);
+        let readback_buffer = create_readback_buffer(
+            &render_device,
+            size.width,
+            size.height,
+            texture_format,
+            "Image Readback Buffer",
+        )
+        .expect("Failed to create readback buffer");
 
-        let pixel_size = match texture_format {
-            TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => 4usize,
-            TextureFormat::Rgba16Float => 8,
-            TextureFormat::Rgba32Float => 16,
-            _ => panic!("Unsupported texture format for readback"),
-        };
-        let readback_buffer_size = size.width * size.height * pixel_size as u32;
-        let readback_buffer = render_device.create_buffer(&BufferDescriptor {
-            label: Some("PImage Readback Buffer"),
-            size: readback_buffer_size as u64,
-            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
         commands
-            .spawn(PImage {
+            .spawn((Image {
                 handle: handle.clone(),
                 readback_buffer,
-                pixel_size,
                 texture_format,
                 size,
-            })
+            },))
             .id()
     }
 
     world
-        .run_system_cached_with(new_inner, (size, data, texture_format))
-        .expect("Failed to run new PImage system")
+        .run_system_cached_with(create_inner, (size, data, texture_format))
+        .unwrap()
 }
 
-pub fn load_start(world: &mut World, path: PathBuf) -> Handle<Image> {
+pub fn load_start(world: &mut World, path: PathBuf) -> Handle<bevy::image::Image> {
     world.get_asset_server().load(path)
 }
 
-pub fn is_loaded(world: &World, handle: &Handle<Image>) -> bool {
+pub fn is_loaded(world: &World, handle: &Handle<bevy::image::Image>) -> bool {
     matches!(
         world.get_asset_server().load_state(handle),
         LoadState::Loaded
@@ -119,34 +119,30 @@ pub fn is_loaded(world: &World, handle: &Handle<Image>) -> bool {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn from_handle(world: &mut World, handle: Handle<Image>) -> Result<Entity> {
-    fn from_handle_inner(In(handle): In<Handle<Image>>, world: &mut World) -> Result<Entity> {
-        let images = world.resource::<Assets<Image>>();
+pub fn from_handle(world: &mut World, handle: Handle<bevy::image::Image>) -> Result<Entity> {
+    fn from_handle_inner(
+        In(handle): In<Handle<bevy::image::Image>>,
+        world: &mut World,
+    ) -> Result<Entity> {
+        let images = world.resource::<Assets<bevy::image::Image>>();
         let image = images.get(&handle).ok_or(ProcessingError::ImageNotFound)?;
 
         let size = image.texture_descriptor.size;
         let texture_format = image.texture_descriptor.format;
-        let pixel_size = match texture_format {
-            TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => 4usize,
-            TextureFormat::Rgba16Float => 8,
-            TextureFormat::Rgba32Float => 16,
-            _ => panic!("Unsupported texture format for readback"),
-        };
-        let readback_buffer_size = size.width * size.height * pixel_size as u32;
 
         let render_device = world.resource::<RenderDevice>();
-        let readback_buffer = render_device.create_buffer(&BufferDescriptor {
-            label: Some("PImage Readback Buffer"),
-            size: readback_buffer_size as u64,
-            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
+        let readback_buffer = create_readback_buffer(
+            render_device,
+            size.width,
+            size.height,
+            texture_format,
+            "Image Readback Buffer",
+        )?;
 
         Ok(world
-            .spawn(PImage {
+            .spawn(Image {
                 handle: handle.clone(),
                 readback_buffer,
-                pixel_size,
                 texture_format,
                 size,
             })
@@ -160,37 +156,29 @@ pub fn from_handle(world: &mut World, handle: Handle<Image>) -> Result<Entity> {
 
 pub fn load(world: &mut World, path: PathBuf) -> Result<Entity> {
     fn load_inner(In(path): In<PathBuf>, world: &mut World) -> Result<Entity> {
-        let handle = world.get_asset_server().load(path);
+        let handle: Handle<bevy::image::Image> = world.get_asset_server().load(path);
         while let LoadState::Loading = world.get_asset_server().load_state(&handle) {
-            world
-                .run_system_once(handle_internal_asset_events)
-                .expect("Failed to run internal asset events system");
+            world.run_system_once(handle_internal_asset_events).unwrap();
         }
-        let images = world.resource::<Assets<Image>>();
+        let images = world.resource::<Assets<bevy::image::Image>>();
         let image = images.get(&handle).ok_or(ProcessingError::ImageNotFound)?;
 
         let size = image.texture_descriptor.size;
         let texture_format = image.texture_descriptor.format;
-        let pixel_size = match texture_format {
-            TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => 4usize,
-            TextureFormat::Rgba16Float => 8,
-            TextureFormat::Rgba32Float => 16,
-            _ => panic!("Unsupported texture format for readback"),
-        };
-        let readback_buffer_size = size.width * size.height * pixel_size as u32;
 
         let render_device = world.resource::<RenderDevice>();
-        let readback_buffer = render_device.create_buffer(&BufferDescriptor {
-            label: Some("PImage Readback Buffer"),
-            size: readback_buffer_size as u64,
-            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
+        let readback_buffer = create_readback_buffer(
+            render_device,
+            size.width,
+            size.height,
+            texture_format,
+            "Image Readback Buffer",
+        )?;
+
         Ok(world
-            .spawn(PImage {
+            .spawn(Image {
                 handle: handle.clone(),
                 readback_buffer,
-                pixel_size,
                 texture_format,
                 size,
             })
@@ -205,26 +193,27 @@ pub fn load(world: &mut World, path: PathBuf) -> Result<Entity> {
 pub fn resize(world: &mut World, entity: Entity, new_size: Extent3d) -> Result<()> {
     fn resize_inner(
         In((entity, new_size)): In<(Entity, Extent3d)>,
-        mut p_images: Query<&mut PImage>,
-        mut images: ResMut<Assets<Image>>,
+        mut p_images: Query<&mut Image>,
+        mut images: ResMut<Assets<bevy::image::Image>>,
         render_device: Res<RenderDevice>,
     ) -> Result<()> {
-        let mut image = p_images
+        let mut p_image = p_images
             .get_mut(entity)
             .map_err(|_| ProcessingError::ImageNotFound)?;
 
         images
-            .get_mut(&image.handle)
+            .get_mut(&p_image.handle)
             .ok_or(ProcessingError::ImageNotFound)?
             .resize_in_place(new_size);
 
-        let size = new_size.width as u64 * new_size.height as u64 * image.pixel_size as u64;
-        image.readback_buffer = render_device.create_buffer(&BufferDescriptor {
-            label: Some("PImage Readback Buffer"),
-            size,
-            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
+        p_image.readback_buffer = create_readback_buffer(
+            &render_device,
+            new_size.width,
+            new_size.height,
+            p_image.texture_format,
+            "Image Readback Buffer",
+        )?;
+        p_image.size = new_size;
 
         Ok(())
     }
@@ -234,12 +223,12 @@ pub fn resize(world: &mut World, entity: Entity, new_size: Extent3d) -> Result<(
         .expect("Failed to run resize system")
 }
 
-pub fn load_pixels(world: &mut World, entity: Entity) -> Result<Vec<LinearRgba>> {
+pub fn readback(world: &mut World, entity: Entity) -> Result<Vec<LinearRgba>> {
     fn readback_inner(
         In(entity): In<Entity>,
-        p_images: Query<&PImage>,
-        p_image_textures: Res<PImageTextures>,
-        mut images: ResMut<Assets<Image>>,
+        p_images: Query<&Image>,
+        p_image_textures: Res<ImageTextures>,
+        mut images: ResMut<Assets<bevy::image::Image>>,
         render_device: Res<RenderDevice>,
         render_queue: ResMut<RenderQueue>,
     ) -> Result<Vec<LinearRgba>> {
@@ -253,12 +242,9 @@ pub fn load_pixels(world: &mut World, entity: Entity) -> Result<Vec<LinearRgba>>
         let mut encoder =
             render_device.create_command_encoder(&CommandEncoderDescriptor::default());
 
-        let block_dimensions = p_image.texture_format.block_dimensions();
-        let block_size = p_image.texture_format.block_copy_size(None).unwrap();
-
-        let padded_bytes_per_row = RenderDevice::align_copy_bytes_per_row(
-            (p_image.size.width as usize / block_dimensions.0 as usize) * block_size as usize,
-        );
+        let px_size = pixel_size(p_image.texture_format)?;
+        let padded_bytes_per_row =
+            RenderDevice::align_copy_bytes_per_row(p_image.size.width as usize * px_size);
 
         encoder.copy_texture_to_buffer(
             texture.as_image_copy(),
@@ -303,35 +289,13 @@ pub fn load_pixels(world: &mut World, entity: Entity) -> Result<Vec<LinearRgba>>
 
         p_image.readback_buffer.unmap();
 
-        let data = match p_image.texture_format {
-            TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => data
-                .chunks_exact(p_image.pixel_size)
-                .map(|chunk| LinearRgba::from_u8_array([chunk[0], chunk[1], chunk[2], chunk[3]]))
-                .collect(),
-            TextureFormat::Rgba16Float => data
-                .chunks_exact(p_image.pixel_size)
-                .map(|chunk| {
-                    let r = f16::from_bits(u16::from_le_bytes([chunk[0], chunk[1]])).to_f32();
-                    let g = f16::from_bits(u16::from_le_bytes([chunk[2], chunk[3]])).to_f32();
-                    let b = f16::from_bits(u16::from_le_bytes([chunk[4], chunk[5]])).to_f32();
-                    let a = f16::from_bits(u16::from_le_bytes([chunk[6], chunk[7]])).to_f32();
-                    LinearRgba::from_f32_array([r, g, b, a])
-                })
-                .collect(),
-            TextureFormat::Rgba32Float => data
-                .chunks_exact(p_image.pixel_size)
-                .map(|chunk| {
-                    let r = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                    let g = f32::from_le_bytes([chunk[4], chunk[5], chunk[6], chunk[7]]);
-                    let b = f32::from_le_bytes([chunk[8], chunk[9], chunk[10], chunk[11]]);
-                    let a = f32::from_le_bytes([chunk[12], chunk[13], chunk[14], chunk[15]]);
-                    LinearRgba::from_f32_array([r, g, b, a])
-                })
-                .collect(),
-            _ => return Err(ProcessingError::UnsupportedTextureFormat),
-        };
-
-        Ok(data)
+        bytes_to_pixels(
+            &data,
+            p_image.texture_format,
+            p_image.size.width,
+            p_image.size.height,
+            padded_bytes_per_row,
+        )
     }
 
     world
@@ -339,12 +303,109 @@ pub fn load_pixels(world: &mut World, entity: Entity) -> Result<Vec<LinearRgba>>
         .expect("Failed to run readback system")
 }
 
+pub fn update_region(
+    world: &mut World,
+    entity: Entity,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    pixels: &[LinearRgba],
+) -> Result<()> {
+    let expected_count = (width * height) as usize;
+    if pixels.len() != expected_count {
+        return Err(ProcessingError::InvalidArgument(format!(
+            "Expected {} pixels for {}x{} region, got {}",
+            expected_count,
+            width,
+            height,
+            pixels.len()
+        )));
+    }
+
+    fn update_region_inner(
+        In((entity, x, y, width, height, data, px_size)): In<(
+            Entity,
+            u32,
+            u32,
+            u32,
+            u32,
+            Vec<u8>,
+            u32,
+        )>,
+        p_images: Query<&Image>,
+        p_image_textures: Res<ImageTextures>,
+        render_queue: Res<RenderQueue>,
+    ) -> Result<()> {
+        let p_image = p_images
+            .get(entity)
+            .map_err(|_| ProcessingError::ImageNotFound)?;
+
+        if x + width > p_image.size.width || y + height > p_image.size.height {
+            return Err(ProcessingError::InvalidArgument(format!(
+                "Region ({}, {}, {}, {}) exceeds image bounds ({}, {})",
+                x, y, width, height, p_image.size.width, p_image.size.height
+            )));
+        }
+
+        let texture = p_image_textures
+            .get(&entity)
+            .ok_or(ProcessingError::ImageNotFound)?;
+
+        let bytes_per_row = width * px_size;
+
+        render_queue.write_texture(
+            TexelCopyTextureInfo {
+                texture,
+                mip_level: 0,
+                origin: Origin3d { x, y, z: 0 },
+                aspect: Default::default(),
+            },
+            &data,
+            TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(bytes_per_row),
+                rows_per_image: None,
+            },
+            Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+
+        Ok(())
+    }
+
+    let p_image = world
+        .get::<Image>(entity)
+        .ok_or(ProcessingError::ImageNotFound)?;
+    let px_size = pixel_size(p_image.texture_format)? as u32;
+    let data = pixels_to_bytes(pixels, p_image.texture_format)?;
+
+    world
+        .run_system_cached_with(
+            update_region_inner,
+            (entity, x, y, width, height, data, px_size),
+        )
+        .expect("Failed to run update_region system")
+}
+
+pub fn update(world: &mut World, entity: Entity, pixels: &[LinearRgba]) -> Result<()> {
+    let size = world
+        .get::<Image>(entity)
+        .ok_or(ProcessingError::ImageNotFound)?
+        .size;
+    update_region(world, entity, 0, 0, size.width, size.height, pixels)
+}
+
 pub fn destroy(world: &mut World, entity: Entity) -> Result<()> {
     fn destroy_inner(
         In(entity): In<Entity>,
-        mut p_images: Query<&mut PImage>,
-        mut images: ResMut<Assets<Image>>,
-        mut p_image_textures: ResMut<PImageTextures>,
+        mut commands: Commands,
+        mut p_images: Query<&mut Image>,
+        mut images: ResMut<Assets<bevy::image::Image>>,
+        mut p_image_textures: ResMut<ImageTextures>,
     ) -> Result<()> {
         let p_image = p_images
             .get_mut(entity)
@@ -352,11 +413,134 @@ pub fn destroy(world: &mut World, entity: Entity) -> Result<()> {
 
         images.remove(&p_image.handle);
         p_image_textures.remove(&entity);
-
+        commands.entity(entity).despawn();
         Ok(())
     }
 
     world
         .run_system_cached_with(destroy_inner, entity)
         .expect("Failed to run destroy system")
+}
+
+/// Get the size in bytes of a single pixel for the given texture format.
+pub fn pixel_size(format: TextureFormat) -> Result<usize> {
+    match format {
+        TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => Ok(4),
+        TextureFormat::Rgba16Float => Ok(8),
+        TextureFormat::Rgba32Float => Ok(16),
+        _ => Err(ProcessingError::UnsupportedTextureFormat),
+    }
+}
+
+/// Convert LinearRgba pixels to raw bytes in the specified texture format.
+pub fn pixels_to_bytes(pixels: &[LinearRgba], format: TextureFormat) -> Result<Vec<u8>> {
+    match format {
+        TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => {
+            Ok(pixels.iter().flat_map(|p| p.to_u8_array()).collect())
+        }
+        TextureFormat::Rgba16Float => Ok(pixels
+            .iter()
+            .flat_map(|p| {
+                let [r, g, b, a] = p.to_f32_array();
+                [
+                    f16::from_f32(r).to_bits().to_le_bytes(),
+                    f16::from_f32(g).to_bits().to_le_bytes(),
+                    f16::from_f32(b).to_bits().to_le_bytes(),
+                    f16::from_f32(a).to_bits().to_le_bytes(),
+                ]
+                .into_iter()
+                .flatten()
+            })
+            .collect()),
+        TextureFormat::Rgba32Float => Ok(pixels
+            .iter()
+            .flat_map(|p| {
+                let [r, g, b, a] = p.to_f32_array();
+                [
+                    r.to_le_bytes(),
+                    g.to_le_bytes(),
+                    b.to_le_bytes(),
+                    a.to_le_bytes(),
+                ]
+                .into_iter()
+                .flatten()
+            })
+            .collect()),
+        _ => Err(ProcessingError::UnsupportedTextureFormat),
+    }
+}
+
+/// Convert raw bytes to LinearRgba pixels based on the texture format.
+/// Handles row padding, data should come from a GPU texture readback with proper alignment.
+pub fn bytes_to_pixels(
+    data: &[u8],
+    format: TextureFormat,
+    width: u32,
+    height: u32,
+    padded_bytes_per_row: usize,
+) -> Result<Vec<LinearRgba>> {
+    let px_size = pixel_size(format)?;
+    let bytes_per_row = width as usize * px_size;
+
+    let pixels = match format {
+        TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => data
+            .chunks_exact(padded_bytes_per_row)
+            .take(height as usize)
+            .flat_map(|row| {
+                row[..bytes_per_row].chunks_exact(px_size).map(|chunk| {
+                    LinearRgba::from_u8_array([chunk[0], chunk[1], chunk[2], chunk[3]])
+                })
+            })
+            .collect(),
+        TextureFormat::Rgba16Float => data
+            .chunks_exact(padded_bytes_per_row)
+            .take(height as usize)
+            .flat_map(|row| {
+                row[..bytes_per_row].chunks_exact(px_size).map(|chunk| {
+                    let r = f16::from_bits(u16::from_le_bytes([chunk[0], chunk[1]])).to_f32();
+                    let g = f16::from_bits(u16::from_le_bytes([chunk[2], chunk[3]])).to_f32();
+                    let b = f16::from_bits(u16::from_le_bytes([chunk[4], chunk[5]])).to_f32();
+                    let a = f16::from_bits(u16::from_le_bytes([chunk[6], chunk[7]])).to_f32();
+                    LinearRgba::from_f32_array([r, g, b, a])
+                })
+            })
+            .collect(),
+        TextureFormat::Rgba32Float => data
+            .chunks_exact(padded_bytes_per_row)
+            .take(height as usize)
+            .flat_map(|row| {
+                row[..bytes_per_row].chunks_exact(px_size).map(|chunk| {
+                    let r = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+                    let g = f32::from_le_bytes([chunk[4], chunk[5], chunk[6], chunk[7]]);
+                    let b = f32::from_le_bytes([chunk[8], chunk[9], chunk[10], chunk[11]]);
+                    let a = f32::from_le_bytes([chunk[12], chunk[13], chunk[14], chunk[15]]);
+                    LinearRgba::from_f32_array([r, g, b, a])
+                })
+            })
+            .collect(),
+        // TODO: Handle more formats as needed
+        _ => return Err(ProcessingError::UnsupportedTextureFormat),
+    };
+
+    Ok(pixels)
+}
+
+/// Create a readback buffer for the given texture dimensions and format.
+pub fn create_readback_buffer(
+    render_device: &RenderDevice,
+    width: u32,
+    height: u32,
+    format: TextureFormat,
+    label: &str,
+) -> Result<Buffer> {
+    let px_size = pixel_size(format)?;
+    let padded_bytes_per_row = RenderDevice::align_copy_bytes_per_row(width as usize * px_size);
+    let buffer_size = padded_bytes_per_row as u64 * height as u64;
+
+    Ok(render_device.create_buffer(&BufferDescriptor {
+        label: Some(label),
+        size: buffer_size,
+        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    }))
 }

@@ -21,15 +21,20 @@ fn sketch() -> error::Result<()> {
     let mut glfw_ctx = GlfwContext::new(400, 400)?;
     init()?;
 
+    let width = 400;
+    let height = 400;
+    let scale_factor = 1.0;
+
     let window_handle = glfw_ctx.get_window();
     let display_handle = glfw_ctx.get_display();
-    let surface = surface_create(window_handle, display_handle, 400, 400, 1.0)?;
+    let surface = surface_create(window_handle, display_handle, width, height, scale_factor)?;
+    let graphics = graphics_create(surface, width, height)?;
 
     while glfw_ctx.poll_events() {
-        begin_draw(surface)?;
+        graphics_begin_draw(graphics)?;
 
-        record_command(
-            surface,
+        graphics_record_command(
+            graphics,
             DrawCommand::Rect {
                 x: 10.0,
                 y: 10.0,
@@ -39,7 +44,7 @@ fn sketch() -> error::Result<()> {
             },
         )?;
 
-        end_draw(surface)?;
+        graphics_end_draw(graphics)?;
     }
     Ok(())
 }
