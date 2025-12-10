@@ -12,7 +12,9 @@ use material::MaterialKey;
 use primitive::{TessellationMode, empty_mesh};
 use transform::TransformStack;
 
-use crate::{Flush, graphics::SurfaceSize, image::Image, render::primitive::rect};
+use crate::{
+    Flush, geometry::Geometry, graphics::SurfaceSize, image::Image, render::primitive::rect,
+};
 
 #[derive(Component)]
 #[relationship(relationship_target = TransientMeshes)]
@@ -97,6 +99,7 @@ pub fn flush_draw_commands(
         With<Flush>,
     >,
     p_images: Query<&Image>,
+    p_geometries: Query<&Geometry>,
 ) {
     for (graphics_entity, mut cmd_buffer, mut state, render_layers, SurfaceSize(width, height)) in
         graphics.iter_mut()
@@ -192,6 +195,37 @@ pub fn flush_draw_commands(
                 DrawCommand::Scale { x, y } => state.transform.scale(x, y),
                 DrawCommand::ShearX { angle } => state.transform.shear_x(angle),
                 DrawCommand::ShearY { angle } => state.transform.shear_y(angle),
+                DrawCommand::Geometry(entity) => {
+                    let Some(geometry) = p_geometries.get(entity).ok() else {
+                        warn!("Could not find Geometry for entity {:?}", entity);
+                        continue;
+                    };
+
+                    flush_batch(&mut res, &mut batch);
+
+                    // TODO: Implement state based material API
+                    // https://github.com/processing/libprocessing/issues/10
+                    let material_key = MaterialKey {
+                        transparent: false, // TODO: detect from geometry colors
+                        background_image: None,
+                    };
+
+                    let material_handle = res.materials.add(material_key.to_material());
+                    let z_offset = -(batch.draw_index as f32 * 0.001);
+
+                    let mut transform = state.transform.to_bevy_transform();
+                    transform.translation.z += z_offset;
+
+                    res.commands.spawn((
+                        Mesh3d(geometry.handle.clone()),
+                        MeshMaterial3d(material_handle),
+                        BelongsToGraphics(batch.graphics_entity),
+                        transform,
+                        batch.render_layers.clone(),
+                    ));
+
+                    batch.draw_index += 1;
+                }
             }
         }
 

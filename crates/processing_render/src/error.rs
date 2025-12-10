@@ -24,4 +24,8 @@ pub enum ProcessingError {
     GraphicsNotFound,
     #[error("Invalid entity")]
     InvalidEntity,
+    #[error("Geometry not found")]
+    GeometryNotFound,
+    #[error("Layout not found")]
+    LayoutNotFound,
 }

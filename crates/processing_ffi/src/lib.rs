@@ -585,3 +585,440 @@ pub extern "C" fn processing_ortho(
     let window_entity = Entity::from_bits(window_id);
     error::check(|| graphics_ortho(window_entity, left, right, bottom, top, near, far));
 }
+
+pub const PROCESSING_ATTR_POSITION: u32 = 0x01;
+pub const PROCESSING_ATTR_NORMAL: u32 = 0x02;
+pub const PROCESSING_ATTR_COLOR: u32 = 0x04;
+pub const PROCESSING_ATTR_UV: u32 = 0x08;
+
+pub const PROCESSING_ATTR_FORMAT_FLOAT: u8 = 1;
+pub const PROCESSING_ATTR_FORMAT_FLOAT2: u8 = 2;
+pub const PROCESSING_ATTR_FORMAT_FLOAT3: u8 = 3;
+pub const PROCESSING_ATTR_FORMAT_FLOAT4: u8 = 4;
+
+pub const PROCESSING_TOPOLOGY_POINT_LIST: u8 = 0;
+pub const PROCESSING_TOPOLOGY_LINE_LIST: u8 = 1;
+pub const PROCESSING_TOPOLOGY_LINE_STRIP: u8 = 2;
+pub const PROCESSING_TOPOLOGY_TRIANGLE_LIST: u8 = 3;
+pub const PROCESSING_TOPOLOGY_TRIANGLE_STRIP: u8 = 4;
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_layout_create() -> u64 {
+    error::clear_error();
+    error::check(geometry_layout_create)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_layout_add_position(layout_id: u64) {
+    error::clear_error();
+    let entity = Entity::from_bits(layout_id);
+    error::check(|| geometry_layout_add_position(entity));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_layout_add_normal(layout_id: u64) {
+    error::clear_error();
+    let entity = Entity::from_bits(layout_id);
+    error::check(|| geometry_layout_add_normal(entity));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_layout_add_color(layout_id: u64) {
+    error::clear_error();
+    let entity = Entity::from_bits(layout_id);
+    error::check(|| geometry_layout_add_color(entity));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_layout_add_uv(layout_id: u64) {
+    error::clear_error();
+    let entity = Entity::from_bits(layout_id);
+    error::check(|| geometry_layout_add_uv(entity));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_layout_add_attribute(layout_id: u64, attr_id: u64) {
+    error::clear_error();
+    let layout_entity = Entity::from_bits(layout_id);
+    let attr_entity = Entity::from_bits(attr_id);
+    error::check(|| geometry_layout_add_attribute(layout_entity, attr_entity));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_layout_build(layout_id: u64) {
+    error::clear_error();
+    let entity = Entity::from_bits(layout_id);
+    error::check(|| geometry_layout_build(entity));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_layout_destroy(layout_id: u64) {
+    error::clear_error();
+    let entity = Entity::from_bits(layout_id);
+    error::check(|| geometry_layout_destroy(entity));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_create_with_layout(layout_id: u64, topology: u8) -> u64 {
+    error::clear_error();
+    let Some(topo) = geometry::Topology::from_u8(topology) else {
+        error::set_error("Invalid topology");
+        return 0;
+    };
+    let entity = Entity::from_bits(layout_id);
+    error::check(|| geometry_create_with_layout(entity, topo))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_create(topology: u8) -> u64 {
+    error::clear_error();
+    let Some(topo) = geometry::Topology::from_u8(topology) else {
+        error::set_error("Invalid topology");
+        return 0;
+    };
+    error::check(|| geometry_create(topo))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_create_with_attrs(attrs: u32, topology: u8) -> u64 {
+    error::clear_error();
+    let Some(topo) = geometry::Topology::from_u8(topology) else {
+        error::set_error("Invalid topology");
+        return 0;
+    };
+    let attrs = geometry::VertexAttributes::from_bits_truncate(attrs);
+    error::check(|| geometry_create_with_attributes(attrs, topo))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_normal(geo_id: u64, nx: f32, ny: f32, nz: f32) {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    error::check(|| geometry_normal(entity, nx, ny, nz));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_color(geo_id: u64, r: f32, g: f32, b: f32, a: f32) {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    error::check(|| geometry_color(entity, r, g, b, a));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_uv(geo_id: u64, u: f32, v: f32) {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    error::check(|| geometry_uv(entity, u, v));
+}
+
+/// # Safety
+/// - `name` must be a valid null-terminated C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_geometry_attribute_create(
+    name: *const std::ffi::c_char,
+    format: u8,
+) -> u64 {
+    error::clear_error();
+
+    let c_str = unsafe { std::ffi::CStr::from_ptr(name) };
+    let name_str = match c_str.to_str() {
+        Ok(s) => s,
+        Err(_) => {
+            error::set_error("Invalid UTF-8 in attribute name");
+            return 0;
+        }
+    };
+
+    let attr_format = match geometry::AttributeFormat::from_u8(format) {
+        Some(f) => f,
+        None => {
+            error::set_error("Invalid attribute format");
+            return 0;
+        }
+    };
+
+    error::check(|| geometry_attribute_create(name_str, attr_format))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_attribute_destroy(attr_id: u64) {
+    error::clear_error();
+    let entity = Entity::from_bits(attr_id);
+    error::check(|| geometry_attribute_destroy(entity));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_attribute_position() -> u64 {
+    geometry_attribute_position().to_bits()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_attribute_normal() -> u64 {
+    geometry_attribute_normal().to_bits()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_attribute_color() -> u64 {
+    geometry_attribute_color().to_bits()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_attribute_uv() -> u64 {
+    geometry_attribute_uv().to_bits()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_attribute_float(geo_id: u64, attr_id: u64, v: f32) {
+    error::clear_error();
+    let geo_entity = Entity::from_bits(geo_id);
+    let attr_entity = Entity::from_bits(attr_id);
+    error::check(|| geometry_attribute_float(geo_entity, attr_entity, v));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_attribute_float2(geo_id: u64, attr_id: u64, x: f32, y: f32) {
+    error::clear_error();
+    let geo_entity = Entity::from_bits(geo_id);
+    let attr_entity = Entity::from_bits(attr_id);
+    error::check(|| geometry_attribute_float2(geo_entity, attr_entity, x, y));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_attribute_float3(
+    geo_id: u64,
+    attr_id: u64,
+    x: f32,
+    y: f32,
+    z: f32,
+) {
+    error::clear_error();
+    let geo_entity = Entity::from_bits(geo_id);
+    let attr_entity = Entity::from_bits(attr_id);
+    error::check(|| geometry_attribute_float3(geo_entity, attr_entity, x, y, z));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_attribute_float4(
+    geo_id: u64,
+    attr_id: u64,
+    x: f32,
+    y: f32,
+    z: f32,
+    w: f32,
+) {
+    error::clear_error();
+    let geo_entity = Entity::from_bits(geo_id);
+    let attr_entity = Entity::from_bits(attr_id);
+    error::check(|| geometry_attribute_float4(geo_entity, attr_entity, x, y, z, w));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_vertex(geo_id: u64, x: f32, y: f32, z: f32) {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    error::check(|| geometry_vertex(entity, x, y, z));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_index(geo_id: u64, i: u32) {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    error::check(|| geometry_index(entity, i));
+}
+
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_vertex_count(geo_id: u64) -> u32 {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    error::check(|| geometry_vertex_count(entity)).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_index_count(geo_id: u64) -> u32 {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    error::check(|| geometry_index_count(entity)).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_geometry_get_positions(
+    geo_id: u64,
+    start: u32,
+    end: u32,
+    out: *mut [f32; 3],
+    out_len: u32,
+) -> u32 {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    let positions = error::check(|| geometry_get_positions(entity, start as usize, end as usize));
+    match positions {
+        Some(p) => {
+            let count = p.len().min(out_len as usize);
+            std::ptr::copy_nonoverlapping(p.as_ptr(), out, count);
+            count as u32
+        }
+        None => 0,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_geometry_get_normals(
+    geo_id: u64,
+    start: u32,
+    end: u32,
+    out: *mut [f32; 3],
+    out_len: u32,
+) -> u32 {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    let normals = error::check(|| geometry_get_normals(entity, start as usize, end as usize));
+    match normals {
+        Some(n) => {
+            let count = n.len().min(out_len as usize);
+            std::ptr::copy_nonoverlapping(n.as_ptr(), out, count);
+            count as u32
+        }
+        None => 0,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_geometry_get_colors(
+    geo_id: u64,
+    start: u32,
+    end: u32,
+    out: *mut [f32; 4],
+    out_len: u32,
+) -> u32 {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    let colors = error::check(|| geometry_get_colors(entity, start as usize, end as usize));
+    match colors {
+        Some(c) => {
+            let count = c.len().min(out_len as usize);
+            std::ptr::copy_nonoverlapping(c.as_ptr(), out, count);
+            count as u32
+        }
+        None => 0,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_geometry_get_uvs(
+    geo_id: u64,
+    start: u32,
+    end: u32,
+    out: *mut [f32; 2],
+    out_len: u32,
+) -> u32 {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    let uvs = error::check(|| geometry_get_uvs(entity, start as usize, end as usize));
+    match uvs {
+        Some(u) => {
+            let count = u.len().min(out_len as usize);
+            std::ptr::copy_nonoverlapping(u.as_ptr(), out, count);
+            count as u32
+        }
+        None => 0,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_geometry_get_indices(
+    geo_id: u64,
+    start: u32,
+    end: u32,
+    out: *mut u32,
+    out_len: u32,
+) -> u32 {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    let indices = error::check(|| geometry_get_indices(entity, start as usize, end as usize));
+    match indices {
+        Some(i) => {
+            let count = i.len().min(out_len as usize);
+            std::ptr::copy_nonoverlapping(i.as_ptr(), out, count);
+            count as u32
+        }
+        None => 0,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_set_vertex(geo_id: u64, index: u32, x: f32, y: f32, z: f32) {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    error::check(|| geometry_set_vertex(entity, index, x, y, z));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_set_normal(
+    geo_id: u64,
+    index: u32,
+    nx: f32,
+    ny: f32,
+    nz: f32,
+) {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    error::check(|| geometry_set_normal(entity, index, nx, ny, nz));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_set_color(
+    geo_id: u64,
+    index: u32,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+) {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    error::check(|| geometry_set_color(entity, index, r, g, b, a));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_set_uv(geo_id: u64, index: u32, u: f32, v: f32) {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    error::check(|| geometry_set_uv(entity, index, u, v));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_destroy(geo_id: u64) {
+    error::clear_error();
+    let entity = Entity::from_bits(geo_id);
+    error::check(|| geometry_destroy(entity));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_model(window_id: u64, geo_id: u64) {
+    error::clear_error();
+    let window_entity = Entity::from_bits(window_id);
+    let geo_entity = Entity::from_bits(geo_id);
+    error::check(|| graphics_record_command(
+        window_entity,
+        DrawCommand::Geometry(geo_entity),
+    ));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_box(width: f32, height: f32, depth: f32) -> u64 {
+    error::clear_error();
+    error::check(|| geometry_box(width, height, depth))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}

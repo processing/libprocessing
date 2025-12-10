@@ -36,6 +36,7 @@ pub enum DrawCommand {
     ShearY {
         angle: f32,
     },
+    Geometry(Entity),
 }
 
 #[derive(Debug, Default, Component)]

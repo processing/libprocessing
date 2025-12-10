@@ -1,4 +1,5 @@
 pub mod error;
+pub mod geometry;
 mod graphics;
 pub mod image;
 pub mod render;
@@ -17,6 +18,7 @@ use bevy::{
 use render::{activate_cameras, clear_transient_meshes, flush_draw_commands};
 use tracing::debug;
 
+use crate::geometry::{AttributeFormat, AttributeValue};
 use crate::graphics::flush;
 use crate::{
     graphics::GraphicsPlugin, image::ImagePlugin, render::command::DrawCommand,
@@ -228,7 +230,7 @@ fn create_app() -> App {
         });
 
     app.add_plugins(plugins);
-    app.add_plugins((ImagePlugin, GraphicsPlugin, SurfacePlugin));
+    app.add_plugins((ImagePlugin, GraphicsPlugin, SurfacePlugin, geometry::GeometryPlugin));
     app.add_systems(First, (clear_transient_meshes, activate_cameras))
         .add_systems(Update, flush_draw_commands.before(AssetEventSystems));
 
@@ -680,5 +682,409 @@ pub fn image_destroy(entity: Entity) -> error::Result<()> {
         app.world_mut()
             .run_system_cached_with(image::destroy, entity)
             .unwrap()
+    })
+}
+
+pub fn geometry_layout_create() -> error::Result<Entity> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(geometry::layout::create, ())
+            .unwrap())
+    })
+}
+
+pub fn geometry_layout_add_position(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        geometry::layout::add_position(app.world_mut(), entity);
+        Ok(())
+    })
+}
+
+pub fn geometry_layout_add_normal(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        geometry::layout::add_normal(app.world_mut(), entity);
+        Ok(())
+    })
+}
+
+pub fn geometry_layout_add_color(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        geometry::layout::add_color(app.world_mut(), entity);
+        Ok(())
+    })
+}
+
+pub fn geometry_layout_add_uv(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        geometry::layout::add_uv(app.world_mut(), entity);
+        Ok(())
+    })
+}
+
+pub fn geometry_layout_add_attribute(layout_entity: Entity, attr_entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        geometry::layout::add_attribute(app.world_mut(), layout_entity, attr_entity);
+        Ok(())
+    })
+}
+
+pub fn geometry_layout_destroy(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::layout::destroy, entity)
+            .unwrap();
+        Ok(())
+    })
+}
+
+pub fn geometry_attribute_create(name: impl Into<String>, format: AttributeFormat) -> error::Result<Entity> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(geometry::create_attribute, (name.into(), format))
+            .unwrap())
+    })
+}
+
+pub fn geometry_attribute_position() -> Entity {
+    app_mut(|app| Ok(app.world().resource::<geometry::BuiltinAttributes>().position)).unwrap()
+}
+
+pub fn geometry_attribute_normal() -> Entity {
+    app_mut(|app| Ok(app.world().resource::<geometry::BuiltinAttributes>().normal)).unwrap()
+}
+
+pub fn geometry_attribute_color() -> Entity {
+    app_mut(|app| Ok(app.world().resource::<geometry::BuiltinAttributes>().color)).unwrap()
+}
+
+pub fn geometry_attribute_uv() -> Entity {
+    app_mut(|app| Ok(app.world().resource::<geometry::BuiltinAttributes>().uv)).unwrap()
+}
+
+pub fn geometry_attribute_destroy(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::destroy_attribute, entity)
+            .unwrap();
+        Ok(())
+    })
+}
+
+pub fn geometry_create(topology: geometry::Topology) -> error::Result<Entity> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(geometry::create, topology)
+            .unwrap())
+    })
+}
+
+pub fn geometry_layout_build(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        let success = app
+            .world_mut()
+            .run_system_cached_with(geometry::layout::build, entity)
+            .unwrap();
+        if success {
+            Ok(())
+        } else {
+            Err(error::ProcessingError::LayoutNotFound)
+        }
+    })
+}
+
+pub fn geometry_create_with_layout(layout_entity: Entity, topology: geometry::Topology) -> error::Result<Entity> {
+    app_mut(|app| {
+        let layout = app
+            .world()
+            .get::<geometry::VertexLayout>(layout_entity)
+            .ok_or(error::ProcessingError::LayoutNotFound)?
+            .clone();
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(geometry::create_with_layout, (layout, topology))
+            .unwrap())
+    })
+}
+
+pub fn geometry_create_with_attributes(attrs: geometry::VertexAttributes, topology: geometry::Topology) -> error::Result<Entity> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(geometry::create_with_attributes, (attrs, topology))
+            .unwrap())
+    })
+}
+
+pub fn geometry_normal(entity: Entity, nx: f32, ny: f32, nz: f32) -> error::Result<()> {
+    app_mut(|app| geometry::normal(app.world_mut(), entity, nx, ny, nz))
+}
+
+pub fn geometry_color(entity: Entity, r: f32, g: f32, b: f32, a: f32) -> error::Result<()> {
+    app_mut(|app| geometry::color(app.world_mut(), entity, r, g, b, a))
+}
+
+pub fn geometry_uv(entity: Entity, u: f32, v: f32) -> error::Result<()> {
+    app_mut(|app| geometry::uv(app.world_mut(), entity, u, v))
+}
+
+pub fn geometry_attribute(
+    geo_entity: Entity,
+    attr_entity: Entity,
+    value: AttributeValue,
+) -> error::Result<()> {
+    app_mut(|app| geometry::attribute(app.world_mut(), geo_entity, attr_entity, value))
+}
+
+pub fn geometry_attribute_float(
+    geo_entity: Entity,
+    attr_entity: Entity,
+    v: f32,
+) -> error::Result<()> {
+    geometry_attribute(geo_entity, attr_entity, AttributeValue::Float(v))
+}
+
+pub fn geometry_attribute_float2(
+    geo_entity: Entity,
+    attr_entity: Entity,
+    x: f32,
+    y: f32,
+) -> error::Result<()> {
+    geometry_attribute(geo_entity, attr_entity, AttributeValue::Float2([x, y]))
+}
+
+pub fn geometry_attribute_float3(
+    geo_entity: Entity,
+    attr_entity: Entity,
+    x: f32,
+    y: f32,
+    z: f32,
+) -> error::Result<()> {
+    geometry_attribute(geo_entity, attr_entity, AttributeValue::Float3([x, y, z]))
+}
+
+pub fn geometry_attribute_float4(
+    geo_entity: Entity,
+    attr_entity: Entity,
+    x: f32,
+    y: f32,
+    z: f32,
+    w: f32,
+) -> error::Result<()> {
+    geometry_attribute(geo_entity, attr_entity, AttributeValue::Float4([x, y, z, w]))
+}
+
+pub fn geometry_vertex(entity: Entity, x: f32, y: f32, z: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::vertex, (entity, x, y, z))
+            .unwrap()
+    })
+}
+
+pub fn geometry_index(entity: Entity, i: u32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::index, (entity, i))
+            .unwrap()
+    })
+}
+
+pub fn geometry_vertex_count(entity: Entity) -> error::Result<u32> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::vertex_count, entity)
+            .unwrap()
+    })
+}
+
+pub fn geometry_index_count(entity: Entity) -> error::Result<u32> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::index_count, entity)
+            .unwrap()
+    })
+}
+
+pub fn geometry_get_positions(
+    entity: Entity,
+    start: usize,
+    end: usize,
+) -> error::Result<Vec<[f32; 3]>> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::get_positions, (entity, start..end))
+            .unwrap()
+    })
+}
+
+pub fn geometry_get_normals(
+    entity: Entity,
+    start: usize,
+    end: usize,
+) -> error::Result<Vec<[f32; 3]>> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::get_normals, (entity, start..end))
+            .unwrap()
+    })
+}
+
+pub fn geometry_get_colors(
+    entity: Entity,
+    start: usize,
+    end: usize,
+) -> error::Result<Vec<[f32; 4]>> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::get_colors, (entity, start..end))
+            .unwrap()
+    })
+}
+
+pub fn geometry_get_uvs(
+    entity: Entity,
+    start: usize,
+    end: usize,
+) -> error::Result<Vec<[f32; 2]>> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::get_uvs, (entity, start..end))
+            .unwrap()
+    })
+}
+
+pub fn geometry_get_indices(
+    entity: Entity,
+    start: usize,
+    end: usize,
+) -> error::Result<Vec<u32>> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::get_indices, (entity, start..end))
+            .unwrap()
+    })
+}
+
+pub fn geometry_destroy(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::destroy, entity)
+            .unwrap()
+    })
+}
+
+pub fn geometry_set_vertex(
+    entity: Entity,
+    index: u32,
+    x: f32,
+    y: f32,
+    z: f32,
+) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::set_vertex, (entity, index, x, y, z))
+            .unwrap()
+    })
+}
+
+pub fn geometry_set_normal(
+    entity: Entity,
+    index: u32,
+    nx: f32,
+    ny: f32,
+    nz: f32,
+) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::set_normal, (entity, index, nx, ny, nz))
+            .unwrap()
+    })
+}
+
+pub fn geometry_set_color(
+    entity: Entity,
+    index: u32,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::set_color, (entity, index, r, g, b, a))
+            .unwrap()
+    })
+}
+
+pub fn geometry_set_uv(entity: Entity, index: u32, u: f32, v: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::set_uv, (entity, index, u, v))
+            .unwrap()
+    })
+}
+
+pub fn geometry_get_attribute(
+    geo_entity: Entity,
+    attr_entity: Entity,
+    index: u32,
+) -> error::Result<AttributeValue> {
+    app_mut(|app| {
+        let attr = app
+            .world()
+            .get::<geometry::Attribute>(attr_entity)
+            .ok_or(error::ProcessingError::InvalidEntity)?;
+        let inner = attr.inner.clone();
+        app.world_mut()
+            .run_system_cached_with(geometry::get_attribute, (geo_entity, inner, index))
+            .unwrap()
+    })
+}
+
+pub fn geometry_get_attributes(
+    geo_entity: Entity,
+    attr_entity: Entity,
+    start: usize,
+    end: usize,
+) -> error::Result<Vec<AttributeValue>> {
+    app_mut(|app| {
+        let attr = app
+            .world()
+            .get::<geometry::Attribute>(attr_entity)
+            .ok_or(error::ProcessingError::InvalidEntity)?;
+        let inner = attr.inner.clone();
+        app.world_mut()
+            .run_system_cached_with(geometry::get_attributes, (geo_entity, inner, start..end))
+            .unwrap()
+    })
+}
+
+pub fn geometry_set_attribute(
+    geo_entity: Entity,
+    attr_entity: Entity,
+    index: u32,
+    value: AttributeValue,
+) -> error::Result<()> {
+    app_mut(|app| {
+        let attr = app
+            .world()
+            .get::<geometry::Attribute>(attr_entity)
+            .ok_or(error::ProcessingError::InvalidEntity)?;
+        let inner = attr.inner.clone();
+        app.world_mut()
+            .run_system_cached_with(geometry::set_attribute, (geo_entity, inner, index, value))
+            .unwrap()
+    })
+}
+
+pub fn geometry_box(width: f32, height: f32, depth: f32) -> error::Result<Entity> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(geometry::create_box, (width, height, depth))
+            .unwrap())
     })
 }

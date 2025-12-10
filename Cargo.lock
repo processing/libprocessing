@@ -4426,6 +4426,7 @@ name = "processing_render"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bitflags 2.10.0",
  "crossbeam-channel",
  "half",
  "js-sys",

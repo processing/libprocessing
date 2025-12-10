@@ -52,6 +52,18 @@ path = "examples/update_pixels.rs"
 name = "transforms"
 path = "examples/transforms.rs"
 
+[[example]]
+name = "box"
+path = "examples/box.rs"
+
+[[example]]
+name = "animated_mesh"
+path = "examples/animated_mesh.rs"
+
+[[example]]
+name = "custom_attribute"
+path = "examples/custom_attribute.rs"
+
 [profile.wasm-release]
 inherits = "release"
 opt-level = "z"
