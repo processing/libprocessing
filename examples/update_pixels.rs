@@ -25,9 +25,7 @@ fn sketch() -> error::Result<()> {
     let height = 100;
     let scale_factor = 1.0;
 
-    let window_handle = glfw_ctx.get_window();
-    let display_handle = glfw_ctx.get_display();
-    let surface = surface_create(window_handle, display_handle, width, height, scale_factor)?;
+    let surface = glfw_ctx.create_surface(width, height, scale_factor)?;
     let graphics = graphics_create(surface, width, height)?;
 
     let rect_w = 10;

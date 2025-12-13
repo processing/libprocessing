@@ -7,6 +7,11 @@ autoexamples = false
 [lints]
 workspace = true
 
+[features]
+default = ["wayland"]
+wayland = ["processing_render/wayland"]
+x11 = ["processing_render/x11"]
+
 [workspace]
 resolver = "3"
 members = ["crates/*"]
@@ -16,9 +21,13 @@ type_complexity = "allow"
 too_many_arguments = "allow"
 
 [workspace.dependencies]
-bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", no-default-features = true, features = [
+bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", default-features = false, features = [
     "bevy_render",
     "bevy_color",
+    "bevy_pbr",
+    "bevy_log",
+    "bevy_window",
+    "bevy_winit",
 ] }
 processing = { path = "." }
 processing_pyo3 = { path = "crates/processing_pyo3" }

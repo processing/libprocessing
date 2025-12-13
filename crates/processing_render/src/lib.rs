@@ -42,12 +42,35 @@ fn app_mut<T>(cb: impl FnOnce(&mut App) -> error::Result<T>) -> error::Result<T>
     Ok(res)
 }
 
-/// Create a WebGPU surface from a native window handle.
-///
-/// Currently, this just creates a bevy window with the given parameters and
-/// stores the raw window handle for later use by the renderer, which will
-/// actually create the surface.
-pub fn surface_create(
+/// Create a WebGPU surface from a macOS NSWindow handle.
+#[cfg(target_os = "macos")]
+pub fn surface_create_macos(
+    window_handle: u64,
+    width: u32,
+    height: u32,
+    scale_factor: f32,
+) -> error::Result<Entity> {
+    app_mut(|app| {
+        surface::create_surface_macos(app.world_mut(), window_handle, width, height, scale_factor)
+    })
+}
+
+/// Create a WebGPU surface from a Windows HWND handle.
+#[cfg(target_os = "windows")]
+pub fn surface_create_windows(
+    window_handle: u64,
+    width: u32,
+    height: u32,
+    scale_factor: f32,
+) -> error::Result<Entity> {
+    app_mut(|app| {
+        surface::create_surface_windows(app.world_mut(), window_handle, width, height, scale_factor)
+    })
+}
+
+/// Create a WebGPU surface from a Wayland window and display handle.
+#[cfg(all(target_os = "linux", feature = "wayland"))]
+pub fn surface_create_wayland(
     window_handle: u64,
     display_handle: u64,
     width: u32,
@@ -55,7 +78,7 @@ pub fn surface_create(
     scale_factor: f32,
 ) -> error::Result<Entity> {
     app_mut(|app| {
-        surface::create(
+        surface::create_surface_wayland(
             app.world_mut(),
             window_handle,
             display_handle,
@@ -63,6 +86,40 @@ pub fn surface_create(
             height,
             scale_factor,
         )
+    })
+}
+
+/// Create a WebGPU surface from an X11 window and display handle.
+#[cfg(all(target_os = "linux", feature = "x11"))]
+pub fn surface_create_x11(
+    window_handle: u64,
+    display_handle: u64,
+    width: u32,
+    height: u32,
+    scale_factor: f32,
+) -> error::Result<Entity> {
+    app_mut(|app| {
+        surface::create_surface_x11(
+            app.world_mut(),
+            window_handle,
+            display_handle,
+            width,
+            height,
+            scale_factor,
+        )
+    })
+}
+
+/// Create a WebGPU surface from a web canvas element pointer.
+#[cfg(target_arch = "wasm32")]
+pub fn surface_create_web(
+    window_handle: u64,
+    width: u32,
+    height: u32,
+    scale_factor: f32,
+) -> error::Result<Entity> {
+    app_mut(|app| {
+        surface::create_surface_web(app.world_mut(), window_handle, width, height, scale_factor)
     })
 }
 
@@ -106,7 +163,7 @@ pub fn surface_create_from_canvas(
     // TODO: not sure if this is right to force here
     let scale_factor = 1.0;
 
-    surface_create(canvas_ptr, 0, width, height, scale_factor)
+    surface_create_web(canvas_ptr, width, height, scale_factor)
 }
 
 pub fn surface_destroy(graphics_entity: Entity) -> error::Result<()> {
@@ -124,9 +181,8 @@ fn create_app() -> App {
     #[cfg(not(target_arch = "wasm32"))]
     let plugins = DefaultPlugins
         .build()
-        .disable::<bevy::log::LogPlugin>()
         .disable::<bevy::winit::WinitPlugin>()
-        .disable::<bevy::render::pipelined_rendering::PipelinedRenderingPlugin>()
+        .disable::<bevy::log::LogPlugin>()
         .set(WindowPlugin {
             primary_window: None,
             exit_condition: bevy::window::ExitCondition::DontExit,
@@ -136,9 +192,8 @@ fn create_app() -> App {
     #[cfg(target_arch = "wasm32")]
     let plugins = DefaultPlugins
         .build()
-        .disable::<bevy::log::LogPlugin>()
         .disable::<bevy::winit::WinitPlugin>()
-        .disable::<bevy::audio::AudioPlugin>()
+        .disable::<bevy::log::LogPlugin>()
         .set(WindowPlugin {
             primary_window: None,
             exit_condition: bevy::window::ExitCondition::DontExit,

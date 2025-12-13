@@ -6,6 +6,17 @@
 //!
 //! In Bevy, we can consider a surface to be a [`RenderTarget`], which is either a window or a
 //! texture.
+//!
+//! ## Platform-specific surface creation
+//!
+//! On Linux, both X11 and Wayland are supported via feature flags:
+//! - `x11`: Enable X11 surface creation via `create_surface_x11`
+//! - `wayland`: Enable Wayland surface creation via `create_surface_wayland`
+//!
+//! On other platforms, use the platform-specific functions:
+//! - macOS: `create_surface_macos`
+//! - Windows: `create_surface_windows`
+//! - WebAssembly: `create_surface_web`
 #[cfg(any(target_os = "linux", target_arch = "wasm32"))]
 use std::ffi::c_void;
 use std::ptr::NonNull;
@@ -69,12 +80,165 @@ impl HasDisplayHandle for GlfwWindow {
     }
 }
 
-/// Create a WebGPU surface from a native window handle.
+/// Helper to spawn a surface entity from raw handles.
+fn spawn_surface(
+    commands: &mut Commands,
+    raw_window_handle: RawWindowHandle,
+    raw_display_handle: RawDisplayHandle,
+    width: u32,
+    height: u32,
+    scale_factor: f32,
+) -> Result<Entity> {
+    let glfw_window = GlfwWindow {
+        window_handle: raw_window_handle,
+        display_handle: raw_display_handle,
+    };
+
+    let window_wrapper = WindowWrapper::new(glfw_window);
+    let handle_wrapper = RawHandleWrapper::new(&window_wrapper)?;
+
+    Ok(commands
+        .spawn((
+            Window {
+                resolution: WindowResolution::new(width, height)
+                    .with_scale_factor_override(scale_factor),
+                ..default()
+            },
+            handle_wrapper,
+            Surface,
+        ))
+        .id())
+}
+
+/// Create a WebGPU surface from a macOS NSWindow handle.
 ///
-/// Currently, this just creates a bevy window with the given parameters and
-/// stores the raw window handle for later use by the renderer, which will
-/// actually create the surface.
-pub fn create(
+/// # Arguments
+/// * `window_handle` - A pointer to the NSWindow (from GLFW's `get_cocoa_window()`)
+#[cfg(target_os = "macos")]
+pub fn create_surface_macos(
+    world: &mut World,
+    window_handle: u64,
+    width: u32,
+    height: u32,
+    scale_factor: f32,
+) -> Result<Entity> {
+    fn create_inner(
+        In((window_handle, width, height, scale_factor)): In<(u64, u32, u32, f32)>,
+        mut commands: Commands,
+    ) -> Result<Entity> {
+        use raw_window_handle::{AppKitDisplayHandle, AppKitWindowHandle};
+
+        // GLFW gives us NSWindow*, but AppKitWindowHandle needs NSView*
+        // so we have to do some objc magic to grab the right pointer
+        let ns_view_ptr = {
+            use objc2::rc::Retained;
+            use objc2_app_kit::{NSView, NSWindow};
+
+            // SAFETY:
+            //  - window_handle is a valid NSWindow pointer from the GLFW window
+            let ns_window = window_handle as *mut NSWindow;
+            if ns_window.is_null() {
+                return Err(error::ProcessingError::InvalidWindowHandle);
+            }
+
+            // SAFETY:
+            // - The contentView is owned by NSWindow and remains valid as long as the window exists
+            let ns_window_ref = unsafe { &*ns_window };
+            let content_view: Option<Retained<NSView>> = ns_window_ref.contentView();
+
+            match content_view {
+                Some(view) => Retained::as_ptr(&view) as *mut std::ffi::c_void,
+                None => {
+                    return Err(error::ProcessingError::InvalidWindowHandle);
+                }
+            }
+        };
+
+        let window = AppKitWindowHandle::new(NonNull::new(ns_view_ptr).unwrap());
+        let display = AppKitDisplayHandle::new();
+
+        spawn_surface(
+            &mut commands,
+            RawWindowHandle::AppKit(window),
+            RawDisplayHandle::AppKit(display),
+            width,
+            height,
+            scale_factor,
+        )
+    }
+
+    world
+        .run_system_cached_with(create_inner, (window_handle, width, height, scale_factor))
+        .unwrap()
+}
+
+/// Create a WebGPU surface from a Windows HWND handle.
+///
+/// # Arguments
+/// * `window_handle` - The HWND value (from GLFW's `get_win32_window()`)
+#[cfg(target_os = "windows")]
+pub fn create_surface_windows(
+    world: &mut World,
+    window_handle: u64,
+    width: u32,
+    height: u32,
+    scale_factor: f32,
+) -> Result<Entity> {
+    fn create_inner(
+        In((window_handle, width, height, scale_factor)): In<(u64, u32, u32, f32)>,
+        mut commands: Commands,
+    ) -> Result<Entity> {
+        use std::num::NonZeroIsize;
+
+        use raw_window_handle::{Win32WindowHandle, WindowsDisplayHandle};
+        use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+
+        if window_handle == 0 {
+            return Err(error::ProcessingError::InvalidWindowHandle);
+        }
+
+        // HWND is isize, so cast it
+        let hwnd_isize = window_handle as isize;
+        let hwnd_nonzero = match NonZeroIsize::new(hwnd_isize) {
+            Some(nz) => nz,
+            None => return Err(error::ProcessingError::InvalidWindowHandle),
+        };
+
+        let mut window = Win32WindowHandle::new(hwnd_nonzero);
+
+        // VK_KHR_win32_surface requires hinstance *and* hwnd
+        // SAFETY: GetModuleHandleW(NULL) is safe
+        let hinstance = unsafe { GetModuleHandleW(None) }
+            .map_err(|_| error::ProcessingError::InvalidWindowHandle)?;
+
+        let hinstance_nonzero = NonZeroIsize::new(hinstance.0 as isize)
+            .ok_or(error::ProcessingError::InvalidWindowHandle)?;
+        window.hinstance = Some(hinstance_nonzero);
+
+        let display = WindowsDisplayHandle::new();
+
+        spawn_surface(
+            &mut commands,
+            RawWindowHandle::Win32(window),
+            RawDisplayHandle::Windows(display),
+            width,
+            height,
+            scale_factor,
+        )
+    }
+
+    world
+        .run_system_cached_with(create_inner, (window_handle, width, height, scale_factor))
+        .unwrap()
+}
+
+/// Create a WebGPU surface from a Wayland window and display handle.
+///
+/// # Arguments
+/// * `window_handle` - The wl_surface pointer (from GLFW's `get_wayland_window()`)
+/// * `display_handle` - The wl_display pointer (from GLFW's `get_wayland_display()`)
+#[cfg(all(target_os = "linux", feature = "wayland"))]
+pub fn create_surface_wayland(
     world: &mut World,
     window_handle: u64,
     display_handle: u64,
@@ -92,144 +256,32 @@ pub fn create(
         )>,
         mut commands: Commands,
     ) -> Result<Entity> {
-        #[cfg(target_os = "macos")]
-        let (raw_window_handle, raw_display_handle) = {
-            use raw_window_handle::{AppKitDisplayHandle, AppKitWindowHandle};
+        use raw_window_handle::{WaylandDisplayHandle, WaylandWindowHandle};
 
-            // GLFW gives us NSWindow*, but AppKitWindowHandle needs NSView*
-            // so we have to do some objc magic to grab the right pointer
-            let ns_view_ptr = {
-                use objc2::rc::Retained;
-                use objc2_app_kit::{NSView, NSWindow};
+        if window_handle == 0 {
+            return Err(error::ProcessingError::HandleError(
+                HandleError::Unavailable,
+            ));
+        }
+        let window_handle_ptr = NonNull::new(window_handle as *mut c_void).unwrap();
+        let window = WaylandWindowHandle::new(window_handle_ptr);
 
-                // SAFETY:
-                //  - window_handle is a valid NSWindow pointer from the GLFW window
-                let ns_window = window_handle as *mut NSWindow;
-                if ns_window.is_null() {
-                    return Err(error::ProcessingError::InvalidWindowHandle);
-                }
+        if display_handle == 0 {
+            return Err(error::ProcessingError::HandleError(
+                HandleError::Unavailable,
+            ));
+        }
+        let display_handle_ptr = NonNull::new(display_handle as *mut c_void).unwrap();
+        let display = WaylandDisplayHandle::new(display_handle_ptr);
 
-                // SAFETY:
-                // - The contentView is owned by NSWindow and remains valid as long as the window exists
-                let ns_window_ref = unsafe { &*ns_window };
-                let content_view: Option<Retained<NSView>> = ns_window_ref.contentView();
-
-                match content_view {
-                    Some(view) => Retained::as_ptr(&view) as *mut std::ffi::c_void,
-                    None => {
-                        return Err(error::ProcessingError::InvalidWindowHandle);
-                    }
-                }
-            };
-
-            let window = AppKitWindowHandle::new(NonNull::new(ns_view_ptr).unwrap());
-            let display = AppKitDisplayHandle::new();
-            (
-                RawWindowHandle::AppKit(window),
-                RawDisplayHandle::AppKit(display),
-            )
-        };
-
-        #[cfg(target_os = "windows")]
-        let (raw_window_handle, raw_display_handle) = {
-            use std::num::NonZeroIsize;
-
-            use raw_window_handle::{Win32WindowHandle, WindowsDisplayHandle};
-            use windows::Win32::{Foundation::HINSTANCE, System::LibraryLoader::GetModuleHandleW};
-
-            if window_handle == 0 {
-                return Err(error::ProcessingError::InvalidWindowHandle);
-            }
-
-            // HWND is isize, so cast it
-            let hwnd_isize = window_handle as isize;
-            let hwnd_nonzero = match NonZeroIsize::new(hwnd_isize) {
-                Some(nz) => nz,
-                None => return Err(error::ProcessingError::InvalidWindowHandle),
-            };
-
-            let mut window = Win32WindowHandle::new(hwnd_nonzero);
-
-            // VK_KHR_win32_surface requires hinstance *and* hwnd
-            // SAFETY: GetModuleHandleW(NULL) is safe
-            let hinstance = unsafe { GetModuleHandleW(None) }
-                .map_err(|_| error::ProcessingError::InvalidWindowHandle)?;
-
-            let hinstance_nonzero = NonZeroIsize::new(hinstance.0 as isize)
-                .ok_or(error::ProcessingError::InvalidWindowHandle)?;
-            window.hinstance = Some(hinstance_nonzero);
-
-            let display = WindowsDisplayHandle::new();
-
-            (
-                RawWindowHandle::Win32(window),
-                RawDisplayHandle::Windows(display),
-            )
-        };
-
-        #[cfg(target_os = "linux")]
-        let (raw_window_handle, raw_display_handle) = {
-            use raw_window_handle::{WaylandDisplayHandle, WaylandWindowHandle};
-
-            if window_handle == 0 {
-                return Err(error::ProcessingError::HandleError(
-                    HandleError::Unavailable,
-                ));
-            }
-            let window_handle_ptr = NonNull::new(window_handle as *mut c_void).unwrap();
-            let window = WaylandWindowHandle::new(window_handle_ptr);
-
-            if display_handle == 0 {
-                return Err(error::ProcessingError::HandleError(
-                    HandleError::Unavailable,
-                ));
-            }
-            let display_handle_ptr = NonNull::new(display_handle as *mut c_void).unwrap();
-            let display = WaylandDisplayHandle::new(display_handle_ptr);
-
-            (
-                RawWindowHandle::Wayland(window),
-                RawDisplayHandle::Wayland(display),
-            )
-        };
-
-        #[cfg(target_arch = "wasm32")]
-        let (raw_window_handle, raw_display_handle) = {
-            use raw_window_handle::{WebCanvasWindowHandle, WebDisplayHandle};
-
-            // For WASM, window_handle is a pointer to an HtmlCanvasElement
-            if window_handle == 0 {
-                return Err(error::ProcessingError::InvalidWindowHandle);
-            }
-            let canvas_ptr = NonNull::new(window_handle as *mut c_void).unwrap();
-            let window = WebCanvasWindowHandle::new(canvas_ptr.cast());
-            let display = WebDisplayHandle::new();
-
-            (
-                RawWindowHandle::WebCanvas(window),
-                RawDisplayHandle::Web(display),
-            )
-        };
-
-        let glfw_window = GlfwWindow {
-            window_handle: raw_window_handle,
-            display_handle: raw_display_handle,
-        };
-
-        let window_wrapper = WindowWrapper::new(glfw_window);
-        let handle_wrapper = RawHandleWrapper::new(&window_wrapper)?;
-
-        Ok(commands
-            .spawn((
-                Window {
-                    resolution: WindowResolution::new(width, height)
-                        .with_scale_factor_override(scale_factor),
-                    ..default()
-                },
-                handle_wrapper,
-                Surface,
-            ))
-            .id())
+        spawn_surface(
+            &mut commands,
+            RawWindowHandle::Wayland(window),
+            RawDisplayHandle::Wayland(display),
+            width,
+            height,
+            scale_factor,
+        )
     }
 
     world
@@ -237,6 +289,107 @@ pub fn create(
             create_inner,
             (window_handle, display_handle, width, height, scale_factor),
         )
+        .unwrap()
+}
+
+/// Create a WebGPU surface from an X11 window and display handle.
+///
+/// # Arguments
+/// * `window_handle` - The X11 Window ID (from GLFW's `get_x11_window()`)
+/// * `display_handle` - The X11 Display pointer (from GLFW's `get_x11_display()`)
+#[cfg(all(target_os = "linux", feature = "x11"))]
+pub fn create_surface_x11(
+    world: &mut World,
+    window_handle: u64,
+    display_handle: u64,
+    width: u32,
+    height: u32,
+    scale_factor: f32,
+) -> Result<Entity> {
+    fn create_inner(
+        In((window_handle, display_handle, width, height, scale_factor)): In<(
+            u64,
+            u64,
+            u32,
+            u32,
+            f32,
+        )>,
+        mut commands: Commands,
+    ) -> Result<Entity> {
+        use raw_window_handle::{XlibDisplayHandle, XlibWindowHandle};
+
+        if window_handle == 0 {
+            return Err(error::ProcessingError::HandleError(
+                HandleError::Unavailable,
+            ));
+        }
+        // X11 Window is a u32/u64 ID, not a pointer
+        let window = XlibWindowHandle::new(window_handle as std::ffi::c_ulong);
+
+        if display_handle == 0 {
+            return Err(error::ProcessingError::HandleError(
+                HandleError::Unavailable,
+            ));
+        }
+        let display_ptr = NonNull::new(display_handle as *mut c_void).unwrap();
+        let display = XlibDisplayHandle::new(Some(display_ptr), 0); // screen 0
+
+        spawn_surface(
+            &mut commands,
+            RawWindowHandle::Xlib(window),
+            RawDisplayHandle::Xlib(display),
+            width,
+            height,
+            scale_factor,
+        )
+    }
+
+    world
+        .run_system_cached_with(
+            create_inner,
+            (window_handle, display_handle, width, height, scale_factor),
+        )
+        .unwrap()
+}
+
+/// Create a WebGPU surface from a web canvas element.
+///
+/// # Arguments
+/// * `window_handle` - A pointer to the HtmlCanvasElement
+#[cfg(target_arch = "wasm32")]
+pub fn create_surface_web(
+    world: &mut World,
+    window_handle: u64,
+    width: u32,
+    height: u32,
+    scale_factor: f32,
+) -> Result<Entity> {
+    fn create_inner(
+        In((window_handle, width, height, scale_factor)): In<(u64, u32, u32, f32)>,
+        mut commands: Commands,
+    ) -> Result<Entity> {
+        use raw_window_handle::{WebCanvasWindowHandle, WebDisplayHandle};
+
+        // For WASM, window_handle is a pointer to an HtmlCanvasElement
+        if window_handle == 0 {
+            return Err(error::ProcessingError::InvalidWindowHandle);
+        }
+        let canvas_ptr = NonNull::new(window_handle as *mut c_void).unwrap();
+        let window = WebCanvasWindowHandle::new(canvas_ptr.cast());
+        let display = WebDisplayHandle::new();
+
+        spawn_surface(
+            &mut commands,
+            RawWindowHandle::WebCanvas(window),
+            RawDisplayHandle::Web(display),
+            width,
+            height,
+            scale_factor,
+        )
+    }
+
+    world
+        .run_system_cached_with(create_inner, (window_handle, width, height, scale_factor))
         .unwrap()
 }
 

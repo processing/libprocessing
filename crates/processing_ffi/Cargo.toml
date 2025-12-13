@@ -10,6 +10,11 @@ workspace = true
 name = "processing"
 crate-type = ["cdylib"]
 
+[features]
+default = []
+wayland = ["processing/wayland"]
+x11 = ["processing/x11"]
+
 [dependencies]
 processing = { workspace = true }
 bevy = { workspace = true }
