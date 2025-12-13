@@ -44,9 +44,8 @@ impl Graphics {
 
         init().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
-        let window_handle = glfw_ctx.get_window();
-        let display_handle = glfw_ctx.get_display();
-        let surface = surface_create(window_handle, display_handle, width, height, 1.0)
+        let surface = glfw_ctx
+            .create_surface(width, height, 1.0)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let surface = Surface {

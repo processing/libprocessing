@@ -10,6 +10,11 @@ workspace = true
 name = "processing"
 crate-type = ["cdylib"]
 
+[features]
+default = []
+wayland = ["processing/wayland", "glfw/wayland"]
+x11 = ["processing/x11"]
+
 [dependencies]
 pyo3 = "0.27.0"
 processing = { workspace = true }
@@ -18,6 +23,3 @@ glfw = { version = "0.60.0"}
 
 [target.'cfg(target_os = "macos")'.dependencies]
 glfw = { version = "0.60.0", features = ["static-link"] }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-glfw = { version = "0.60.0", features = ["wayland"] }
