@@ -1,6 +1,5 @@
 mod glfw;
 
-use bevy::prelude::Color;
 use glfw::GlfwContext;
 use processing::prelude::*;
 use processing_render::render::command::DrawCommand;
