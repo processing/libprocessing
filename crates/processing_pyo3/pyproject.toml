@@ -17,3 +17,10 @@ dev = ["maturin>=1.10,<2.0"]
 
 [tool.maturin]
 manifest-path = "Cargo.toml"
+
+[tool.uv]
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "src/**/*.rs" },
+]
