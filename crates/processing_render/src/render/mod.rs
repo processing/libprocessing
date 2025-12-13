@@ -31,6 +31,13 @@ pub struct RenderContext<'w, 's> {
     state: Local<'s, RenderState>,
 }
 
+impl <'w, 's> RenderContext<'w, 's> {
+    pub fn reset(&mut self, graphics_entity: Entity, render_layers: RenderLayers) {
+        self.batch.reset(graphics_entity, render_layers);
+        self.state.transform.clear();
+    }
+}
+
 struct BatchState {
     current_mesh: Option<Mesh>,
     material_key: Option<MaterialKey>,
@@ -50,6 +57,17 @@ impl Default for BatchState {
             render_layers: RenderLayers::default(),
             graphics_entity: None,
         }
+    }
+}
+
+impl BatchState {
+    fn reset(&mut self, graphics_entity: Entity, render_layers: RenderLayers) {
+        self.current_mesh = None;
+        self.material_key = None;
+        self.transform = Affine3A::IDENTITY;
+        self.draw_index = 0;
+        self.render_layers = render_layers;
+        self.graphics_entity = Some(graphics_entity);
     }
 }
 
@@ -105,9 +123,7 @@ pub fn flush_draw_commands(
         graphics.iter_mut()
     {
         let draw_commands = std::mem::take(&mut cmd_buffer.commands);
-        ctx.batch.render_layers = render_layers.clone();
-        ctx.batch.graphics_entity = Some(graphics_entity);
-        ctx.batch.draw_index = 0; // Reset draw index for each flush
+        ctx.reset(graphics_entity, render_layers.clone());
 
         for cmd in draw_commands {
             match cmd {

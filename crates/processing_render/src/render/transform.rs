@@ -29,6 +29,11 @@ impl TransformStack {
         self.current = Affine3A::IDENTITY;
     }
 
+    pub fn clear(&mut self) {
+        self.current = Affine3A::IDENTITY;
+        self.stack.clear();
+    }
+
     pub fn translate(&mut self, x: f32, y: f32) {
         self.translate_3d(x, y, 0.0);
     }
