@@ -32,13 +32,23 @@ impl GlfwContext {
     #[cfg(target_os = "macos")]
     pub fn create_surface(&self, width: u32, height: u32, scale_factor: f32) -> Result<Entity> {
         use processing::prelude::surface_create_macos;
-        surface_create_macos(self.window.get_cocoa_window() as u64, width, height, scale_factor)
+        surface_create_macos(
+            self.window.get_cocoa_window() as u64,
+            width,
+            height,
+            scale_factor,
+        )
     }
 
     #[cfg(target_os = "windows")]
     pub fn create_surface(&self, width: u32, height: u32, scale_factor: f32) -> Result<Entity> {
         use processing::prelude::surface_create_windows;
-        surface_create_windows(self.window.get_win32_window() as u64, width, height, scale_factor)
+        surface_create_windows(
+            self.window.get_win32_window() as u64,
+            width,
+            height,
+            scale_factor,
+        )
     }
 
     #[cfg(all(target_os = "linux", feature = "wayland"))]
