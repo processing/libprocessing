@@ -23,19 +23,10 @@ pub struct BelongsToGraphics(pub Entity);
 pub struct TransientMeshes(Vec<Entity>);
 
 #[derive(SystemParam)]
-pub struct RenderContext<'w, 's> {
+pub struct RenderResources<'w, 's> {
     commands: Commands<'w, 's>,
     meshes: ResMut<'w, Assets<Mesh>>,
     materials: ResMut<'w, Assets<StandardMaterial>>,
-    batch: Local<'s, BatchState>,
-    state: Local<'s, RenderState>,
-}
-
-impl <'w, 's> RenderContext<'w, 's> {
-    pub fn reset(&mut self, graphics_entity: Entity, render_layers: RenderLayers) {
-        self.batch.reset(graphics_entity, render_layers);
-        self.state.transform.clear();
-    }
 }
 
 struct BatchState {
@@ -44,40 +35,27 @@ struct BatchState {
     transform: Affine3A,
     draw_index: u32,
     render_layers: RenderLayers,
-    graphics_entity: Option<Entity>,
+    graphics_entity: Entity,
 }
 
-impl Default for BatchState {
-    fn default() -> Self {
+impl BatchState {
+    fn new(graphics_entity: Entity, render_layers: RenderLayers) -> Self {
         Self {
             current_mesh: None,
             material_key: None,
             transform: Affine3A::IDENTITY,
             draw_index: 0,
-            render_layers: RenderLayers::default(),
-            graphics_entity: None,
+            render_layers,
+            graphics_entity,
         }
     }
 }
 
-impl BatchState {
-    fn reset(&mut self, graphics_entity: Entity, render_layers: RenderLayers) {
-        self.current_mesh = None;
-        self.material_key = None;
-        self.transform = Affine3A::IDENTITY;
-        self.draw_index = 0;
-        self.render_layers = render_layers;
-        self.graphics_entity = Some(graphics_entity);
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Component)]
 pub struct RenderState {
-    // drawing state
     pub fill_color: Option<Color>,
     pub stroke_color: Option<Color>,
     pub stroke_weight: f32,
-    // transform state
     pub transform: TransformStack,
 }
 
@@ -93,16 +71,8 @@ impl Default for RenderState {
 }
 
 impl RenderState {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn has_fill(&self) -> bool {
-        self.fill_color.is_some()
-    }
-
-    pub fn has_stroke(&self) -> bool {
-        self.stroke_color.is_some()
+    pub fn reset(&mut self) {
+        *self = Self::default();
     }
 
     pub fn fill_is_transparent(&self) -> bool {
@@ -115,39 +85,48 @@ impl RenderState {
 }
 
 pub fn flush_draw_commands(
-    mut ctx: RenderContext,
-    mut graphics: Query<(Entity, &mut CommandBuffer, &RenderLayers, &SurfaceSize), With<Flush>>,
+    mut res: RenderResources,
+    mut graphics: Query<
+        (
+            Entity,
+            &mut CommandBuffer,
+            &mut RenderState,
+            &RenderLayers,
+            &SurfaceSize,
+        ),
+        With<Flush>,
+    >,
     p_images: Query<&Image>,
 ) {
-    for (graphics_entity, mut cmd_buffer, render_layers, SurfaceSize(width, height)) in
+    for (graphics_entity, mut cmd_buffer, mut state, render_layers, SurfaceSize(width, height)) in
         graphics.iter_mut()
     {
         let draw_commands = std::mem::take(&mut cmd_buffer.commands);
-        ctx.reset(graphics_entity, render_layers.clone());
+        let mut batch = BatchState::new(graphics_entity, render_layers.clone());
 
         for cmd in draw_commands {
             match cmd {
                 DrawCommand::Fill(color) => {
-                    ctx.state.fill_color = Some(color);
+                    state.fill_color = Some(color);
                 }
                 DrawCommand::NoFill => {
-                    ctx.state.fill_color = None;
+                    state.fill_color = None;
                 }
                 DrawCommand::StrokeColor(color) => {
-                    ctx.state.stroke_color = Some(color);
+                    state.stroke_color = Some(color);
                 }
                 DrawCommand::NoStroke => {
-                    ctx.state.stroke_color = None;
+                    state.stroke_color = None;
                 }
                 DrawCommand::StrokeWeight(weight) => {
-                    ctx.state.stroke_weight = weight;
+                    state.stroke_weight = weight;
                 }
                 DrawCommand::Rect { x, y, w, h, radii } => {
-                    add_fill(&mut ctx, |mesh, color| {
+                    add_fill(&mut res, &mut batch, &state, |mesh, color| {
                         rect(mesh, x, y, w, h, radii, color, TessellationMode::Fill)
                     });
 
-                    add_stroke(&mut ctx, |mesh, color, weight| {
+                    add_stroke(&mut res, &mut batch, &state, |mesh, color, weight| {
                         rect(
                             mesh,
                             x,
@@ -161,7 +140,7 @@ pub fn flush_draw_commands(
                     });
                 }
                 DrawCommand::BackgroundColor(color) => {
-                    add_fill(&mut ctx, |mesh, _| {
+                    add_fill(&mut res, &mut batch, &state, |mesh, _| {
                         rect(
                             mesh,
                             0.0,
@@ -180,20 +159,17 @@ pub fn flush_draw_commands(
                         continue;
                     };
 
-                    // force flush current batch before changing material
-                    flush_batch(&mut ctx);
+                    flush_batch(&mut res, &mut batch);
 
                     let material_key = MaterialKey {
                         transparent: false,
                         background_image: Some(p_image.handle.clone()),
                     };
 
-                    ctx.batch.material_key = Some(material_key);
-                    ctx.batch.current_mesh = Some(empty_mesh());
+                    batch.material_key = Some(material_key);
+                    batch.current_mesh = Some(empty_mesh());
 
-                    // we're reusing rect to draw the fullscreen quad but don't need to track
-                    // a fill here and can just pass white manually
-                    if let Some(ref mut mesh) = ctx.batch.current_mesh {
+                    if let Some(ref mut mesh) = batch.current_mesh {
                         rect(
                             mesh,
                             0.0,
@@ -206,32 +182,20 @@ pub fn flush_draw_commands(
                         )
                     }
 
-                    flush_batch(&mut ctx);
+                    flush_batch(&mut res, &mut batch);
                 }
-                DrawCommand::PushMatrix => ctx.state.transform.push(),
-                DrawCommand::PopMatrix => ctx.state.transform.pop(),
-                DrawCommand::ResetMatrix => {
-                    ctx.state.transform.reset();
-                }
-                DrawCommand::Translate { x, y } => {
-                    ctx.state.transform.translate(x, y);
-                }
-                DrawCommand::Rotate { angle } => {
-                    ctx.state.transform.rotate(angle);
-                }
-                DrawCommand::Scale { x, y } => {
-                    ctx.state.transform.scale(x, y);
-                }
-                DrawCommand::ShearX { angle } => {
-                    ctx.state.transform.shear_x(angle);
-                }
-                DrawCommand::ShearY { angle } => {
-                    ctx.state.transform.shear_y(angle);
-                }
+                DrawCommand::PushMatrix => state.transform.push(),
+                DrawCommand::PopMatrix => state.transform.pop(),
+                DrawCommand::ResetMatrix => state.transform.reset(),
+                DrawCommand::Translate { x, y } => state.transform.translate(x, y),
+                DrawCommand::Rotate { angle } => state.transform.rotate(angle),
+                DrawCommand::Scale { x, y } => state.transform.scale(x, y),
+                DrawCommand::ShearX { angle } => state.transform.shear_x(angle),
+                DrawCommand::ShearY { angle } => state.transform.shear_y(angle),
             }
         }
 
-        flush_batch(&mut ctx);
+        flush_batch(&mut res, &mut batch);
     }
 }
 
@@ -252,90 +216,96 @@ pub fn clear_transient_meshes(
     }
 }
 
-fn spawn_mesh(ctx: &mut RenderContext, mesh: Mesh, z_offset: f32) {
-    let Some(material_key) = &ctx.batch.material_key else {
-        return;
-    };
-    let Some(surface_entity) = ctx.batch.graphics_entity else {
+fn spawn_mesh(res: &mut RenderResources, batch: &mut BatchState, mesh: Mesh, z_offset: f32) {
+    let Some(material_key) = &batch.material_key else {
         return;
     };
 
-    let mesh_handle = ctx.meshes.add(mesh);
-    let material_handle = ctx.materials.add(material_key.to_material());
+    let mesh_handle = res.meshes.add(mesh);
+    let material_handle = res.materials.add(material_key.to_material());
 
-    let (scale, rotation, translation) = ctx.batch.transform.to_scale_rotation_translation();
+    let (scale, rotation, translation) = batch.transform.to_scale_rotation_translation();
     let transform = Transform {
         translation: translation + Vec3::new(0.0, 0.0, z_offset),
         rotation,
         scale,
     };
 
-    ctx.commands.spawn((
+    res.commands.spawn((
         Mesh3d(mesh_handle),
         MeshMaterial3d(material_handle),
-        BelongsToGraphics(surface_entity),
+        BelongsToGraphics(batch.graphics_entity),
         transform,
-        ctx.batch.render_layers.clone(),
+        batch.render_layers.clone(),
     ));
 }
 
-fn needs_batch(ctx: &RenderContext, material_key: &MaterialKey) -> bool {
-    let current_transform = ctx.state.transform.current();
-    let material_changed = ctx.batch.material_key.as_ref() != Some(material_key);
-    let transform_changed = ctx.batch.transform != current_transform;
+fn needs_batch(batch: &BatchState, state: &RenderState, material_key: &MaterialKey) -> bool {
+    let current_transform = state.transform.current();
+    let material_changed = batch.material_key.as_ref() != Some(material_key);
+    let transform_changed = batch.transform != current_transform;
     material_changed || transform_changed
 }
 
-fn start_batch(ctx: &mut RenderContext, material_key: MaterialKey) {
-    flush_batch(ctx);
-    ctx.batch.material_key = Some(material_key);
-    ctx.batch.transform = ctx.state.transform.current();
-    ctx.batch.current_mesh = Some(empty_mesh());
+fn start_batch(res: &mut RenderResources, batch: &mut BatchState, state: &RenderState, material_key: MaterialKey) {
+    flush_batch(res, batch);
+    batch.material_key = Some(material_key);
+    batch.transform = state.transform.current();
+    batch.current_mesh = Some(empty_mesh());
 }
 
-fn add_fill(ctx: &mut RenderContext, tessellate: impl FnOnce(&mut Mesh, Color)) {
-    let Some(color) = ctx.state.fill_color else {
+fn add_fill(
+    res: &mut RenderResources,
+    batch: &mut BatchState,
+    state: &RenderState,
+    tessellate: impl FnOnce(&mut Mesh, Color),
+) {
+    let Some(color) = state.fill_color else {
         return;
     };
     let material_key = MaterialKey {
-        transparent: ctx.state.fill_is_transparent(),
+        transparent: state.fill_is_transparent(),
         background_image: None,
     };
 
-    if needs_batch(ctx, &material_key) {
-        start_batch(ctx, material_key);
+    if needs_batch(batch, state, &material_key) {
+        start_batch(res, batch, state, material_key);
     }
 
-    if let Some(ref mut mesh) = ctx.batch.current_mesh {
+    if let Some(ref mut mesh) = batch.current_mesh {
         tessellate(mesh, color);
     }
 }
 
-fn add_stroke(ctx: &mut RenderContext, tessellate: impl FnOnce(&mut Mesh, Color, f32)) {
-    let Some(color) = ctx.state.stroke_color else {
+fn add_stroke(
+    res: &mut RenderResources,
+    batch: &mut BatchState,
+    state: &RenderState,
+    tessellate: impl FnOnce(&mut Mesh, Color, f32),
+) {
+    let Some(color) = state.stroke_color else {
         return;
     };
-    let stroke_weight = ctx.state.stroke_weight;
+    let stroke_weight = state.stroke_weight;
     let material_key = MaterialKey {
-        transparent: ctx.state.stroke_is_transparent(),
+        transparent: state.stroke_is_transparent(),
         background_image: None,
     };
 
-    if needs_batch(ctx, &material_key) {
-        start_batch(ctx, material_key);
+    if needs_batch(batch, state, &material_key) {
+        start_batch(res, batch, state, material_key);
     }
 
-    if let Some(ref mut mesh) = ctx.batch.current_mesh {
+    if let Some(ref mut mesh) = batch.current_mesh {
         tessellate(mesh, color, stroke_weight);
     }
 }
 
-fn flush_batch(ctx: &mut RenderContext) {
-    if let Some(mesh) = ctx.batch.current_mesh.take() {
-        // we defensively apply a small z-offset based on draw_index to preserve painter's algorithm
-        let z_offset = -(ctx.batch.draw_index as f32 * 0.001);
-        spawn_mesh(ctx, mesh, z_offset);
-        ctx.batch.draw_index += 1;
+fn flush_batch(res: &mut RenderResources, batch: &mut BatchState) {
+    if let Some(mesh) = batch.current_mesh.take() {
+        let z_offset = -(batch.draw_index as f32 * 0.001);
+        spawn_mesh(res, batch, mesh, z_offset);
+        batch.draw_index += 1;
     }
-    ctx.batch.material_key = None;
+    batch.material_key = None;
 }
