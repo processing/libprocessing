@@ -211,6 +211,110 @@ pub extern "C" fn processing_no_stroke(window_id: u64) {
     error::check(|| graphics_record_command(window_entity, DrawCommand::NoStroke));
 }
 
+/// Push the current transformation matrix onto the stack.
+///
+/// SAFETY:
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_push_matrix(window_id: u64) {
+    error::clear_error();
+    let window_entity = Entity::from_bits(window_id);
+    error::check(|| graphics_record_command(window_entity, DrawCommand::PushMatrix));
+}
+
+/// Pop the transformation matrix from the stack.
+///
+/// SAFETY:
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_pop_matrix(window_id: u64) {
+    error::clear_error();
+    let window_entity = Entity::from_bits(window_id);
+    error::check(|| graphics_record_command(window_entity, DrawCommand::PopMatrix));
+}
+
+/// Reset the transformation matrix to identity.
+///
+/// SAFETY:
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_reset_matrix(window_id: u64) {
+    error::clear_error();
+    let window_entity = Entity::from_bits(window_id);
+    error::check(|| graphics_record_command(window_entity, DrawCommand::ResetMatrix));
+}
+
+/// Translate the coordinate system.
+///
+/// SAFETY:
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_translate(window_id: u64, x: f32, y: f32) {
+    error::clear_error();
+    let window_entity = Entity::from_bits(window_id);
+    error::check(|| graphics_record_command(window_entity, DrawCommand::Translate { x, y }));
+}
+
+/// Rotate the coordinate system.
+///
+/// SAFETY:
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_rotate(window_id: u64, angle: f32) {
+    error::clear_error();
+    let window_entity = Entity::from_bits(window_id);
+    error::check(|| graphics_record_command(window_entity, DrawCommand::Rotate { angle }));
+}
+
+/// Scale the coordinate system.
+///
+/// SAFETY:
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_scale(window_id: u64, x: f32, y: f32) {
+    error::clear_error();
+    let window_entity = Entity::from_bits(window_id);
+    error::check(|| graphics_record_command(window_entity, DrawCommand::Scale { x, y }));
+}
+
+/// Shear along the X axis.
+///
+/// SAFETY:
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_shear_x(window_id: u64, angle: f32) {
+    error::clear_error();
+    let window_entity = Entity::from_bits(window_id);
+    error::check(|| graphics_record_command(window_entity, DrawCommand::ShearX { angle }));
+}
+
+/// Shear along the Y axis.
+///
+/// SAFETY:
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_shear_y(window_id: u64, angle: f32) {
+    error::clear_error();
+    let window_entity = Entity::from_bits(window_id);
+    error::check(|| graphics_record_command(window_entity, DrawCommand::ShearY { angle }));
+}
+
 /// Draw a rectangle.
 ///
 /// SAFETY:

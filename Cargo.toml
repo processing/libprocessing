@@ -46,6 +46,10 @@ path = "examples/background_image.rs"
 name = "update_pixels"
 path = "examples/update_pixels.rs"
 
+[[example]]
+name = "transforms"
+path = "examples/transforms.rs"
+
 [profile.wasm-release]
 inherits = "release"
 opt-level = "z"

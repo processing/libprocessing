@@ -228,8 +228,8 @@ pub fn graphics_create(surface_entity: Entity, width: u32, height: u32) -> error
 }
 
 /// Begin a new draw pass for the graphics surface.
-pub fn graphics_begin_draw(_graphics_entity: Entity) -> error::Result<()> {
-    app_mut(|app| graphics::begin_draw(app, _graphics_entity))
+pub fn graphics_begin_draw(graphics_entity: Entity) -> error::Result<()> {
+    app_mut(|app| graphics::begin_draw(app.world_mut(), graphics_entity))
 }
 
 /// Flush current pending draw commands to the graphics surface.

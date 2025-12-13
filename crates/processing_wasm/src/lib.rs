@@ -140,6 +140,70 @@ pub fn js_rect(
     ))
 }
 
+#[wasm_bindgen(js_name = "pushMatrix")]
+pub fn js_push_matrix(surface_id: u64) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::PushMatrix,
+    ))
+}
+
+#[wasm_bindgen(js_name = "popMatrix")]
+pub fn js_pop_matrix(surface_id: u64) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::PopMatrix,
+    ))
+}
+
+#[wasm_bindgen(js_name = "resetMatrix")]
+pub fn js_reset_matrix(surface_id: u64) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::ResetMatrix,
+    ))
+}
+
+#[wasm_bindgen(js_name = "translate")]
+pub fn js_translate(surface_id: u64, x: f32, y: f32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Translate { x, y },
+    ))
+}
+
+#[wasm_bindgen(js_name = "rotate")]
+pub fn js_rotate(surface_id: u64, angle: f32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Rotate { angle },
+    ))
+}
+
+#[wasm_bindgen(js_name = "scale")]
+pub fn js_scale(surface_id: u64, x: f32, y: f32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Scale { x, y },
+    ))
+}
+
+#[wasm_bindgen(js_name = "shearX")]
+pub fn js_shear_x(surface_id: u64, angle: f32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::ShearX { angle },
+    ))
+}
+
+#[wasm_bindgen(js_name = "shearY")]
+pub fn js_shear_y(surface_id: u64, angle: f32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::ShearY { angle },
+    ))
+}
+
 #[wasm_bindgen(js_name = "createImage")]
 pub fn js_image_create(width: u32, height: u32, data: &[u8]) -> Result<u64, JsValue> {
     use bevy::render::render_resource::{Extent3d, TextureFormat};

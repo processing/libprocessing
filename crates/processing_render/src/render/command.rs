@@ -16,6 +16,26 @@ pub enum DrawCommand {
         h: f32,
         radii: [f32; 4], // [tl, tr, br, bl]
     },
+    PushMatrix,
+    PopMatrix,
+    ResetMatrix,
+    Translate {
+        x: f32,
+        y: f32,
+    },
+    Rotate {
+        angle: f32,
+    },
+    Scale {
+        x: f32,
+        y: f32,
+    },
+    ShearX {
+        angle: f32,
+    },
+    ShearY {
+        angle: f32,
+    },
 }
 
 #[derive(Debug, Default, Component)]
