@@ -51,7 +51,7 @@ impl TransformStack {
             Vec3::new(angle.tan(), 1.0, 0.0),
             Vec3::new(0.0, 0.0, 1.0),
         ));
-        self.current = self.current * shear;
+        self.current *= shear;
     }
 
     pub fn shear_y(&mut self, angle: f32) {
@@ -60,41 +60,41 @@ impl TransformStack {
             Vec3::new(0.0, 1.0, 0.0),
             Vec3::new(0.0, 0.0, 1.0),
         ));
-        self.current = self.current * shear;
+        self.current *= shear;
     }
 
     pub fn translate_3d(&mut self, x: f32, y: f32, z: f32) {
         let t = Affine3A::from_translation(Vec3::new(x, y, z));
-        self.current = self.current * t;
+        self.current *= t;
     }
 
     pub fn rotate_x(&mut self, angle: f32) {
         let r = Affine3A::from_quat(Quat::from_rotation_x(angle));
-        self.current = self.current * r;
+        self.current *= r;
     }
 
     pub fn rotate_y(&mut self, angle: f32) {
         let r = Affine3A::from_quat(Quat::from_rotation_y(angle));
-        self.current = self.current * r;
+        self.current *= r;
     }
 
     pub fn rotate_z(&mut self, angle: f32) {
         let r = Affine3A::from_quat(Quat::from_rotation_z(angle));
-        self.current = self.current * r;
+        self.current *= r;
     }
 
     pub fn rotate_axis(&mut self, angle: f32, axis: Vec3) {
         let r = Affine3A::from_quat(Quat::from_axis_angle(axis.normalize(), angle));
-        self.current = self.current * r;
+        self.current *= r;
     }
 
     pub fn scale_3d(&mut self, sx: f32, sy: f32, sz: f32) {
         let s = Affine3A::from_scale(Vec3::new(sx, sy, sz));
-        self.current = self.current * s;
+        self.current *= s;
     }
 
     pub fn apply(&mut self, transform: Affine3A) {
-        self.current = self.current * transform;
+        self.current *= transform;
     }
 
     pub fn to_bevy_transform(&self) -> bevy::prelude::Transform {
@@ -118,8 +118,9 @@ impl TransformStack {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::f32::consts::PI;
+
+    use super::*;
 
     static EPSILON: f32 = 1e-5;
 

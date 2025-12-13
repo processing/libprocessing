@@ -1,9 +1,10 @@
 mod glfw;
 
+use std::f32::consts::PI;
+
 use glfw::GlfwContext;
 use processing::prelude::*;
 use processing_render::render::command::DrawCommand;
-use std::f32::consts::PI;
 
 fn main() {
     sketch().unwrap();

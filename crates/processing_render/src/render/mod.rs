@@ -4,7 +4,9 @@ pub mod mesh_builder;
 pub mod primitive;
 pub mod transform;
 
-use bevy::{camera::visibility::RenderLayers, ecs::system::SystemParam, math::Affine3A, prelude::*};
+use bevy::{
+    camera::visibility::RenderLayers, ecs::system::SystemParam, math::Affine3A, prelude::*,
+};
 use command::{CommandBuffer, DrawCommand};
 use material::MaterialKey;
 use primitive::{TessellationMode, empty_mesh};
@@ -261,20 +263,18 @@ fn spawn_mesh(ctx: &mut RenderContext, mesh: Mesh, z_offset: f32) {
     ));
 }
 
-fn maybe_start_batch(ctx: &mut RenderContext, material_key: MaterialKey) -> bool {
+fn needs_batch(ctx: &RenderContext, material_key: &MaterialKey) -> bool {
     let current_transform = ctx.state.transform.current();
-    let material_changed = ctx.batch.material_key.as_ref() != Some(&material_key);
+    let material_changed = ctx.batch.material_key.as_ref() != Some(material_key);
     let transform_changed = ctx.batch.transform != current_transform;
+    material_changed || transform_changed
+}
 
-    if material_changed || transform_changed {
-        flush_batch(ctx);
-        ctx.batch.material_key = Some(material_key);
-        ctx.batch.transform = current_transform;
-        ctx.batch.current_mesh = Some(empty_mesh());
-        true
-    } else {
-        false
-    }
+fn start_batch(ctx: &mut RenderContext, material_key: MaterialKey) {
+    flush_batch(ctx);
+    ctx.batch.material_key = Some(material_key);
+    ctx.batch.transform = ctx.state.transform.current();
+    ctx.batch.current_mesh = Some(empty_mesh());
 }
 
 fn add_fill(ctx: &mut RenderContext, tessellate: impl FnOnce(&mut Mesh, Color)) {
@@ -286,9 +286,10 @@ fn add_fill(ctx: &mut RenderContext, tessellate: impl FnOnce(&mut Mesh, Color)) 
         background_image: None,
     };
 
-    maybe_start_batch(ctx, material_key);
+    if needs_batch(ctx, &material_key) {
+        start_batch(ctx, material_key);
+    }
 
-    // accumulate geometry into the current mega mesh
     if let Some(ref mut mesh) = ctx.batch.current_mesh {
         tessellate(mesh, color);
     }
@@ -304,9 +305,10 @@ fn add_stroke(ctx: &mut RenderContext, tessellate: impl FnOnce(&mut Mesh, Color,
         background_image: None,
     };
 
-    maybe_start_batch(ctx, material_key);
+    if needs_batch(ctx, &material_key) {
+        start_batch(ctx, material_key);
+    }
 
-    // accumulate geometry into the current mega mesh
     if let Some(ref mut mesh) = ctx.batch.current_mesh {
         tessellate(mesh, color, stroke_weight);
     }
