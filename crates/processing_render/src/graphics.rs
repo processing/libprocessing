@@ -29,7 +29,10 @@ use crate::{
     Flush,
     error::{ProcessingError, Result},
     image::{Image, bytes_to_pixels, create_readback_buffer, pixel_size, pixels_to_bytes},
-    render::{RenderState, command::{CommandBuffer, DrawCommand}},
+    render::{
+        RenderState,
+        command::{CommandBuffer, DrawCommand},
+    },
     surface::Surface,
 };
 

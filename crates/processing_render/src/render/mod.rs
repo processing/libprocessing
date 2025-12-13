@@ -247,7 +247,12 @@ fn needs_batch(batch: &BatchState, state: &RenderState, material_key: &MaterialK
     material_changed || transform_changed
 }
 
-fn start_batch(res: &mut RenderResources, batch: &mut BatchState, state: &RenderState, material_key: MaterialKey) {
+fn start_batch(
+    res: &mut RenderResources,
+    batch: &mut BatchState,
+    state: &RenderState,
+    material_key: MaterialKey,
+) {
     flush_batch(res, batch);
     batch.material_key = Some(material_key);
     batch.transform = state.transform.current();
