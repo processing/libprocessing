@@ -123,6 +123,46 @@ impl Graphics {
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    pub fn push_matrix(&self) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::PushMatrix)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn pop_matrix(&self) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::PopMatrix)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn reset_matrix(&self) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::ResetMatrix)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn translate(&self, x: f32, y: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Translate { x, y })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn rotate(&self, angle: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Rotate { angle })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn scale(&self, x: f32, y: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Scale { x, y })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn shear_x(&self, angle: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::ShearX { angle })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn shear_y(&self, angle: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::ShearY { angle })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     pub fn begin_draw(&self) -> PyResult<()> {
         graphics_begin_draw(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }

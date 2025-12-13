@@ -2,11 +2,13 @@ pub mod command;
 pub mod material;
 pub mod mesh_builder;
 pub mod primitive;
+pub mod transform;
 
-use bevy::{camera::visibility::RenderLayers, ecs::system::SystemParam, prelude::*};
+use bevy::{camera::visibility::RenderLayers, ecs::system::SystemParam, math::Affine3A, prelude::*};
 use command::{CommandBuffer, DrawCommand};
 use material::MaterialKey;
 use primitive::{TessellationMode, empty_mesh};
+use transform::TransformStack;
 
 use crate::{Flush, graphics::SurfaceSize, image::Image, render::primitive::rect};
 
@@ -27,13 +29,26 @@ pub struct RenderContext<'w, 's> {
     state: Local<'s, RenderState>,
 }
 
-#[derive(Default)]
 struct BatchState {
     current_mesh: Option<Mesh>,
     material_key: Option<MaterialKey>,
+    transform: Affine3A,
     draw_index: u32,
     render_layers: RenderLayers,
     graphics_entity: Option<Entity>,
+}
+
+impl Default for BatchState {
+    fn default() -> Self {
+        Self {
+            current_mesh: None,
+            material_key: None,
+            transform: Affine3A::IDENTITY,
+            draw_index: 0,
+            render_layers: RenderLayers::default(),
+            graphics_entity: None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -42,6 +57,8 @@ pub struct RenderState {
     pub fill_color: Option<Color>,
     pub stroke_color: Option<Color>,
     pub stroke_weight: f32,
+    // transform state
+    pub transform: TransformStack,
 }
 
 impl Default for RenderState {
@@ -50,6 +67,7 @@ impl Default for RenderState {
             fill_color: Some(Color::WHITE),
             stroke_color: Some(Color::BLACK),
             stroke_weight: 1.0,
+            transform: TransformStack::new(),
         }
     }
 }
@@ -172,6 +190,26 @@ pub fn flush_draw_commands(
 
                     flush_batch(&mut ctx);
                 }
+                DrawCommand::PushMatrix => ctx.state.transform.push(),
+                DrawCommand::PopMatrix => ctx.state.transform.pop(),
+                DrawCommand::ResetMatrix => {
+                    ctx.state.transform.reset();
+                }
+                DrawCommand::Translate { x, y } => {
+                    ctx.state.transform.translate(x, y);
+                }
+                DrawCommand::Rotate { angle } => {
+                    ctx.state.transform.rotate(angle);
+                }
+                DrawCommand::Scale { x, y } => {
+                    ctx.state.transform.scale(x, y);
+                }
+                DrawCommand::ShearX { angle } => {
+                    ctx.state.transform.shear_x(angle);
+                }
+                DrawCommand::ShearY { angle } => {
+                    ctx.state.transform.shear_y(angle);
+                }
             }
         }
 
@@ -207,13 +245,36 @@ fn spawn_mesh(ctx: &mut RenderContext, mesh: Mesh, z_offset: f32) {
     let mesh_handle = ctx.meshes.add(mesh);
     let material_handle = ctx.materials.add(material_key.to_material());
 
+    let (scale, rotation, translation) = ctx.batch.transform.to_scale_rotation_translation();
+    let transform = Transform {
+        translation: translation + Vec3::new(0.0, 0.0, z_offset),
+        rotation,
+        scale,
+    };
+
     ctx.commands.spawn((
         Mesh3d(mesh_handle),
         MeshMaterial3d(material_handle),
         BelongsToGraphics(surface_entity),
-        Transform::from_xyz(0.0, 0.0, z_offset),
+        transform,
         ctx.batch.render_layers.clone(),
     ));
+}
+
+fn maybe_start_batch(ctx: &mut RenderContext, material_key: MaterialKey) -> bool {
+    let current_transform = ctx.state.transform.current();
+    let material_changed = ctx.batch.material_key.as_ref() != Some(&material_key);
+    let transform_changed = ctx.batch.transform != current_transform;
+
+    if material_changed || transform_changed {
+        flush_batch(ctx);
+        ctx.batch.material_key = Some(material_key);
+        ctx.batch.transform = current_transform;
+        ctx.batch.current_mesh = Some(empty_mesh());
+        true
+    } else {
+        false
+    }
 }
 
 fn add_fill(ctx: &mut RenderContext, tessellate: impl FnOnce(&mut Mesh, Color)) {
@@ -225,12 +286,7 @@ fn add_fill(ctx: &mut RenderContext, tessellate: impl FnOnce(&mut Mesh, Color)) 
         background_image: None,
     };
 
-    // when the material changes, flush the current batch
-    if ctx.batch.material_key.as_ref() != Some(&material_key) {
-        flush_batch(ctx);
-        ctx.batch.material_key = Some(material_key);
-        ctx.batch.current_mesh = Some(empty_mesh());
-    }
+    maybe_start_batch(ctx, material_key);
 
     // accumulate geometry into the current mega mesh
     if let Some(ref mut mesh) = ctx.batch.current_mesh {
@@ -248,12 +304,7 @@ fn add_stroke(ctx: &mut RenderContext, tessellate: impl FnOnce(&mut Mesh, Color,
         background_image: None,
     };
 
-    // when the material changes, flush the current batch
-    if ctx.batch.material_key.as_ref() != Some(&material_key) {
-        flush_batch(ctx);
-        ctx.batch.material_key = Some(material_key);
-        ctx.batch.current_mesh = Some(empty_mesh());
-    }
+    maybe_start_batch(ctx, material_key);
 
     // accumulate geometry into the current mega mesh
     if let Some(ref mut mesh) = ctx.batch.current_mesh {
