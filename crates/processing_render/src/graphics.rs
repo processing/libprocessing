@@ -29,7 +29,10 @@ use crate::{
     Flush,
     error::{ProcessingError, Result},
     image::{Image, bytes_to_pixels, create_readback_buffer, pixel_size, pixels_to_bytes},
-    render::command::{CommandBuffer, DrawCommand},
+    render::{
+        RenderState,
+        command::{CommandBuffer, DrawCommand},
+    },
     surface::Surface,
 };
 
@@ -246,6 +249,7 @@ pub fn create(
                 Transform::from_xyz(0.0, 0.0, 999.9),
                 render_layer,
                 CommandBuffer::new(),
+                RenderState::default(),
                 SurfaceSize(width, height),
                 Graphics {
                     readback_buffer,
@@ -307,9 +311,21 @@ pub fn destroy(world: &mut World, entity: Entity) -> Result<()> {
     world.run_system_cached_with(destroy_inner, entity).unwrap()
 }
 
-pub fn begin_draw(_app: &mut App, _entity: Entity) -> Result<()> {
-    // nothing to do here for now
-    Ok(())
+pub fn begin_draw(world: &mut World, entity: Entity) -> Result<()> {
+    fn begin_draw_inner(
+        In(entity): In<Entity>,
+        mut state_query: Query<&mut RenderState>,
+    ) -> Result<()> {
+        let mut state = state_query
+            .get_mut(entity)
+            .map_err(|_| ProcessingError::GraphicsNotFound)?;
+        state.reset();
+        Ok(())
+    }
+
+    world
+        .run_system_cached_with(begin_draw_inner, entity)
+        .unwrap()
 }
 
 pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
