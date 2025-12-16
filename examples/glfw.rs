@@ -1,4 +1,5 @@
 /// Minimal GLFW helper for Processing examples
+use bevy::prelude::Entity;
 use glfw::{Glfw, GlfwReceiver, PWindow, WindowEvent, WindowMode};
 use processing_render::error::Result;
 
@@ -30,28 +31,49 @@ impl GlfwContext {
     }
 
     #[cfg(target_os = "macos")]
-    pub fn get_window(&self) -> u64 {
-        self.window.get_cocoa_window() as u64
+    pub fn create_surface(&self, width: u32, height: u32, scale_factor: f32) -> Result<Entity> {
+        use processing_render::surface_create_macos;
+        surface_create_macos(
+            self.window.get_cocoa_window() as u64,
+            width,
+            height,
+            scale_factor,
+        )
     }
 
     #[cfg(target_os = "windows")]
-    pub fn get_window(&self) -> u64 {
-        self.window.get_win32_window() as u64
+    pub fn create_surface(&self, width: u32, height: u32, scale_factor: f32) -> Result<Entity> {
+        use processing_render::surface_create_windows;
+        surface_create_windows(
+            self.window.get_win32_window() as u64,
+            width,
+            height,
+            scale_factor,
+        )
     }
 
-    #[cfg(target_os = "linux")]
-    pub fn get_window(&self) -> u64 {
-        self.window.get_wayland_window() as u64
+    #[cfg(all(target_os = "linux", feature = "wayland"))]
+    pub fn create_surface(&self, width: u32, height: u32, scale_factor: f32) -> Result<Entity> {
+        use processing_render::surface_create_wayland;
+        surface_create_wayland(
+            self.window.get_wayland_window() as u64,
+            self.glfw.get_wayland_display() as u64,
+            width,
+            height,
+            scale_factor,
+        )
     }
 
-    #[cfg(not(target_os = "linux"))]
-    pub fn get_display(&self) -> u64 {
-        0
-    }
-
-    #[cfg(target_os = "linux")]
-    pub fn get_display(&self) -> u64 {
-        self.glfw.get_wayland_display() as u64
+    #[cfg(all(target_os = "linux", feature = "x11"))]
+    pub fn create_surface(&self, width: u32, height: u32, scale_factor: f32) -> Result<Entity> {
+        use processing_render::surface_create_x11;
+        surface_create_x11(
+            self.window.get_x11_window() as u64,
+            self.glfw.get_x11_display() as u64,
+            width,
+            height,
+            scale_factor,
+        )
     }
 
     pub fn poll_events(&mut self) -> bool {

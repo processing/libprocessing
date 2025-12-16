@@ -6,6 +6,11 @@ edition = "2024"
 [lints]
 workspace = true
 
+[features]
+default = []
+wayland = ["bevy/wayland"]
+x11 = ["bevy/x11"]
+
 [dependencies]
 bevy = { workspace = true }
 lyon = "1.0"

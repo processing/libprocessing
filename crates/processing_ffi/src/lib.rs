@@ -20,16 +20,58 @@ pub extern "C" fn processing_init() {
     error::check(init);
 }
 
-/// Create a WebGPU surface from a native window handle.
-/// Returns a window ID (entity ID) that should be used for subsequent operations.
-/// Returns 0 on failure.
+/// Create a WebGPU surface from a macOS NSWindow handle.
 ///
 /// SAFETY:
 /// - Init has been called.
-/// - window_handle is a valid GLFW window pointer.
+/// - window_handle is a valid NSWindow pointer.
 /// - This is called from the same thread as init.
+#[cfg(target_os = "macos")]
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_surface_create(
+    window_handle: u64,
+    _display_handle: u64,
+    width: u32,
+    height: u32,
+    scale_factor: f32,
+) -> u64 {
+    error::clear_error();
+    error::check(|| surface_create_macos(window_handle, width, height, scale_factor))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+/// Create a WebGPU surface from a Windows HWND handle.
+///
+/// SAFETY:
+/// - Init has been called.
+/// - window_handle is a valid HWND.
+/// - This is called from the same thread as init.
+#[cfg(target_os = "windows")]
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_surface_create(
+    window_handle: u64,
+    _display_handle: u64,
+    width: u32,
+    height: u32,
+    scale_factor: f32,
+) -> u64 {
+    error::clear_error();
+    error::check(|| surface_create_windows(window_handle, width, height, scale_factor))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+/// Create a WebGPU surface from a Wayland window and display handle.
+///
+/// SAFETY:
+/// - Init has been called.
+/// - window_handle is a valid wl_surface pointer.
+/// - display_handle is a valid wl_display pointer.
+/// - This is called from the same thread as init.
+#[cfg(all(target_os = "linux", feature = "wayland"))]
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_surface_create_wayland(
     window_handle: u64,
     display_handle: u64,
     width: u32,
@@ -37,7 +79,31 @@ pub extern "C" fn processing_surface_create(
     scale_factor: f32,
 ) -> u64 {
     error::clear_error();
-    error::check(|| surface_create(window_handle, display_handle, width, height, scale_factor))
+    error::check(|| {
+        surface_create_wayland(window_handle, display_handle, width, height, scale_factor)
+    })
+    .map(|e| e.to_bits())
+    .unwrap_or(0)
+}
+
+/// Create a WebGPU surface from an X11 window and display handle.
+///
+/// SAFETY:
+/// - Init has been called.
+/// - window_handle is a valid X11 Window ID.
+/// - display_handle is a valid X11 Display pointer.
+/// - This is called from the same thread as init.
+#[cfg(all(target_os = "linux", feature = "x11"))]
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_surface_create_x11(
+    window_handle: u64,
+    display_handle: u64,
+    width: u32,
+    height: u32,
+    scale_factor: f32,
+) -> u64 {
+    error::clear_error();
+    error::check(|| surface_create_x11(window_handle, display_handle, width, height, scale_factor))
         .map(|e| e.to_bits())
         .unwrap_or(0)
 }
