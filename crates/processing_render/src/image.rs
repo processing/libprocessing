@@ -63,48 +63,37 @@ fn sync_textures(mut main_world: ResMut<MainWorld>, gpu_images: Res<RenderAssets
 }
 
 pub fn create(
-    world: &mut World,
-    size: Extent3d,
-    data: Vec<u8>,
-    texture_format: TextureFormat,
+    In((size, data, texture_format)): In<(Extent3d, Vec<u8>, TextureFormat)>,
+    mut commands: Commands,
+    mut images: ResMut<Assets<bevy::image::Image>>,
+    render_device: Res<RenderDevice>,
 ) -> Entity {
-    fn create_inner(
-        In((size, data, texture_format)): In<(Extent3d, Vec<u8>, TextureFormat)>,
-        mut commands: Commands,
-        mut images: ResMut<Assets<bevy::image::Image>>,
-        render_device: Res<RenderDevice>,
-    ) -> Entity {
-        let image = bevy::image::Image::new(
+    let image = bevy::image::Image::new(
+        size,
+        TextureDimension::D2,
+        data,
+        texture_format,
+        RenderAssetUsages::all(),
+    );
+
+    let handle = images.add(image);
+    let readback_buffer = create_readback_buffer(
+        &render_device,
+        size.width,
+        size.height,
+        texture_format,
+        "Image Readback Buffer",
+    )
+    .expect("Failed to create readback buffer");
+
+    commands
+        .spawn((Image {
+            handle: handle.clone(),
+            readback_buffer,
+            texture_format,
             size,
-            TextureDimension::D2,
-            data,
-            texture_format,
-            RenderAssetUsages::all(),
-        );
-
-        let handle = images.add(image);
-        let readback_buffer = create_readback_buffer(
-            &render_device,
-            size.width,
-            size.height,
-            texture_format,
-            "Image Readback Buffer",
-        )
-        .expect("Failed to create readback buffer");
-
-        commands
-            .spawn((Image {
-                handle: handle.clone(),
-                readback_buffer,
-                texture_format,
-                size,
-            },))
-            .id()
-    }
-
-    world
-        .run_system_cached_with(create_inner, (size, data, texture_format))
-        .unwrap()
+        },))
+        .id()
 }
 
 pub fn load_start(world: &mut World, path: PathBuf) -> Handle<bevy::image::Image> {
@@ -119,262 +108,226 @@ pub fn is_loaded(world: &World, handle: &Handle<bevy::image::Image>) -> bool {
 }
 
 #[cfg(target_arch = "wasm32")]
-pub fn from_handle(world: &mut World, handle: Handle<bevy::image::Image>) -> Result<Entity> {
-    fn from_handle_inner(
-        In(handle): In<Handle<bevy::image::Image>>,
-        world: &mut World,
-    ) -> Result<Entity> {
-        let images = world.resource::<Assets<bevy::image::Image>>();
-        let image = images.get(&handle).ok_or(ProcessingError::ImageNotFound)?;
-
-        let size = image.texture_descriptor.size;
-        let texture_format = image.texture_descriptor.format;
-
-        let render_device = world.resource::<RenderDevice>();
-        let readback_buffer = create_readback_buffer(
-            render_device,
-            size.width,
-            size.height,
-            texture_format,
-            "Image Readback Buffer",
-        )?;
-
-        Ok(world
-            .spawn(Image {
-                handle: handle.clone(),
-                readback_buffer,
-                texture_format,
-                size,
-            })
-            .id())
-    }
-
-    world
-        .run_system_cached_with(from_handle_inner, handle)
-        .expect("Failed to run from_handle system")
-}
-
-pub fn load(world: &mut World, path: PathBuf) -> Result<Entity> {
-    fn load_inner(In(path): In<PathBuf>, world: &mut World) -> Result<Entity> {
-        let handle: Handle<bevy::image::Image> = world.get_asset_server().load(path);
-        while let LoadState::Loading = world.get_asset_server().load_state(&handle) {
-            world.run_system_once(handle_internal_asset_events).unwrap();
-        }
-        let images = world.resource::<Assets<bevy::image::Image>>();
-        let image = images.get(&handle).ok_or(ProcessingError::ImageNotFound)?;
-
-        let size = image.texture_descriptor.size;
-        let texture_format = image.texture_descriptor.format;
-
-        let render_device = world.resource::<RenderDevice>();
-        let readback_buffer = create_readback_buffer(
-            render_device,
-            size.width,
-            size.height,
-            texture_format,
-            "Image Readback Buffer",
-        )?;
-
-        Ok(world
-            .spawn(Image {
-                handle: handle.clone(),
-                readback_buffer,
-                texture_format,
-                size,
-            })
-            .id())
-    }
-
-    world
-        .run_system_cached_with(load_inner, path.to_path_buf())
-        .expect("Failed to run load system")
-}
-
-pub fn resize(world: &mut World, entity: Entity, new_size: Extent3d) -> Result<()> {
-    fn resize_inner(
-        In((entity, new_size)): In<(Entity, Extent3d)>,
-        mut p_images: Query<&mut Image>,
-        mut images: ResMut<Assets<bevy::image::Image>>,
-        render_device: Res<RenderDevice>,
-    ) -> Result<()> {
-        let mut p_image = p_images
-            .get_mut(entity)
-            .map_err(|_| ProcessingError::ImageNotFound)?;
-
-        images
-            .get_mut(&p_image.handle)
-            .ok_or(ProcessingError::ImageNotFound)?
-            .resize_in_place(new_size);
-
-        p_image.readback_buffer = create_readback_buffer(
-            &render_device,
-            new_size.width,
-            new_size.height,
-            p_image.texture_format,
-            "Image Readback Buffer",
-        )?;
-        p_image.size = new_size;
-
-        Ok(())
-    }
-
-    world
-        .run_system_cached_with(resize_inner, (entity, new_size))
-        .expect("Failed to run resize system")
-}
-
-pub fn readback(world: &mut World, entity: Entity) -> Result<Vec<LinearRgba>> {
-    fn readback_inner(
-        In(entity): In<Entity>,
-        p_images: Query<&Image>,
-        p_image_textures: Res<ImageTextures>,
-        mut images: ResMut<Assets<bevy::image::Image>>,
-        render_device: Res<RenderDevice>,
-        render_queue: ResMut<RenderQueue>,
-    ) -> Result<Vec<LinearRgba>> {
-        let p_image = p_images
-            .get(entity)
-            .map_err(|_| ProcessingError::ImageNotFound)?;
-        let texture = p_image_textures
-            .get(&entity)
-            .ok_or(ProcessingError::ImageNotFound)?;
-
-        let mut encoder =
-            render_device.create_command_encoder(&CommandEncoderDescriptor::default());
-
-        let px_size = pixel_size(p_image.texture_format)?;
-        let padded_bytes_per_row =
-            RenderDevice::align_copy_bytes_per_row(p_image.size.width as usize * px_size);
-
-        encoder.copy_texture_to_buffer(
-            texture.as_image_copy(),
-            TexelCopyBufferInfo {
-                buffer: &p_image.readback_buffer,
-                layout: TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(
-                        std::num::NonZero::<u32>::new(padded_bytes_per_row as u32)
-                            .unwrap()
-                            .into(),
-                    ),
-                    rows_per_image: None,
-                },
-            },
-            p_image.size,
-        );
-
-        render_queue.submit(std::iter::once(encoder.finish()));
-
-        let buffer_slice = p_image.readback_buffer.slice(..);
-
-        let (s, r) = crossbeam_channel::bounded(1);
-
-        buffer_slice.map_async(MapMode::Read, move |r| match r {
-            Ok(r) => s.send(r).expect("Failed to send map update"),
-            Err(err) => panic!("Failed to map buffer {err}"),
-        });
-
-        render_device
-            .poll(PollType::Wait)
-            .expect("Failed to poll device for map async");
-
-        r.recv().expect("Failed to receive the map_async message");
-
-        let data = buffer_slice.get_mapped_range().to_vec();
-
-        let image = images
-            .get_mut(&p_image.handle)
-            .ok_or(ProcessingError::ImageNotFound)?;
-        image.data = Some(data.clone());
-
-        p_image.readback_buffer.unmap();
-
-        bytes_to_pixels(
-            &data,
-            p_image.texture_format,
-            p_image.size.width,
-            p_image.size.height,
-            padded_bytes_per_row,
-        )
-    }
-
-    world
-        .run_system_cached_with(readback_inner, entity)
-        .expect("Failed to run readback system")
-}
-
-pub fn update_region(
+pub fn from_handle(
+    In(handle): In<Handle<bevy::image::Image>>,
     world: &mut World,
+) -> Result<Entity> {
+    let images = world.resource::<Assets<bevy::image::Image>>();
+    let image = images.get(&handle).ok_or(ProcessingError::ImageNotFound)?;
+
+    let size = image.texture_descriptor.size;
+    let texture_format = image.texture_descriptor.format;
+
+    let render_device = world.resource::<RenderDevice>();
+    let readback_buffer = create_readback_buffer(
+        render_device,
+        size.width,
+        size.height,
+        texture_format,
+        "Image Readback Buffer",
+    )?;
+
+    Ok(world
+        .spawn(Image {
+            handle: handle.clone(),
+            readback_buffer,
+            texture_format,
+            size,
+        })
+        .id())
+}
+
+pub fn load(In(path): In<PathBuf>, world: &mut World) -> Result<Entity> {
+    let handle: Handle<bevy::image::Image> = world.get_asset_server().load(path);
+    while let LoadState::Loading = world.get_asset_server().load_state(&handle) {
+        world.run_system_once(handle_internal_asset_events).unwrap();
+    }
+    let images = world.resource::<Assets<bevy::image::Image>>();
+    let image = images.get(&handle).ok_or(ProcessingError::ImageNotFound)?;
+
+    let size = image.texture_descriptor.size;
+    let texture_format = image.texture_descriptor.format;
+
+    let render_device = world.resource::<RenderDevice>();
+    let readback_buffer = create_readback_buffer(
+        render_device,
+        size.width,
+        size.height,
+        texture_format,
+        "Image Readback Buffer",
+    )?;
+
+    Ok(world
+        .spawn(Image {
+            handle: handle.clone(),
+            readback_buffer,
+            texture_format,
+            size,
+        })
+        .id())
+}
+
+pub fn resize(
+    In((entity, new_size)): In<(Entity, Extent3d)>,
+    mut p_images: Query<&mut Image>,
+    mut images: ResMut<Assets<bevy::image::Image>>,
+    render_device: Res<RenderDevice>,
+) -> Result<()> {
+    let mut p_image = p_images
+        .get_mut(entity)
+        .map_err(|_| ProcessingError::ImageNotFound)?;
+
+    images
+        .get_mut(&p_image.handle)
+        .ok_or(ProcessingError::ImageNotFound)?
+        .resize_in_place(new_size);
+
+    p_image.readback_buffer = create_readback_buffer(
+        &render_device,
+        new_size.width,
+        new_size.height,
+        p_image.texture_format,
+        "Image Readback Buffer",
+    )?;
+    p_image.size = new_size;
+
+    Ok(())
+}
+
+pub fn readback(
+    In(entity): In<Entity>,
+    p_images: Query<&Image>,
+    p_image_textures: Res<ImageTextures>,
+    mut images: ResMut<Assets<bevy::image::Image>>,
+    render_device: Res<RenderDevice>,
+    render_queue: ResMut<RenderQueue>,
+) -> Result<Vec<LinearRgba>> {
+    let p_image = p_images
+        .get(entity)
+        .map_err(|_| ProcessingError::ImageNotFound)?;
+    let texture = p_image_textures
+        .get(&entity)
+        .ok_or(ProcessingError::ImageNotFound)?;
+
+    let mut encoder =
+        render_device.create_command_encoder(&CommandEncoderDescriptor::default());
+
+    let px_size = pixel_size(p_image.texture_format)?;
+    let padded_bytes_per_row =
+        RenderDevice::align_copy_bytes_per_row(p_image.size.width as usize * px_size);
+
+    encoder.copy_texture_to_buffer(
+        texture.as_image_copy(),
+        TexelCopyBufferInfo {
+            buffer: &p_image.readback_buffer,
+            layout: TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(
+                    std::num::NonZero::<u32>::new(padded_bytes_per_row as u32)
+                        .unwrap()
+                        .into(),
+                ),
+                rows_per_image: None,
+            },
+        },
+        p_image.size,
+    );
+
+    render_queue.submit(std::iter::once(encoder.finish()));
+
+    let buffer_slice = p_image.readback_buffer.slice(..);
+
+    let (s, r) = crossbeam_channel::bounded(1);
+
+    buffer_slice.map_async(MapMode::Read, move |r| match r {
+        Ok(r) => s.send(r).expect("Failed to send map update"),
+        Err(err) => panic!("Failed to map buffer {err}"),
+    });
+
+    render_device
+        .poll(PollType::Wait)
+        .expect("Failed to poll device for map async");
+
+    r.recv().expect("Failed to receive the map_async message");
+
+    let data = buffer_slice.get_mapped_range().to_vec();
+
+    let image = images
+        .get_mut(&p_image.handle)
+        .ok_or(ProcessingError::ImageNotFound)?;
+    image.data = Some(data.clone());
+
+    p_image.readback_buffer.unmap();
+
+    bytes_to_pixels(
+        &data,
+        p_image.texture_format,
+        p_image.size.width,
+        p_image.size.height,
+        padded_bytes_per_row,
+    )
+}
+
+pub fn update_region_write(
+    In((entity, x, y, width, height, data, px_size)): In<(Entity, u32, u32, u32, u32, Vec<u8>, u32)>,
+    p_images: Query<&Image>,
+    p_image_textures: Res<ImageTextures>,
+    render_queue: Res<RenderQueue>,
+) -> Result<()> {
+    let p_image = p_images
+        .get(entity)
+        .map_err(|_| ProcessingError::ImageNotFound)?;
+
+    if x + width > p_image.size.width || y + height > p_image.size.height {
+        return Err(ProcessingError::InvalidArgument(format!(
+            "Region ({}, {}, {}, {}) exceeds image bounds ({}, {})",
+            x, y, width, height, p_image.size.width, p_image.size.height
+        )));
+    }
+
+    let texture = p_image_textures
+        .get(&entity)
+        .ok_or(ProcessingError::ImageNotFound)?;
+
+    let bytes_per_row = width * px_size;
+
+    render_queue.write_texture(
+        TexelCopyTextureInfo {
+            texture,
+            mip_level: 0,
+            origin: Origin3d { x, y, z: 0 },
+            aspect: Default::default(),
+        },
+        &data,
+        TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(bytes_per_row),
+            rows_per_image: None,
+        },
+        Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        },
+    );
+
+    Ok(())
+}
+
+pub fn prepare_update_region(
+    world: &World,
     entity: Entity,
-    x: u32,
-    y: u32,
     width: u32,
     height: u32,
     pixels: &[LinearRgba],
-) -> Result<()> {
+) -> Result<(Vec<u8>, u32)> {
     let expected_count = (width * height) as usize;
     if pixels.len() != expected_count {
         return Err(ProcessingError::InvalidArgument(format!(
             "Expected {} pixels for {}x{} region, got {}",
-            expected_count,
-            width,
-            height,
+            expected_count, width, height,
             pixels.len()
         )));
-    }
-
-    fn update_region_inner(
-        In((entity, x, y, width, height, data, px_size)): In<(
-            Entity,
-            u32,
-            u32,
-            u32,
-            u32,
-            Vec<u8>,
-            u32,
-        )>,
-        p_images: Query<&Image>,
-        p_image_textures: Res<ImageTextures>,
-        render_queue: Res<RenderQueue>,
-    ) -> Result<()> {
-        let p_image = p_images
-            .get(entity)
-            .map_err(|_| ProcessingError::ImageNotFound)?;
-
-        if x + width > p_image.size.width || y + height > p_image.size.height {
-            return Err(ProcessingError::InvalidArgument(format!(
-                "Region ({}, {}, {}, {}) exceeds image bounds ({}, {})",
-                x, y, width, height, p_image.size.width, p_image.size.height
-            )));
-        }
-
-        let texture = p_image_textures
-            .get(&entity)
-            .ok_or(ProcessingError::ImageNotFound)?;
-
-        let bytes_per_row = width * px_size;
-
-        render_queue.write_texture(
-            TexelCopyTextureInfo {
-                texture,
-                mip_level: 0,
-                origin: Origin3d { x, y, z: 0 },
-                aspect: Default::default(),
-            },
-            &data,
-            TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(bytes_per_row),
-                rows_per_image: None,
-            },
-            Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-        );
-
-        Ok(())
     }
 
     let p_image = world
@@ -383,43 +336,24 @@ pub fn update_region(
     let px_size = pixel_size(p_image.texture_format)? as u32;
     let data = pixels_to_bytes(pixels, p_image.texture_format)?;
 
-    world
-        .run_system_cached_with(
-            update_region_inner,
-            (entity, x, y, width, height, data, px_size),
-        )
-        .expect("Failed to run update_region system")
+    Ok((data, px_size))
 }
 
-pub fn update(world: &mut World, entity: Entity, pixels: &[LinearRgba]) -> Result<()> {
-    let size = world
-        .get::<Image>(entity)
-        .ok_or(ProcessingError::ImageNotFound)?
-        .size;
-    update_region(world, entity, 0, 0, size.width, size.height, pixels)
-}
+pub fn destroy(
+    In(entity): In<Entity>,
+    mut commands: Commands,
+    mut p_images: Query<&mut Image>,
+    mut images: ResMut<Assets<bevy::image::Image>>,
+    mut p_image_textures: ResMut<ImageTextures>,
+) -> Result<()> {
+    let p_image = p_images
+        .get_mut(entity)
+        .map_err(|_| ProcessingError::ImageNotFound)?;
 
-pub fn destroy(world: &mut World, entity: Entity) -> Result<()> {
-    fn destroy_inner(
-        In(entity): In<Entity>,
-        mut commands: Commands,
-        mut p_images: Query<&mut Image>,
-        mut images: ResMut<Assets<bevy::image::Image>>,
-        mut p_image_textures: ResMut<ImageTextures>,
-    ) -> Result<()> {
-        let p_image = p_images
-            .get_mut(entity)
-            .map_err(|_| ProcessingError::ImageNotFound)?;
-
-        images.remove(&p_image.handle);
-        p_image_textures.remove(&entity);
-        commands.entity(entity).despawn();
-        Ok(())
-    }
-
-    world
-        .run_system_cached_with(destroy_inner, entity)
-        .expect("Failed to run destroy system")
+    images.remove(&p_image.handle);
+    p_image_textures.remove(&entity);
+    commands.entity(entity).despawn();
+    Ok(())
 }
 
 /// Get the size in bytes of a single pixel for the given texture format.

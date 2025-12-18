@@ -118,17 +118,31 @@ more frequently are imperatively modifying the world rather than adding "normal"
 
 There are several strategies that can help work around this:
 
-1. You can call systems on `World` that accept and return data! This looks like the following:
+1. You can call systems on `World` that accept and return data using `In<T>` parameters:
 
 ```rust
-fn my_system(In(arg_a, arg_b): In<(u32, u32)>, mut my_res: ResMut<MyResource>, a_cool_query: Query<&Foo, &Bar>) -> u32 {
-    return 1234;
+// In a object module define plain systems with `In` params:
+pub fn create(
+    In((width, height, surface_entity)): In<(u32, u32, Entity)>,
+    mut commands: Commands,
+    render_device: Res<RenderDevice>,
+) -> Result<Entity> {
+    // implementation that uses Commands, queries, resources, etc.
+    Ok(entity)
 }
 
-// ... later
-world
-.run_system_cached_with(1, 2) ?;
+// In lib, call the system via run_system_cached_with:
+pub fn graphics_create(surface_entity: Entity, width: u32, height: u32) -> error::Result<Entity> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(graphics::create, (width, height, surface_entity))
+            .unwrap()
+    })
+}
 ```
+
+The `In<T>` parameter receives input data passed via `run_system_cached_with()`. For multiple parameters, use tuples:
+`In<(T, U, V)>`. The `In` parameter must always be the first system parameter.
 
 2. Collect results from queries into intermediate collections. This can resolve the borrow for a query at the cost of a
    bit of inefficiency.

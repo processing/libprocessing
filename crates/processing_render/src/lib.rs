@@ -51,7 +51,12 @@ pub fn surface_create_macos(
     scale_factor: f32,
 ) -> error::Result<Entity> {
     app_mut(|app| {
-        surface::create_surface_macos(app.world_mut(), window_handle, width, height, scale_factor)
+        app.world_mut()
+            .run_system_cached_with(
+                surface::create_surface_macos,
+                (window_handle, width, height, scale_factor),
+            )
+            .unwrap()
     })
 }
 
@@ -64,7 +69,12 @@ pub fn surface_create_windows(
     scale_factor: f32,
 ) -> error::Result<Entity> {
     app_mut(|app| {
-        surface::create_surface_windows(app.world_mut(), window_handle, width, height, scale_factor)
+        app.world_mut()
+            .run_system_cached_with(
+                surface::create_surface_windows,
+                (window_handle, width, height, scale_factor),
+            )
+            .unwrap()
     })
 }
 
@@ -78,14 +88,12 @@ pub fn surface_create_wayland(
     scale_factor: f32,
 ) -> error::Result<Entity> {
     app_mut(|app| {
-        surface::create_surface_wayland(
-            app.world_mut(),
-            window_handle,
-            display_handle,
-            width,
-            height,
-            scale_factor,
-        )
+        app.world_mut()
+            .run_system_cached_with(
+                surface::create_surface_wayland,
+                (window_handle, display_handle, width, height, scale_factor),
+            )
+            .unwrap()
     })
 }
 
@@ -99,14 +107,12 @@ pub fn surface_create_x11(
     scale_factor: f32,
 ) -> error::Result<Entity> {
     app_mut(|app| {
-        surface::create_surface_x11(
-            app.world_mut(),
-            window_handle,
-            display_handle,
-            width,
-            height,
-            scale_factor,
-        )
+        app.world_mut()
+            .run_system_cached_with(
+                surface::create_surface_x11,
+                (window_handle, display_handle, width, height, scale_factor),
+            )
+            .unwrap()
     })
 }
 
@@ -119,7 +125,12 @@ pub fn surface_create_web(
     scale_factor: f32,
 ) -> error::Result<Entity> {
     app_mut(|app| {
-        surface::create_surface_web(app.world_mut(), window_handle, width, height, scale_factor)
+        app.world_mut()
+            .run_system_cached_with(
+                surface::create_surface_web,
+                (window_handle, width, height, scale_factor),
+            )
+            .unwrap()
     })
 }
 
@@ -130,7 +141,14 @@ pub fn surface_create_offscreen(
     texture_format: TextureFormat,
 ) -> error::Result<Entity> {
     app_mut(|app| {
-        surface::create_offscreen(app.world_mut(), width, height, scale_factor, texture_format)
+        let (size, data, texture_format) =
+            surface::prepare_offscreen(width, height, scale_factor, texture_format)?;
+        let world = app.world_mut();
+        let image_entity = world
+            .run_system_cached_with(image::create, (size, data, texture_format))
+            .unwrap();
+        world.entity_mut(image_entity).insert(surface::Surface);
+        Ok(image_entity)
     })
 }
 
@@ -167,12 +185,20 @@ pub fn surface_create_from_canvas(
 }
 
 pub fn surface_destroy(graphics_entity: Entity) -> error::Result<()> {
-    app_mut(|app| surface::destroy(app.world_mut(), graphics_entity))
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::destroy, graphics_entity)
+            .unwrap()
+    })
 }
 
 /// Update window size when resized.
 pub fn surface_resize(graphics_entity: Entity, width: u32, height: u32) -> error::Result<()> {
-    app_mut(|app| surface::resize(app.world_mut(), graphics_entity, width, height))
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::resize, (graphics_entity, width, height))
+            .unwrap()
+    })
 }
 
 fn create_app() -> App {
@@ -279,12 +305,20 @@ pub async fn init() -> error::Result<()> {
 
 /// Create a new graphics surface for rendering.
 pub fn graphics_create(surface_entity: Entity, width: u32, height: u32) -> error::Result<Entity> {
-    app_mut(|app| graphics::create(app.world_mut(), surface_entity, width, height))
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(graphics::create, (width, height, surface_entity))
+            .unwrap()
+    })
 }
 
 /// Begin a new draw pass for the graphics surface.
 pub fn graphics_begin_draw(graphics_entity: Entity) -> error::Result<()> {
-    app_mut(|app| graphics::begin_draw(app.world_mut(), graphics_entity))
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(graphics::begin_draw, graphics_entity)
+            .unwrap()
+    })
 }
 
 /// Flush current pending draw commands to the graphics surface.
@@ -299,20 +333,40 @@ pub fn graphics_end_draw(graphics_entity: Entity) -> error::Result<()> {
 
 /// Destroy the graphics surface and free its resources.
 pub fn graphics_destroy(graphics_entity: Entity) -> error::Result<()> {
-    app_mut(|app| graphics::destroy(app.world_mut(), graphics_entity))
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(graphics::destroy, graphics_entity)
+            .unwrap()
+    })
 }
 
 /// Read back pixel data from the graphics surface.
 pub fn graphics_readback(graphics_entity: Entity) -> error::Result<Vec<LinearRgba>> {
     app_mut(|app| {
         graphics::flush(app, graphics_entity)?;
-        graphics::readback(app.world_mut(), graphics_entity)
+        app.world_mut()
+            .run_system_cached_with(graphics::readback, graphics_entity)
+            .unwrap()
     })
 }
 
 /// Update the graphics surface with new pixel data.
 pub fn graphics_update(graphics_entity: Entity, pixels: &[LinearRgba]) -> error::Result<()> {
-    app_mut(|app| graphics::update(app.world_mut(), graphics_entity, pixels))
+    app_mut(|app| {
+        let world = app.world_mut();
+        let size = world
+            .get::<graphics::Graphics>(graphics_entity)
+            .ok_or(error::ProcessingError::GraphicsNotFound)?
+            .size;
+        let (data, px_size) =
+            graphics::prepare_update_region(world, graphics_entity, size.width, size.height, pixels)?;
+        world
+            .run_system_cached_with(
+                graphics::update_region_write,
+                (graphics_entity, 0, 0, size.width, size.height, data, px_size),
+            )
+            .unwrap()
+    })
 }
 
 /// Update a region of the graphics surface with new pixel data.
@@ -325,15 +379,15 @@ pub fn graphics_update_region(
     pixels: &[LinearRgba],
 ) -> error::Result<()> {
     app_mut(|app| {
-        graphics::update_region(
-            app.world_mut(),
-            graphics_entity,
-            x,
-            y,
-            width,
-            height,
-            pixels,
-        )
+        let world = app.world_mut();
+        let (data, px_size) =
+            graphics::prepare_update_region(world, graphics_entity, width, height, pixels)?;
+        world
+            .run_system_cached_with(
+                graphics::update_region_write,
+                (graphics_entity, x, y, width, height, data, px_size),
+            )
+            .unwrap()
     })
 }
 
@@ -371,7 +425,11 @@ fn setup_tracing() -> error::Result<()> {
 
 /// Record a drawing command for a window
 pub fn graphics_record_command(graphics_entity: Entity, cmd: DrawCommand) -> error::Result<()> {
-    app_mut(|app| graphics::record_command(app.world_mut(), graphics_entity, cmd))
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(graphics::record_command, (graphics_entity, cmd))
+            .unwrap()
+    })
 }
 
 /// Create a new image with given size and data.
@@ -380,14 +438,23 @@ pub fn image_create(
     data: Vec<u8>,
     texture_format: TextureFormat,
 ) -> error::Result<Entity> {
-    app_mut(|app| Ok(image::create(app.world_mut(), size, data, texture_format)))
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(image::create, (size, data, texture_format))
+            .unwrap())
+    })
 }
 
 /// Load an image from disk.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn image_load(path: &str) -> error::Result<Entity> {
     let path = PathBuf::from(path);
-    app_mut(|app| image::load(app.world_mut(), path))
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(image::load, path)
+            .unwrap()
+    })
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -422,22 +489,48 @@ pub async fn image_load(path: &str) -> error::Result<Entity> {
         })?;
     }
 
-    app_mut(|app| image::from_handle(app.world_mut(), handle))
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(image::from_handle, handle)
+            .unwrap()
+    })
 }
 
 /// Resize an existing image to new size.
 pub fn image_resize(entity: Entity, new_size: Extent3d) -> error::Result<()> {
-    app_mut(|app| image::resize(app.world_mut(), entity, new_size))
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(image::resize, (entity, new_size))
+            .unwrap()
+    })
 }
 
 /// Read back image data from GPU to CPU.
 pub fn image_readback(entity: Entity) -> error::Result<Vec<LinearRgba>> {
-    app_mut(|app| image::readback(app.world_mut(), entity))
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(image::readback, entity)
+            .unwrap()
+    })
 }
 
 /// Update an existing image with new pixel data.
 pub fn image_update(entity: Entity, pixels: &[LinearRgba]) -> error::Result<()> {
-    app_mut(|app| image::update(app.world_mut(), entity, pixels))
+    app_mut(|app| {
+        let world = app.world_mut();
+        let size = world
+            .get::<image::Image>(entity)
+            .ok_or(error::ProcessingError::ImageNotFound)?
+            .size;
+        let (data, px_size) =
+            image::prepare_update_region(world, entity, size.width, size.height, pixels)?;
+        world
+            .run_system_cached_with(
+                image::update_region_write,
+                (entity, 0, 0, size.width, size.height, data, px_size),
+            )
+            .unwrap()
+    })
 }
 
 /// Update a region of an existing image with new pixel data.
@@ -449,10 +542,23 @@ pub fn image_update_region(
     height: u32,
     pixels: &[LinearRgba],
 ) -> error::Result<()> {
-    app_mut(|app| image::update_region(app.world_mut(), entity, x, y, width, height, pixels))
+    app_mut(|app| {
+        let world = app.world_mut();
+        let (data, px_size) = image::prepare_update_region(world, entity, width, height, pixels)?;
+        world
+            .run_system_cached_with(
+                image::update_region_write,
+                (entity, x, y, width, height, data, px_size),
+            )
+            .unwrap()
+    })
 }
 
 /// Destroy an existing image and free its resources.
 pub fn image_destroy(entity: Entity) -> error::Result<()> {
-    app_mut(|app| image::destroy(app.world_mut(), entity))
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(image::destroy, entity)
+            .unwrap()
+    })
 }
