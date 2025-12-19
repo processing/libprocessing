@@ -12,7 +12,7 @@ mod glfw;
 mod graphics;
 
 use graphics::{Graphics, get_graphics, get_graphics_mut};
-use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyFunction};
+use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
 #[pymodule]
 fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
