@@ -43,8 +43,29 @@ fn run(module: &Bound<'_, PyModule>) -> PyResult<()> {
     Python::attach(|py| {
         let builtins = PyModule::import(py, "builtins")?;
         let locals = builtins.getattr("locals")?.call0()?;
+
         let setup_fn = locals.get_item("setup")?;
+        let draw_fn = locals.get_item("draw")?;
+
+        // call setup
         setup_fn.call0()?;
+
+        // start draw loop
+        loop {
+            {
+                let mut graphics = get_graphics_mut(module)?;
+                if !graphics.surface.poll_events() {
+                    break;
+                }
+                graphics.begin_draw()?;
+            }
+
+            draw_fn
+                .call0()
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+
+            get_graphics(module)?.end_draw()?;
+        }
 
         Ok(())
     })

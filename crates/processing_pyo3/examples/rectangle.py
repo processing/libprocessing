@@ -1,7 +1,7 @@
 from processing import *
 
-# TODO: this should be in a setup function
-size(800, 600)
+def setup():
+    size(800, 600)
 
 def draw():
     background(220)
@@ -12,4 +12,4 @@ def draw():
     rect(100, 100, 200, 150)
 
 # TODO: this should happen implicitly on module load somehow
-run(draw)
+run()
