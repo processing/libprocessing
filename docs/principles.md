@@ -93,9 +93,39 @@ destroyed.
 
 ### Bridging Bevy and immediate-mode APIs
 
-By default, Bevy is highly optimized for throughput and includes automatic parallelization, pipelined rendering, and
-sophisticated rendering batching algorithms. This poses a problem for Processing which wants to present an
-immediate-mode API where the user can flush their current draw state to a given surface at any time.
+The central architectural challenge of libprocessing is reconciling two fundamentally different models of how graphics
+programming works.
+
+Immediate mode treats drawing as a sequence of imperative commands: when you call `rect(10, 10, 50, 50)` a rectangle
+appears *now*. State is global and mutable where the user thinks in terms of a linear script that paints pixels onto a 
+canvas. This is the traditional "sketch" model of Processing.
+
+Retained mode in the case of Bevy's ECS treats the scene as a database of entities with components. Systems query and
+transform this data, often in parallel. Rendering is a separate phase that happens later, potentially pipelined across
+frames. The renderer batches draw calls for efficiency and has a number of optimizations that could be considered a form 
+of eventual consistency (think of a game where objects take flicker in and out on screen as assets load). The user 
+thinks in terms of a scene graph that is updated over time, where multiple asynchronous systems are modifying data.
+
+Neither model is wrong! But they very much optimize for different things. Immediate mode is intuitive and exploratory 
+which is why it's so well suited to learning, prototyping, and creative coding. Retained mode is efficient and scalable, 
+perfect for games with thousands or hundreds of thousands of objects or for more complex artworks that require 
+sophisticated rendering techniques.
+
+Our job is to present the former while implementing it atop the latter.
+
+This requires us to invert several of Bevy's defaults:
+
+- Recording instead of executing: When user code calls a draw function, we don't spawn entities immediately.
+  Instead, we record the intent as a `DrawCommand` in a per-graphics `CommandBuffer`. This preserves call order and
+  allows us to process commands in a controlled batch.
+- Synchronous frame control: Bevy wants to manage its own main loop with pipelined rendering. We instead hold the
+  `App` in a thread-local and call `app.update()` only when the user explicitly flushes, i.e. makes a change that
+  requires rendering to occur in occur because of some data dependency. 
+- Selective rendering: By default, Bevy will render all active cameras every update. We disable cameras unless the
+  user has requested a flush, using marker components to signal which surfaces should actually render.
+- Transient geometry: In immediate mode, shapes exist only for the frame they're drawn. We spawn mesh entities when
+  flushing commands and despawn them before the next frame. The ECS becomes a staging area rather than a persistent
+  scene graph.
 
 We work around this in the following manner:
 
