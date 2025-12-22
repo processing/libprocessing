@@ -7,7 +7,7 @@
 //! receiver.
 //!
 //! To allow Python users to create a similar experience, we provide module-level
-//! functions that forward to a singleton Graphics object bepub(crate) pub(crate) hind the scenes.
+//! functions that forward to a singleton Graphics object pub(crate) behind the scenes.
 mod glfw;
 mod graphics;
 
@@ -16,23 +16,41 @@ use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
 #[pymodule]
 fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<Graphics>()?;
-    m.add_function(wrap_pyfunction!(size, m)?)?;
-    m.add_function(wrap_pyfunction!(run, m)?)?;
-    m.add_function(wrap_pyfunction!(background, m)?)?;
-    m.add_function(wrap_pyfunction!(fill, m)?)?;
-    m.add_function(wrap_pyfunction!(no_fill, m)?)?;
-    m.add_function(wrap_pyfunction!(stroke, m)?)?;
-    m.add_function(wrap_pyfunction!(no_stroke, m)?)?;
-    m.add_function(wrap_pyfunction!(stroke_weight, m)?)?;
-    m.add_function(wrap_pyfunction!(rect, m)?)?;
-    m.add_function(wrap_pyfunction!(image, m)?)?;
-    Ok(())
+    Python::attach(|py| {
+        let sys = PyModule::import(py, "sys")?;
+        let argv: Vec<String> = sys.getattr("argv")?.extract()?;
+        let os = PyModule::import(py, "os")?;
+        let path = os.getattr("path")?;
+        let dirname = path
+            .getattr("dirname")?
+            .call1(pyo3::types::PyTuple::new(py, &[&argv[0]])?)?;
+        let abspath = path
+            .getattr("abspath")?
+            .call1(pyo3::types::PyTuple::new(py, &[dirname])?)?;
+
+        println!("DEBUG MOMENT OF SUCCESS: {}", abspath);
+        // TODO: Pass this into Graphics for App init
+
+        m.add_class::<Graphics>()?;
+        m.add_function(wrap_pyfunction!(size, m)?)?;
+        m.add_function(wrap_pyfunction!(run, m)?)?;
+        m.add_function(wrap_pyfunction!(background, m)?)?;
+        m.add_function(wrap_pyfunction!(fill, m)?)?;
+        m.add_function(wrap_pyfunction!(no_fill, m)?)?;
+        m.add_function(wrap_pyfunction!(stroke, m)?)?;
+        m.add_function(wrap_pyfunction!(no_stroke, m)?)?;
+        m.add_function(wrap_pyfunction!(stroke_weight, m)?)?;
+        m.add_function(wrap_pyfunction!(rect, m)?)?;
+        m.add_function(wrap_pyfunction!(image, m)?)?;
+        Ok(())
+    })
 }
 
 #[pyfunction]
 #[pyo3(pass_module)]
 fn size(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<()> {
+    // would we get a directory here?
+
     let graphics = Graphics::new(width, height)?;
     module.setattr("_graphics", graphics)?;
     Ok(())
