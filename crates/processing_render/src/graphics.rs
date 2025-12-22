@@ -358,8 +358,7 @@ pub fn readback(
 
     let texture = view_target.main_texture();
 
-    let mut encoder =
-        render_device.create_command_encoder(&CommandEncoderDescriptor::default());
+    let mut encoder = render_device.create_command_encoder(&CommandEncoderDescriptor::default());
 
     let px_size = pixel_size(graphics.texture_format)?;
     let padded_bytes_per_row =
@@ -413,7 +412,15 @@ pub fn readback(
 }
 
 pub fn update_region_write(
-    In((entity, x, y, width, height, data, px_size)): In<(Entity, u32, u32, u32, u32, Vec<u8>, u32)>,
+    In((entity, x, y, width, height, data, px_size)): In<(
+        Entity,
+        u32,
+        u32,
+        u32,
+        u32,
+        Vec<u8>,
+        u32,
+    )>,
     graphics_query: Query<&Graphics>,
     graphics_targets: Res<GraphicsTargets>,
     render_queue: Res<RenderQueue>,
@@ -437,11 +444,7 @@ pub fn update_region_write(
     let texture = view_target.main_texture();
     eprintln!(
         "update_region: writing to texture {:p} at ({}, {}) size {}x{}",
-        texture as *const _,
-        x,
-        y,
-        width,
-        height
+        texture as *const _, x, y, width, height
     );
     let bytes_per_row = width * px_size;
 
@@ -479,7 +482,9 @@ pub fn prepare_update_region(
     if pixels.len() != expected_count {
         return Err(ProcessingError::InvalidArgument(format!(
             "Expected {} pixels for {}x{} region, got {}",
-            expected_count, width, height,
+            expected_count,
+            width,
+            height,
             pixels.len()
         )));
     }
@@ -492,7 +497,6 @@ pub fn prepare_update_region(
 
     Ok((data, px_size))
 }
-
 
 #[derive(Resource, Debug, Clone, Reflect)]
 pub struct RenderLayersManager {

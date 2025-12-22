@@ -209,8 +209,7 @@ pub fn readback(
         .get(&entity)
         .ok_or(ProcessingError::ImageNotFound)?;
 
-    let mut encoder =
-        render_device.create_command_encoder(&CommandEncoderDescriptor::default());
+    let mut encoder = render_device.create_command_encoder(&CommandEncoderDescriptor::default());
 
     let px_size = pixel_size(p_image.texture_format)?;
     let padded_bytes_per_row =
@@ -269,7 +268,15 @@ pub fn readback(
 }
 
 pub fn update_region_write(
-    In((entity, x, y, width, height, data, px_size)): In<(Entity, u32, u32, u32, u32, Vec<u8>, u32)>,
+    In((entity, x, y, width, height, data, px_size)): In<(
+        Entity,
+        u32,
+        u32,
+        u32,
+        u32,
+        Vec<u8>,
+        u32,
+    )>,
     p_images: Query<&Image>,
     p_image_textures: Res<ImageTextures>,
     render_queue: Res<RenderQueue>,
@@ -325,7 +332,9 @@ pub fn prepare_update_region(
     if pixels.len() != expected_count {
         return Err(ProcessingError::InvalidArgument(format!(
             "Expected {} pixels for {}x{} region, got {}",
-            expected_count, width, height,
+            expected_count,
+            width,
+            height,
             pixels.len()
         )));
     }

@@ -358,12 +358,25 @@ pub fn graphics_update(graphics_entity: Entity, pixels: &[LinearRgba]) -> error:
             .get::<graphics::Graphics>(graphics_entity)
             .ok_or(error::ProcessingError::GraphicsNotFound)?
             .size;
-        let (data, px_size) =
-            graphics::prepare_update_region(world, graphics_entity, size.width, size.height, pixels)?;
+        let (data, px_size) = graphics::prepare_update_region(
+            world,
+            graphics_entity,
+            size.width,
+            size.height,
+            pixels,
+        )?;
         world
             .run_system_cached_with(
                 graphics::update_region_write,
-                (graphics_entity, 0, 0, size.width, size.height, data, px_size),
+                (
+                    graphics_entity,
+                    0,
+                    0,
+                    size.width,
+                    size.height,
+                    data,
+                    px_size,
+                ),
             )
             .unwrap()
     })
