@@ -26,6 +26,7 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(no_stroke, m)?)?;
     m.add_function(wrap_pyfunction!(stroke_weight, m)?)?;
     m.add_function(wrap_pyfunction!(rect, m)?)?;
+    m.add_function(wrap_pyfunction!(image, m)?)?;
     Ok(())
 }
 
@@ -121,4 +122,10 @@ fn rect(
     bl: f32,
 ) -> PyResult<()> {
     get_graphics(module)?.rect(x, y, w, h, tl, tr, br, bl)
+}
+
+#[pyfunction]
+#[pyo3(pass_module, signature = (image_file))]
+fn image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<()> {
+    get_graphics(module)?.image(image_file)
 }

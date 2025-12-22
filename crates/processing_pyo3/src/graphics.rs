@@ -122,6 +122,12 @@ impl Graphics {
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    pub fn image(&self, file: &str) -> PyResult<()> {
+        let image = image_load(file).unwrap();
+        graphics_record_command(self.entity, DrawCommand::BackgroundImage(image))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     pub fn push_matrix(&self) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::PushMatrix)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
