@@ -10,6 +10,7 @@ workspace = true
 default = []
 wayland = ["bevy/wayland"]
 x11 = ["bevy/x11"]
+python = []
 
 [dependencies]
 bevy = { workspace = true }

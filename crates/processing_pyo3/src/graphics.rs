@@ -42,6 +42,7 @@ impl Graphics {
         let glfw_ctx =
             GlfwContext::new(width, height).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
+        // TODO: pass in something to set the directory?
         init().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let surface = glfw_ctx

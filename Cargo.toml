@@ -11,6 +11,7 @@ workspace = true
 default = ["wayland"]
 wayland = ["processing_render/wayland"]
 x11 = ["processing_render/x11"]
+python = ["processing_render/python"]
 
 [workspace]
 resolver = "3"

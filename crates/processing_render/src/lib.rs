@@ -6,6 +6,8 @@ mod surface;
 
 use std::{cell::RefCell, num::NonZero, path::PathBuf, sync::OnceLock};
 
+#[cfg(feature = "python")]
+use bevy::asset::io::AssetSourceBuilder;
 #[cfg(not(target_arch = "wasm32"))]
 use bevy::log::tracing_subscriber;
 use bevy::{
@@ -226,6 +228,13 @@ fn create_app() -> App {
             exit_condition: bevy::window::ExitCondition::DontExit,
             ..default()
         });
+
+    #[cfg(feature = "python")]
+    app.register_asset_source(
+        "assets_directory",
+        // TODO: set this path to the directory containing the main sketch file
+        AssetSourceBuilder::platform_default("TODO/TODO/TODO/libprocessing/assets", None),
+    );
 
     app.add_plugins(plugins);
     app.add_plugins((ImagePlugin, GraphicsPlugin, SurfacePlugin));
