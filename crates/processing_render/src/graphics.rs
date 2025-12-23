@@ -275,6 +275,169 @@ pub fn resize(
     }
 }
 
+pub fn mode_3d(
+    In(entity): In<Entity>,
+    mut projections: Query<&mut Projection>,
+    mut transforms: Query<&mut Transform>,
+    sizes: Query<&SurfaceSize>,
+) -> Result<()> {
+    let SurfaceSize(width, height) = sizes
+        .get(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    let width = *width as f32;
+    let height = *height as f32;
+
+    let fov = std::f32::consts::PI / 3.0; // 60 degrees
+    let aspect = width / height;
+    let camera_z = (height / 2.0) / (fov / 2.0).tan();
+    let near = camera_z / 10.0;
+    let far = camera_z * 10.0;
+
+    let mut projection = projections
+        .get_mut(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    *projection = Projection::Perspective(PerspectiveProjection {
+        fov,
+        aspect_ratio: aspect,
+        near,
+        far,
+    });
+
+    let mut transform = transforms
+        .get_mut(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    *transform = Transform::from_xyz(0.0, 0.0, camera_z).looking_at(Vec3::ZERO, Vec3::Y);
+
+    Ok(())
+}
+
+pub fn mode_2d(
+    In(entity): In<Entity>,
+    mut projections: Query<&mut Projection>,
+    mut transforms: Query<&mut Transform>,
+    sizes: Query<&SurfaceSize>,
+) -> Result<()> {
+    let SurfaceSize(width, height) = sizes
+        .get(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    let mut projection = projections
+        .get_mut(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    *projection = Projection::custom(ProcessingProjection {
+        width: *width as f32,
+        height: *height as f32,
+        near: 0.0,
+        far: 1000.0,
+    });
+
+    let mut transform = transforms
+        .get_mut(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    *transform = Transform::from_xyz(0.0, 0.0, 999.9);
+
+    Ok(())
+}
+
+pub fn camera_position(
+    In((entity, x, y, z)): In<(Entity, f32, f32, f32)>,
+    mut transforms: Query<&mut Transform>,
+) -> Result<()> {
+    let mut transform = transforms
+        .get_mut(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    transform.translation = Vec3::new(x, y, z);
+
+    Ok(())
+}
+
+pub fn camera_look_at(
+    In((entity, target_x, target_y, target_z)): In<(Entity, f32, f32, f32)>,
+    mut transforms: Query<&mut Transform>,
+) -> Result<()> {
+    let mut transform = transforms
+        .get_mut(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    // TODO: allow specifying up vector?
+    // does anyone actually use anything other than Vec3::Y here?
+    let target = Vec3::new(target_x, target_y, target_z);
+    transform.look_at(target, Vec3::Y);
+
+    Ok(())
+}
+
+pub fn perspective(
+    In((
+        entity,
+        PerspectiveProjection {
+            fov,
+            aspect_ratio,
+            near,
+            far,
+        },
+    )): In<(Entity, PerspectiveProjection)>,
+    mut projections: Query<&mut Projection>,
+) -> Result<()> {
+    let mut projection = projections
+        .get_mut(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    *projection = Projection::Perspective(PerspectiveProjection {
+        fov,
+        aspect_ratio,
+        near,
+        far,
+    });
+
+    Ok(())
+}
+
+pub struct OrthoArgs {
+    pub left: f32,
+    pub right: f32,
+    pub bottom: f32,
+    pub top: f32,
+    pub near: f32,
+    pub far: f32,
+}
+
+pub fn ortho(
+    In((
+        entity,
+        OrthoArgs {
+            left,
+            right,
+            bottom,
+            top,
+            near,
+            far,
+        },
+    )): In<(Entity, OrthoArgs)>,
+    mut projections: Query<&mut Projection>,
+) -> Result<()> {
+    let mut projection = projections
+        .get_mut(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    // we need a custom projection to support processing's coordinate system
+    // but this is in effect an orthographic projection with the given bounds
+    *projection = Projection::custom(ProcessingProjection {
+        width: right - left,
+        height: top - bottom,
+        near,
+        far,
+    });
+
+    Ok(())
+}
+
 pub fn destroy(
     In(entity): In<Entity>,
     mut commands: Commands,

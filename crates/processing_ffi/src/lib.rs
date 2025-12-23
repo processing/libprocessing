@@ -524,3 +524,64 @@ pub unsafe extern "C" fn processing_image_readback(
         Ok(())
     });
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_mode_3d(window_id: u64) {
+    error::clear_error();
+    let window_entity = Entity::from_bits(window_id);
+    error::check(|| graphics_mode_3d(window_entity));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_mode_2d(window_id: u64) {
+    error::clear_error();
+    let window_entity = Entity::from_bits(window_id);
+    error::check(|| graphics_mode_2d(window_entity));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_camera_position(window_id: u64, x: f32, y: f32, z: f32) {
+    error::clear_error();
+    let window_entity = Entity::from_bits(window_id);
+    error::check(|| graphics_camera_position(window_entity, x, y, z));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_camera_look_at(
+    window_id: u64,
+    target_x: f32,
+    target_y: f32,
+    target_z: f32,
+) {
+    error::clear_error();
+    let window_entity = Entity::from_bits(window_id);
+    error::check(|| graphics_camera_look_at(window_entity, target_x, target_y, target_z));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_perspective(
+    window_id: u64,
+    fov: f32,
+    aspect: f32,
+    near: f32,
+    far: f32,
+) {
+    error::clear_error();
+    let window_entity = Entity::from_bits(window_id);
+    error::check(|| graphics_perspective(window_entity, fov, aspect, near, far));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_ortho(
+    window_id: u64,
+    left: f32,
+    right: f32,
+    bottom: f32,
+    top: f32,
+    near: f32,
+    far: f32,
+) {
+    error::clear_error();
+    let window_entity = Entity::from_bits(window_id);
+    error::check(|| graphics_ortho(window_entity, left, right, bottom, top, near, far));
+}

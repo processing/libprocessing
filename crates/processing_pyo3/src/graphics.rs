@@ -169,6 +169,43 @@ impl Graphics {
     pub fn end_draw(&self) -> PyResult<()> {
         graphics_end_draw(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
+
+    pub fn mode_3d(&self) -> PyResult<()> {
+        graphics_mode_3d(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn mode_2d(&self) -> PyResult<()> {
+        graphics_mode_2d(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn camera_position(&self, x: f32, y: f32, z: f32) -> PyResult<()> {
+        graphics_camera_position(self.entity, x, y, z)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn camera_look_at(&self, target_x: f32, target_y: f32, target_z: f32) -> PyResult<()> {
+        graphics_camera_look_at(self.entity, target_x, target_y, target_z)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn perspective(&self, fov: f32, aspect: f32, near: f32, far: f32) -> PyResult<()> {
+        graphics_perspective(self.entity, fov, aspect, near, far)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn ortho(
+        &self,
+        left: f32,
+        right: f32,
+        bottom: f32,
+        top: f32,
+        near: f32,
+        far: f32,
+    ) -> PyResult<()> {
+        graphics_ortho(self.entity, left, right, bottom, top, near, far)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
 }
 
 // TODO: a real color type. or color parser? idk. color is confusing. let's think
