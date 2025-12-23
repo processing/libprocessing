@@ -38,12 +38,11 @@ impl Drop for Graphics {
 #[pymethods]
 impl Graphics {
     #[new]
-    pub fn new(width: u32, height: u32) -> PyResult<Self> {
+    pub fn new(width: u32, height: u32, asset_path: &str) -> PyResult<Self> {
         let glfw_ctx =
             GlfwContext::new(width, height).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
-        // TODO: pass in something to set the directory?
-        init().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        init(Some(asset_path)).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let surface = glfw_ctx
             .create_surface(width, height, 1.0)

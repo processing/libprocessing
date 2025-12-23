@@ -12,7 +12,7 @@ mod glfw;
 mod graphics;
 
 use graphics::{Graphics, get_graphics, get_graphics_mut};
-use pyo3::{exceptions::PyRuntimeError, prelude::*};
+use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyString};
 
 #[pymodule]
 fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -27,10 +27,9 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
         let abspath = path
             .getattr("abspath")?
             .call1(pyo3::types::PyTuple::new(py, &[dirname])?)?;
+        let abspath = path.getattr("join")?.call1((abspath, "assets"))?;
 
-        println!("DEBUG MOMENT OF SUCCESS: {}", abspath);
-        // TODO: Pass this into Graphics for App init
-
+        m.add("_root_dir", abspath)?;
         m.add_class::<Graphics>()?;
         m.add_function(wrap_pyfunction!(size, m)?)?;
         m.add_function(wrap_pyfunction!(run, m)?)?;
@@ -49,9 +48,8 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[pyfunction]
 #[pyo3(pass_module)]
 fn size(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<()> {
-    // would we get a directory here?
-
-    let graphics = Graphics::new(width, height)?;
+    let asset_path: String = module.getattr("_root_dir")?.extract()?;
+    let graphics = Graphics::new(width, height, asset_path.as_str())?;
     module.setattr("_graphics", graphics)?;
     Ok(())
 }

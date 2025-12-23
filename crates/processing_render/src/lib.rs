@@ -204,7 +204,7 @@ pub fn surface_resize(graphics_entity: Entity, width: u32, height: u32) -> error
     })
 }
 
-fn create_app() -> App {
+fn create_app(asset_path: Option<&str>) -> App {
     let mut app = App::new();
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -233,7 +233,7 @@ fn create_app() -> App {
     app.register_asset_source(
         "assets_directory",
         // TODO: set this path to the directory containing the main sketch file
-        AssetSourceBuilder::platform_default("TODO/TODO/TODO/libprocessing/assets", None),
+        AssetSourceBuilder::platform_default(asset_path.unwrap(), None),
     );
 
     app.add_plugins(plugins);
@@ -266,14 +266,15 @@ fn set_app(app: App) {
 
 /// Initialize the app, if not already initialized. Must be called from the main thread and cannot
 /// be called concurrently from multiple threads.
+/// asset_path is Optional because only python needs to use it.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn init() -> error::Result<()> {
+pub fn init(asset_path: Option<&str>) -> error::Result<()> {
     setup_tracing()?;
     if is_already_init()? {
         return Ok(());
     }
 
-    let mut app = create_app();
+    let mut app = create_app(asset_path);
     app.finish();
     app.cleanup();
     set_app(app);
