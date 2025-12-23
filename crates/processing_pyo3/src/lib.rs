@@ -12,21 +12,18 @@ mod glfw;
 mod graphics;
 
 use graphics::{Graphics, get_graphics, get_graphics_mut};
-use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyString};
+use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
 #[pymodule]
 fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Python::attach(|py| {
         let sys = PyModule::import(py, "sys")?;
         let argv: Vec<String> = sys.getattr("argv")?.extract()?;
+        let filename: &str = argv[0].as_str();
         let os = PyModule::import(py, "os")?;
         let path = os.getattr("path")?;
-        let dirname = path
-            .getattr("dirname")?
-            .call1(pyo3::types::PyTuple::new(py, &[&argv[0]])?)?;
-        let abspath = path
-            .getattr("abspath")?
-            .call1(pyo3::types::PyTuple::new(py, &[dirname])?)?;
+        let dirname = path.getattr("dirname")?.call1((filename,))?;
+        let abspath = path.getattr("abspath")?.call1((dirname,))?;
         let abspath = path.getattr("join")?.call1((abspath, "assets"))?;
 
         m.add("_root_dir", abspath)?;
