@@ -1,3 +1,4 @@
+pub mod config;
 pub mod error;
 mod graphics;
 pub mod image;
@@ -5,6 +6,8 @@ pub mod render;
 mod surface;
 
 use std::{cell::RefCell, num::NonZero, path::PathBuf, sync::OnceLock};
+
+use config::*;
 
 #[cfg(feature = "python")]
 use bevy::asset::io::AssetSourceBuilder;
@@ -204,7 +207,7 @@ pub fn surface_resize(graphics_entity: Entity, width: u32, height: u32) -> error
     })
 }
 
-fn create_app(asset_path: Option<&str>) -> App {
+fn create_app(_config: Config) -> App {
     let mut app = App::new();
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -230,11 +233,13 @@ fn create_app(asset_path: Option<&str>) -> App {
         });
 
     #[cfg(feature = "python")]
-    app.register_asset_source(
-        "assets_directory",
-        // TODO: set this path to the directory containing the main sketch file
-        AssetSourceBuilder::platform_default(asset_path.unwrap(), None),
-    );
+    {
+        let asset_path = _config.get(ConfigKey::AssetRootPath).unwrap();
+        app.register_asset_source(
+            "assets_directory",
+            AssetSourceBuilder::platform_default(asset_path, None),
+        );
+    }
 
     app.add_plugins(plugins);
     app.add_plugins((ImagePlugin, GraphicsPlugin, SurfacePlugin));
@@ -268,13 +273,15 @@ fn set_app(app: App) {
 /// be called concurrently from multiple threads.
 /// asset_path is Optional because only python needs to use it.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn init(asset_path: Option<&str>) -> error::Result<()> {
+pub fn init(config: Option<Config>) -> error::Result<()> {
+    let config = config.unwrap_or_else(|| Config::new());
+
     setup_tracing()?;
     if is_already_init()? {
         return Ok(());
     }
 
-    let mut app = create_app(asset_path);
+    let mut app = create_app(config);
     app.finish();
     app.cleanup();
     set_app(app);
