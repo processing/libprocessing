@@ -30,3 +30,9 @@ impl Config {
         self.map.insert(k, v);
     }
 }
+
+impl Default for Config {
+    fn default() -> Self {
+        Self::new()
+    }
+}

@@ -274,7 +274,7 @@ fn set_app(app: App) {
 /// asset_path is Optional because only python needs to use it.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn init(config: Option<Config>) -> error::Result<()> {
-    let config = config.unwrap_or_else(|| Config::new());
+    let config = config.unwrap_or_default();
 
     setup_tracing()?;
     if is_already_init()? {
