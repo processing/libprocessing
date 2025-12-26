@@ -586,11 +586,6 @@ pub extern "C" fn processing_ortho(
     error::check(|| graphics_ortho(window_entity, left, right, bottom, top, near, far));
 }
 
-pub const PROCESSING_ATTR_POSITION: u32 = 0x01;
-pub const PROCESSING_ATTR_NORMAL: u32 = 0x02;
-pub const PROCESSING_ATTR_COLOR: u32 = 0x04;
-pub const PROCESSING_ATTR_UV: u32 = 0x08;
-
 pub const PROCESSING_ATTR_FORMAT_FLOAT: u8 = 1;
 pub const PROCESSING_ATTR_FORMAT_FLOAT2: u8 = 2;
 pub const PROCESSING_ATTR_FORMAT_FLOAT3: u8 = 3;
