@@ -797,45 +797,14 @@ pub fn geometry_create(topology: geometry::Topology) -> error::Result<Entity> {
     })
 }
 
-pub fn geometry_layout_build(entity: Entity) -> error::Result<()> {
-    app_mut(|app| {
-        let success = app
-            .world_mut()
-            .run_system_cached_with(geometry::layout::build, entity)
-            .unwrap();
-        if success {
-            Ok(())
-        } else {
-            Err(error::ProcessingError::LayoutNotFound)
-        }
-    })
-}
-
 pub fn geometry_create_with_layout(
     layout_entity: Entity,
     topology: geometry::Topology,
 ) -> error::Result<Entity> {
     app_mut(|app| {
-        let layout = app
-            .world()
-            .get::<geometry::VertexLayout>(layout_entity)
-            .ok_or(error::ProcessingError::LayoutNotFound)?
-            .clone();
         Ok(app
             .world_mut()
-            .run_system_cached_with(geometry::create_with_layout, (layout, topology))
-            .unwrap())
-    })
-}
-
-pub fn geometry_create_with_attributes(
-    attrs: geometry::VertexAttributes,
-    topology: geometry::Topology,
-) -> error::Result<Entity> {
-    app_mut(|app| {
-        Ok(app
-            .world_mut()
-            .run_system_cached_with(geometry::create_with_attributes, (attrs, topology))
+            .run_system_cached_with(geometry::create_with_layout, (layout_entity, topology))
             .unwrap())
     })
 }

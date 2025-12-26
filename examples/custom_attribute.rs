@@ -29,28 +29,27 @@ fn sketch() -> error::Result<()> {
     let surface = glfw_ctx.create_surface(width, height, scale_factor)?;
     let graphics = graphics_create(surface, width, height)?;
 
-    let weight_attr = geometry_attribute_create("Weight", AttributeFormat::Float)?;
+    let custom_attr = geometry_attribute_create("Custom", AttributeFormat::Float)?;
 
     let layout = geometry_layout_create()?;
     geometry_layout_add_position(layout)?;
     geometry_layout_add_normal(layout)?;
     geometry_layout_add_color(layout)?;
-    geometry_layout_add_attribute(layout, weight_attr)?;
-    geometry_layout_build(layout)?;
+    geometry_layout_add_attribute(layout, custom_attr)?;
 
     let mesh = geometry_create_with_layout(layout, Topology::LineStrip)?;
 
     geometry_color(mesh, 1.0, 0.0, 0.0, 1.0)?;
     geometry_normal(mesh, 0.0, 0.0, 1.0)?;
-    geometry_attribute_float(mesh, weight_attr, 0.0)?;
+    geometry_attribute_float(mesh, custom_attr, 0.0)?;
     geometry_vertex(mesh, -50.0, -50.0, 0.0)?;
 
     geometry_color(mesh, 0.0, 1.0, 0.0, 1.0)?;
-    geometry_attribute_float(mesh, weight_attr, 0.5)?;
+    geometry_attribute_float(mesh, custom_attr, 0.5)?;
     geometry_vertex(mesh, 50.0, -50.0, 0.0)?;
 
     geometry_color(mesh, 0.0, 0.0, 1.0, 1.0)?;
-    geometry_attribute_float(mesh, weight_attr, 1.0)?;
+    geometry_attribute_float(mesh, custom_attr, 1.0)?;
     geometry_vertex(mesh, 0.0, 50.0, 0.0)?;
 
     geometry_index(mesh, 0)?;

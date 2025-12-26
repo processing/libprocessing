@@ -647,13 +647,6 @@ pub extern "C" fn processing_geometry_layout_add_attribute(layout_id: u64, attr_
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_geometry_layout_build(layout_id: u64) {
-    error::clear_error();
-    let entity = Entity::from_bits(layout_id);
-    error::check(|| geometry_layout_build(entity));
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn processing_geometry_layout_destroy(layout_id: u64) {
     error::clear_error();
     let entity = Entity::from_bits(layout_id);
@@ -681,19 +674,6 @@ pub extern "C" fn processing_geometry_create(topology: u8) -> u64 {
         return 0;
     };
     error::check(|| geometry_create(topo))
-        .map(|e| e.to_bits())
-        .unwrap_or(0)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn processing_geometry_create_with_attrs(attrs: u32, topology: u8) -> u64 {
-    error::clear_error();
-    let Some(topo) = geometry::Topology::from_u8(topology) else {
-        error::set_error("Invalid topology");
-        return 0;
-    };
-    let attrs = geometry::VertexAttributes::from_bits_truncate(attrs);
-    error::check(|| geometry_create_with_attributes(attrs, topo))
         .map(|e| e.to_bits())
         .unwrap_or(0)
 }
