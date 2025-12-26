@@ -40,7 +40,7 @@ fn get_mesh_mut<'a>(
         .ok_or(ProcessingError::GeometryNotFound)
 }
 
-macro_rules! impl_bulk_getter {
+macro_rules! impl_getter {
     ($name:ident, $attr:expr, $variant:ident, $type:ty) => {
         pub fn $name(
             In((entity, range)): In<(Entity, Range<usize>)>,
@@ -61,10 +61,10 @@ macro_rules! impl_bulk_getter {
     };
 }
 
-impl_bulk_getter!(get_positions, Mesh::ATTRIBUTE_POSITION, Float32x3, [f32; 3]);
-impl_bulk_getter!(get_normals, Mesh::ATTRIBUTE_NORMAL, Float32x3, [f32; 3]);
-impl_bulk_getter!(get_colors, Mesh::ATTRIBUTE_COLOR, Float32x4, [f32; 4]);
-impl_bulk_getter!(get_uvs, Mesh::ATTRIBUTE_UV_0, Float32x2, [f32; 2]);
+impl_getter!(get_positions, Mesh::ATTRIBUTE_POSITION, Float32x3, [f32; 3]);
+impl_getter!(get_normals, Mesh::ATTRIBUTE_NORMAL, Float32x3, [f32; 3]);
+impl_getter!(get_colors, Mesh::ATTRIBUTE_COLOR, Float32x4, [f32; 4]);
+impl_getter!(get_uvs, Mesh::ATTRIBUTE_UV_0, Float32x2, [f32; 2]);
 
 pub fn get_indices(
     In((entity, range)): In<(Entity, Range<usize>)>,
@@ -165,6 +165,9 @@ pub struct Attribute {
 
 impl Attribute {
     pub fn new(name: impl Into<String>, format: AttributeFormat) -> Self {
+        // we leak here to get a 'static str for the attribute name, but this is okay because
+        // we never expect to unload attributes during the lifetime of the application
+        // and attribute names are generally small in number
         let name: &'static str = Box::leak(name.into().into_boxed_str());
         let id = hash_attr_name(name);
         let inner = MeshVertexAttribute::new(name, id, format.to_vertex_format());
@@ -370,28 +373,5 @@ pub fn set_attribute(
         _ => Err(ProcessingError::InvalidArgument(
             "Attribute value type does not match attribute format".into(),
         )),
-    }
-}
-
-pub fn to_attribute_values(values: &[AttributeValue]) -> Option<VertexAttributeValues> {
-    macro_rules! convert {
-        ($variant:ident, $bevy:ident, $default:expr) => {
-            Some(VertexAttributeValues::$bevy(
-                values
-                    .iter()
-                    .map(|v| match v {
-                        AttributeValue::$variant(x) => *x,
-                        _ => $default,
-                    })
-                    .collect(),
-            ))
-        };
-    }
-
-    match values.first()? {
-        AttributeValue::Float(_) => convert!(Float, Float32, 0.0),
-        AttributeValue::Float2(_) => convert!(Float2, Float32x2, [0.0; 2]),
-        AttributeValue::Float3(_) => convert!(Float3, Float32x3, [0.0; 3]),
-        AttributeValue::Float4(_) => convert!(Float4, Float32x4, [0.0; 4]),
     }
 }

@@ -700,41 +700,26 @@ pub fn geometry_layout_create() -> error::Result<Entity> {
 }
 
 pub fn geometry_layout_add_position(entity: Entity) -> error::Result<()> {
-    app_mut(|app| {
-        geometry::layout::add_position(app.world_mut(), entity);
-        Ok(())
-    })
+    app_mut(|app| geometry::layout::add_position(app.world_mut(), entity))
 }
 
 pub fn geometry_layout_add_normal(entity: Entity) -> error::Result<()> {
-    app_mut(|app| {
-        geometry::layout::add_normal(app.world_mut(), entity);
-        Ok(())
-    })
+    app_mut(|app| geometry::layout::add_normal(app.world_mut(), entity))
 }
 
 pub fn geometry_layout_add_color(entity: Entity) -> error::Result<()> {
-    app_mut(|app| {
-        geometry::layout::add_color(app.world_mut(), entity);
-        Ok(())
-    })
+    app_mut(|app| geometry::layout::add_color(app.world_mut(), entity))
 }
 
 pub fn geometry_layout_add_uv(entity: Entity) -> error::Result<()> {
-    app_mut(|app| {
-        geometry::layout::add_uv(app.world_mut(), entity);
-        Ok(())
-    })
+    app_mut(|app| geometry::layout::add_uv(app.world_mut(), entity))
 }
 
 pub fn geometry_layout_add_attribute(
     layout_entity: Entity,
     attr_entity: Entity,
 ) -> error::Result<()> {
-    app_mut(|app| {
-        geometry::layout::add_attribute(app.world_mut(), layout_entity, attr_entity);
-        Ok(())
-    })
+    app_mut(|app| geometry::layout::add_attribute(app.world_mut(), layout_entity, attr_entity))
 }
 
 pub fn geometry_layout_destroy(entity: Entity) -> error::Result<()> {
@@ -802,10 +787,9 @@ pub fn geometry_create_with_layout(
     topology: geometry::Topology,
 ) -> error::Result<Entity> {
     app_mut(|app| {
-        Ok(app
-            .world_mut()
+        app.world_mut()
             .run_system_cached_with(geometry::create_with_layout, (layout_entity, topology))
-            .unwrap())
+            .unwrap()
     })
 }
 
@@ -1024,7 +1008,7 @@ pub fn geometry_get_attribute(
             .world()
             .get::<geometry::Attribute>(attr_entity)
             .ok_or(error::ProcessingError::InvalidEntity)?;
-        let inner = attr.inner.clone();
+        let inner = attr.inner;
         app.world_mut()
             .run_system_cached_with(geometry::get_attribute, (geo_entity, inner, index))
             .unwrap()
@@ -1042,7 +1026,7 @@ pub fn geometry_get_attributes(
             .world()
             .get::<geometry::Attribute>(attr_entity)
             .ok_or(error::ProcessingError::InvalidEntity)?;
-        let inner = attr.inner.clone();
+        let inner = attr.inner;
         app.world_mut()
             .run_system_cached_with(geometry::get_attributes, (geo_entity, inner, start..end))
             .unwrap()
@@ -1060,7 +1044,7 @@ pub fn geometry_set_attribute(
             .world()
             .get::<geometry::Attribute>(attr_entity)
             .ok_or(error::ProcessingError::InvalidEntity)?;
-        let inner = attr.inner.clone();
+        let inner = attr.inner;
         app.world_mut()
             .run_system_cached_with(geometry::set_attribute, (geo_entity, inner, index, value))
             .unwrap()

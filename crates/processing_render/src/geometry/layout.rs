@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 use super::BuiltinAttributes;
+use crate::error::{ProcessingError, Result};
 
 // bevy requires an attribute id for each unique vertex attribute. we don't really want to
 // expose this to users, so we hash the attribute name to generate a unique id. in theory
@@ -39,7 +40,9 @@ impl VertexLayout {
     }
 
     pub fn push(&mut self, attr: Entity) {
-        self.attributes.push(attr);
+        if !self.attributes.contains(&attr) {
+            self.attributes.push(attr);
+        }
     }
 
     pub fn has_attribute(&self, attr_entity: Entity) -> bool {
@@ -53,42 +56,57 @@ pub fn create(In(()): In<()>, mut commands: Commands) -> Entity {
 
 pub fn create_default(world: &mut World) -> Entity {
     let builtins = world.resource::<BuiltinAttributes>();
-    let attrs = vec![builtins.position, builtins.normal, builtins.color, builtins.uv];
+    let attrs = vec![
+        builtins.position,
+        builtins.normal,
+        builtins.color,
+        builtins.uv,
+    ];
     world.spawn(VertexLayout::with_attributes(attrs)).id()
 }
 
-pub fn add_position(world: &mut World, entity: Entity) {
+pub fn add_position(world: &mut World, entity: Entity) -> Result<()> {
     let position = world.resource::<BuiltinAttributes>().position;
-    if let Some(mut layout) = world.get_mut::<VertexLayout>(entity) {
-        layout.push(position);
-    }
+    let mut layout = world
+        .get_mut::<VertexLayout>(entity)
+        .ok_or(ProcessingError::LayoutNotFound)?;
+    layout.push(position);
+    Ok(())
 }
 
-pub fn add_normal(world: &mut World, entity: Entity) {
+pub fn add_normal(world: &mut World, entity: Entity) -> Result<()> {
     let normal = world.resource::<BuiltinAttributes>().normal;
-    if let Some(mut layout) = world.get_mut::<VertexLayout>(entity) {
-        layout.push(normal);
-    }
+    let mut layout = world
+        .get_mut::<VertexLayout>(entity)
+        .ok_or(ProcessingError::LayoutNotFound)?;
+    layout.push(normal);
+    Ok(())
 }
 
-pub fn add_color(world: &mut World, entity: Entity) {
+pub fn add_color(world: &mut World, entity: Entity) -> Result<()> {
     let color = world.resource::<BuiltinAttributes>().color;
-    if let Some(mut layout) = world.get_mut::<VertexLayout>(entity) {
-        layout.push(color);
-    }
+    let mut layout = world
+        .get_mut::<VertexLayout>(entity)
+        .ok_or(ProcessingError::LayoutNotFound)?;
+    layout.push(color);
+    Ok(())
 }
 
-pub fn add_uv(world: &mut World, entity: Entity) {
+pub fn add_uv(world: &mut World, entity: Entity) -> Result<()> {
     let uv = world.resource::<BuiltinAttributes>().uv;
-    if let Some(mut layout) = world.get_mut::<VertexLayout>(entity) {
-        layout.push(uv);
-    }
+    let mut layout = world
+        .get_mut::<VertexLayout>(entity)
+        .ok_or(ProcessingError::LayoutNotFound)?;
+    layout.push(uv);
+    Ok(())
 }
 
-pub fn add_attribute(world: &mut World, layout_entity: Entity, attr_entity: Entity) {
-    if let Some(mut layout) = world.get_mut::<VertexLayout>(layout_entity) {
-        layout.push(attr_entity);
-    }
+pub fn add_attribute(world: &mut World, layout_entity: Entity, attr_entity: Entity) -> Result<()> {
+    let mut layout = world
+        .get_mut::<VertexLayout>(layout_entity)
+        .ok_or(ProcessingError::LayoutNotFound)?;
+    layout.push(attr_entity);
+    Ok(())
 }
 
 pub fn destroy(In(entity): In<Entity>, mut commands: Commands) {

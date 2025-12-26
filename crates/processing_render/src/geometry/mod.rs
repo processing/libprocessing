@@ -117,15 +117,19 @@ pub fn create_with_layout(
     mut meshes: ResMut<Assets<Mesh>>,
     layouts: Query<&VertexLayout>,
     attrs: Query<&Attribute>,
-) -> Entity {
-    let layout = layouts.get(layout_entity).unwrap();
+) -> Result<Entity> {
+    let layout = layouts
+        .get(layout_entity)
+        .map_err(|_| ProcessingError::LayoutNotFound)?;
     let mut mesh = Mesh::new(
         topology.to_primitive_topology(),
         RenderAssetUsages::default(),
     );
 
     for &attr_entity in layout.attributes() {
-        let attr = attrs.get(attr_entity).unwrap();
+        let attr = attrs
+            .get(attr_entity)
+            .map_err(|_| ProcessingError::InvalidEntity)?;
         let empty_values = match attr.inner.format {
             bevy::render::render_resource::VertexFormat::Float32 => {
                 VertexAttributeValues::Float32(Vec::new())
@@ -141,11 +145,11 @@ pub fn create_with_layout(
             }
             _ => continue,
         };
-        mesh.insert_attribute(attr.inner.clone(), empty_values);
+        mesh.insert_attribute(attr.inner, empty_values);
     }
 
     let handle = meshes.add(mesh);
-    commands.spawn(Geometry::new(handle, layout_entity)).id()
+    Ok(commands.spawn(Geometry::new(handle, layout_entity)).id())
 }
 
 pub fn create_box(
@@ -237,28 +241,25 @@ pub fn vertex(
         positions.push([x, y, z]);
     }
 
-    if layout.has_attribute(builtins.normal) {
-        if let Some(VertexAttributeValues::Float32x3(normals)) =
+    if layout.has_attribute(builtins.normal)
+        && let Some(VertexAttributeValues::Float32x3(normals)) =
             mesh.attribute_mut(Mesh::ATTRIBUTE_NORMAL)
-        {
-            normals.push(geometry.current_normal);
-        }
+    {
+        normals.push(geometry.current_normal);
     }
 
-    if layout.has_attribute(builtins.color) {
-        if let Some(VertexAttributeValues::Float32x4(colors)) =
+    if layout.has_attribute(builtins.color)
+        && let Some(VertexAttributeValues::Float32x4(colors)) =
             mesh.attribute_mut(Mesh::ATTRIBUTE_COLOR)
-        {
-            colors.push(geometry.current_color);
-        }
+    {
+        colors.push(geometry.current_color);
     }
 
-    if layout.has_attribute(builtins.uv) {
-        if let Some(VertexAttributeValues::Float32x2(uvs)) =
+    if layout.has_attribute(builtins.uv)
+        && let Some(VertexAttributeValues::Float32x2(uvs)) =
             mesh.attribute_mut(Mesh::ATTRIBUTE_UV_0)
-        {
-            uvs.push(geometry.current_uv);
-        }
+    {
+        uvs.push(geometry.current_uv);
     }
 
     for &attr_entity in layout.attributes() {
@@ -273,7 +274,7 @@ pub fn vertex(
             .get(attr_entity)
             .map_err(|_| ProcessingError::InvalidEntity)?;
         if let Some(current) = geometry.custom_current.get(&attr.inner.id) {
-            match (mesh.attribute_mut(attr.inner.clone()), current) {
+            match (mesh.attribute_mut(attr.inner), current) {
                 (Some(VertexAttributeValues::Float32(values)), AttributeValue::Float(v)) => {
                     values.push(*v);
                 }
