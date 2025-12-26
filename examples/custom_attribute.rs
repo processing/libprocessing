@@ -66,7 +66,6 @@ fn sketch() -> error::Result<()> {
         graphics_begin_draw(graphics)?;
         graphics_record_command(graphics, DrawCommand::Geometry(mesh))?;
         graphics_end_draw(graphics)?;
-
     }
     Ok(())
 }

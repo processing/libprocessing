@@ -1,17 +1,19 @@
 //! Geometry is a retained-mode representation of 3D mesh data that can be used for efficient
 //! rendering. Typically, Processing's "sketch" API creates new mesh data every frame, which can be
 //! inefficient for complex geometries. Geometry is backed by a Bevy [`Mesh`](Mesh) asset.
-mod attributes;
+pub(crate) mod attribute;
 pub mod layout;
 
-pub use attributes::*;
-pub use layout::{hash_attr_name, VertexAttributes, VertexLayout, VertexAttribute, VertexLayoutBuilder};
+pub use attribute::*;
+pub use layout::{
+    VertexAttribute, VertexAttributes, VertexLayout, VertexLayoutBuilder, hash_attr_name,
+};
 
 use std::collections::HashMap;
 
 use bevy::{
     asset::RenderAssetUsages,
-    mesh::{Indices, Meshable, MeshVertexAttributeId, VertexAttributeValues},
+    mesh::{Indices, MeshVertexAttributeId, Meshable, VertexAttributeValues},
     prelude::*,
     render::render_resource::PrimitiveTopology,
 };
@@ -88,7 +90,10 @@ impl Geometry {
 }
 
 fn create_empty_mesh(layout: &VertexLayout, topology: Topology) -> Mesh {
-    let mut mesh = Mesh::new(topology.to_primitive_topology(), RenderAssetUsages::default());
+    let mut mesh = Mesh::new(
+        topology.to_primitive_topology(),
+        RenderAssetUsages::default(),
+    );
 
     for attr in layout.attributes() {
         let empty_values = match attr.attribute.format {
@@ -148,7 +153,9 @@ pub fn create_box(
     let mesh = cuboid.mesh().build();
     let handle = meshes.add(mesh);
 
-    commands.spawn(Geometry::new(handle, VertexLayout::default())).id()
+    commands
+        .spawn(Geometry::new(handle, VertexLayout::default()))
+        .id()
 }
 
 pub fn normal(world: &mut World, entity: Entity, nx: f32, ny: f32, nz: f32) -> Result<()> {

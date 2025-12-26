@@ -39,7 +39,13 @@ fn sketch() -> error::Result<()> {
         for x in 0..grid_size {
             let px = x as f32 * spacing - offset;
             let pz = z as f32 * spacing - offset;
-            geometry_color(mesh, x as f32 / grid_size as f32, 0.5, z as f32 / grid_size as f32, 1.0)?;
+            geometry_color(
+                mesh,
+                x as f32 / grid_size as f32,
+                0.5,
+                z as f32 / grid_size as f32,
+                1.0,
+            )?;
             geometry_normal(mesh, 0.0, 1.0, 0.0)?;
             geometry_vertex(mesh, px, 0.0, pz)?;
         }

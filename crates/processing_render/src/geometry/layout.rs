@@ -52,7 +52,10 @@ impl VertexLayout {
 
         for attr in attrs {
             let size = attr.format.size();
-            layout_attrs.push(VertexAttribute { attribute: attr, offset });
+            layout_attrs.push(VertexAttribute {
+                attribute: attr,
+                offset,
+            });
             offset += size;
         }
 
@@ -105,7 +108,10 @@ impl VertexAttributes {
 
         for attr in attrs {
             let size = attr.format.size();
-            layout_attrs.push(VertexAttribute { attribute: attr, offset });
+            layout_attrs.push(VertexAttribute {
+                attribute: attr,
+                offset,
+            });
             offset += size;
         }
 
@@ -195,6 +201,9 @@ pub fn build(
         attributes: layout_attrs,
     };
 
-    commands.entity(entity).remove::<VertexLayoutBuilder>().insert(layout);
+    commands
+        .entity(entity)
+        .remove::<VertexLayoutBuilder>()
+        .insert(layout);
     true
 }

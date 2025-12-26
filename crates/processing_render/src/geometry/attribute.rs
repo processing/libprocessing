@@ -8,7 +8,7 @@ use bevy::{
 
 use crate::error::{ProcessingError, Result};
 
-use super::{hash_attr_name, Geometry};
+use super::{Geometry, hash_attr_name};
 
 fn clamp_range(range: Range<usize>, len: usize) -> Range<usize> {
     range.start.min(len)..range.end.min(len)
@@ -168,7 +168,11 @@ impl Attribute {
         let name: &'static str = Box::leak(name.into().into_boxed_str());
         let id = hash_attr_name(name);
         let inner = MeshVertexAttribute::new(name, id, format.to_vertex_format());
-        Self { name, format, inner }
+        Self {
+            name,
+            format,
+            inner,
+        }
     }
 
     pub fn from_builtin(inner: MeshVertexAttribute, format: AttributeFormat) -> Self {
@@ -195,31 +199,50 @@ pub struct BuiltinAttributes {
 impl FromWorld for BuiltinAttributes {
     fn from_world(world: &mut World) -> Self {
         let position = world
-            .spawn(Attribute::from_builtin(Mesh::ATTRIBUTE_POSITION, AttributeFormat::Float3))
+            .spawn(Attribute::from_builtin(
+                Mesh::ATTRIBUTE_POSITION,
+                AttributeFormat::Float3,
+            ))
             .id();
         let normal = world
-            .spawn(Attribute::from_builtin(Mesh::ATTRIBUTE_NORMAL, AttributeFormat::Float3))
+            .spawn(Attribute::from_builtin(
+                Mesh::ATTRIBUTE_NORMAL,
+                AttributeFormat::Float3,
+            ))
             .id();
         let color = world
-            .spawn(Attribute::from_builtin(Mesh::ATTRIBUTE_COLOR, AttributeFormat::Float4))
+            .spawn(Attribute::from_builtin(
+                Mesh::ATTRIBUTE_COLOR,
+                AttributeFormat::Float4,
+            ))
             .id();
         let uv = world
-            .spawn(Attribute::from_builtin(Mesh::ATTRIBUTE_UV_0, AttributeFormat::Float2))
+            .spawn(Attribute::from_builtin(
+                Mesh::ATTRIBUTE_UV_0,
+                AttributeFormat::Float2,
+            ))
             .id();
 
-        Self { position, normal, color, uv }
+        Self {
+            position,
+            normal,
+            color,
+            uv,
+        }
     }
 }
 
-pub fn create_attribute(
+pub fn create(
     In((name, format)): In<(String, AttributeFormat)>,
     mut commands: Commands,
-) -> Entity {
-    commands.spawn(Attribute::new(name, format)).id()
+) -> Result<Entity> {
+    // TODO: validation?
+    Ok(commands.spawn(Attribute::new(name, format)).id())
 }
 
-pub fn destroy_attribute(In(entity): In<Entity>, mut commands: Commands) {
+pub fn destroy(In(entity): In<Entity>, mut commands: Commands) -> Result<()> {
     commands.entity(entity).despawn();
+    Ok(())
 }
 
 pub fn get_attribute(
@@ -277,18 +300,22 @@ pub fn get_attributes(
     })?;
 
     match attr {
-        VertexAttributeValues::Float32(v) => {
-            Ok(v[clamp_range(range, v.len())].iter().map(|&x| AttributeValue::Float(x)).collect())
-        }
-        VertexAttributeValues::Float32x2(v) => {
-            Ok(v[clamp_range(range, v.len())].iter().map(|&x| AttributeValue::Float2(x)).collect())
-        }
-        VertexAttributeValues::Float32x3(v) => {
-            Ok(v[clamp_range(range, v.len())].iter().map(|&x| AttributeValue::Float3(x)).collect())
-        }
-        VertexAttributeValues::Float32x4(v) => {
-            Ok(v[clamp_range(range, v.len())].iter().map(|&x| AttributeValue::Float4(x)).collect())
-        }
+        VertexAttributeValues::Float32(v) => Ok(v[clamp_range(range, v.len())]
+            .iter()
+            .map(|&x| AttributeValue::Float(x))
+            .collect()),
+        VertexAttributeValues::Float32x2(v) => Ok(v[clamp_range(range, v.len())]
+            .iter()
+            .map(|&x| AttributeValue::Float2(x))
+            .collect()),
+        VertexAttributeValues::Float32x3(v) => Ok(v[clamp_range(range, v.len())]
+            .iter()
+            .map(|&x| AttributeValue::Float3(x))
+            .collect()),
+        VertexAttributeValues::Float32x4(v) => Ok(v[clamp_range(range, v.len())]
+            .iter()
+            .map(|&x| AttributeValue::Float4(x))
+            .collect()),
         _ => Err(ProcessingError::InvalidArgument(
             "Unsupported attribute format".into(),
         )),
@@ -346,9 +373,7 @@ pub fn set_attribute(
     }
 }
 
-pub fn to_attribute_values(
-    values: &[AttributeValue],
-) -> Option<VertexAttributeValues> {
+pub fn to_attribute_values(values: &[AttributeValue]) -> Option<VertexAttributeValues> {
     macro_rules! convert {
         ($variant:ident, $bevy:ident, $default:expr) => {
             Some(VertexAttributeValues::$bevy(

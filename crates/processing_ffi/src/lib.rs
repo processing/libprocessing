@@ -836,7 +836,6 @@ pub extern "C" fn processing_geometry_index(geo_id: u64, i: u32) {
     error::check(|| geometry_index(entity, i));
 }
 
-
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_geometry_vertex_count(geo_id: u64) -> u32 {
     error::clear_error();
@@ -1009,10 +1008,7 @@ pub extern "C" fn processing_model(window_id: u64, geo_id: u64) {
     error::clear_error();
     let window_entity = Entity::from_bits(window_id);
     let geo_entity = Entity::from_bits(geo_id);
-    error::check(|| graphics_record_command(
-        window_entity,
-        DrawCommand::Geometry(geo_entity),
-    ));
+    error::check(|| graphics_record_command(window_entity, DrawCommand::Geometry(geo_entity)));
 }
 
 #[unsafe(no_mangle)]
