@@ -44,7 +44,7 @@ impl Graphics {
 
         let mut config = Config::new();
         config.set(ConfigKey::AssetRootPath, asset_path.to_string());
-        init(Some(config)).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        init(config).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let surface = glfw_ctx
             .create_surface(width, height, 1.0)

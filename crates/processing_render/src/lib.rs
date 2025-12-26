@@ -9,13 +9,11 @@ use std::{cell::RefCell, num::NonZero, path::PathBuf, sync::OnceLock};
 
 use config::*;
 
-#[cfg(feature = "python")]
-use bevy::asset::io::AssetSourceBuilder;
 #[cfg(not(target_arch = "wasm32"))]
 use bevy::log::tracing_subscriber;
 use bevy::{
     app::{App, AppExit},
-    asset::AssetEventSystems,
+    asset::{AssetEventSystems, io::AssetSourceBuilder},
     prelude::*,
     render::render_resource::{Extent3d, TextureFormat},
 };
@@ -207,7 +205,7 @@ pub fn surface_resize(graphics_entity: Entity, width: u32, height: u32) -> error
     })
 }
 
-fn create_app(_config: Config) -> App {
+fn create_app(config: Config) -> App {
     let mut app = App::new();
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -232,9 +230,7 @@ fn create_app(_config: Config) -> App {
             ..default()
         });
 
-    #[cfg(feature = "python")]
-    {
-        let asset_path = _config.get(ConfigKey::AssetRootPath).unwrap();
+    if let Some(asset_path) = config.get(ConfigKey::AssetRootPath) {
         app.register_asset_source(
             "assets_directory",
             AssetSourceBuilder::platform_default(asset_path, None),
@@ -271,11 +267,8 @@ fn set_app(app: App) {
 
 /// Initialize the app, if not already initialized. Must be called from the main thread and cannot
 /// be called concurrently from multiple threads.
-/// asset_path is Optional because only python needs to use it.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn init(config: Option<Config>) -> error::Result<()> {
-    let config = config.unwrap_or_default();
-
+pub fn init(config: Config) -> error::Result<()> {
     setup_tracing()?;
     if is_already_init()? {
         return Ok(());
