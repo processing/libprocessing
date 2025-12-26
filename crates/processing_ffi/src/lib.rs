@@ -17,7 +17,7 @@ mod error;
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_init() {
     error::clear_error();
-    error::check(|| init(None));
+    error::check(|| init(Config::default()));
 }
 
 /// Create a WebGPU surface from a macOS NSWindow handle.
