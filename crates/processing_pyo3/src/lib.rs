@@ -16,6 +16,21 @@ use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
 #[pymodule]
 fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<Graphics>()?;
+    m.add_function(wrap_pyfunction!(size, m)?)?;
+    m.add_function(wrap_pyfunction!(run, m)?)?;
+    m.add_function(wrap_pyfunction!(background, m)?)?;
+    m.add_function(wrap_pyfunction!(fill, m)?)?;
+    m.add_function(wrap_pyfunction!(no_fill, m)?)?;
+    m.add_function(wrap_pyfunction!(stroke, m)?)?;
+    m.add_function(wrap_pyfunction!(no_stroke, m)?)?;
+    m.add_function(wrap_pyfunction!(stroke_weight, m)?)?;
+    m.add_function(wrap_pyfunction!(rect, m)?)?;
+    m.add_function(wrap_pyfunction!(image, m)?)?;
+    Ok(())
+}
+
+fn get_asset_root() -> PyResult<String> {
     Python::attach(|py| {
         let sys = PyModule::import(py, "sys")?;
         let argv: Vec<String> = sys.getattr("argv")?.extract()?;
@@ -24,28 +39,18 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
         let path = os.getattr("path")?;
         let dirname = path.getattr("dirname")?.call1((filename,))?;
         let abspath = path.getattr("abspath")?.call1((dirname,))?;
-        let abspath = path.getattr("join")?.call1((abspath, "assets"))?;
-
-        m.add("_root_dir", abspath)?;
-        m.add_class::<Graphics>()?;
-        m.add_function(wrap_pyfunction!(size, m)?)?;
-        m.add_function(wrap_pyfunction!(run, m)?)?;
-        m.add_function(wrap_pyfunction!(background, m)?)?;
-        m.add_function(wrap_pyfunction!(fill, m)?)?;
-        m.add_function(wrap_pyfunction!(no_fill, m)?)?;
-        m.add_function(wrap_pyfunction!(stroke, m)?)?;
-        m.add_function(wrap_pyfunction!(no_stroke, m)?)?;
-        m.add_function(wrap_pyfunction!(stroke_weight, m)?)?;
-        m.add_function(wrap_pyfunction!(rect, m)?)?;
-        m.add_function(wrap_pyfunction!(image, m)?)?;
-        Ok(())
+        let asset_root = path
+            .getattr("join")?
+            .call1((abspath, "assets"))?
+            .to_string();
+        Ok(asset_root)
     })
 }
 
 #[pyfunction]
 #[pyo3(pass_module)]
 fn size(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<()> {
-    let asset_path: String = module.getattr("_root_dir")?.extract()?;
+    let asset_path: String = get_asset_root()?;
     let graphics = Graphics::new(width, height, asset_path.as_str())?;
     module.setattr("_graphics", graphics)?;
     Ok(())
