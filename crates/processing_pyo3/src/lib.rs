@@ -14,6 +14,8 @@ mod graphics;
 use graphics::{Graphics, get_graphics, get_graphics_mut};
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
+use std::env;
+
 #[pymodule]
 fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Graphics>()?;
@@ -31,6 +33,10 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 
 fn get_asset_root() -> PyResult<String> {
+    if let Ok(val) = env::var("PROCESSING_ASSET_ROOT") {
+        return Ok(val);
+    }
+
     Python::attach(|py| {
         let sys = PyModule::import(py, "sys")?;
         let argv: Vec<String> = sys.getattr("argv")?.extract()?;
