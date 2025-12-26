@@ -2,23 +2,33 @@
 //!
 //! To add a new Config just add a new enum with associated value
 
+use bevy::prelude::Resource;
 use std::collections::HashMap;
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub enum ConfigKey {
     AssetRootPath,
 }
+
 // TODO: Consider Box<dyn Any> instead of String
-pub type ConfigMap = HashMap<ConfigKey, String>;
+#[derive(Resource)]
 pub struct Config {
-    map: ConfigMap,
+    map: HashMap<ConfigKey, String>,
+}
+
+impl Clone for Config {
+    fn clone(&self) -> Self {
+        Config {
+            map: self.map.clone(),
+        }
+    }
 }
 
 impl Config {
     pub fn new() -> Self {
         // TODO consider defaults
         Config {
-            map: ConfigMap::new(),
+            map: HashMap::new(),
         }
     }
 

@@ -208,6 +208,8 @@ pub fn surface_resize(graphics_entity: Entity, width: u32, height: u32) -> error
 fn create_app(config: Config) -> App {
     let mut app = App::new();
 
+    app.insert_resource(config.clone());
+
     #[cfg(not(target_arch = "wasm32"))]
     let plugins = DefaultPlugins
         .build()

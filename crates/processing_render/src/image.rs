@@ -3,11 +3,10 @@
 //! It can be created from raw pixel data, loaded from disk, resized, and read back to CPU memory.
 use std::path::PathBuf;
 
-#[cfg(feature = "python")]
-use bevy::asset::{AssetPath, io::AssetSourceId};
 use bevy::{
     asset::{
-        LoadState, RenderAssetUsages, handle_internal_asset_events, io::embedded::GetAssetServer,
+        AssetPath, LoadState, RenderAssetUsages, handle_internal_asset_events,
+        io::{AssetSourceId, embedded::GetAssetServer},
     },
     ecs::{entity::EntityHashMap, system::RunSystemOnce},
     prelude::*,
@@ -25,6 +24,7 @@ use bevy::{
 };
 use half::f16;
 
+use crate::config::{Config, ConfigKey};
 use crate::error::{ProcessingError, Result};
 
 pub struct ImagePlugin;
@@ -140,10 +140,16 @@ pub fn from_handle(
 }
 
 pub fn load(In(path): In<PathBuf>, world: &mut World) -> Result<Entity> {
-    #[cfg(feature = "python")]
-    let path = AssetPath::from_path_buf(path).with_source(AssetSourceId::from("assets_directory"));
+    let config = world.resource_mut::<Config>();
+    let path: AssetPath = match config.get(ConfigKey::AssetRootPath) {
+        Some(_) => {
+            AssetPath::from_path_buf(path).with_source(AssetSourceId::from("assets_directory"))
+        }
+        None => AssetPath::from_path_buf(path),
+    };
 
     let handle: Handle<bevy::image::Image> = world.get_asset_server().load(path);
+
     while let LoadState::Loading = world.get_asset_server().load_state(&handle) {
         world.run_system_once(handle_internal_asset_events).unwrap();
     }

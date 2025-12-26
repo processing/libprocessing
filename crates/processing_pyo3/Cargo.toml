@@ -17,7 +17,7 @@ x11 = ["processing/x11"]
 
 [dependencies]
 pyo3 = "0.27.0"
-processing = { workspace = true, features = ["python"] }
+processing = { workspace = true }
 bevy = { workspace = true }
 glfw = { version = "0.60.0"}
 
