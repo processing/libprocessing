@@ -825,6 +825,8 @@ pub extern "C" fn processing_geometry_index_count(geo_id: u64) -> u32 {
     error::check(|| geometry_index_count(entity)).unwrap_or(0)
 }
 
+/// # Safety
+/// - `out` must be valid for writes of `out_len` elements.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_geometry_get_positions(
     geo_id: u64,
@@ -839,13 +841,15 @@ pub unsafe extern "C" fn processing_geometry_get_positions(
     match positions {
         Some(p) => {
             let count = p.len().min(out_len as usize);
-            std::ptr::copy_nonoverlapping(p.as_ptr(), out, count);
+            unsafe { std::ptr::copy_nonoverlapping(p.as_ptr(), out, count) };
             count as u32
         }
         None => 0,
     }
 }
 
+/// # Safety
+/// - `out` must be valid for writes of `out_len` elements.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_geometry_get_normals(
     geo_id: u64,
@@ -860,13 +864,15 @@ pub unsafe extern "C" fn processing_geometry_get_normals(
     match normals {
         Some(n) => {
             let count = n.len().min(out_len as usize);
-            std::ptr::copy_nonoverlapping(n.as_ptr(), out, count);
+            unsafe { std::ptr::copy_nonoverlapping(n.as_ptr(), out, count) };
             count as u32
         }
         None => 0,
     }
 }
 
+/// # Safety
+/// - `out` must be valid for writes of `out_len` elements.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_geometry_get_colors(
     geo_id: u64,
@@ -881,13 +887,15 @@ pub unsafe extern "C" fn processing_geometry_get_colors(
     match colors {
         Some(c) => {
             let count = c.len().min(out_len as usize);
-            std::ptr::copy_nonoverlapping(c.as_ptr(), out, count);
+            unsafe { std::ptr::copy_nonoverlapping(c.as_ptr(), out, count) };
             count as u32
         }
         None => 0,
     }
 }
 
+/// # Safety
+/// - `out` must be valid for writes of `out_len` elements.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_geometry_get_uvs(
     geo_id: u64,
@@ -902,13 +910,15 @@ pub unsafe extern "C" fn processing_geometry_get_uvs(
     match uvs {
         Some(u) => {
             let count = u.len().min(out_len as usize);
-            std::ptr::copy_nonoverlapping(u.as_ptr(), out, count);
+            unsafe { std::ptr::copy_nonoverlapping(u.as_ptr(), out, count) };
             count as u32
         }
         None => 0,
     }
 }
 
+/// # Safety
+/// - `out` must be valid for writes of `out_len` elements.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_geometry_get_indices(
     geo_id: u64,
@@ -923,7 +933,7 @@ pub unsafe extern "C" fn processing_geometry_get_indices(
     match indices {
         Some(i) => {
             let count = i.len().min(out_len as usize);
-            std::ptr::copy_nonoverlapping(i.as_ptr(), out, count);
+            unsafe { std::ptr::copy_nonoverlapping(i.as_ptr(), out, count) };
             count as u32
         }
         None => 0,
