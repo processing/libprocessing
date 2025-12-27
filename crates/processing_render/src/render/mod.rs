@@ -5,16 +5,17 @@ pub mod primitive;
 pub mod transform;
 
 use bevy::{
-    camera::visibility::RenderLayers, ecs::system::SystemParam, math::Affine3A, prelude::*,
+    camera::visibility::RenderLayers,
+    ecs::system::SystemParam,
+    math::{Affine3A, Mat4, Vec4},
+    prelude::*,
 };
 use command::{CommandBuffer, DrawCommand};
 use material::MaterialKey;
 use primitive::{TessellationMode, empty_mesh};
 use transform::TransformStack;
 
-use crate::{
-    Flush, geometry::Geometry, graphics::SurfaceSize, image::Image, render::primitive::rect,
-};
+use crate::{Flush, geometry::Geometry, image::Image, render::primitive::rect};
 
 #[derive(Component)]
 #[relationship(relationship_target = TransientMeshes)]
@@ -94,16 +95,26 @@ pub fn flush_draw_commands(
             &mut CommandBuffer,
             &mut RenderState,
             &RenderLayers,
-            &SurfaceSize,
+            &Projection,
+            &Transform,
         ),
         With<Flush>,
     >,
     p_images: Query<&Image>,
     p_geometries: Query<&Geometry>,
 ) {
-    for (graphics_entity, mut cmd_buffer, mut state, render_layers, SurfaceSize(width, height)) in
-        graphics.iter_mut()
+    for (
+        graphics_entity,
+        mut cmd_buffer,
+        mut state,
+        render_layers,
+        projection,
+        camera_transform,
+    ) in graphics.iter_mut()
     {
+        let clip_from_view = projection.get_clip_from_view();
+        let view_from_world = camera_transform.to_matrix().inverse();
+        let world_from_clip = (clip_from_view * view_from_world).inverse();
         let draw_commands = std::mem::take(&mut cmd_buffer.commands);
         let mut batch = BatchState::new(graphics_entity, render_layers.clone());
 
@@ -143,18 +154,26 @@ pub fn flush_draw_commands(
                     });
                 }
                 DrawCommand::BackgroundColor(color) => {
-                    add_fill(&mut res, &mut batch, &state, |mesh, _| {
-                        rect(
-                            mesh,
-                            0.0,
-                            0.0,
-                            *width as f32,
-                            *height as f32,
-                            [0.0; 4],
-                            color,
-                            TessellationMode::Fill,
-                        )
-                    });
+                    flush_batch(&mut res, &mut batch);
+
+                    let mesh = create_ndc_background_quad(world_from_clip, color, false);
+                    let mesh_handle = res.meshes.add(mesh);
+
+                    let material_key = MaterialKey {
+                        transparent: color.alpha() < 1.0,
+                        background_image: None,
+                    };
+                    let material_handle = res.materials.add(material_key.to_material());
+
+                    res.commands.spawn((
+                        Mesh3d(mesh_handle),
+                        MeshMaterial3d(material_handle),
+                        BelongsToGraphics(batch.graphics_entity),
+                        Transform::IDENTITY,
+                        batch.render_layers.clone(),
+                    ));
+
+                    batch.draw_index += 1;
                 }
                 DrawCommand::BackgroundImage(entity) => {
                     let Some(p_image) = p_images.get(entity).ok() else {
@@ -164,28 +183,24 @@ pub fn flush_draw_commands(
 
                     flush_batch(&mut res, &mut batch);
 
+                    let mesh = create_ndc_background_quad(world_from_clip, Color::WHITE, true);
+                    let mesh_handle = res.meshes.add(mesh);
+
                     let material_key = MaterialKey {
                         transparent: false,
                         background_image: Some(p_image.handle.clone()),
                     };
+                    let material_handle = res.materials.add(material_key.to_material());
 
-                    batch.material_key = Some(material_key);
-                    batch.current_mesh = Some(empty_mesh());
+                    res.commands.spawn((
+                        Mesh3d(mesh_handle),
+                        MeshMaterial3d(material_handle),
+                        BelongsToGraphics(batch.graphics_entity),
+                        Transform::IDENTITY,
+                        batch.render_layers.clone(),
+                    ));
 
-                    if let Some(ref mut mesh) = batch.current_mesh {
-                        rect(
-                            mesh,
-                            0.0,
-                            0.0,
-                            *width as f32,
-                            *height as f32,
-                            [0.0; 4],
-                            Color::WHITE,
-                            TessellationMode::Fill,
-                        )
-                    }
-
-                    flush_batch(&mut res, &mut batch);
+                    batch.draw_index += 1;
                 }
                 DrawCommand::PushMatrix => state.transform.push(),
                 DrawCommand::PopMatrix => state.transform.pop(),
@@ -347,4 +362,52 @@ fn flush_batch(res: &mut RenderResources, batch: &mut BatchState) {
         batch.draw_index += 1;
     }
     batch.material_key = None;
+}
+
+/// Creates a fullscreen quad by transforming NDC fullscreen by inverse of the clip-from-world matrix
+/// so that when the vertex shader applies clip_from_world, the vertices end up correctly back in
+/// NDC space.
+fn create_ndc_background_quad(world_from_clip: Mat4, color: Color, with_uvs: bool) -> Mesh {
+    use bevy::asset::RenderAssetUsages;
+    use bevy::mesh::{Indices, PrimitiveTopology};
+
+    let ndc_z = 0.001; // near far plane (bevy uses reverse-z)
+    let ndc_corners = [
+        Vec4::new(-1.0, -1.0, ndc_z, 1.0), // bl
+        Vec4::new(1.0, -1.0, ndc_z, 1.0),  // br
+        Vec4::new(1.0, 1.0, ndc_z, 1.0),   // tr
+        Vec4::new(-1.0, 1.0, ndc_z, 1.0),  // tl
+    ];
+
+    let world_positions: Vec<[f32; 3]> = ndc_corners
+        .iter()
+        .map(|ndc| {
+            let world = world_from_clip * *ndc;
+            [world.x / world.w, world.y / world.w, world.z / world.w]
+        })
+        .collect();
+
+    let uvs: Vec<[f32; 2]> = vec![
+        [0.0, 1.0], // bl
+        [1.0, 1.0], // br
+        [1.0, 0.0], // tr
+        [0.0, 0.0], // tl
+    ];
+
+    let color_array: [f32; 4] = color.to_linear().to_f32_array();
+    let colors: Vec<[f32; 4]> = vec![color_array; 4];
+
+    // two tris
+    let indices: Vec<u32> = vec![0, 1, 2, 0, 2, 3];
+
+    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
+
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, world_positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
+    if with_uvs {
+        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
+    }
+    mesh.insert_indices(Indices::U32(indices));
+
+    mesh
 }
