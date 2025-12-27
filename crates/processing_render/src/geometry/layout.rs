@@ -7,13 +7,16 @@ use crate::error::{ProcessingError, Result};
 // expose this to users, so we hash the attribute name to generate a unique id. in theory
 // there could be collisions, but in practice this should be fine?
 // https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function#FNV-1a_hash
+const FNV1A_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+const FNV1A_PRIME: u64 = 0x100000001b3;
+
 pub const fn hash_attr_name(s: &str) -> u64 {
     let bytes = s.as_bytes();
-    let mut hash = 0xcbf29ce484222325u64;
+    let mut hash = FNV1A_OFFSET_BASIS;
     let mut i = 0;
     while i < bytes.len() {
         hash ^= bytes[i] as u64;
-        hash = hash.wrapping_mul(0x100000001b3);
+        hash = hash.wrapping_mul(FNV1A_PRIME);
         i += 1;
     }
     hash
