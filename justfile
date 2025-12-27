@@ -1,3 +1,5 @@
+export PROCESSING_ASSET_ROOT := `realpath ./assets`
+
 default:
     @just --list
 
@@ -5,7 +7,7 @@ py-build:
     cd crates/processing_pyo3 && uv run maturin develop
 
 py-run file: py-build
-    cd crates/processing_pyo3 && uv run python ../../{{file}}
+    cd crates/processing_pyo3 && uv run python ./examples/{{file}}
 
 wasm-build:
     wasm-pack build crates/processing_wasm --target web --out-dir ../../target/wasm

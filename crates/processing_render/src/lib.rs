@@ -1,3 +1,4 @@
+pub mod config;
 pub mod error;
 mod graphics;
 pub mod image;
@@ -6,11 +7,13 @@ mod surface;
 
 use std::{cell::RefCell, num::NonZero, path::PathBuf, sync::OnceLock};
 
+use config::*;
+
 #[cfg(not(target_arch = "wasm32"))]
 use bevy::log::tracing_subscriber;
 use bevy::{
     app::{App, AppExit},
-    asset::AssetEventSystems,
+    asset::{AssetEventSystems, io::AssetSourceBuilder},
     prelude::*,
     render::render_resource::{Extent3d, TextureFormat},
 };
@@ -202,8 +205,10 @@ pub fn surface_resize(graphics_entity: Entity, width: u32, height: u32) -> error
     })
 }
 
-fn create_app() -> App {
+fn create_app(config: Config) -> App {
     let mut app = App::new();
+
+    app.insert_resource(config.clone());
 
     #[cfg(not(target_arch = "wasm32"))]
     let plugins = DefaultPlugins
@@ -226,6 +231,13 @@ fn create_app() -> App {
             exit_condition: bevy::window::ExitCondition::DontExit,
             ..default()
         });
+
+    if let Some(asset_path) = config.get(ConfigKey::AssetRootPath) {
+        app.register_asset_source(
+            "assets_directory",
+            AssetSourceBuilder::platform_default(asset_path, None),
+        );
+    }
 
     app.add_plugins(plugins);
     app.add_plugins((ImagePlugin, GraphicsPlugin, SurfacePlugin));
@@ -258,13 +270,13 @@ fn set_app(app: App) {
 /// Initialize the app, if not already initialized. Must be called from the main thread and cannot
 /// be called concurrently from multiple threads.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn init() -> error::Result<()> {
+pub fn init(config: Config) -> error::Result<()> {
     setup_tracing()?;
     if is_already_init()? {
         return Ok(());
     }
 
-    let mut app = create_app();
+    let mut app = create_app(config);
     app.finish();
     app.cleanup();
     set_app(app);

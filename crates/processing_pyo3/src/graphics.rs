@@ -38,11 +38,13 @@ impl Drop for Graphics {
 #[pymethods]
 impl Graphics {
     #[new]
-    pub fn new(width: u32, height: u32) -> PyResult<Self> {
+    pub fn new(width: u32, height: u32, asset_path: &str) -> PyResult<Self> {
         let glfw_ctx =
             GlfwContext::new(width, height).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
-        init().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let mut config = Config::new();
+        config.set(ConfigKey::AssetRootPath, asset_path.to_string());
+        init(config).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let surface = glfw_ctx
             .create_surface(width, height, 1.0)
@@ -120,6 +122,12 @@ impl Graphics {
             },
         )
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn image(&self, file: &str) -> PyResult<()> {
+        let image = image_load(file).unwrap();
+        graphics_record_command(self.entity, DrawCommand::BackgroundImage(image))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn push_matrix(&self) -> PyResult<()> {

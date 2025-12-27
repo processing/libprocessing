@@ -7,12 +7,14 @@
 //! receiver.
 //!
 //! To allow Python users to create a similar experience, we provide module-level
-//! functions that forward to a singleton Graphics object bepub(crate) pub(crate) hind the scenes.
+//! functions that forward to a singleton Graphics object pub(crate) behind the scenes.
 mod glfw;
 mod graphics;
 
 use graphics::{Graphics, get_graphics, get_graphics_mut};
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
+
+use std::env;
 
 #[pymodule]
 fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -26,13 +28,36 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(no_stroke, m)?)?;
     m.add_function(wrap_pyfunction!(stroke_weight, m)?)?;
     m.add_function(wrap_pyfunction!(rect, m)?)?;
+    m.add_function(wrap_pyfunction!(image, m)?)?;
     Ok(())
+}
+
+fn get_asset_root() -> PyResult<String> {
+    if let Ok(val) = env::var("PROCESSING_ASSET_ROOT") {
+        return Ok(val);
+    }
+
+    Python::attach(|py| {
+        let sys = PyModule::import(py, "sys")?;
+        let argv: Vec<String> = sys.getattr("argv")?.extract()?;
+        let filename: &str = argv[0].as_str();
+        let os = PyModule::import(py, "os")?;
+        let path = os.getattr("path")?;
+        let dirname = path.getattr("dirname")?.call1((filename,))?;
+        let abspath = path.getattr("abspath")?.call1((dirname,))?;
+        let asset_root = path
+            .getattr("join")?
+            .call1((abspath, "assets"))?
+            .to_string();
+        Ok(asset_root)
+    })
 }
 
 #[pyfunction]
 #[pyo3(pass_module)]
 fn size(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<()> {
-    let graphics = Graphics::new(width, height)?;
+    let asset_path: String = get_asset_root()?;
+    let graphics = Graphics::new(width, height, asset_path.as_str())?;
     module.setattr("_graphics", graphics)?;
     Ok(())
 }
@@ -121,4 +146,10 @@ fn rect(
     bl: f32,
 ) -> PyResult<()> {
     get_graphics(module)?.rect(x, y, w, h, tl, tr, br, bl)
+}
+
+#[pyfunction]
+#[pyo3(pass_module, signature = (image_file))]
+fn image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<()> {
+    get_graphics(module)?.image(image_file)
 }

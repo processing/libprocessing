@@ -19,7 +19,7 @@ fn main() {
 
 fn sketch() -> error::Result<()> {
     let mut glfw_ctx = GlfwContext::new(100, 100)?;
-    init()?;
+    init(Config::default())?;
 
     let width = 100;
     let height = 100;
