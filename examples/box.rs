@@ -38,6 +38,11 @@ fn sketch() -> error::Result<()> {
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;
 
+        graphics_record_command(
+            graphics,
+            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.1, 0.1, 0.15)),
+        )?;
+
         graphics_record_command(graphics, DrawCommand::PushMatrix)?;
         graphics_record_command(graphics, DrawCommand::Rotate { angle })?;
         graphics_record_command(graphics, DrawCommand::Geometry(box_geo))?;

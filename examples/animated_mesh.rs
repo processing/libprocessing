@@ -86,6 +86,10 @@ fn sketch() -> error::Result<()> {
         }
 
         graphics_begin_draw(graphics)?;
+        graphics_record_command(
+            graphics,
+            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.05, 0.05, 0.1)),
+        )?;
         graphics_record_command(graphics, DrawCommand::Geometry(mesh))?;
         graphics_end_draw(graphics)?;
 
