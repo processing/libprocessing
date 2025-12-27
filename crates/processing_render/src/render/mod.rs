@@ -103,14 +103,8 @@ pub fn flush_draw_commands(
     p_images: Query<&Image>,
     p_geometries: Query<&Geometry>,
 ) {
-    for (
-        graphics_entity,
-        mut cmd_buffer,
-        mut state,
-        render_layers,
-        projection,
-        camera_transform,
-    ) in graphics.iter_mut()
+    for (graphics_entity, mut cmd_buffer, mut state, render_layers, projection, camera_transform) in
+        graphics.iter_mut()
     {
         let clip_from_view = projection.get_clip_from_view();
         let view_from_world = camera_transform.to_matrix().inverse();
@@ -400,7 +394,10 @@ fn create_ndc_background_quad(world_from_clip: Mat4, color: Color, with_uvs: boo
     // two tris
     let indices: Vec<u32> = vec![0, 1, 2, 0, 2, 3];
 
-    let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::default());
+    let mut mesh = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    );
 
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, world_positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
