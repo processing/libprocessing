@@ -22,6 +22,13 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Image>()?;
     m.add_function(wrap_pyfunction!(size, m)?)?;
     m.add_function(wrap_pyfunction!(run, m)?)?;
+    m.add_function(wrap_pyfunction!(mode_3d, m)?)?;
+    m.add_function(wrap_pyfunction!(camera_position, m)?)?;
+    m.add_function(wrap_pyfunction!(camera_look_at, m)?)?;
+    m.add_function(wrap_pyfunction!(push_matrix, m)?)?;
+    m.add_function(wrap_pyfunction!(pop_matrix, m)?)?;
+    m.add_function(wrap_pyfunction!(rotate, m)?)?;
+    m.add_function(wrap_pyfunction!(draw_box, m)?)?;
     m.add_function(wrap_pyfunction!(background, m)?)?;
     m.add_function(wrap_pyfunction!(fill, m)?)?;
     m.add_function(wrap_pyfunction!(no_fill, m)?)?;
@@ -95,6 +102,53 @@ fn run(module: &Bound<'_, PyModule>) -> PyResult<()> {
 
         Ok(())
     })
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn mode_3d(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    get_graphics(module)?.mode_3d()
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn camera_position(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<()> {
+    get_graphics(module)?.camera_position(x, y, z)
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn camera_look_at(
+    module: &Bound<'_, PyModule>,
+    target_x: f32,
+    target_y: f32,
+    target_z: f32,
+) -> PyResult<()> {
+    get_graphics(module)?.camera_look_at(target_x, target_y, target_z)
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn push_matrix(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    get_graphics(module)?.push_matrix()
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn pop_matrix(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    get_graphics(module)?.push_matrix()
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn rotate(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
+    get_graphics(module)?.rotate(angle)
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn draw_box(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<()> {
+    get_graphics(module)?.draw_box(x, y, z)
 }
 
 #[pyfunction]

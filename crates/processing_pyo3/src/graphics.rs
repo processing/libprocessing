@@ -173,6 +173,12 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    pub fn draw_box(&self, x: f32, y: f32, z: f32) -> PyResult<()> {
+        let box_geo = geometry_box(x, y, z).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        graphics_record_command(self.entity, DrawCommand::Geometry(box_geo))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     pub fn scale(&self, x: f32, y: f32) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::Scale { x, y })
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
