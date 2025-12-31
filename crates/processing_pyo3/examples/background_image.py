@@ -1,7 +1,5 @@
 from processing import *
 
-i = None 
-
 def setup():
     global i
     size(800, 600)
@@ -9,9 +7,7 @@ def setup():
 
 
 def draw():
-    global i
     background(220, 100, 24)
-    # i = image("images/logo.png")
     background(i)
 
 

@@ -102,7 +102,7 @@ fn run(module: &Bound<'_, PyModule>) -> PyResult<()> {
 fn background(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
     let first = args.get_item(0)?;
     if first.is_instance_of::<Image>() {
-        get_graphics(module)?.background_image(first.extract::<Image>()?)
+        get_graphics(module)?.background_image(&*first.extract::<PyRef<Image>>()?)
     } else {
         get_graphics(module)?.background(args.extract()?)
     }
