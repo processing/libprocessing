@@ -23,6 +23,19 @@ impl Drop for Surface {
     }
 }
 
+#[pyclass]
+#[derive(Clone, Debug)]
+pub struct Image {
+    entity: Entity,
+}
+
+// TODO: we lose the image if this is implemented, meaning that the image is getting dropped prematurely
+// impl Drop for Image {
+//     fn drop(&mut self) {
+//         let _ = image_destroy(self.entity);
+//     }
+// }
+
 #[pyclass(unsendable)]
 pub struct Graphics {
     entity: Entity,
@@ -68,6 +81,11 @@ impl Graphics {
         let (r, g, b, a) = parse_color(&args)?;
         let color = bevy::color::Color::srgba(r, g, b, a);
         graphics_record_command(self.entity, DrawCommand::BackgroundColor(color))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn background_image(&self, image: Image) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::BackgroundImage(image.entity))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
@@ -124,10 +142,11 @@ impl Graphics {
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn image(&self, file: &str) -> PyResult<()> {
-        let image = image_load(file).unwrap();
-        graphics_record_command(self.entity, DrawCommand::BackgroundImage(image))
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    pub fn image(&self, file: &str) -> PyResult<Image> {
+        match image_load(file) {
+            Ok(image) => Ok(Image { entity: image }),
+            Err(e) => Err(PyRuntimeError::new_err(format!("{e}"))),
+        }
     }
 
     pub fn push_matrix(&self) -> PyResult<()> {

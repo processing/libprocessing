@@ -11,14 +11,15 @@
 mod glfw;
 mod graphics;
 
-use graphics::{Graphics, get_graphics, get_graphics_mut};
-use pyo3::{exceptions::PyRuntimeError, prelude::*};
+use graphics::{Graphics, Image, get_graphics, get_graphics_mut};
+use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyTuple};
 
 use std::env;
 
 #[pymodule]
 fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Graphics>()?;
+    m.add_class::<Image>()?;
     m.add_function(wrap_pyfunction!(size, m)?)?;
     m.add_function(wrap_pyfunction!(run, m)?)?;
     m.add_function(wrap_pyfunction!(background, m)?)?;
@@ -98,8 +99,13 @@ fn run(module: &Bound<'_, PyModule>) -> PyResult<()> {
 
 #[pyfunction]
 #[pyo3(pass_module, signature = (*args))]
-fn background(module: &Bound<'_, PyModule>, args: Vec<f32>) -> PyResult<()> {
-    get_graphics(module)?.background(args)
+fn background(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+    let first = args.get_item(0)?;
+    if first.is_instance_of::<Image>() {
+        get_graphics(module)?.background_image(first.extract::<Image>()?)
+    } else {
+        get_graphics(module)?.background(args.extract()?)
+    }
 }
 
 #[pyfunction]
@@ -150,6 +156,6 @@ fn rect(
 
 #[pyfunction]
 #[pyo3(pass_module, signature = (image_file))]
-fn image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<()> {
+fn image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<Image> {
     get_graphics(module)?.image(image_file)
 }
