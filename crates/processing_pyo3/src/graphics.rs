@@ -65,6 +65,11 @@ impl Mesh {
     pub fn index(&self, i: u32) -> PyResult<()> {
         geometry_index(self.entity, i).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
+
+    pub fn set_vertex(&self, i: u32, x: f32, y: f32, z: f32) -> PyResult<()> {
+        geometry_set_vertex(self.entity, i, x, y, z)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
 }
 
 #[pyclass(unsendable)]

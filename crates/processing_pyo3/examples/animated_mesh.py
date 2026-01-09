@@ -1,9 +1,11 @@
 from processing import *
+from math import sin, cos
 
 mesh = None
 grid_size = 20 
 spacing = 10.0
 offset = (grid_size * spacing) / 2.0;
+time = 0.0
 
 def setup():
     global mesh
@@ -39,13 +41,23 @@ def draw():
     global grid_size
     global offset
     global spacing
+    global time
 
     camera_position(150.0, 150.0, 150.0)
     camera_look_at( 0.0, 0.0, 0.0)
     background(220, 200, 140)
 
+    for z in range(grid_size):
+        for x in range(grid_size):
+            idx = int(z * grid_size + x)
+            px = x * spacing - offset
+            pz = z * spacing - offset
+            wave = sin(px * 0.1 + time) * cos(pz * 0.1 + time) * 20.0
+            mesh.set_vertex(idx, px, wave, pz)
+
     draw_mesh(mesh)
 
+    time += 0.05
 
 
 # TODO: this should happen implicitly on module load somehow
