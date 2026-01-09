@@ -12,7 +12,6 @@ def draw():
     camera_look_at(0.0, 0.0, 0.0)
     background(220)
 
-
     push_matrix()
     rotate(angle)
     draw_box(100.0, 100.0, 100.0)

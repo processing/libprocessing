@@ -36,6 +36,38 @@ impl Drop for Image {
 }
 
 #[pyclass(unsendable)]
+pub struct Mesh {
+    entity: Entity,
+}
+
+#[pymethods]
+impl Mesh {
+    #[new]
+    pub fn new() -> PyResult<Self> {
+        let geometry = geometry_create(geometry::Topology::TriangleList)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Self { entity: geometry })
+    }
+
+    pub fn color(&self, r: f32, g: f32, b: f32, a: f32) -> PyResult<()> {
+        geometry_color(self.entity, r, g, b, a).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn normal(&self, nx: f32, ny: f32, nz: f32) -> PyResult<()> {
+        geometry_normal(self.entity, nx, ny, nz)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn vertex(&self, x: f32, y: f32, z: f32) -> PyResult<()> {
+        geometry_vertex(self.entity, x, y, z).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn index(&self, i: u32) -> PyResult<()> {
+        geometry_index(self.entity, i).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+}
+
+#[pyclass(unsendable)]
 pub struct Graphics {
     entity: Entity,
     pub surface: Surface,
@@ -176,6 +208,11 @@ impl Graphics {
     pub fn draw_box(&self, x: f32, y: f32, z: f32) -> PyResult<()> {
         let box_geo = geometry_box(x, y, z).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         graphics_record_command(self.entity, DrawCommand::Geometry(box_geo))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn draw_mesh(&self, mesh: &Mesh) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Geometry(mesh.entity))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
