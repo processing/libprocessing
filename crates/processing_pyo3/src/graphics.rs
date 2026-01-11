@@ -36,7 +36,7 @@ impl Drop for Image {
 }
 
 #[pyclass(unsendable)]
-pub struct Mesh {
+pub struct Geometry {
     entity: Entity,
 }
 
@@ -62,7 +62,7 @@ impl Topology {
 }
 
 #[pymethods]
-impl Mesh {
+impl Geometry {
     #[new]
     #[pyo3(signature = (**kwargs))]
     pub fn new(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
@@ -244,8 +244,8 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn draw_mesh(&self, mesh: &Mesh) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::Geometry(mesh.entity))
+    pub fn draw_geometry(&self, geometry: &Geometry) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Geometry(geometry.entity))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 

@@ -11,7 +11,7 @@
 mod glfw;
 mod graphics;
 
-use graphics::{Graphics, Image, Mesh, Topology, get_graphics, get_graphics_mut};
+use graphics::{Graphics, Image, Geometry, Topology, get_graphics, get_graphics_mut};
 use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyTuple};
 
 use std::env;
@@ -20,7 +20,7 @@ use std::env;
 fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Graphics>()?;
     m.add_class::<Image>()?;
-    m.add_class::<Mesh>()?;
+    m.add_class::<Geometry>()?;
     m.add_class::<Topology>()?;
     m.add_function(wrap_pyfunction!(size, m)?)?;
     m.add_function(wrap_pyfunction!(run, m)?)?;
@@ -39,7 +39,7 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(stroke_weight, m)?)?;
     m.add_function(wrap_pyfunction!(rect, m)?)?;
     m.add_function(wrap_pyfunction!(image, m)?)?;
-    m.add_function(wrap_pyfunction!(draw_mesh, m)?)?;
+    m.add_function(wrap_pyfunction!(draw_geometry, m)?)?;
 
     Ok(())
 }
@@ -156,9 +156,9 @@ fn draw_box(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<()
 }
 
 #[pyfunction]
-#[pyo3(pass_module, signature = (mesh))]
-fn draw_mesh(module: &Bound<'_, PyModule>, mesh: &Bound<'_, Mesh>) -> PyResult<()> {
-    get_graphics(module)?.draw_mesh(&*mesh.extract::<PyRef<Mesh>>()?)
+#[pyo3(pass_module, signature = (geometry))]
+fn draw_geometry(module: &Bound<'_, PyModule>, geometry: &Bound<'_, Geometry>) -> PyResult<()> {
+    get_graphics(module)?.draw_geometry(&*geometry.extract::<PyRef<Geometry>>()?)
 }
 
 #[pyfunction]

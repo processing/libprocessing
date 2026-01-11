@@ -1,24 +1,24 @@
 from processing import *
 from math import sin, cos
 
-mesh = None
+geometry = None
 grid_size = 20 
 spacing = 10.0
 offset = (grid_size * spacing) / 2.0;
 time = 0.0
 
 def setup():
-    global mesh
+    global geometry
     size(800, 600)
     mode_3d()
-    mesh = Mesh()
+    geometry = Geometry()
     for z in range(grid_size):
         for x in range(grid_size):
             px = x * spacing - offset
             pz = z * spacing - offset
-            mesh.color(x/grid_size, 0.5, z/grid_size, 1.0)
-            mesh.normal(0.0, 1.0, 0.0)
-            mesh.vertex(px, 0.0, pz)
+            geometry.color(x/grid_size, 0.5, z/grid_size, 1.0)
+            geometry.normal(0.0, 1.0, 0.0)
+            geometry.vertex(px, 0.0, pz)
 
     for z in range(grid_size-1):
         for x in range(grid_size-1):
@@ -27,17 +27,17 @@ def setup():
             bl = (z + 1) * grid_size + x
             br = bl + 1
 
-            mesh.index(tl)
-            mesh.index(bl)
-            mesh.index(tr)
+            geometry.index(tl)
+            geometry.index(bl)
+            geometry.index(tr)
 
-            mesh.index(tr)
-            mesh.index(bl)
-            mesh.index(br)
+            geometry.index(tr)
+            geometry.index(bl)
+            geometry.index(br)
 
 
 def draw():
-    global mesh
+    global geometry
     global grid_size
     global offset
     global spacing
@@ -53,9 +53,9 @@ def draw():
             px = x * spacing - offset
             pz = z * spacing - offset
             wave = sin(px * 0.1 + time) * cos(pz * 0.1 + time) * 20.0
-            mesh.set_vertex(idx, px, wave, pz)
+            geometry.set_vertex(idx, px, wave, pz)
 
-    draw_mesh(mesh)
+    draw_geometry(geometry)
 
     time += 0.05
 
