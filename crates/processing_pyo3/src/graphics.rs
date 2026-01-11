@@ -1,6 +1,6 @@
 use bevy::prelude::Entity;
 use processing::prelude::*;
-use pyo3::{exceptions::PyRuntimeError, prelude::*};
+use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyDict};
 
 use crate::glfw::GlfwContext;
 
@@ -32,6 +32,71 @@ pub struct Image {
 impl Drop for Image {
     fn drop(&mut self) {
         let _ = image_destroy(self.entity);
+    }
+}
+
+#[pyclass(unsendable)]
+pub struct Geometry {
+    entity: Entity,
+}
+
+#[pyclass]
+pub enum Topology {
+    PointList = 0,
+    LineList = 1,
+    LineStrip = 2,
+    TriangleList = 3,
+    TriangleStrip = 4,
+}
+
+impl Topology {
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            Self::PointList => 0,
+            Self::LineList => 1,
+            Self::LineStrip => 2,
+            Self::TriangleList => 3,
+            Self::TriangleStrip => 4,
+        }
+    }
+}
+
+#[pymethods]
+impl Geometry {
+    #[new]
+    #[pyo3(signature = (**kwargs))]
+    pub fn new(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+        let topology = kwargs
+            .and_then(|k| k.get_item("topology").ok().flatten())
+            .and_then(|t| t.cast_into::<Topology>().ok())
+            .and_then(|t| geometry::Topology::from_u8(t.borrow().as_u8()))
+            .unwrap_or(geometry::Topology::TriangleList);
+
+        let geometry =
+            geometry_create(topology).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Self { entity: geometry })
+    }
+
+    pub fn color(&self, r: f32, g: f32, b: f32, a: f32) -> PyResult<()> {
+        geometry_color(self.entity, r, g, b, a).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn normal(&self, nx: f32, ny: f32, nz: f32) -> PyResult<()> {
+        geometry_normal(self.entity, nx, ny, nz)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn vertex(&self, x: f32, y: f32, z: f32) -> PyResult<()> {
+        geometry_vertex(self.entity, x, y, z).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn index(&self, i: u32) -> PyResult<()> {
+        geometry_index(self.entity, i).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn set_vertex(&self, i: u32, x: f32, y: f32, z: f32) -> PyResult<()> {
+        geometry_set_vertex(self.entity, i, x, y, z)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 }
 
@@ -170,6 +235,17 @@ impl Graphics {
 
     pub fn rotate(&self, angle: f32) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::Rotate { angle })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn draw_box(&self, x: f32, y: f32, z: f32) -> PyResult<()> {
+        let box_geo = geometry_box(x, y, z).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        graphics_record_command(self.entity, DrawCommand::Geometry(box_geo))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn draw_geometry(&self, geometry: &Geometry) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Geometry(geometry.entity))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
