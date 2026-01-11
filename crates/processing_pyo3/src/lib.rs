@@ -11,7 +11,7 @@
 mod glfw;
 mod graphics;
 
-use graphics::{Graphics, Image, Geometry, Topology, get_graphics, get_graphics_mut};
+use graphics::{Geometry, Graphics, Image, Topology, get_graphics, get_graphics_mut};
 use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyTuple};
 
 use std::env;
