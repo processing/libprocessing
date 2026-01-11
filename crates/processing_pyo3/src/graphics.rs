@@ -1,6 +1,6 @@
 use bevy::prelude::Entity;
 use processing::prelude::*;
-use pyo3::{exceptions::PyRuntimeError, prelude::*};
+use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyDict};
 
 use crate::glfw::GlfwContext;
 
@@ -40,12 +40,40 @@ pub struct Mesh {
     entity: Entity,
 }
 
+#[pyclass]
+pub enum Topology {
+    PointList = 0,
+    LineList = 1,
+    LineStrip = 2,
+    TriangleList = 3,
+    TriangleStrip = 4,
+}
+
+impl Topology {
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            Self::PointList => 0,
+            Self::LineList => 1,
+            Self::LineStrip => 2,
+            Self::TriangleList => 3,
+            Self::TriangleStrip => 4,
+        }
+    }
+}
+
 #[pymethods]
 impl Mesh {
     #[new]
-    pub fn new() -> PyResult<Self> {
-        let geometry = geometry_create(geometry::Topology::TriangleList)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    #[pyo3(signature = (**kwargs))]
+    pub fn new(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+        let topology = kwargs
+            .and_then(|k| k.get_item("topology").ok().flatten())
+            .and_then(|t| t.cast_into::<Topology>().ok())
+            .and_then(|t| geometry::Topology::from_u8(t.borrow().as_u8()))
+            .unwrap_or(geometry::Topology::TriangleList);
+
+        let geometry =
+            geometry_create(topology).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(Self { entity: geometry })
     }
 

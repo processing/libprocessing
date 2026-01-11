@@ -11,7 +11,7 @@
 mod glfw;
 mod graphics;
 
-use graphics::{Graphics, Image, Mesh, get_graphics, get_graphics_mut};
+use graphics::{Graphics, Image, Mesh, Topology, get_graphics, get_graphics_mut};
 use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyTuple};
 
 use std::env;
@@ -21,6 +21,7 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Graphics>()?;
     m.add_class::<Image>()?;
     m.add_class::<Mesh>()?;
+    m.add_class::<Topology>()?;
     m.add_function(wrap_pyfunction!(size, m)?)?;
     m.add_function(wrap_pyfunction!(run, m)?)?;
     m.add_function(wrap_pyfunction!(mode_3d, m)?)?;
