@@ -83,7 +83,7 @@ user-facing API via an overload.
 We never return pointers to data that lives in libprocessing. Because we use the ECS to manage Rust data, where longer
 lifetimes are necessary we return an `Entity` id, which can be returned to the user as a `u64` containing both the index
 and generation of the ECS entity. Any data not representing an API-level object should be returned on the stack and
-where an allocation is necessary (e.g. buffers for pixel data), it's the responsibility of the consumer to allocate a
+where an allocation is necessary (e.g. buffers for pixel data), it's the responsibility of the consumer to allocate and
 provide the pointer to the requisite allocation.
 
 API-level objects should wrap ids and they should never be exposed to the user as a first-class concept. All data which
