@@ -2,9 +2,7 @@
 
 use bevy::prelude::Entity;
 use processing_render::{
-    exit, graphics_begin_draw, graphics_end_draw, graphics_flush, graphics_record_command,
-    image_create, image_destroy, image_load, image_readback, image_resize, init,
-    render::command::DrawCommand, surface_create_from_canvas, surface_destroy, surface_resize,
+    config::Config, exit, graphics_begin_draw, graphics_end_draw, graphics_flush, graphics_record_command, image_create, image_destroy, image_load, image_readback, image_resize, init, render::command::DrawCommand, surface_create_from_canvas, surface_destroy, surface_resize
 };
 use wasm_bindgen::prelude::*;
 
@@ -19,7 +17,8 @@ fn wasm_start() {
 
 #[wasm_bindgen(js_name = "init")]
 pub async fn js_init() -> Result<(), JsValue> {
-    check(init().await)
+    let config = Config::new();
+    check(init(config).await)
 }
 
 #[wasm_bindgen(js_name = "createSurface")]
