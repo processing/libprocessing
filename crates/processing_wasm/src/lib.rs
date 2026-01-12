@@ -2,7 +2,10 @@
 
 use bevy::prelude::Entity;
 use processing_render::{
-    config::Config, exit, graphics_begin_draw, graphics_end_draw, graphics_flush, graphics_record_command, image_create, image_destroy, image_load, image_readback, image_resize, init, render::command::DrawCommand, surface_create_from_canvas, surface_destroy, surface_resize
+    config::Config, exit, graphics_begin_draw, graphics_end_draw, graphics_flush,
+    graphics_record_command, image_create, image_destroy, image_load, image_readback, image_resize,
+    init, render::command::DrawCommand, surface_create_from_canvas, surface_destroy,
+    surface_resize,
 };
 use wasm_bindgen::prelude::*;
 
