@@ -4,7 +4,7 @@ from math import sin, cos
 geometry = None
 grid_size = 20 
 spacing = 10.0
-offset = (grid_size * spacing) / 2.0;
+offset = (grid_size * spacing) / 2.0
 time = 0.0
 
 def setup():
