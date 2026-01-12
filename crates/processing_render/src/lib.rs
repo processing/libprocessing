@@ -293,7 +293,7 @@ pub fn init(config: Config) -> error::Result<()> {
 
 /// Initialize the app asynchronously
 #[cfg(target_arch = "wasm32")]
-pub async fn init() -> error::Result<()> {
+pub async fn init(config: Config) -> error::Result<()> {
     use bevy::app::PluginsState;
 
     setup_tracing()?;
@@ -301,7 +301,7 @@ pub async fn init() -> error::Result<()> {
         return Ok(());
     }
 
-    let mut app = create_app();
+    let mut app = create_app(config);
 
     // we need to avoid blocking the main thread while waiting for plugins to initialize
     while app.plugins_state() == PluginsState::Adding {
