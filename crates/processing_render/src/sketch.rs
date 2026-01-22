@@ -17,17 +17,23 @@ impl Plugin for LivecodePlugin {
         app.init_asset::<Sketch>()
             .init_asset_loader::<SketchLoader>()
             .add_systems(Startup, load_current_sketch);
+        // .add_systems(Update, test_system);
+        let render_app = app.sub_app_mut(bevy::render::RenderApp);
+        render_app.add_systems(ExtractSchedule, test_system);
     }
 }
 
+fn test_system() {
+    info!("DEBUG: calling test_system");
+    assert!(false);
+}
+
 fn load_current_sketch(asset_server: Res<AssetServer>) {
+    info!("DEBUG: calling load_current_sketch");
     let path = Path::new("rectangle.py");
     let source = AssetSourceId::from("sketch_directory");
-    let _asset_path = AssetPath::from_path(path).with_source(source);
-
-    dbg!("OKOKOKOK {:?}", _asset_path);
-
-    let _h: Handle<Sketch> = asset_server.load(path);
+    let asset_path = AssetPath::from_path(path).with_source(source);
+    let _h: Handle<Sketch> = asset_server.load(asset_path);
 }
 
 /// A sketch source file loaded as a Bevy asset.
