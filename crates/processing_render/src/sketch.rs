@@ -7,7 +7,7 @@ use bevy::{
     },
     prelude::*,
 };
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// Plugin that registers the Sketch asset type and its loader.
 pub struct LivecodePlugin;
@@ -15,26 +15,48 @@ pub struct LivecodePlugin;
 impl Plugin for LivecodePlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<Sketch>()
-            .init_asset_loader::<SketchLoader>()
-            .add_systems(Startup, load_current_sketch);
-        // .add_systems(Update, test_system);
-        let render_app = app.sub_app_mut(bevy::render::RenderApp);
-        render_app.add_systems(ExtractSchedule, test_system);
+            .init_asset_loader::<SketchLoader>();
+
+        app.add_systems(PreStartup, load_current_sketch)
+            .add_systems(Update, sketch_update_handler);
     }
 }
 
-fn test_system() {
-    info!("DEBUG: calling test_system");
-    assert!(false);
+// TODO: A better name is possible
+fn sketch_update_handler(mut events: MessageReader<AssetEvent<Sketch>>) {
+    for event in events.read() {
+        match event {
+            AssetEvent::Added { id } => {
+                info!("Added: {id}")
+            }
+            AssetEvent::Modified { id } => {
+                info!("Modified: {id}")
+            }
+            AssetEvent::Removed { id } => {
+                info!("Removed: {id}")
+            }
+            AssetEvent::Unused { id } => {
+                info!("Unused: {id}")
+            }
+            AssetEvent::LoadedWithDependencies { id } => {
+                info!("LoadedWithDependencies: {id}")
+            }
+        }
+    }
 }
 
-fn load_current_sketch(asset_server: Res<AssetServer>) {
+fn load_current_sketch(mut commands: Commands, asset_server: Res<AssetServer>) {
     info!("DEBUG: calling load_current_sketch");
     let path = Path::new("rectangle.py");
     let source = AssetSourceId::from("sketch_directory");
     let asset_path = AssetPath::from_path(path).with_source(source);
-    let _h: Handle<Sketch> = asset_server.load(asset_path);
+    let sketch_handle: Handle<Sketch> = asset_server.load(asset_path);
+    commands.spawn(SketchRoot(sketch_handle));
 }
+
+/// `SketchRoot` is what will be spawned and will contain a `Handle` to the `Sketch`
+#[derive(Component)]
+pub struct SketchRoot(pub Handle<Sketch>);
 
 /// A sketch source file loaded as a Bevy asset.
 ///
@@ -42,11 +64,7 @@ fn load_current_sketch(asset_server: Res<AssetServer>) {
 /// or execute the code — that responsibility belongs to language-specific crates.
 #[derive(Asset, TypePath, Debug)]
 pub struct Sketch {
-    /// The source code contents of the sketch file.
-    pub source: String,
-
-    /// The original file path.
-    pub path: PathBuf,
+    source: String,
 }
 
 /// Loads sketch files from disk.
@@ -65,7 +83,7 @@ impl AssetLoader for SketchLoader {
         &self,
         reader: &mut dyn Reader,
         _settings: &Self::Settings,
-        load_context: &mut LoadContext<'_>,
+        _load_context: &mut LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
         let mut source = String::new();
 
@@ -76,10 +94,9 @@ impl AssetLoader for SketchLoader {
             source = utf8.to_string();
         }
 
-        let asset_path = load_context.path();
-        let path: PathBuf = asset_path.path().to_path_buf();
+        info!(source);
 
-        Ok(Sketch { source, path })
+        Ok(Sketch { source })
     }
 
     fn extensions(&self) -> &[&str] {
