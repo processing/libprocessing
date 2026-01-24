@@ -308,6 +308,11 @@ impl Graphics {
         graphics_ortho(self.entity, left, right, bottom, top, near, far)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
+
+    pub fn begin_geometry(&self) -> PyResult<()> {
+        geometry_begin(self.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
 }
 
 // TODO: a real color type. or color parser? idk. color is confusing. let's think

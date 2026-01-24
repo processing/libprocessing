@@ -16,7 +16,7 @@ use bevy::{
     render::render_resource::PrimitiveTopology,
 };
 
-use crate::error::{ProcessingError, Result};
+use crate::{error::{ProcessingError, Result}, render::RenderState};
 
 pub struct GeometryPlugin;
 
@@ -363,5 +363,35 @@ pub fn destroy(
 
     meshes.remove(&geometry.handle);
     commands.entity(entity).despawn();
+    Ok(())
+}
+
+pub fn begin(
+    In(graphics_entity): In<Entity>,
+    mut commands: Commands,
+    mut state_query: Query<&mut RenderState>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    builtins: Res<BuiltinAttributes>,
+) -> Result<()> {    
+    let layout_entity = commands
+        .spawn(VertexLayout::with_attributes(vec![
+            builtins.position,
+            builtins.normal,
+            builtins.color,
+            builtins.uv,
+        ]))
+        .id();
+
+    let mesh = Mesh::new(
+        Topology::TriangleList.to_primitive_topology(),
+        RenderAssetUsages::default(),
+    );
+    let handle = meshes.add(mesh);
+    
+    let mut state = state_query
+        .get_mut(graphics_entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    state.running_geometry = Some(Geometry::new(handle, layout_entity));
     Ok(())
 }
