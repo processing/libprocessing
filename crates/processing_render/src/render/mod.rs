@@ -60,6 +60,7 @@ pub struct RenderState {
     pub stroke_color: Option<Color>,
     pub stroke_weight: f32,
     pub transform: TransformStack,
+    pub running_geometry: Option<Geometry>,
 }
 
 impl Default for RenderState {
@@ -69,6 +70,7 @@ impl Default for RenderState {
             stroke_color: Some(Color::BLACK),
             stroke_weight: 1.0,
             transform: TransformStack::new(),
+            running_geometry: None,
         }
     }
 }

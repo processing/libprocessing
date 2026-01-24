@@ -60,7 +60,7 @@ impl Topology {
     }
 }
 
-#[derive(Component)]
+#[derive(Debug, Component)]
 pub struct Geometry {
     pub handle: Handle<Mesh>,
     pub layout: Entity,
