@@ -41,7 +41,8 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(image, m)?)?;
     m.add_function(wrap_pyfunction!(draw_geometry, m)?)?;
     m.add_function(wrap_pyfunction!(begin_geometry, m)?)?;
-    
+    m.add_function(wrap_pyfunction!(end_geometry, m)?)?;
+
     Ok(())
 }
 
@@ -229,4 +230,10 @@ fn image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<Image> {
 #[pyo3(pass_module)]
 fn begin_geometry(module: &Bound<'_, PyModule>) -> PyResult<()> {
     get_graphics(module)?.begin_geometry()
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn end_geometry(module: &Bound<'_, PyModule>) -> PyResult<Geometry> {
+    get_graphics(module)?.end_geometry()
 }

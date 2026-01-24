@@ -16,7 +16,10 @@ use bevy::{
     render::render_resource::PrimitiveTopology,
 };
 
-use crate::{error::{ProcessingError, Result}, render::RenderState};
+use crate::{
+    error::{ProcessingError, Result},
+    render::RenderState,
+};
 
 pub struct GeometryPlugin;
 
@@ -372,7 +375,7 @@ pub fn begin(
     mut state_query: Query<&mut RenderState>,
     mut meshes: ResMut<Assets<Mesh>>,
     builtins: Res<BuiltinAttributes>,
-) -> Result<()> {    
+) -> Result<()> {
     let layout_entity = commands
         .spawn(VertexLayout::with_attributes(vec![
             builtins.position,
@@ -387,11 +390,26 @@ pub fn begin(
         RenderAssetUsages::default(),
     );
     let handle = meshes.add(mesh);
-    
+
     let mut state = state_query
         .get_mut(graphics_entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
     state.running_geometry = Some(Geometry::new(handle, layout_entity));
     Ok(())
+}
+
+pub fn end(
+    In(graphics_entity): In<Entity>,
+    mut commands: Commands,
+    mut state_query: Query<&mut RenderState>,
+) -> Result<Entity> {
+    let geometry = state_query
+        .get_mut(graphics_entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?
+        .running_geometry
+        .take()
+        .ok_or(ProcessingError::GeometryNotFound)?;
+
+    Ok(commands.spawn(geometry).id())
 }

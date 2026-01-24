@@ -310,8 +310,14 @@ impl Graphics {
     }
 
     pub fn begin_geometry(&self) -> PyResult<()> {
-        geometry_begin(self.entity)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        geometry_begin(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn end_geometry(&self) -> PyResult<Geometry> {
+        match geometry_end(self.entity) {
+            Ok(geometry) => Ok(Geometry { entity: geometry }),
+            Err(e) => Err(PyRuntimeError::new_err(format!("{e}"))),
+        }
     }
 }
 
