@@ -233,6 +233,11 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    pub fn translate_3d(&self, x: f32, y: f32, z: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Translate3D { x, y, z })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     pub fn rotate(&self, angle: f32) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::Rotate { angle })
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))

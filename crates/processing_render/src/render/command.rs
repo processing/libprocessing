@@ -23,6 +23,11 @@ pub enum DrawCommand {
         x: f32,
         y: f32,
     },
+    Translate3D {
+        x: f32,
+        y: f32,
+        z: f32,
+    },
     Rotate {
         angle: f32,
     },
