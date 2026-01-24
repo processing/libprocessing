@@ -44,6 +44,7 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(draw_geometry, m)?)?;
     m.add_function(wrap_pyfunction!(begin_geometry, m)?)?;
     m.add_function(wrap_pyfunction!(end_geometry, m)?)?;
+    m.add_function(wrap_pyfunction!(sphere, m)?)?;
 
     Ok(())
 }
@@ -250,4 +251,10 @@ fn begin_geometry(module: &Bound<'_, PyModule>) -> PyResult<()> {
 #[pyo3(pass_module)]
 fn end_geometry(module: &Bound<'_, PyModule>) -> PyResult<Geometry> {
     get_graphics(module)?.end_geometry()
+}
+
+#[pyfunction]
+#[pyo3(pass_module, signature = (radius))]
+fn sphere(module: &Bound<'_, PyModule>, radius: f32) -> PyResult<()> {
+    get_graphics(module)?.sphere(radius)
 }

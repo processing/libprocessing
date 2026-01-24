@@ -21,7 +21,7 @@ def draw():
 def create_geometry():
     global geometry
 
-    beginGeometry()
+    begin_geometry()
 
     for i in range(60):        
         x = gauss(400, 200)
@@ -29,11 +29,11 @@ def create_geometry():
         z = gauss(0, 100)
         
         push_matrix()
-        translate(x, y, z)
+        translate_3d(x, y, z)
         sphere(10)
         pop_matrix()
 
-    geometry = endGeometry()
+    geometry = end_geometry()
 
 # TODO: this should happen implicitly on module load somehow
 run()

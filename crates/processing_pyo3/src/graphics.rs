@@ -324,6 +324,10 @@ impl Graphics {
             Err(e) => Err(PyRuntimeError::new_err(format!("{e}"))),
         }
     }
+
+    pub fn sphere(&self, radius: f32) -> PyResult<()> {
+        geometry_sphere(self.entity, radius).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
 }
 
 // TODO: a real color type. or color parser? idk. color is confusing. let's think

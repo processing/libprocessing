@@ -1087,3 +1087,11 @@ pub fn geometry_end(graphics_entity: Entity) -> error::Result<Entity> {
             .unwrap()
     })
 }
+
+pub fn geometry_sphere(graphics_entity: Entity, radius: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(geometry::sphere, (graphics_entity, radius))
+            .unwrap()
+    })
+}

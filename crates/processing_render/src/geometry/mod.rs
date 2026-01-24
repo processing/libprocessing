@@ -370,7 +370,7 @@ pub fn destroy(
 }
 
 pub fn begin(
-    In(graphics_entity): In<Entity>,
+    In(entity): In<Entity>,
     mut commands: Commands,
     mut state_query: Query<&mut RenderState>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -392,7 +392,7 @@ pub fn begin(
     let handle = meshes.add(mesh);
 
     let mut state = state_query
-        .get_mut(graphics_entity)
+        .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
     state.running_geometry = Some(Geometry::new(handle, layout_entity));
@@ -400,16 +400,82 @@ pub fn begin(
 }
 
 pub fn end(
-    In(graphics_entity): In<Entity>,
+    In(entity): In<Entity>,
     mut commands: Commands,
     mut state_query: Query<&mut RenderState>,
 ) -> Result<Entity> {
     let geometry = state_query
-        .get_mut(graphics_entity)
+        .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?
         .running_geometry
         .take()
         .ok_or(ProcessingError::GeometryNotFound)?;
 
     Ok(commands.spawn(geometry).id())
+}
+
+pub fn sphere(
+    In((entity, radius)): In<(Entity, f32)>,
+    state_query: Query<&mut RenderState>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) -> Result<()> {
+    let geometry = state_query
+        .get(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?
+        .running_geometry
+        .as_ref()
+        .ok_or(ProcessingError::GeometryNotFound)?;
+
+    let mesh = meshes
+        .get_mut(&geometry.handle)
+        .ok_or(ProcessingError::GeometryNotFound)?;
+
+    let base_index = mesh.count_vertices() as u32;
+    let sphere_mesh = Sphere::new(radius).mesh().build();
+
+    // Append positions
+    if let Some(VertexAttributeValues::Float32x3(new_pos)) =
+        sphere_mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+        && let Some(VertexAttributeValues::Float32x3(positions)) =
+            mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
+    {
+        positions.extend_from_slice(new_pos);
+    }
+
+    // Append normals
+    if let Some(VertexAttributeValues::Float32x3(new_normals)) =
+        sphere_mesh.attribute(Mesh::ATTRIBUTE_NORMAL)
+        && let Some(VertexAttributeValues::Float32x3(normals)) =
+            mesh.attribute_mut(Mesh::ATTRIBUTE_NORMAL)
+    {
+        normals.extend_from_slice(new_normals);
+    }
+
+    // Append UVs
+    if let Some(VertexAttributeValues::Float32x2(new_uvs)) =
+        sphere_mesh.attribute(Mesh::ATTRIBUTE_UV_0)
+        && let Some(VertexAttributeValues::Float32x2(uvs)) =
+            mesh.attribute_mut(Mesh::ATTRIBUTE_UV_0)
+    {
+        uvs.extend_from_slice(new_uvs);
+    }
+
+    // Append indices with offset
+    let new_indices: Vec<u32> = match sphere_mesh.indices() {
+        Some(Indices::U16(vec)) => vec.iter().map(|&i| i as u32 + base_index).collect(),
+        Some(Indices::U32(vec)) => vec.iter().map(|&i| i + base_index).collect(),
+        None => Vec::new(),
+    };
+
+    match mesh.indices_mut() {
+        Some(Indices::U32(indices)) => indices.extend(new_indices),
+        Some(Indices::U16(indices)) => {
+            indices.extend(new_indices.iter().map(|&i| i as u16));
+        }
+        None => {
+            mesh.insert_indices(Indices::U32(new_indices));
+        }
+    }
+
+    Ok(())
 }
