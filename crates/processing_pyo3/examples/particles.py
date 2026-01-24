@@ -1,5 +1,4 @@
 from processing import *
-from math import sin, cos
 from random import gauss
 
 geometry = None
