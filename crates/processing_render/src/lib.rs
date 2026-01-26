@@ -1226,3 +1226,12 @@ pub fn geometry_box(width: f32, height: f32, depth: f32) -> error::Result<Entity
             .unwrap())
     })
 }
+
+pub fn poll_for_sketch_updates() -> error::Result<Option<sketch::Sketch>> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached(sketch::sketch_update_handler)
+            .unwrap())
+    })
+}

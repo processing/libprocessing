@@ -61,6 +61,11 @@ impl Topology {
     }
 }
 
+#[pyclass]
+pub struct Sketch {
+    pub source: String,
+}
+
 #[pymethods]
 impl Geometry {
     #[new]
@@ -144,6 +149,21 @@ impl Graphics {
             entity: graphics,
             surface,
         })
+    }
+
+    pub fn poll_for_sketch_update(&self) -> PyResult<Sketch> {
+        match poll_for_sketch_updates().map_err(|_| PyRuntimeError::new_err("SKETCH UPDATE ERR"))? {
+            Some(sketch) => Ok(Sketch {
+                source: sketch.source,
+            }),
+            None => Ok(Sketch {
+                source: "".to_string(),
+            }),
+        }
+
+        // Ok(Sketch {
+        //     source: sketch.unwrap().source,
+        // })
     }
 
     pub fn background(&self, args: Vec<f32>) -> PyResult<()> {

@@ -19,17 +19,18 @@ impl Plugin for LivecodePlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<Sketch>()
             .init_asset_loader::<SketchLoader>()
+            // TODO: this could be switched to Message
             .insert_resource(SketchNeedsReload(false))
-            .add_systems(PreStartup, load_current_sketch)
-            .add_systems(Update, sketch_update_handler);
+            .add_systems(PreStartup, load_current_sketch);
+        // .add_systems(Update, sketch_update_handler);
     }
 }
 
 // TODO: A better name is possible
-fn sketch_update_handler(
+pub fn sketch_update_handler(
     mut events: MessageReader<AssetEvent<Sketch>>,
-    mut needs_reload: ResMut<SketchNeedsReload>,
-) {
+    sketches: Res<Assets<Sketch>>,
+) -> Option<Sketch> {
     for event in events.read() {
         match event {
             AssetEvent::Added { id } => {
@@ -38,7 +39,11 @@ fn sketch_update_handler(
             AssetEvent::Modified { id } => {
                 info!("Modified: {id}");
                 // we want to emit some event to bevy??
-                needs_reload.0 = true;
+                // needs_reload.0 = true;
+                if let Some(sketch) = sketches.get(*id) {
+                    let sketch = sketch.clone();
+                    return Some(sketch);
+                }
             }
             AssetEvent::Removed { id } => {
                 info!("Removed: {id}")
@@ -51,6 +56,8 @@ fn sketch_update_handler(
             }
         }
     }
+
+    None
 }
 
 fn load_current_sketch(mut commands: Commands, asset_server: Res<AssetServer>) {
@@ -70,9 +77,10 @@ pub struct SketchRoot(pub Handle<Sketch>);
 ///
 /// The `Sketch` asset contains the raw source code as a string. It does not interpret
 /// or execute the code — that responsibility belongs to language-specific crates.
-#[derive(Asset, TypePath, Debug)]
+#[derive(Asset, Clone, TypePath, Debug)]
 pub struct Sketch {
-    source: String,
+    // TODO: should this be &str ?
+    pub source: String,
 }
 
 /// Loads sketch files from disk.
