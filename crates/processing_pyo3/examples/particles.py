@@ -12,8 +12,8 @@ def setup():
 def draw():
     global geometry
 
-    camera_position(150.0, 150.0, 150.0)
-    camera_look_at( 0.0, 0.0, 0.0)
+    camera_position(100.0, 100.0, 300.0)
+    camera_look_at(0.0, 0.0, 0.0)
     background(220, 200, 140)
 
     draw_geometry(geometry)
@@ -23,15 +23,9 @@ def create_geometry():
 
     begin_geometry()
 
-    for i in range(60):        
-        x = gauss(400, 200)
-        y = gauss(350, 175)
-        z = gauss(0, 100)
-        
-        push_matrix()
-        translate_3d(x, y, z)
-        sphere(10)
-        pop_matrix()
+    push_matrix()
+    sphere(10)
+    pop_matrix()
 
     geometry = end_geometry()
 
