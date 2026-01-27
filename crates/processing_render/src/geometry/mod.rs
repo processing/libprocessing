@@ -473,42 +473,39 @@ pub fn sphere(
     }
 
     // Append normals with rotation applied (no translation/scale)
-    if layout.has_attribute(builtins.normal) {
-        if let Some(VertexAttributeValues::Float32x3(new_normals)) =
+    if layout.has_attribute(builtins.normal)
+        && let Some(VertexAttributeValues::Float32x3(new_normals)) =
             sphere_mesh.attribute(Mesh::ATTRIBUTE_NORMAL)
-            && let Some(VertexAttributeValues::Float32x3(normals)) =
-                mesh.attribute_mut(Mesh::ATTRIBUTE_NORMAL)
-        {
-            let normal_matrix = transform.matrix3;
-            for normal in new_normals {
-                let transformed = normal_matrix
-                    .mul_vec3(Vec3::from_array(*normal))
-                    .normalize();
-                normals.push(transformed.to_array());
-            }
+        && let Some(VertexAttributeValues::Float32x3(normals)) =
+            mesh.attribute_mut(Mesh::ATTRIBUTE_NORMAL)
+    {
+        let normal_matrix = transform.matrix3;
+        for normal in new_normals {
+            let transformed = normal_matrix
+                .mul_vec3(Vec3::from_array(*normal))
+                .normalize();
+            normals.push(transformed.to_array());
         }
     }
 
     // Append colors if in layout - fill with current color
-    if layout.has_attribute(builtins.color) {
-        if let Some(VertexAttributeValues::Float32x4(colors)) =
+    if layout.has_attribute(builtins.color)
+        && let Some(VertexAttributeValues::Float32x4(colors)) =
             mesh.attribute_mut(Mesh::ATTRIBUTE_COLOR)
-        {
-            for _ in 0..vertex_count {
-                colors.push(geometry.current_color);
-            }
+    {
+        for _ in 0..vertex_count {
+            colors.push(geometry.current_color);
         }
     }
 
     // Append UVs if in layout
-    if layout.has_attribute(builtins.uv) {
-        if let Some(VertexAttributeValues::Float32x2(new_uvs)) =
+    if layout.has_attribute(builtins.uv)
+        && let Some(VertexAttributeValues::Float32x2(new_uvs)) =
             sphere_mesh.attribute(Mesh::ATTRIBUTE_UV_0)
-            && let Some(VertexAttributeValues::Float32x2(uvs)) =
-                mesh.attribute_mut(Mesh::ATTRIBUTE_UV_0)
-        {
-            uvs.extend_from_slice(new_uvs);
-        }
+        && let Some(VertexAttributeValues::Float32x2(uvs)) =
+            mesh.attribute_mut(Mesh::ATTRIBUTE_UV_0)
+    {
+        uvs.extend_from_slice(new_uvs);
     }
 
     // Append indices with offset
