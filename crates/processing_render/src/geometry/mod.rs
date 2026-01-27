@@ -419,7 +419,8 @@ pub fn end(
         .ok_or(ProcessingError::GeometryNotFound)?;
 
     if let Some(mesh) = meshes.get(&geometry.handle) {
-        println!("End geometry: {} vertices, {} indices", 
+        println!(
+            "End geometry: {} vertices, {} indices",
             mesh.count_vertices(),
             mesh.indices().map(|i| i.len()).unwrap_or(0)
         );
@@ -438,7 +439,7 @@ pub fn sphere(
     let state = state_query
         .get(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
-    
+
     let geometry = state
         .running_geometry
         .as_ref()
@@ -480,7 +481,9 @@ pub fn sphere(
         {
             let normal_matrix = transform.matrix3;
             for normal in new_normals {
-                let transformed = normal_matrix.mul_vec3(Vec3::from_array(*normal)).normalize();
+                let transformed = normal_matrix
+                    .mul_vec3(Vec3::from_array(*normal))
+                    .normalize();
                 normals.push(transformed.to_array());
             }
         }
@@ -528,7 +531,7 @@ pub fn sphere(
                     // Need to upgrade to U32
                     let existing: Vec<u32> = indices.iter().map(|&i| i as u32).collect();
                     mesh.insert_indices(Indices::U32(
-                        existing.into_iter().chain(new_indices).collect()
+                        existing.into_iter().chain(new_indices).collect(),
                     ));
                 } else {
                     indices.extend(new_indices.iter().map(|&i| i as u16));

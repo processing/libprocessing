@@ -2,7 +2,7 @@ mod glfw;
 
 use glfw::GlfwContext;
 use processing::prelude::*;
-use processing_render::{render::command::DrawCommand};
+use processing_render::render::command::DrawCommand;
 
 fn main() {
     match sketch() {
@@ -39,13 +39,13 @@ fn sketch() -> error::Result<()> {
             graphics,
             DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.1, 0.1, 0.15)),
         )?;
-        
+
         geometry_begin(graphics)?;
-        
+
         graphics_record_command(graphics, DrawCommand::PushMatrix)?;
         geometry_sphere(graphics, 10.)?;
         graphics_record_command(graphics, DrawCommand::PopMatrix)?;
-        
+
         let geometry = geometry_end(graphics)?;
         graphics_record_command(graphics, DrawCommand::Geometry(geometry))?;
         graphics_end_draw(graphics)?;
