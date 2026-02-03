@@ -3,6 +3,7 @@ pub mod error;
 pub mod geometry;
 mod graphics;
 pub mod image;
+pub mod light;
 pub mod render;
 mod surface;
 pub mod transform;
@@ -25,7 +26,7 @@ use tracing::debug;
 use crate::geometry::{AttributeFormat, AttributeValue};
 use crate::graphics::flush;
 use crate::{
-    graphics::GraphicsPlugin, image::ImagePlugin, render::command::DrawCommand,
+    graphics::GraphicsPlugin, image::ImagePlugin, light::LightPlugin, render::command::DrawCommand,
     surface::SurfacePlugin,
 };
 
@@ -248,6 +249,7 @@ fn create_app(config: Config) -> App {
         GraphicsPlugin,
         SurfacePlugin,
         geometry::GeometryPlugin,
+        LightPlugin,
     ));
     app.add_systems(First, (clear_transient_meshes, activate_cameras))
         .add_systems(Update, flush_draw_commands.before(AssetEventSystems));
@@ -771,6 +773,88 @@ pub fn image_destroy(entity: Entity) -> error::Result<()> {
         app.world_mut()
             .run_system_cached_with(image::destroy, entity)
             .unwrap()
+    })
+}
+
+pub fn light_create_directional(
+    x: f32,
+    y: f32,
+    z: f32,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+    illuminance: f32,
+) -> error::Result<Entity> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(
+                light::create_directional,
+                (x, y, z, r, g, b, a, illuminance),
+            )
+            .unwrap())
+    })
+}
+
+pub fn light_create_point(
+    x: f32,
+    y: f32,
+    z: f32,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+    intensity: f32,
+    range: f32,
+    radius: f32,
+) -> error::Result<Entity> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(
+                light::create_point,
+                (x, y, z, r, g, b, a, intensity, range, radius),
+            )
+            .unwrap())
+    })
+}
+
+pub fn light_create_spot(
+    x: f32,
+    y: f32,
+    z: f32,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+    intensity: f32,
+    range: f32,
+    radius: f32,
+    inner_angle: f32,
+    outer_angle: f32,
+) -> error::Result<Entity> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(
+                light::create_spot,
+                (
+                    x,
+                    y,
+                    z,
+                    r,
+                    g,
+                    b,
+                    a,
+                    intensity,
+                    range,
+                    radius,
+                    inner_angle,
+                    outer_angle,
+                ),
+            )
+            .unwrap())
     })
 }
 

@@ -34,6 +34,10 @@ rendering texture that the camera draws to (`ViewTarget`), which is not typicall
 For consistency, all image functions should accept a graphics object, although its internal image representation is 
 not guaranteed to be the same as a user-created image.
 
+### Light
+
+[//]: # (TODO: Document Image API object)
+
 ### Image
 
 Images are 2D or 3D arrays of pixels that can be drawn onto surfaces. They can be created from files, generated procedurally,
