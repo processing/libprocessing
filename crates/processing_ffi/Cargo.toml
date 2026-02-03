@@ -8,7 +8,7 @@ workspace = true
 
 [lib]
 name = "processing"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "staticlib"]
 
 [features]
 default = []

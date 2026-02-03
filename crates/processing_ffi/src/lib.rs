@@ -108,6 +108,34 @@ pub extern "C" fn processing_surface_create_x11(
         .unwrap_or(0)
 }
 
+/// Create a graphics context for a surface.
+///
+/// SAFETY:
+/// - Init and surface_create have been called.
+/// - surface_id is a valid ID returned from surface_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_graphics_create(surface_id: u64, width: u32, height: u32) -> u64 {
+    error::clear_error();
+    let surface_entity = Entity::from_bits(surface_id);
+    error::check(|| graphics_create(surface_entity, width, height))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+/// Destroy a graphics context.
+///
+/// SAFETY:
+/// - Init and graphics_create have been called.
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_graphics_destroy(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_destroy(graphics_entity));
+}
+
 /// Destroy the surface associated with the given window ID.
 ///
 /// SAFETY:
@@ -134,69 +162,74 @@ pub extern "C" fn processing_surface_resize(window_id: u64, width: u32, height: 
     error::check(|| surface_resize(window_entity, width, height));
 }
 
-/// Set the background color for the given window.
+/// Set the background color for the given graphics context.
 ///
 /// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_background_color(window_id: u64, color: Color) {
+pub extern "C" fn processing_background_color(graphics_id: u64, color: Color) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
+    let graphics_entity = Entity::from_bits(graphics_id);
     error::check(|| {
-        graphics_record_command(window_entity, DrawCommand::BackgroundColor(color.into()))
+        graphics_record_command(graphics_entity, DrawCommand::BackgroundColor(color.into()))
     });
 }
 
-/// Set the background image for the given window.
+/// Set the background image for the given graphics context.
 ///
 /// SAFETY:
-/// - This is called from the same thread as init.
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - image_id is a valid ID returned from processing_image_create.
 /// - The image has been fully uploaded.
+/// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_background_image(window_id: u64, image_id: u64) {
+pub extern "C" fn processing_background_image(graphics_id: u64, image_id: u64) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
+    let graphics_entity = Entity::from_bits(graphics_id);
     let image_entity = Entity::from_bits(image_id);
     error::check(|| {
-        graphics_record_command(window_entity, DrawCommand::BackgroundImage(image_entity))
+        graphics_record_command(graphics_entity, DrawCommand::BackgroundImage(image_entity))
     });
 }
 
-/// Begins the draw for the given window.
+/// Begins the draw for the given graphics context.
 ///
 /// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - Init has been called and exit has not been called.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_begin_draw(window_id: u64) {
+pub extern "C" fn processing_begin_draw(graphics_id: u64) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_begin_draw(window_entity));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_begin_draw(graphics_entity));
 }
 
-/// Flushes recorded draw commands for the given window.
+/// Flushes recorded draw commands for the given graphics context.
 ///
 /// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - Init has been called and exit has not been called.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_flush(window_id: u64) {
+pub extern "C" fn processing_flush(graphics_id: u64) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_flush(window_entity));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_flush(graphics_entity));
 }
 
-/// Ends the draw for the given window and presents the frame.
+/// Ends the draw for the given graphics context and presents the frame.
 ///
 /// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - Init has been called and exit has not been called.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_end_draw(window_id: u64) {
+pub extern "C" fn processing_end_draw(graphics_id: u64) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_end_draw(window_entity));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_end_draw(graphics_entity));
 }
 
 /// Shuts down internal resources with given exit code, but does *not* terminate the process.
@@ -213,183 +246,169 @@ pub extern "C" fn processing_exit(exit_code: u8) {
 /// Set the fill color.
 ///
 /// SAFETY:
-/// - Init and surface_create have been called.
-/// - window_id is a valid ID returned from surface_create.
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_set_fill(window_id: u64, r: f32, g: f32, b: f32, a: f32) {
+pub extern "C" fn processing_set_fill(graphics_id: u64, r: f32, g: f32, b: f32, a: f32) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
+    let graphics_entity = Entity::from_bits(graphics_id);
     let color = bevy::color::Color::srgba(r, g, b, a);
-    error::check(|| graphics_record_command(window_entity, DrawCommand::Fill(color)));
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Fill(color)));
 }
 
 /// Set the stroke color.
 ///
 /// SAFETY:
-/// - Init and surface_create have been called.
-/// - window_id is a valid ID returned from surface_create.
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_set_stroke_color(window_id: u64, r: f32, g: f32, b: f32, a: f32) {
+pub extern "C" fn processing_set_stroke_color(graphics_id: u64, r: f32, g: f32, b: f32, a: f32) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
+    let graphics_entity = Entity::from_bits(graphics_id);
     let color = bevy::color::Color::srgba(r, g, b, a);
-    error::check(|| graphics_record_command(window_entity, DrawCommand::StrokeColor(color)));
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::StrokeColor(color)));
 }
 
 /// Set the stroke weight.
 ///
 /// SAFETY:
-/// - Init and surface_create have been called.
-/// - window_id is a valid ID returned from surface_create.
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_set_stroke_weight(window_id: u64, weight: f32) {
+pub extern "C" fn processing_set_stroke_weight(graphics_id: u64, weight: f32) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_record_command(window_entity, DrawCommand::StrokeWeight(weight)));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::StrokeWeight(weight)));
 }
 
 /// Disable fill for subsequent shapes.
 ///
 /// SAFETY:
-/// - Init and surface_create have been called.
-/// - window_id is a valid ID returned from surface_create.
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_no_fill(window_id: u64) {
+pub extern "C" fn processing_no_fill(graphics_id: u64) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_record_command(window_entity, DrawCommand::NoFill));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::NoFill));
 }
 
 /// Disable stroke for subsequent shapes.
 ///
 /// SAFETY:
-/// - Init and surface_create have been called.
-/// - window_id is a valid ID returned from surface_create.
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_no_stroke(window_id: u64) {
+pub extern "C" fn processing_no_stroke(graphics_id: u64) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_record_command(window_entity, DrawCommand::NoStroke));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::NoStroke));
 }
 
 /// Push the current transformation matrix onto the stack.
 ///
 /// SAFETY:
-/// - Init and surface_create have been called.
-/// - window_id is a valid ID returned from surface_create.
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_push_matrix(window_id: u64) {
+pub extern "C" fn processing_push_matrix(graphics_id: u64) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_record_command(window_entity, DrawCommand::PushMatrix));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::PushMatrix));
 }
 
 /// Pop the transformation matrix from the stack.
 ///
 /// SAFETY:
-/// - Init and surface_create have been called.
-/// - window_id is a valid ID returned from surface_create.
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_pop_matrix(window_id: u64) {
+pub extern "C" fn processing_pop_matrix(graphics_id: u64) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_record_command(window_entity, DrawCommand::PopMatrix));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::PopMatrix));
 }
 
 /// Reset the transformation matrix to identity.
 ///
 /// SAFETY:
-/// - Init and surface_create have been called.
-/// - window_id is a valid ID returned from surface_create.
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_reset_matrix(window_id: u64) {
+pub extern "C" fn processing_reset_matrix(graphics_id: u64) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_record_command(window_entity, DrawCommand::ResetMatrix));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::ResetMatrix));
 }
 
 /// Translate the coordinate system.
 ///
 /// SAFETY:
-/// - Init and surface_create have been called.
-/// - window_id is a valid ID returned from surface_create.
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_translate(window_id: u64, x: f32, y: f32) {
+pub extern "C" fn processing_translate(graphics_id: u64, x: f32, y: f32) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_record_command(window_entity, DrawCommand::Translate { x, y }));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Translate { x, y }));
 }
 
 /// Rotate the coordinate system.
 ///
 /// SAFETY:
-/// - Init and surface_create have been called.
-/// - window_id is a valid ID returned from surface_create.
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_rotate(window_id: u64, angle: f32) {
+pub extern "C" fn processing_rotate(graphics_id: u64, angle: f32) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_record_command(window_entity, DrawCommand::Rotate { angle }));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Rotate { angle }));
 }
 
 /// Scale the coordinate system.
 ///
 /// SAFETY:
-/// - Init and surface_create have been called.
-/// - window_id is a valid ID returned from surface_create.
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_scale(window_id: u64, x: f32, y: f32) {
+pub extern "C" fn processing_scale(graphics_id: u64, x: f32, y: f32) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_record_command(window_entity, DrawCommand::Scale { x, y }));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Scale { x, y }));
 }
 
 /// Shear along the X axis.
 ///
 /// SAFETY:
-/// - Init and surface_create have been called.
-/// - window_id is a valid ID returned from surface_create.
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_shear_x(window_id: u64, angle: f32) {
+pub extern "C" fn processing_shear_x(graphics_id: u64, angle: f32) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_record_command(window_entity, DrawCommand::ShearX { angle }));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::ShearX { angle }));
 }
 
 /// Shear along the Y axis.
 ///
 /// SAFETY:
-/// - Init and surface_create have been called.
-/// - window_id is a valid ID returned from surface_create.
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_shear_y(window_id: u64, angle: f32) {
+pub extern "C" fn processing_shear_y(graphics_id: u64, angle: f32) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_record_command(window_entity, DrawCommand::ShearY { angle }));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::ShearY { angle }));
 }
 
 /// Draw a rectangle.
 ///
 /// SAFETY:
-/// - Init and surface_create have been called.
-/// - window_id is a valid ID returned from surface_create.
+/// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_rect(
-    window_id: u64,
+    graphics_id: u64,
     x: f32,
     y: f32,
     w: f32,
@@ -400,10 +419,10 @@ pub extern "C" fn processing_rect(
     bl: f32,
 ) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
+    let graphics_entity = Entity::from_bits(graphics_id);
     error::check(|| {
         graphics_record_command(
-            window_entity,
+            graphics_entity,
             DrawCommand::Rect {
                 x,
                 y,
@@ -526,54 +545,54 @@ pub unsafe extern "C" fn processing_image_readback(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_mode_3d(window_id: u64) {
+pub extern "C" fn processing_mode_3d(graphics_id: u64) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_mode_3d(window_entity));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_mode_3d(graphics_entity));
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_mode_2d(window_id: u64) {
+pub extern "C" fn processing_mode_2d(graphics_id: u64) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_mode_2d(window_entity));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_mode_2d(graphics_entity));
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_camera_position(window_id: u64, x: f32, y: f32, z: f32) {
+pub extern "C" fn processing_camera_position(graphics_id: u64, x: f32, y: f32, z: f32) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_camera_position(window_entity, x, y, z));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_camera_position(graphics_entity, x, y, z));
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_camera_look_at(
-    window_id: u64,
+    graphics_id: u64,
     target_x: f32,
     target_y: f32,
     target_z: f32,
 ) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_camera_look_at(window_entity, target_x, target_y, target_z));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_camera_look_at(graphics_entity, target_x, target_y, target_z));
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_perspective(
-    window_id: u64,
+    graphics_id: u64,
     fov: f32,
     aspect: f32,
     near: f32,
     far: f32,
 ) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_perspective(window_entity, fov, aspect, near, far));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_perspective(graphics_entity, fov, aspect, near, far));
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_ortho(
-    window_id: u64,
+    graphics_id: u64,
     left: f32,
     right: f32,
     bottom: f32,
@@ -582,8 +601,8 @@ pub extern "C" fn processing_ortho(
     far: f32,
 ) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
-    error::check(|| graphics_ortho(window_entity, left, right, bottom, top, near, far));
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_ortho(graphics_entity, left, right, bottom, top, near, far));
 }
 
 pub const PROCESSING_ATTR_FORMAT_FLOAT: u8 = 1;
@@ -989,11 +1008,11 @@ pub extern "C" fn processing_geometry_destroy(geo_id: u64) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_model(window_id: u64, geo_id: u64) {
+pub extern "C" fn processing_model(graphics_id: u64, geo_id: u64) {
     error::clear_error();
-    let window_entity = Entity::from_bits(window_id);
+    let graphics_entity = Entity::from_bits(graphics_id);
     let geo_entity = Entity::from_bits(geo_id);
-    error::check(|| graphics_record_command(window_entity, DrawCommand::Geometry(geo_entity)));
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Geometry(geo_entity)));
 }
 
 #[unsafe(no_mangle)]
