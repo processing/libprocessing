@@ -1091,3 +1091,58 @@ pub extern "C" fn processing_geometry_box(width: f32, height: f32, depth: f32) -
         .map(|e| e.to_bits())
         .unwrap_or(0)
 }
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_light_create_directional(
+    graphics_id: u64,
+    color: Color,
+    illuminance: f32,
+) -> u64 {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| light_create_directional(graphics_entity, color.into(), illuminance))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_light_create_point(
+    graphics_id: u64,
+    color: Color,
+    intensity: f32,
+    range: f32,
+    radius: f32,
+) -> u64 {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| light_create_point(graphics_entity, color.into(), intensity, range, radius))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_light_create_spot(
+    graphics_id: u64,
+    color: Color,
+    intensity: f32,
+    range: f32,
+    radius: f32,
+    inner_angle: f32,
+    outer_angle: f32,
+) -> u64 {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        light_create_spot(
+            graphics_entity,
+            color.into(),
+            intensity,
+            range,
+            radius,
+            inner_angle,
+            outer_angle,
+        )
+    })
+    .map(|e| e.to_bits())
+    .unwrap_or(0)
+}
