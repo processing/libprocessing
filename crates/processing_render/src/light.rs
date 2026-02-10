@@ -12,7 +12,7 @@ impl Plugin for LightPlugin {
 }
 
 pub fn create_directional(
-    In((entity, px, py, pz, color, illuminance)): In<(Entity, f32, f32, f32, Color, f32)>,
+    In((entity, color, illuminance)): In<(Entity, Color, f32)>,
     mut commands: Commands,
     graphics: Query<&RenderLayers, With<Graphics>>,
 ) -> Result<Entity, ProcessingError> {
@@ -26,23 +26,13 @@ pub fn create_directional(
                 color,
                 ..default()
             },
-            Transform::from_xyz(px, py, pz),
             layer.clone(),
         ))
         .id())
 }
 
 pub fn create_point(
-    In((entity, px, py, pz, color, intensity, range, radius)): In<(
-        Entity,
-        f32,
-        f32,
-        f32,
-        Color,
-        f32,
-        f32,
-        f32,
-    )>,
+    In((entity, color, intensity, range, radius)): In<(Entity, Color, f32, f32, f32)>,
     mut commands: Commands,
     graphics: Query<&RenderLayers, With<Graphics>>,
 ) -> Result<Entity, ProcessingError> {
@@ -58,18 +48,14 @@ pub fn create_point(
                 radius,
                 ..default()
             },
-            Transform::from_xyz(px, py, pz),
             layer.clone(),
         ))
         .id())
 }
 
 pub fn create_spot(
-    In((entity, px, py, pz, color, intensity, range, radius, inner_angle, outer_angle)): In<(
+    In((entity, color, intensity, range, radius, inner_angle, outer_angle)): In<(
         Entity,
-        f32,
-        f32,
-        f32,
         Color,
         f32,
         f32,
@@ -94,7 +80,6 @@ pub fn create_spot(
                 outer_angle,
                 ..default()
             },
-            Transform::from_xyz(px, py, pz),
             layer.clone(),
         ))
         .id())

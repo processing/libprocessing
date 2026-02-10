@@ -778,9 +778,6 @@ pub fn image_destroy(entity: Entity) -> error::Result<()> {
 
 pub fn light_create_directional(
     graphics_entity: Entity,
-    x: f32,
-    y: f32,
-    z: f32,
     color: Color,
     illuminance: f32,
 ) -> error::Result<Entity> {
@@ -788,7 +785,7 @@ pub fn light_create_directional(
         app.world_mut()
             .run_system_cached_with(
                 light::create_directional,
-                (graphics_entity, x, y, z, color, illuminance),
+                (graphics_entity, color, illuminance),
             )
             .unwrap()
     })
@@ -796,9 +793,6 @@ pub fn light_create_directional(
 
 pub fn light_create_point(
     graphics_entity: Entity,
-    x: f32,
-    y: f32,
-    z: f32,
     color: Color,
     intensity: f32,
     range: f32,
@@ -808,7 +802,7 @@ pub fn light_create_point(
         app.world_mut()
             .run_system_cached_with(
                 light::create_point,
-                (graphics_entity, x, y, z, color, intensity, range, radius),
+                (graphics_entity, color, intensity, range, radius),
             )
             .unwrap()
     })
@@ -816,9 +810,6 @@ pub fn light_create_point(
 
 pub fn light_create_spot(
     graphics_entity: Entity,
-    x: f32,
-    y: f32,
-    z: f32,
     color: Color,
     intensity: f32,
     range: f32,
@@ -832,9 +823,6 @@ pub fn light_create_spot(
                 light::create_spot,
                 (
                     graphics_entity,
-                    x,
-                    y,
-                    z,
                     color,
                     intensity,
                     range,

@@ -31,21 +31,12 @@ fn sketch() -> error::Result<()> {
 
     // We will only declare lights in `setup`
     // rather than calling some sort of `light()` method inside of `draw`
-    let dir_light = light_create_directional(
-        graphics,
-        0.0,
-        0.0,
-        0.0,
-        bevy::color::Color::srgb(0.35, 0.25, 0.5),
-        1000.0,
-    )?;
+    let dir_light =
+        light_create_directional(graphics, bevy::color::Color::srgb(0.35, 0.25, 0.5), 1000.0)?;
     transform_set_position(dir_light, 10.0, 10.0, 0.0)?;
 
     let point_light = light_create_point(
         graphics,
-        100.0,
-        100.0,
-        10.0,
         bevy::color::Color::srgb(1.0, 0.5, 0.25),
         1_000_000.0,
         20.0,
@@ -56,9 +47,6 @@ fn sketch() -> error::Result<()> {
 
     let spot_light = light_create_spot(
         graphics,
-        -15.0,
-        -15.0,
-        0.0,
         bevy::color::Color::srgb(0.25, 0.5, 0.88),
         1_000_000.0,
         25.0,
