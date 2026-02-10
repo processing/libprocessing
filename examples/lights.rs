@@ -27,34 +27,48 @@ fn sketch() -> error::Result<()> {
 
     let surface = glfw_ctx.create_surface(width, height, scale_factor)?;
     let graphics = graphics_create(surface, width, height)?;
-    let box_geo = geometry_box(10.0, 10.0, 10.0)?;
+    let box_geo = geometry_box(100.0, 100.0, 100.0)?;
 
     // We will only declare lights in `setup`
     // rather than calling some sort of `light()` method inside of `draw`
-    let dir_light =
-        light_create_directional(graphics, bevy::color::Color::srgb(0.35, 0.25, 0.5), 1000.0)?;
-    transform_set_position(dir_light, 10.0, 10.0, 0.0)?;
 
-    let point_light = light_create_point(
+    // create a directional light
+    let _dir_light =
+        light_create_directional(graphics, bevy::color::Color::srgb(0.35, 0.25, 0.5), 500.0)?;
+
+    // create a point light
+    let point_light_a = light_create_point(
         graphics,
         bevy::color::Color::srgb(1.0, 0.5, 0.25),
         1_000_000.0,
-        20.0,
-        0.0,
+        200.0,
+        0.5,
     )?;
-    transform_set_position(point_light, 10.0, 10.0, 0.0)?;
-    transform_look_at(point_light, 0.0, 0.0, 0.0)?;
+    transform_set_position(point_light_a, -25.0, 5.0, 51.0)?;
+    transform_look_at(point_light_a, 0.0, 0.0, 0.0)?;
 
+    // create another point light
+    let point_light_b = light_create_point(
+        graphics,
+        bevy::color::Color::srgb(0.0, 0.5, 0.75),
+        2_000_000.0,
+        200.0,
+        0.25,
+    )?;
+    transform_set_position(point_light_b, 0.0, 5.0, 50.5)?;
+    transform_look_at(point_light_b, 0.0, 0.0, 0.0)?;
+
+    // and a spot light, too!
     let spot_light = light_create_spot(
         graphics,
-        bevy::color::Color::srgb(0.25, 0.5, 0.88),
-        1_000_000.0,
-        25.0,
-        0.6,
-        0.8,
+        bevy::color::Color::srgb(0.25, 0.8, 0.19),
+        15.0 * 1_000_000.0,
+        200.0,
+        0.84,
+        0.0,
         core::f32::consts::FRAC_PI_4,
     )?;
-    transform_set_position(spot_light, 5.0, 7.5, 10.0)?;
+    transform_set_position(spot_light, 40.0, 0.0, 70.0)?;
     transform_look_at(spot_light, 0.0, 0.0, 0.0)?;
 
     graphics_mode_3d(graphics)?;
@@ -71,15 +85,7 @@ fn sketch() -> error::Result<()> {
             DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.18, 0.20, 0.15)),
         )?;
 
-        // graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        // graphics_record_command(graphics, DrawCommand::Translate { x: 0.0, y: 0.0 })?;
-        // graphics_record_command(graphics, DrawCommand::Rotate { angle })?;
-        // graphics_record_command(graphics, DrawCommand::Geometry(box_geo))?;
-        // graphics_record_command(graphics, DrawCommand::PopMatrix)?;
-
         graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(graphics, DrawCommand::Translate { x: 0.0, y: 0.0 })?;
-        // graphics_record_command(graphics, DrawCommand::Scale { x: 5.0, y: 5.0 })?;
         graphics_record_command(graphics, DrawCommand::Rotate { angle })?;
         graphics_record_command(graphics, DrawCommand::Geometry(box_geo))?;
         graphics_record_command(graphics, DrawCommand::PopMatrix)?;
