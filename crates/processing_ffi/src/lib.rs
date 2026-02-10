@@ -559,25 +559,6 @@ pub extern "C" fn processing_mode_2d(graphics_id: u64) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_camera_position(graphics_id: u64, x: f32, y: f32, z: f32) {
-    error::clear_error();
-    let entity = Entity::from_bits(graphics_id);
-    error::check(|| transform_set_position(entity, x, y, z));
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn processing_camera_look_at(
-    graphics_id: u64,
-    target_x: f32,
-    target_y: f32,
-    target_z: f32,
-) {
-    error::clear_error();
-    let entity = Entity::from_bits(graphics_id);
-    error::check(|| transform_look_at(entity, target_x, target_y, target_z));
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn processing_perspective(
     graphics_id: u64,
     fov: f32,
