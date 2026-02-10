@@ -60,6 +60,7 @@ pub struct RenderState {
     pub stroke_color: Option<Color>,
     pub stroke_weight: f32,
     pub transform: TransformStack,
+    pub running_geometry: Option<Geometry>,
 }
 
 impl Default for RenderState {
@@ -69,6 +70,7 @@ impl Default for RenderState {
             stroke_color: Some(Color::BLACK),
             stroke_weight: 1.0,
             transform: TransformStack::new(),
+            running_geometry: None,
         }
     }
 }
@@ -200,6 +202,7 @@ pub fn flush_draw_commands(
                 DrawCommand::PopMatrix => state.transform.pop(),
                 DrawCommand::ResetMatrix => state.transform.reset(),
                 DrawCommand::Translate { x, y } => state.transform.translate(x, y),
+                DrawCommand::Translate3D { x, y, z } => state.transform.translate_3d(x, y, z),
                 DrawCommand::Rotate { angle } => state.transform.rotate(angle),
                 DrawCommand::Scale { x, y } => state.transform.scale(x, y),
                 DrawCommand::ShearX { angle } => state.transform.shear_x(angle),

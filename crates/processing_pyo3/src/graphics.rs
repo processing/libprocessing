@@ -233,6 +233,11 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    pub fn translate_3d(&self, x: f32, y: f32, z: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Translate3D { x, y, z })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     pub fn rotate(&self, angle: f32) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::Rotate { angle })
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
@@ -307,6 +312,21 @@ impl Graphics {
     ) -> PyResult<()> {
         graphics_ortho(self.entity, left, right, bottom, top, near, far)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn begin_geometry(&self) -> PyResult<()> {
+        geometry_begin(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn end_geometry(&self) -> PyResult<Geometry> {
+        match geometry_end(self.entity) {
+            Ok(geometry) => Ok(Geometry { entity: geometry }),
+            Err(e) => Err(PyRuntimeError::new_err(format!("{e}"))),
+        }
+    }
+
+    pub fn sphere(&self, radius: f32) -> PyResult<()> {
+        geometry_sphere(self.entity, radius).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 }
 

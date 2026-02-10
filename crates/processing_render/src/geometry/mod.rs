@@ -16,7 +16,10 @@ use bevy::{
     render::render_resource::PrimitiveTopology,
 };
 
-use crate::error::{ProcessingError, Result};
+use crate::{
+    error::{ProcessingError, Result},
+    render::RenderState,
+};
 
 pub struct GeometryPlugin;
 
@@ -60,7 +63,7 @@ impl Topology {
     }
 }
 
-#[derive(Component)]
+#[derive(Debug, Component)]
 pub struct Geometry {
     pub handle: Handle<Mesh>,
     pub layout: Entity,
@@ -363,5 +366,176 @@ pub fn destroy(
 
     meshes.remove(&geometry.handle);
     commands.entity(entity).despawn();
+    Ok(())
+}
+
+pub fn begin(
+    In(entity): In<Entity>,
+    mut commands: Commands,
+    mut state_query: Query<&mut RenderState>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    builtins: Res<BuiltinAttributes>,
+) -> Result<()> {
+    let layout_entity = commands
+        .spawn(VertexLayout::with_attributes(vec![
+            builtins.position,
+            builtins.normal,
+            builtins.color,
+            builtins.uv,
+        ]))
+        .id();
+
+    let mut mesh = Mesh::new(
+        Topology::TriangleList.to_primitive_topology(),
+        RenderAssetUsages::default(),
+    );
+
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, Vec::<[f32; 3]>::new());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, Vec::<[f32; 3]>::new());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, Vec::<[f32; 4]>::new());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, Vec::<[f32; 2]>::new());
+
+    let handle = meshes.add(mesh);
+
+    let mut state = state_query
+        .get_mut(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    state.running_geometry = Some(Geometry::new(handle, layout_entity));
+    Ok(())
+}
+
+pub fn end(
+    In(entity): In<Entity>,
+    mut commands: Commands,
+    mut state_query: Query<&mut RenderState>,
+    meshes: Res<Assets<Mesh>>,
+) -> Result<Entity> {
+    let geometry = state_query
+        .get_mut(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?
+        .running_geometry
+        .take()
+        .ok_or(ProcessingError::GeometryNotFound)?;
+
+    if let Some(mesh) = meshes.get(&geometry.handle) {
+        println!(
+            "End geometry: {} vertices, {} indices",
+            mesh.count_vertices(),
+            mesh.indices().map(|i| i.len()).unwrap_or(0)
+        );
+    }
+
+    Ok(commands.spawn(geometry).id())
+}
+
+pub fn sphere(
+    In((entity, radius)): In<(Entity, f32)>,
+    state_query: Query<&mut RenderState>,
+    layouts: Query<&VertexLayout>,
+    builtins: Res<BuiltinAttributes>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) -> Result<()> {
+    let state = state_query
+        .get(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    let geometry = state
+        .running_geometry
+        .as_ref()
+        .ok_or(ProcessingError::GeometryNotFound)?;
+
+    let layout = layouts
+        .get(geometry.layout)
+        .map_err(|_| ProcessingError::LayoutNotFound)?;
+
+    let mesh = meshes
+        .get_mut(&geometry.handle)
+        .ok_or(ProcessingError::GeometryNotFound)?;
+
+    let base_index = mesh.count_vertices() as u32;
+    let sphere_mesh = Sphere::new(radius).mesh().build();
+    let vertex_count = sphere_mesh.count_vertices();
+
+    // Get current transformation matrix from render state
+    let transform = state.transform.current();
+
+    // Append positions with transformation applied
+    if let Some(VertexAttributeValues::Float32x3(new_pos)) =
+        sphere_mesh.attribute(Mesh::ATTRIBUTE_POSITION)
+        && let Some(VertexAttributeValues::Float32x3(positions)) =
+            mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
+    {
+        for pos in new_pos {
+            let transformed = transform.transform_point3(Vec3::from_array(*pos));
+            positions.push(transformed.to_array());
+        }
+    }
+
+    // Append normals with rotation applied (no translation/scale)
+    if layout.has_attribute(builtins.normal)
+        && let Some(VertexAttributeValues::Float32x3(new_normals)) =
+            sphere_mesh.attribute(Mesh::ATTRIBUTE_NORMAL)
+        && let Some(VertexAttributeValues::Float32x3(normals)) =
+            mesh.attribute_mut(Mesh::ATTRIBUTE_NORMAL)
+    {
+        let normal_matrix = transform.matrix3;
+        for normal in new_normals {
+            let transformed = normal_matrix
+                .mul_vec3(Vec3::from_array(*normal))
+                .normalize();
+            normals.push(transformed.to_array());
+        }
+    }
+
+    // Append colors if in layout - fill with current color
+    if layout.has_attribute(builtins.color)
+        && let Some(VertexAttributeValues::Float32x4(colors)) =
+            mesh.attribute_mut(Mesh::ATTRIBUTE_COLOR)
+    {
+        for _ in 0..vertex_count {
+            colors.push(geometry.current_color);
+        }
+    }
+
+    // Append UVs if in layout
+    if layout.has_attribute(builtins.uv)
+        && let Some(VertexAttributeValues::Float32x2(new_uvs)) =
+            sphere_mesh.attribute(Mesh::ATTRIBUTE_UV_0)
+        && let Some(VertexAttributeValues::Float32x2(uvs)) =
+            mesh.attribute_mut(Mesh::ATTRIBUTE_UV_0)
+    {
+        uvs.extend_from_slice(new_uvs);
+    }
+
+    // Append indices with offset
+    let new_indices: Vec<u32> = match sphere_mesh.indices() {
+        Some(Indices::U16(vec)) => vec.iter().map(|&i| i as u32 + base_index).collect(),
+        Some(Indices::U32(vec)) => vec.iter().map(|&i| i + base_index).collect(),
+        None => Vec::new(),
+    };
+
+    if !new_indices.is_empty() {
+        match mesh.indices_mut() {
+            Some(Indices::U32(indices)) => {
+                indices.extend(new_indices);
+            }
+            None => {
+                mesh.insert_indices(Indices::U32(new_indices));
+            }
+            Some(Indices::U16(indices)) => {
+                if base_index + vertex_count as u32 > u16::MAX as u32 {
+                    // Need to upgrade to U32
+                    let existing: Vec<u32> = indices.iter().map(|&i| i as u32).collect();
+                    mesh.insert_indices(Indices::U32(
+                        existing.into_iter().chain(new_indices).collect(),
+                    ));
+                } else {
+                    indices.extend(new_indices.iter().map(|&i| i as u16));
+                }
+            }
+        }
+    }
+
     Ok(())
 }

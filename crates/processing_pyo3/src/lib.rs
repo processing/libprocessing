@@ -30,6 +30,8 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(push_matrix, m)?)?;
     m.add_function(wrap_pyfunction!(pop_matrix, m)?)?;
     m.add_function(wrap_pyfunction!(rotate, m)?)?;
+    m.add_function(wrap_pyfunction!(translate, m)?)?;
+    m.add_function(wrap_pyfunction!(translate_3d, m)?)?;
     m.add_function(wrap_pyfunction!(draw_box, m)?)?;
     m.add_function(wrap_pyfunction!(background, m)?)?;
     m.add_function(wrap_pyfunction!(fill, m)?)?;
@@ -40,6 +42,9 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(rect, m)?)?;
     m.add_function(wrap_pyfunction!(image, m)?)?;
     m.add_function(wrap_pyfunction!(draw_geometry, m)?)?;
+    m.add_function(wrap_pyfunction!(begin_geometry, m)?)?;
+    m.add_function(wrap_pyfunction!(end_geometry, m)?)?;
+    m.add_function(wrap_pyfunction!(sphere, m)?)?;
 
     Ok(())
 }
@@ -151,6 +156,18 @@ fn rotate(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
 
 #[pyfunction]
 #[pyo3(pass_module)]
+fn translate(module: &Bound<'_, PyModule>, x: f32, y: f32) -> PyResult<()> {
+    get_graphics(module)?.translate(x, y)
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn translate_3d(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<()> {
+    get_graphics(module)?.translate_3d(x, y, z)
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
 fn draw_box(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<()> {
     get_graphics(module)?.draw_box(x, y, z)
 }
@@ -222,4 +239,22 @@ fn rect(
 #[pyo3(pass_module, signature = (image_file))]
 fn image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<Image> {
     get_graphics(module)?.image(image_file)
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn begin_geometry(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    get_graphics(module)?.begin_geometry()
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn end_geometry(module: &Bound<'_, PyModule>) -> PyResult<Geometry> {
+    get_graphics(module)?.end_geometry()
+}
+
+#[pyfunction]
+#[pyo3(pass_module, signature = (radius))]
+fn sphere(module: &Bound<'_, PyModule>, radius: f32) -> PyResult<()> {
+    get_graphics(module)?.sphere(radius)
 }

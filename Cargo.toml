@@ -64,6 +64,10 @@ path = "examples/animated_mesh.rs"
 name = "custom_attribute"
 path = "examples/custom_attribute.rs"
 
+[[example]]
+name = "particles"
+path = "examples/particles.rs"
+
 [profile.wasm-release]
 inherits = "release"
 opt-level = "z"
