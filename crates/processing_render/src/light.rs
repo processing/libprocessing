@@ -10,14 +10,14 @@ impl Plugin for LightPlugin {
 }
 
 pub fn create_directional(
-    In((px, py, pz, r, g, b, a, illuminance)): In<(f32, f32, f32, f32, f32, f32, f32, f32)>,
+    In((px, py, pz, color, illuminance)): In<(f32, f32, f32, Color, f32)>,
     mut commands: Commands,
 ) -> Entity {
     commands
         .spawn((
             DirectionalLight {
                 illuminance,
-                color: Color::srgba(r, g, b, a),
+                color,
                 ..default()
             },
             Transform::from_xyz(px, py, pz),
@@ -26,25 +26,14 @@ pub fn create_directional(
 }
 
 pub fn create_point(
-    In((px, py, pz, r, g, b, a, intensity, range, radius)): In<(
-        f32,
-        f32,
-        f32,
-        f32,
-        f32,
-        f32,
-        f32,
-        f32,
-        f32,
-        f32,
-    )>,
+    In((px, py, pz, color, intensity, range, radius)): In<(f32, f32, f32, Color, f32, f32, f32)>,
     mut commands: Commands,
 ) -> Entity {
     commands
         .spawn((
             PointLight {
                 intensity,
-                color: Color::srgba(r, g, b, a),
+                color,
                 range,
                 radius,
                 ..default()
@@ -55,14 +44,11 @@ pub fn create_point(
 }
 
 pub fn create_spot(
-    In((px, py, pz, r, g, b, a, intensity, range, radius, inner_angle, outer_angle)): In<(
+    In((px, py, pz, color, intensity, range, radius, inner_angle, outer_angle)): In<(
         f32,
         f32,
         f32,
-        f32,
-        f32,
-        f32,
-        f32,
+        Color,
         f32,
         f32,
         f32,
@@ -74,7 +60,7 @@ pub fn create_spot(
     commands
         .spawn((
             SpotLight {
-                color: Color::srgba(r, g, b, a),
+                color,
                 intensity,
                 range,
                 radius,

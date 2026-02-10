@@ -780,19 +780,13 @@ pub fn light_create_directional(
     x: f32,
     y: f32,
     z: f32,
-    r: f32,
-    g: f32,
-    b: f32,
-    a: f32,
+    color: Color,
     illuminance: f32,
 ) -> error::Result<Entity> {
     app_mut(|app| {
         Ok(app
             .world_mut()
-            .run_system_cached_with(
-                light::create_directional,
-                (x, y, z, r, g, b, a, illuminance),
-            )
+            .run_system_cached_with(light::create_directional, (x, y, z, color, illuminance))
             .unwrap())
     })
 }
@@ -801,10 +795,7 @@ pub fn light_create_point(
     x: f32,
     y: f32,
     z: f32,
-    r: f32,
-    g: f32,
-    b: f32,
-    a: f32,
+    color: Color,
     intensity: f32,
     range: f32,
     radius: f32,
@@ -814,7 +805,7 @@ pub fn light_create_point(
             .world_mut()
             .run_system_cached_with(
                 light::create_point,
-                (x, y, z, r, g, b, a, intensity, range, radius),
+                (x, y, z, color, intensity, range, radius),
             )
             .unwrap())
     })
@@ -824,10 +815,7 @@ pub fn light_create_spot(
     x: f32,
     y: f32,
     z: f32,
-    r: f32,
-    g: f32,
-    b: f32,
-    a: f32,
+    color: Color,
     intensity: f32,
     range: f32,
     radius: f32,
@@ -843,10 +831,7 @@ pub fn light_create_spot(
                     x,
                     y,
                     z,
-                    r,
-                    g,
-                    b,
-                    a,
+                    color,
                     intensity,
                     range,
                     radius,
