@@ -10,7 +10,7 @@ impl MaterialKey {
     pub fn to_material(&self) -> StandardMaterial {
         StandardMaterial {
             base_color: Color::WHITE,
-            unlit: true,
+            unlit: false,
             cull_mode: None,
             base_color_texture: self.background_image.clone(),
             alpha_mode: if self.transparent {
