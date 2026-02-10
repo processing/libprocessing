@@ -5,6 +5,7 @@ mod graphics;
 pub mod image;
 pub mod render;
 mod surface;
+pub mod transform;
 
 use std::{cell::RefCell, num::NonZero, path::PathBuf, sync::OnceLock};
 
@@ -483,37 +484,6 @@ pub fn graphics_mode_2d(graphics_entity: Entity) -> error::Result<()> {
     })
 }
 
-pub fn graphics_camera_position(
-    graphics_entity: Entity,
-    x: f32,
-    y: f32,
-    z: f32,
-) -> error::Result<()> {
-    app_mut(|app| {
-        flush(app, graphics_entity)?;
-        app.world_mut()
-            .run_system_cached_with(graphics::camera_position, (graphics_entity, x, y, z))
-            .unwrap()
-    })
-}
-
-pub fn graphics_camera_look_at(
-    graphics_entity: Entity,
-    target_x: f32,
-    target_y: f32,
-    target_z: f32,
-) -> error::Result<()> {
-    app_mut(|app| {
-        flush(app, graphics_entity)?;
-        app.world_mut()
-            .run_system_cached_with(
-                graphics::camera_look_at,
-                (graphics_entity, target_x, target_y, target_z),
-            )
-            .unwrap()
-    })
-}
-
 pub fn graphics_perspective(
     graphics_entity: Entity,
     fov: f32,
@@ -567,6 +537,108 @@ pub fn graphics_ortho(
                     },
                 ),
             )
+            .unwrap()
+    })
+}
+
+pub fn transform_set_position(entity: Entity, x: f32, y: f32, z: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(transform::set_position, (entity, x, y, z))
+            .unwrap()
+    })
+}
+
+pub fn transform_translate(entity: Entity, x: f32, y: f32, z: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(transform::translate, (entity, x, y, z))
+            .unwrap()
+    })
+}
+
+pub fn transform_set_rotation(entity: Entity, x: f32, y: f32, z: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(transform::set_rotation, (entity, x, y, z))
+            .unwrap()
+    })
+}
+
+pub fn transform_rotate_x(entity: Entity, angle: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(transform::rotate_x, (entity, angle))
+            .unwrap()
+    })
+}
+
+pub fn transform_rotate_y(entity: Entity, angle: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(transform::rotate_y, (entity, angle))
+            .unwrap()
+    })
+}
+
+pub fn transform_rotate_z(entity: Entity, angle: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(transform::rotate_z, (entity, angle))
+            .unwrap()
+    })
+}
+
+pub fn transform_rotate_axis(
+    entity: Entity,
+    angle: f32,
+    axis_x: f32,
+    axis_y: f32,
+    axis_z: f32,
+) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(
+                transform::rotate_axis,
+                (entity, angle, axis_x, axis_y, axis_z),
+            )
+            .unwrap()
+    })
+}
+
+pub fn transform_set_scale(entity: Entity, x: f32, y: f32, z: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(transform::set_scale, (entity, x, y, z))
+            .unwrap()
+    })
+}
+
+pub fn transform_scale(entity: Entity, x: f32, y: f32, z: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(transform::scale, (entity, x, y, z))
+            .unwrap()
+    })
+}
+
+pub fn transform_look_at(
+    entity: Entity,
+    target_x: f32,
+    target_y: f32,
+    target_z: f32,
+) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(transform::look_at, (entity, target_x, target_y, target_z))
+            .unwrap()
+    })
+}
+
+pub fn transform_reset(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(transform::reset, entity)
             .unwrap()
     })
 }

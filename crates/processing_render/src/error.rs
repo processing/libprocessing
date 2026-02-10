@@ -28,4 +28,6 @@ pub enum ProcessingError {
     GeometryNotFound,
     #[error("Layout not found")]
     LayoutNotFound,
+    #[error("Transform not found")]
+    TransformNotFound,
 }

@@ -5,7 +5,9 @@ use processing_render::{
     config::Config, exit, graphics_begin_draw, graphics_end_draw, graphics_flush,
     graphics_record_command, image_create, image_destroy, image_load, image_readback, image_resize,
     init, render::command::DrawCommand, surface_create_from_canvas, surface_destroy,
-    surface_resize,
+    surface_resize, transform_look_at, transform_reset, transform_rotate_axis, transform_rotate_x,
+    transform_rotate_y, transform_rotate_z, transform_scale, transform_set_position,
+    transform_set_rotation, transform_set_scale, transform_translate,
 };
 use wasm_bindgen::prelude::*;
 
@@ -252,4 +254,91 @@ pub fn js_image_readback(image_id: u64) -> Result<Vec<f32>, JsValue> {
 #[wasm_bindgen(js_name = "destroyImage")]
 pub fn js_image_destroy(image_id: u64) -> Result<(), JsValue> {
     check(image_destroy(Entity::from_bits(image_id)))
+}
+
+#[wasm_bindgen(js_name = "transformSetPosition")]
+pub fn js_transform_set_position(entity_id: u64, x: f32, y: f32, z: f32) -> Result<(), JsValue> {
+    check(transform_set_position(
+        Entity::from_bits(entity_id),
+        x,
+        y,
+        z,
+    ))
+}
+
+#[wasm_bindgen(js_name = "transformTranslate")]
+pub fn js_transform_translate(entity_id: u64, x: f32, y: f32, z: f32) -> Result<(), JsValue> {
+    check(transform_translate(Entity::from_bits(entity_id), x, y, z))
+}
+
+#[wasm_bindgen(js_name = "transformSetRotation")]
+pub fn js_transform_set_rotation(entity_id: u64, x: f32, y: f32, z: f32) -> Result<(), JsValue> {
+    check(transform_set_rotation(
+        Entity::from_bits(entity_id),
+        x,
+        y,
+        z,
+    ))
+}
+
+#[wasm_bindgen(js_name = "transformRotateX")]
+pub fn js_transform_rotate_x(entity_id: u64, angle: f32) -> Result<(), JsValue> {
+    check(transform_rotate_x(Entity::from_bits(entity_id), angle))
+}
+
+#[wasm_bindgen(js_name = "transformRotateY")]
+pub fn js_transform_rotate_y(entity_id: u64, angle: f32) -> Result<(), JsValue> {
+    check(transform_rotate_y(Entity::from_bits(entity_id), angle))
+}
+
+#[wasm_bindgen(js_name = "transformRotateZ")]
+pub fn js_transform_rotate_z(entity_id: u64, angle: f32) -> Result<(), JsValue> {
+    check(transform_rotate_z(Entity::from_bits(entity_id), angle))
+}
+
+#[wasm_bindgen(js_name = "transformRotateAxis")]
+pub fn js_transform_rotate_axis(
+    entity_id: u64,
+    angle: f32,
+    axis_x: f32,
+    axis_y: f32,
+    axis_z: f32,
+) -> Result<(), JsValue> {
+    check(transform_rotate_axis(
+        Entity::from_bits(entity_id),
+        angle,
+        axis_x,
+        axis_y,
+        axis_z,
+    ))
+}
+
+#[wasm_bindgen(js_name = "transformSetScale")]
+pub fn js_transform_set_scale(entity_id: u64, x: f32, y: f32, z: f32) -> Result<(), JsValue> {
+    check(transform_set_scale(Entity::from_bits(entity_id), x, y, z))
+}
+
+#[wasm_bindgen(js_name = "transformScale")]
+pub fn js_transform_scale(entity_id: u64, x: f32, y: f32, z: f32) -> Result<(), JsValue> {
+    check(transform_scale(Entity::from_bits(entity_id), x, y, z))
+}
+
+#[wasm_bindgen(js_name = "transformLookAt")]
+pub fn js_transform_look_at(
+    entity_id: u64,
+    target_x: f32,
+    target_y: f32,
+    target_z: f32,
+) -> Result<(), JsValue> {
+    check(transform_look_at(
+        Entity::from_bits(entity_id),
+        target_x,
+        target_y,
+        target_z,
+    ))
+}
+
+#[wasm_bindgen(js_name = "transformReset")]
+pub fn js_transform_reset(entity_id: u64) -> Result<(), JsValue> {
+    check(transform_reset(Entity::from_bits(entity_id)))
 }

@@ -58,8 +58,8 @@ fn sketch() -> error::Result<()> {
     geometry_index(mesh, 0)?;
 
     graphics_mode_3d(graphics)?;
-    graphics_camera_position(graphics, 0.0, 0.0, 200.0)?;
-    graphics_camera_look_at(graphics, 0.0, 0.0, 0.0)?;
+    transform_set_position(graphics, 0.0, 0.0, 200.0)?;
+    transform_look_at(graphics, 0.0, 0.0, 0.0)?;
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;

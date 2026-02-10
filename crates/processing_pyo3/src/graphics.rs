@@ -281,12 +281,12 @@ impl Graphics {
     }
 
     pub fn camera_position(&self, x: f32, y: f32, z: f32) -> PyResult<()> {
-        graphics_camera_position(self.entity, x, y, z)
+        transform_set_position(self.entity, x, y, z)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn camera_look_at(&self, target_x: f32, target_y: f32, target_z: f32) -> PyResult<()> {
-        graphics_camera_look_at(self.entity, target_x, target_y, target_z)
+        transform_look_at(self.entity, target_x, target_y, target_z)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
