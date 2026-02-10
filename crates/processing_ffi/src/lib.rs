@@ -559,25 +559,6 @@ pub extern "C" fn processing_mode_2d(graphics_id: u64) {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_camera_position(graphics_id: u64, x: f32, y: f32, z: f32) {
-    error::clear_error();
-    let graphics_entity = Entity::from_bits(graphics_id);
-    error::check(|| graphics_camera_position(graphics_entity, x, y, z));
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn processing_camera_look_at(
-    graphics_id: u64,
-    target_x: f32,
-    target_y: f32,
-    target_z: f32,
-) {
-    error::clear_error();
-    let graphics_entity = Entity::from_bits(graphics_id);
-    error::check(|| graphics_camera_look_at(graphics_entity, target_x, target_y, target_z));
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn processing_perspective(
     graphics_id: u64,
     fov: f32,
@@ -603,6 +584,94 @@ pub extern "C" fn processing_ortho(
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
     error::check(|| graphics_ortho(graphics_entity, left, right, bottom, top, near, far));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_transform_set_position(entity_id: u64, x: f32, y: f32, z: f32) {
+    error::clear_error();
+    let entity = Entity::from_bits(entity_id);
+    error::check(|| transform_set_position(entity, x, y, z));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_transform_translate(entity_id: u64, x: f32, y: f32, z: f32) {
+    error::clear_error();
+    let entity = Entity::from_bits(entity_id);
+    error::check(|| transform_translate(entity, x, y, z));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_transform_set_rotation(entity_id: u64, x: f32, y: f32, z: f32) {
+    error::clear_error();
+    let entity = Entity::from_bits(entity_id);
+    error::check(|| transform_set_rotation(entity, x, y, z));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_transform_rotate_x(entity_id: u64, angle: f32) {
+    error::clear_error();
+    let entity = Entity::from_bits(entity_id);
+    error::check(|| transform_rotate_x(entity, angle));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_transform_rotate_y(entity_id: u64, angle: f32) {
+    error::clear_error();
+    let entity = Entity::from_bits(entity_id);
+    error::check(|| transform_rotate_y(entity, angle));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_transform_rotate_z(entity_id: u64, angle: f32) {
+    error::clear_error();
+    let entity = Entity::from_bits(entity_id);
+    error::check(|| transform_rotate_z(entity, angle));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_transform_rotate_axis(
+    entity_id: u64,
+    angle: f32,
+    axis_x: f32,
+    axis_y: f32,
+    axis_z: f32,
+) {
+    error::clear_error();
+    let entity = Entity::from_bits(entity_id);
+    error::check(|| transform_rotate_axis(entity, angle, axis_x, axis_y, axis_z));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_transform_set_scale(entity_id: u64, x: f32, y: f32, z: f32) {
+    error::clear_error();
+    let entity = Entity::from_bits(entity_id);
+    error::check(|| transform_set_scale(entity, x, y, z));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_transform_scale(entity_id: u64, x: f32, y: f32, z: f32) {
+    error::clear_error();
+    let entity = Entity::from_bits(entity_id);
+    error::check(|| transform_scale(entity, x, y, z));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_transform_look_at(
+    entity_id: u64,
+    target_x: f32,
+    target_y: f32,
+    target_z: f32,
+) {
+    error::clear_error();
+    let entity = Entity::from_bits(entity_id);
+    error::check(|| transform_look_at(entity, target_x, target_y, target_z));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_transform_reset(entity_id: u64) {
+    error::clear_error();
+    let entity = Entity::from_bits(entity_id);
+    error::check(|| transform_reset(entity));
 }
 
 pub const PROCESSING_ATTR_FORMAT_FLOAT: u8 = 1;

@@ -344,35 +344,6 @@ pub fn mode_2d(
     Ok(())
 }
 
-pub fn camera_position(
-    In((entity, x, y, z)): In<(Entity, f32, f32, f32)>,
-    mut transforms: Query<&mut Transform>,
-) -> Result<()> {
-    let mut transform = transforms
-        .get_mut(entity)
-        .map_err(|_| ProcessingError::GraphicsNotFound)?;
-
-    transform.translation = Vec3::new(x, y, z);
-
-    Ok(())
-}
-
-pub fn camera_look_at(
-    In((entity, target_x, target_y, target_z)): In<(Entity, f32, f32, f32)>,
-    mut transforms: Query<&mut Transform>,
-) -> Result<()> {
-    let mut transform = transforms
-        .get_mut(entity)
-        .map_err(|_| ProcessingError::GraphicsNotFound)?;
-
-    // TODO: allow specifying up vector?
-    // does anyone actually use anything other than Vec3::Y here?
-    let target = Vec3::new(target_x, target_y, target_z);
-    transform.look_at(target, Vec3::Y);
-
-    Ok(())
-}
-
 pub fn perspective(
     In((
         entity,

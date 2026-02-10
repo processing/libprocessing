@@ -30,8 +30,8 @@ fn sketch() -> error::Result<()> {
     let box_geo = geometry_box(100.0, 100.0, 100.0)?;
 
     graphics_mode_3d(graphics)?;
-    graphics_camera_position(graphics, 100.0, 100.0, 300.0)?;
-    graphics_camera_look_at(graphics, 0.0, 0.0, 0.0)?;
+    transform_set_position(graphics, 100.0, 100.0, 300.0)?;
+    transform_look_at(graphics, 0.0, 0.0, 0.0)?;
 
     let mut angle = 0.0;
 

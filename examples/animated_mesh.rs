@@ -69,8 +69,8 @@ fn sketch() -> error::Result<()> {
     }
 
     graphics_mode_3d(graphics)?;
-    graphics_camera_position(graphics, 150.0, 150.0, 150.0)?;
-    graphics_camera_look_at(graphics, 0.0, 0.0, 0.0)?;
+    transform_set_position(graphics, 150.0, 150.0, 150.0)?;
+    transform_look_at(graphics, 0.0, 0.0, 0.0)?;
 
     let mut time = 0.0f32;
 
