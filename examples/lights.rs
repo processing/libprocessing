@@ -32,12 +32,13 @@ fn sketch() -> error::Result<()> {
     // We will only declare lights in `setup`
     // rather than calling some sort of `light()` method inside of `draw`
     let _dir_light = light_create_directional(
+        graphics,
         0.0,
         0.0,
         0.0,
         bevy::color::Color::srgb(1.0, 0.0, 0.0),
         1000.0,
-    );
+    )?;
 
     graphics_mode_3d(graphics)?;
     graphics_camera_position(graphics, 100.0, 100.0, 300.0)?;

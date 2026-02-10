@@ -777,6 +777,7 @@ pub fn image_destroy(entity: Entity) -> error::Result<()> {
 }
 
 pub fn light_create_directional(
+    graphics_entity: Entity,
     x: f32,
     y: f32,
     z: f32,
@@ -784,14 +785,17 @@ pub fn light_create_directional(
     illuminance: f32,
 ) -> error::Result<Entity> {
     app_mut(|app| {
-        Ok(app
-            .world_mut()
-            .run_system_cached_with(light::create_directional, (x, y, z, color, illuminance))
-            .unwrap())
+        app.world_mut()
+            .run_system_cached_with(
+                light::create_directional,
+                (graphics_entity, x, y, z, color, illuminance),
+            )
+            .unwrap()
     })
 }
 
 pub fn light_create_point(
+    graphics_entity: Entity,
     x: f32,
     y: f32,
     z: f32,
@@ -801,17 +805,17 @@ pub fn light_create_point(
     radius: f32,
 ) -> error::Result<Entity> {
     app_mut(|app| {
-        Ok(app
-            .world_mut()
+        app.world_mut()
             .run_system_cached_with(
                 light::create_point,
-                (x, y, z, color, intensity, range, radius),
+                (graphics_entity, x, y, z, color, intensity, range, radius),
             )
-            .unwrap())
+            .unwrap()
     })
 }
 
 pub fn light_create_spot(
+    graphics_entity: Entity,
     x: f32,
     y: f32,
     z: f32,
@@ -823,11 +827,11 @@ pub fn light_create_spot(
     outer_angle: f32,
 ) -> error::Result<Entity> {
     app_mut(|app| {
-        Ok(app
-            .world_mut()
+        app.world_mut()
             .run_system_cached_with(
                 light::create_spot,
                 (
+                    graphics_entity,
                     x,
                     y,
                     z,
@@ -839,7 +843,7 @@ pub fn light_create_spot(
                     outer_angle,
                 ),
             )
-            .unwrap())
+            .unwrap()
     })
 }
 
