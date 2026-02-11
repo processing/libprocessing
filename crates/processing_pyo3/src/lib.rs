@@ -14,7 +14,6 @@ mod graphics;
 use graphics::{Geometry, Graphics, Image, Topology, get_graphics, get_graphics_mut};
 use pyo3::{
     exceptions::PyRuntimeError,
-    ffi::c_str,
     prelude::*,
     types::{PyDict, PyTuple},
 };
@@ -84,16 +83,30 @@ fn get_sketch_root() -> PyResult<String> {
     })
 }
 
+fn get_sketch_filename() -> PyResult<String> {
+    Python::attach(|py| {
+        let sys = PyModule::import(py, "sys")?;
+        let argv: Vec<String> = sys.getattr("argv")?.extract()?;
+        let filename: &str = argv[0].as_str();
+        let os = PyModule::import(py, "os")?;
+        let path = os.getattr("path")?;
+        let basename = path.getattr("basename")?.call1((filename,))?;
+        Ok(basename.to_string())
+    })
+}
+
 #[pyfunction]
 #[pyo3(pass_module)]
 fn size(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<()> {
     let asset_path: String = get_asset_root()?;
     let sketch_root_path: String = get_sketch_root()?;
+    let sketch_filename: String = get_sketch_filename()?;
     let graphics = Graphics::new(
         width,
         height,
         asset_path.as_str(),
         sketch_root_path.as_str(),
+        sketch_filename.as_str(),
     )?;
     module.setattr("_graphics", graphics)?;
     Ok(())

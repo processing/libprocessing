@@ -9,6 +9,8 @@ use bevy::{
 };
 use std::path::Path;
 
+use crate::config::{Config, ConfigKey};
+
 /// Plugin that registers the Sketch asset type and its loader.
 pub struct LivecodePlugin;
 
@@ -41,8 +43,15 @@ pub fn sketch_update_handler(
     None
 }
 
-fn load_current_sketch(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let path = Path::new("rectangle.py");
+fn load_current_sketch(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    config: Res<Config>,
+) {
+    let filename = config
+        .get(ConfigKey::SketchFileName)
+        .expect("SketchFileName not set");
+    let path = Path::new(filename);
     let source = AssetSourceId::from("sketch_directory");
     let asset_path = AssetPath::from_path(path).with_source(source);
     let sketch_handle: Handle<Sketch> = asset_server.load(asset_path);

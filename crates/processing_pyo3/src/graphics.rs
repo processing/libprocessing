@@ -125,6 +125,7 @@ impl Graphics {
         height: u32,
         asset_path: &str,
         sketch_root_path: &str,
+        sketch_file_name: &str,
     ) -> PyResult<Self> {
         let glfw_ctx =
             GlfwContext::new(width, height).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
@@ -132,6 +133,7 @@ impl Graphics {
         let mut config = Config::new();
         config.set(ConfigKey::AssetRootPath, asset_path.to_string());
         config.set(ConfigKey::SketchRootPath, sketch_root_path.to_string());
+        config.set(ConfigKey::SketchFileName, sketch_file_name.to_string());
         init(config).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let surface = glfw_ctx

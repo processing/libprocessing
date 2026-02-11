@@ -9,6 +9,7 @@ use std::collections::HashMap;
 pub enum ConfigKey {
     AssetRootPath,
     SketchRootPath,
+    SketchFileName,
 }
 
 // TODO: Consider Box<dyn Any> instead of String
