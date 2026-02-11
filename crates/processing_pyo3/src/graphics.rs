@@ -120,17 +120,18 @@ impl Drop for Graphics {
 #[pymethods]
 impl Graphics {
     #[new]
-    pub fn new(width: u32, height: u32, asset_path: &str) -> PyResult<Self> {
+    pub fn new(
+        width: u32,
+        height: u32,
+        asset_path: &str,
+        sketch_root_path: &str,
+    ) -> PyResult<Self> {
         let glfw_ctx =
             GlfwContext::new(width, height).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let mut config = Config::new();
         config.set(ConfigKey::AssetRootPath, asset_path.to_string());
-        config.set(
-            // TODO: this needs to be handed to us by python
-            ConfigKey::SketchRootPath,
-            "/home/moon/Code/libprocessing/crates/processing_pyo3/examples".to_string(),
-        );
+        config.set(ConfigKey::SketchRootPath, sketch_root_path.to_string());
         init(config).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let surface = glfw_ctx
@@ -160,10 +161,6 @@ impl Graphics {
                 source: "".to_string(),
             }),
         }
-
-        // Ok(Sketch {
-        //     source: sketch.unwrap().source,
-        // })
     }
 
     pub fn background(&self, args: Vec<f32>) -> PyResult<()> {

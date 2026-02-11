@@ -224,7 +224,6 @@ fn create_app(config: Config) -> App {
     }
 
     if let Some(sketch_path) = config.get(ConfigKey::SketchRootPath) {
-        println!("DEBUG SKETCH PATH = {sketch_path}");
         app.register_asset_source(
             "sketch_directory",
             AssetSourceBuilder::platform_default(sketch_path, None),

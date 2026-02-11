@@ -71,11 +71,30 @@ fn get_asset_root() -> PyResult<String> {
     })
 }
 
+fn get_sketch_root() -> PyResult<String> {
+    Python::attach(|py| {
+        let sys = PyModule::import(py, "sys")?;
+        let argv: Vec<String> = sys.getattr("argv")?.extract()?;
+        let filename: &str = argv[0].as_str();
+        let os = PyModule::import(py, "os")?;
+        let path = os.getattr("path")?;
+        let dirname = path.getattr("dirname")?.call1((filename,))?;
+        let abspath = path.getattr("abspath")?.call1((dirname,))?;
+        Ok(abspath.to_string())
+    })
+}
+
 #[pyfunction]
 #[pyo3(pass_module)]
 fn size(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<()> {
     let asset_path: String = get_asset_root()?;
-    let graphics = Graphics::new(width, height, asset_path.as_str())?;
+    let sketch_root_path: String = get_sketch_root()?;
+    let graphics = Graphics::new(
+        width,
+        height,
+        asset_path.as_str(),
+        sketch_root_path.as_str(),
+    )?;
     module.setattr("_graphics", graphics)?;
     Ok(())
 }

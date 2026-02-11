@@ -9,9 +9,6 @@ use bevy::{
 };
 use std::path::Path;
 
-#[derive(Resource)]
-struct SketchNeedsReload(bool);
-
 /// Plugin that registers the Sketch asset type and its loader.
 pub struct LivecodePlugin;
 
@@ -19,10 +16,7 @@ impl Plugin for LivecodePlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<Sketch>()
             .init_asset_loader::<SketchLoader>()
-            // TODO: this could be switched to Message
-            .insert_resource(SketchNeedsReload(false))
             .add_systems(PreStartup, load_current_sketch);
-        // .add_systems(Update, sketch_update_handler);
     }
 }
 
@@ -33,27 +27,14 @@ pub fn sketch_update_handler(
 ) -> Option<Sketch> {
     for event in events.read() {
         match event {
-            AssetEvent::Added { id } => {
-                info!("Added: {id}")
-            }
             AssetEvent::Modified { id } => {
                 info!("Modified: {id}");
-                // we want to emit some event to bevy??
-                // needs_reload.0 = true;
                 if let Some(sketch) = sketches.get(*id) {
                     let sketch = sketch.clone();
                     return Some(sketch);
                 }
             }
-            AssetEvent::Removed { id } => {
-                info!("Removed: {id}")
-            }
-            AssetEvent::Unused { id } => {
-                info!("Unused: {id}")
-            }
-            AssetEvent::LoadedWithDependencies { id } => {
-                info!("LoadedWithDependencies: {id}")
-            }
+            _ => (),
         }
     }
 
@@ -61,7 +42,6 @@ pub fn sketch_update_handler(
 }
 
 fn load_current_sketch(mut commands: Commands, asset_server: Res<AssetServer>) {
-    info!("DEBUG: calling load_current_sketch");
     let path = Path::new("rectangle.py");
     let source = AssetSourceId::from("sketch_directory");
     let asset_path = AssetPath::from_path(path).with_source(source);
