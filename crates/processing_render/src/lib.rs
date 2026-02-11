@@ -254,7 +254,7 @@ fn create_app(config: Config) -> App {
 
     app.add_plugins(plugins);
 
-    if let Some(_) = config.get(ConfigKey::SketchRootPath) {
+    if config.get(ConfigKey::SketchRootPath).is_some() {
         info!("Adding plugin");
         app.add_plugins(sketch::LivecodePlugin);
     }

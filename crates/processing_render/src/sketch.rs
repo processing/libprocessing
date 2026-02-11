@@ -28,15 +28,12 @@ pub fn sketch_update_handler(
     sketches: Res<Assets<Sketch>>,
 ) -> Option<Sketch> {
     for event in events.read() {
-        match event {
-            AssetEvent::Modified { id } => {
-                info!("Modified: {id}");
-                if let Some(sketch) = sketches.get(*id) {
-                    let sketch = sketch.clone();
-                    return Some(sketch);
-                }
+        if let AssetEvent::Modified { id } = event {
+            info!("Modified: {id}");
+            if let Some(sketch) = sketches.get(*id) {
+                let sketch = sketch.clone();
+                return Some(sketch);
             }
-            _ => (),
         }
     }
 
