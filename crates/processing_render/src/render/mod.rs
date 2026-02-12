@@ -15,6 +15,7 @@ use material::MaterialKey;
 use primitive::{TessellationMode, empty_mesh};
 use transform::TransformStack;
 
+use crate::render::material::UntypedMaterial;
 use crate::{Flush, geometry::Geometry, image::Image, render::primitive::rect};
 
 #[derive(Component)]
@@ -153,15 +154,15 @@ pub fn flush_draw_commands(
                     let mesh = create_ndc_background_quad(world_from_clip, color, false);
                     let mesh_handle = res.meshes.add(mesh);
 
-                    let material_key = MaterialKey {
+                    let material_key = MaterialKey::Color {
                         transparent: color.alpha() < 1.0,
                         background_image: None,
                     };
-                    let material_handle = res.materials.add(material_key.to_material());
+                    let material_handle = material_key.to_material(&mut res.materials);
 
                     res.commands.spawn((
                         Mesh3d(mesh_handle),
-                        MeshMaterial3d(material_handle),
+                        UntypedMaterial(material_handle),
                         BelongsToGraphics(batch.graphics_entity),
                         Transform::IDENTITY,
                         batch.render_layers.clone(),
@@ -180,15 +181,15 @@ pub fn flush_draw_commands(
                     let mesh = create_ndc_background_quad(world_from_clip, Color::WHITE, true);
                     let mesh_handle = res.meshes.add(mesh);
 
-                    let material_key = MaterialKey {
+                    let material_key = MaterialKey::Color {
                         transparent: false,
                         background_image: Some(p_image.handle.clone()),
                     };
-                    let material_handle = res.materials.add(material_key.to_material());
+                    let material_handle = material_key.to_material(&mut res.materials);
 
                     res.commands.spawn((
                         Mesh3d(mesh_handle),
-                        MeshMaterial3d(material_handle),
+                        UntypedMaterial(material_handle),
                         BelongsToGraphics(batch.graphics_entity),
                         Transform::IDENTITY,
                         batch.render_layers.clone(),
@@ -214,12 +215,12 @@ pub fn flush_draw_commands(
 
                     // TODO: Implement state based material API
                     // https://github.com/processing/libprocessing/issues/10
-                    let material_key = MaterialKey {
+                    let material_key = MaterialKey::Color {
                         transparent: false, // TODO: detect from geometry colors
                         background_image: None,
                     };
 
-                    let material_handle = res.materials.add(material_key.to_material());
+                    let material_handle = material_key.to_material(&mut res.materials);
                     let z_offset = -(batch.draw_index as f32 * 0.001);
 
                     let mut transform = state.transform.to_bevy_transform();
@@ -227,7 +228,7 @@ pub fn flush_draw_commands(
 
                     res.commands.spawn((
                         Mesh3d(geometry.handle.clone()),
-                        MeshMaterial3d(material_handle),
+                        UntypedMaterial(material_handle),
                         BelongsToGraphics(batch.graphics_entity),
                         transform,
                         batch.render_layers.clone(),
@@ -265,7 +266,7 @@ fn spawn_mesh(res: &mut RenderResources, batch: &mut BatchState, mesh: Mesh, z_o
     };
 
     let mesh_handle = res.meshes.add(mesh);
-    let material_handle = res.materials.add(material_key.to_material());
+    let material_handle = material_key.to_material(&mut res.materials);
 
     let (scale, rotation, translation) = batch.transform.to_scale_rotation_translation();
     let transform = Transform {
@@ -276,7 +277,7 @@ fn spawn_mesh(res: &mut RenderResources, batch: &mut BatchState, mesh: Mesh, z_o
 
     res.commands.spawn((
         Mesh3d(mesh_handle),
-        MeshMaterial3d(material_handle),
+        UntypedMaterial(material_handle),
         BelongsToGraphics(batch.graphics_entity),
         transform,
         batch.render_layers.clone(),
@@ -311,7 +312,7 @@ fn add_fill(
     let Some(color) = state.fill_color else {
         return;
     };
-    let material_key = MaterialKey {
+    let material_key = MaterialKey::Color {
         transparent: state.fill_is_transparent(),
         background_image: None,
     };
@@ -335,7 +336,7 @@ fn add_stroke(
         return;
     };
     let stroke_weight = state.stroke_weight;
-    let material_key = MaterialKey {
+    let material_key = MaterialKey::Color {
         transparent: state.stroke_is_transparent(),
         background_image: None,
     };
