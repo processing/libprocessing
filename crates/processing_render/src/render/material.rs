@@ -1,5 +1,5 @@
-use std::ops::Deref;
 use bevy::{prelude::*, render::alpha::AlphaMode};
+use std::ops::Deref;
 
 /// A component that holds an untyped handle to a material. This allows the main render loop
 /// to be agnostic of the specific material types being used, and allows for dynamic material

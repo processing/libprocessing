@@ -15,8 +15,8 @@ use material::MaterialKey;
 use primitive::{TessellationMode, empty_mesh};
 use transform::TransformStack;
 
-use crate::{Flush, geometry::Geometry, image::Image, render::primitive::rect};
 use crate::render::material::UntypedMaterial;
+use crate::{Flush, geometry::Geometry, image::Image, render::primitive::rect};
 
 #[derive(Component)]
 #[relationship(relationship_target = TransientMeshes)]
@@ -313,7 +313,7 @@ fn add_fill(
         return;
     };
     let material_key = MaterialKey::Color {
-         transparent: state.fill_is_transparent(),
+        transparent: state.fill_is_transparent(),
         background_image: None,
     };
 
