@@ -25,6 +25,7 @@ use tracing::debug;
 
 use crate::geometry::{AttributeFormat, AttributeValue};
 use crate::graphics::flush;
+use crate::render::material::add_standard_materials;
 use crate::{
     graphics::GraphicsPlugin, image::ImagePlugin, light::LightPlugin, render::command::DrawCommand,
     surface::SurfacePlugin,
@@ -252,7 +253,13 @@ fn create_app(config: Config) -> App {
         LightPlugin,
     ));
     app.add_systems(First, (clear_transient_meshes, activate_cameras))
-        .add_systems(Update, flush_draw_commands.before(AssetEventSystems));
+        .add_systems(
+            Update,
+            (
+                flush_draw_commands.before(AssetEventSystems),
+                add_standard_materials.after(flush_draw_commands),
+            ),
+        );
 
     app
 }

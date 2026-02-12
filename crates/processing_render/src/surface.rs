@@ -19,6 +19,7 @@
 //! - WebAssembly: `create_surface_web`
 #[cfg(any(target_os = "linux", target_arch = "wasm32"))]
 use std::ffi::c_void;
+#[cfg(not(target_os = "windows"))]
 use std::ptr::NonNull;
 
 use bevy::{
