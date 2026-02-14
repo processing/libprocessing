@@ -25,6 +25,19 @@ impl Drop for Surface {
 
 #[pyclass]
 #[derive(Debug)]
+pub struct Light {
+    entity: Entity,
+}
+
+// TODO: implement `light_destroy`
+// impl Drop for Light {
+//     fn drop(&mut self) {
+//         let _ = light_destroy(self.entity);
+//     }
+// }
+
+#[pyclass]
+#[derive(Debug)]
 pub struct Image {
     entity: Entity,
 }
@@ -307,6 +320,14 @@ impl Graphics {
     ) -> PyResult<()> {
         graphics_ortho(self.entity, left, right, bottom, top, near, far)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn light_directional(&self, r: f32, g: f32, b: f32, illuminance: f32) -> PyResult<Light> {
+        let color = bevy::color::Color::srgb(r, g, b);
+        match light_create_directional(self.entity, color, illuminance) {
+            Ok(light) => Ok(Light { entity: light }),
+            Err(e) => Err(PyRuntimeError::new_err(format!("{e}"))),
+        }
     }
 }
 
