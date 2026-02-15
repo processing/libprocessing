@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 bevy = { workspace = true }
-bevy_midi = { git = "https://github.com/catilac/bevy_midi", branch = "edge" }
+bevy_midi = { git = "https://github.com/BlackPhlox/bevy_midi", branch = "latest" }
 
 
 [lints]

@@ -1222,7 +1222,7 @@ dependencies = [
 [[package]]
 name = "bevy_midi"
 version = "0.13.0"
-source = "git+https://github.com/catilac/bevy_midi?branch=edge#f4312dc30951bb2ba7783b39ca13fde9167271ec"
+source = "git+https://github.com/BlackPhlox/bevy_midi?branch=latest#79963a94198b158de0ca0913942bb2d088f900b2"
 dependencies = [
  "bevy",
  "crossbeam-channel",
