@@ -5,6 +5,7 @@ mod graphics;
 pub mod image;
 pub mod light;
 pub mod render;
+pub mod sketch;
 mod surface;
 pub mod transform;
 
@@ -215,6 +216,20 @@ fn create_app(config: Config) -> App {
 
     app.insert_resource(config.clone());
 
+    if let Some(asset_path) = config.get(ConfigKey::AssetRootPath) {
+        app.register_asset_source(
+            "assets_directory",
+            AssetSourceBuilder::platform_default(asset_path, None),
+        );
+    }
+
+    if let Some(sketch_path) = config.get(ConfigKey::SketchRootPath) {
+        app.register_asset_source(
+            "sketch_directory",
+            AssetSourceBuilder::platform_default(sketch_path, None),
+        );
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     let plugins = DefaultPlugins
         .build()
@@ -237,14 +252,13 @@ fn create_app(config: Config) -> App {
             ..default()
         });
 
-    if let Some(asset_path) = config.get(ConfigKey::AssetRootPath) {
-        app.register_asset_source(
-            "assets_directory",
-            AssetSourceBuilder::platform_default(asset_path, None),
-        );
+    app.add_plugins(plugins);
+
+    if config.get(ConfigKey::SketchRootPath).is_some() {
+        info!("Adding plugin");
+        app.add_plugins(sketch::LivecodePlugin);
     }
 
-    app.add_plugins(plugins);
     app.add_plugins((
         ImagePlugin,
         GraphicsPlugin,
@@ -1208,6 +1222,15 @@ pub fn geometry_box(width: f32, height: f32, depth: f32) -> error::Result<Entity
         Ok(app
             .world_mut()
             .run_system_cached_with(geometry::create_box, (width, height, depth))
+            .unwrap())
+    })
+}
+
+pub fn poll_for_sketch_updates() -> error::Result<Option<sketch::Sketch>> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached(sketch::sketch_update_handler)
             .unwrap())
     })
 }

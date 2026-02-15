@@ -61,6 +61,11 @@ impl Topology {
     }
 }
 
+#[pyclass]
+pub struct Sketch {
+    pub source: String,
+}
+
 #[pymethods]
 impl Geometry {
     #[new]
@@ -115,12 +120,20 @@ impl Drop for Graphics {
 #[pymethods]
 impl Graphics {
     #[new]
-    pub fn new(width: u32, height: u32, asset_path: &str) -> PyResult<Self> {
+    pub fn new(
+        width: u32,
+        height: u32,
+        asset_path: &str,
+        sketch_root_path: &str,
+        sketch_file_name: &str,
+    ) -> PyResult<Self> {
         let glfw_ctx =
             GlfwContext::new(width, height).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let mut config = Config::new();
         config.set(ConfigKey::AssetRootPath, asset_path.to_string());
+        config.set(ConfigKey::SketchRootPath, sketch_root_path.to_string());
+        config.set(ConfigKey::SketchFileName, sketch_file_name.to_string());
         init(config).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let surface = glfw_ctx
@@ -139,6 +152,17 @@ impl Graphics {
             entity: graphics,
             surface,
         })
+    }
+
+    pub fn poll_for_sketch_update(&self) -> PyResult<Sketch> {
+        match poll_for_sketch_updates().map_err(|_| PyRuntimeError::new_err("SKETCH UPDATE ERR"))? {
+            Some(sketch) => Ok(Sketch {
+                source: sketch.source,
+            }),
+            None => Ok(Sketch {
+                source: "".to_string(),
+            }),
+        }
     }
 
     pub fn background(&self, args: Vec<f32>) -> PyResult<()> {

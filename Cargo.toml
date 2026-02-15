@@ -21,7 +21,7 @@ type_complexity = "allow"
 too_many_arguments = "allow"
 
 [workspace.dependencies]
-bevy = { git = "https://github.com/bevyengine/bevy", branch = "main" }
+bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", features = ["file_watcher"] }
 processing = { path = "." }
 processing_pyo3 = { path = "crates/processing_pyo3" }
 processing_render = { path = "crates/processing_render" }

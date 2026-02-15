@@ -12,7 +12,12 @@ mod glfw;
 mod graphics;
 
 use graphics::{Geometry, Graphics, Image, Topology, get_graphics, get_graphics_mut};
-use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyTuple};
+use pyo3::{
+    exceptions::PyRuntimeError,
+    prelude::*,
+    types::{PyDict, PyTuple},
+};
+use std::ffi::{CStr, CString};
 
 use std::env;
 
@@ -65,11 +70,34 @@ fn get_asset_root() -> PyResult<String> {
     })
 }
 
+fn get_sketch_info() -> PyResult<(String, String)> {
+    Python::attach(|py| {
+        let sys = PyModule::import(py, "sys")?;
+        let argv: Vec<String> = sys.getattr("argv")?.extract()?;
+        let filename: &str = argv[0].as_str();
+        let os = PyModule::import(py, "os")?;
+        let path = os.getattr("path")?;
+        let dirname = path.getattr("dirname")?.call1((filename,))?;
+        let abspath = path.getattr("abspath")?.call1((dirname,))?;
+        let basename = path.getattr("basename")?.call1((filename,))?;
+        Ok((abspath.to_string(), basename.to_string()))
+    })
+}
+
 #[pyfunction]
 #[pyo3(pass_module)]
 fn size(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<()> {
     let asset_path: String = get_asset_root()?;
-    let graphics = Graphics::new(width, height, asset_path.as_str())?;
+    let (sketch_root_path, sketch_filename) = get_sketch_info()?;
+    // let sketch_root_path: String = get_sketch_root()?;
+    // let sketch_filename: String = get_sketch_filename()?;
+    let graphics = Graphics::new(
+        width,
+        height,
+        asset_path.as_str(),
+        sketch_root_path.as_str(),
+        sketch_filename.as_str(),
+    )?;
     module.setattr("_graphics", graphics)?;
     Ok(())
 }
@@ -81,8 +109,8 @@ fn run(module: &Bound<'_, PyModule>) -> PyResult<()> {
         let builtins = PyModule::import(py, "builtins")?;
         let locals = builtins.getattr("locals")?.call0()?;
 
-        let setup_fn = locals.get_item("setup")?;
-        let draw_fn = locals.get_item("draw")?;
+        let mut setup_fn = locals.get_item("setup")?;
+        let mut draw_fn = locals.get_item("draw")?;
 
         // call setup
         setup_fn.call0()?;
@@ -91,6 +119,30 @@ fn run(module: &Bound<'_, PyModule>) -> PyResult<()> {
         loop {
             {
                 let mut graphics = get_graphics_mut(module)?;
+
+                // TODO: this shouldn't be on the graphics object
+                let sketch = graphics.poll_for_sketch_update()?;
+                if !sketch.source.is_empty() {
+                    let locals = PyDict::new(py);
+
+                    let ok = CString::new(sketch.source.as_str()).unwrap();
+                    let cstr: &CStr = ok.as_c_str();
+
+                    match py.run(cstr, None, Some(&locals)) {
+                        Ok(_) => {
+                            dbg!("Success of any kind?");
+                        }
+                        Err(e) => {
+                            dbg!(e);
+                        }
+                    }
+
+                    setup_fn = locals.get_item("setup").unwrap().unwrap();
+                    draw_fn = locals.get_item("draw").unwrap().unwrap();
+
+                    dbg!(locals);
+                }
+
                 if !graphics.surface.poll_events() {
                     break;
                 }
