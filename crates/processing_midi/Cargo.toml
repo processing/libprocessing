@@ -1,0 +1,12 @@
+[package]
+name = "processing_midi"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { workspace = true }
+bevy_midi = { git = "https://github.com/BlackPhlox/bevy_midi", branch = "main" }
+
+
+[lints]
+workspace = true

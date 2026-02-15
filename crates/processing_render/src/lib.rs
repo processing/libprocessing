@@ -33,6 +33,8 @@ use crate::{
     surface::SurfacePlugin,
 };
 
+use processing_midi::MidiPlugin;
+
 static IS_INIT: OnceLock<()> = OnceLock::new();
 
 thread_local! {
@@ -267,6 +269,7 @@ fn create_app(config: Config) -> App {
         geometry::GeometryPlugin,
         LightPlugin,
         material::MaterialPlugin,
+        MidiPlugin,
     ));
     app.add_systems(First, (clear_transient_meshes, activate_cameras))
         .add_systems(
