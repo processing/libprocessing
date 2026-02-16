@@ -11,7 +11,7 @@
 mod glfw;
 mod graphics;
 
-use graphics::{Geometry, Graphics, Image, Topology, get_graphics, get_graphics_mut};
+use graphics::{Geometry, Graphics, Image, Light, Topology, get_graphics, get_graphics_mut};
 use pyo3::{
     exceptions::PyRuntimeError,
     prelude::*,
@@ -25,7 +25,7 @@ use std::env;
 fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Graphics>()?;
     m.add_class::<Image>()?;
-    m.add_class::<Geometry>()?;
+    m.add_class::<Light>()?;
     m.add_class::<Topology>()?;
     m.add_function(wrap_pyfunction!(size, m)?)?;
     m.add_function(wrap_pyfunction!(run, m)?)?;
@@ -45,6 +45,9 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(rect, m)?)?;
     m.add_function(wrap_pyfunction!(image, m)?)?;
     m.add_function(wrap_pyfunction!(draw_geometry, m)?)?;
+    m.add_function(wrap_pyfunction!(create_directional_light, m)?)?;
+    m.add_function(wrap_pyfunction!(create_point_light, m)?)?;
+    m.add_function(wrap_pyfunction!(create_spot_light, m)?)?;
 
     Ok(())
 }
@@ -274,4 +277,46 @@ fn rect(
 #[pyo3(pass_module, signature = (image_file))]
 fn image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<Image> {
     get_graphics(module)?.image(image_file)
+}
+
+#[pyfunction]
+#[pyo3(pass_module, signature = (r, g, b, illuminance))]
+fn create_directional_light(
+    module: &Bound<'_, PyModule>,
+    r: f32,
+    g: f32,
+    b: f32,
+    illuminance: f32,
+) -> PyResult<Light> {
+    get_graphics(module)?.light_directional(r, g, b, illuminance)
+}
+
+#[pyfunction]
+#[pyo3(pass_module, signature = (r, g, b, intensity, range, radius))]
+fn create_point_light(
+    module: &Bound<'_, PyModule>,
+    r: f32,
+    g: f32,
+    b: f32,
+    intensity: f32,
+    range: f32,
+    radius: f32,
+) -> PyResult<Light> {
+    get_graphics(module)?.light_point(r, g, b, intensity, range, radius)
+}
+
+#[pyfunction]
+#[pyo3(pass_module, signature = (r, g, b, intensity, range, radius, inner_angle, outer_angle))]
+fn create_spot_light(
+    module: &Bound<'_, PyModule>,
+    r: f32,
+    g: f32,
+    b: f32,
+    intensity: f32,
+    range: f32,
+    radius: f32,
+    inner_angle: f32,
+    outer_angle: f32,
+) -> PyResult<Light> {
+    get_graphics(module)?.light_spot(r, g, b, intensity, range, radius, inner_angle, outer_angle)
 }
