@@ -13,6 +13,7 @@ x11 = ["bevy/x11"]
 
 [dependencies]
 bevy = { workspace = true }
+processing_utils = { workspace = true }
 lyon = "1.0"
 raw-window-handle = "0.6"
 thiserror = "2"

@@ -4754,6 +4754,7 @@ dependencies = [
  "objc2 0.6.3",
  "objc2-app-kit 0.3.2",
  "processing_midi",
+ "processing_utils",
  "raw-window-handle",
  "thiserror 2.0.18",
  "tracing",
@@ -4762,6 +4763,13 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "windows 0.58.0",
+]
+
+[[package]]
+name = "processing_utils"
+version = "0.1.0"
+dependencies = [
+ "bevy",
 ]
 
 [[package]]

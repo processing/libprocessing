@@ -26,6 +26,7 @@ processing = { path = "." }
 processing_pyo3 = { path = "crates/processing_pyo3" }
 processing_render = { path = "crates/processing_render" }
 processing_midi = { path = "crates/processing_midi" }
+processing_utils = { path = "crates/processing_utils" }
 
 [dependencies]
 bevy = { workspace = true }

@@ -10,7 +10,7 @@ use bevy::{
     math::{Affine3A, Mat4, Vec4},
     prelude::*,
 };
-use command::{CommandBuffer, DrawCommand};
+use command::DrawCommand;
 use material::MaterialKey;
 use primitive::{TessellationMode, box_mesh, empty_mesh, sphere_mesh};
 use transform::TransformStack;
@@ -21,6 +21,8 @@ use crate::{
     image::Image,
     render::{material::UntypedMaterial, primitive::rect},
 };
+
+use processing_utils::CommandBuffer;
 
 #[derive(Component)]
 #[relationship(relationship_target = TransientMeshes)]
@@ -113,7 +115,7 @@ pub fn flush_draw_commands(
     mut graphics: Query<
         (
             Entity,
-            &mut CommandBuffer,
+            &mut CommandBuffer<DrawCommand>,
             &mut RenderState,
             &RenderLayers,
             &Projection,
