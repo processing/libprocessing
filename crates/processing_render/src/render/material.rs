@@ -1,6 +1,9 @@
 use bevy::{prelude::*, render::alpha::AlphaMode};
 use std::ops::Deref;
 
+/// A component that holds an untyped handle to a material. This allows the main render loop
+/// to be agnostic of the specific material types being used, and allows for dynamic material
+/// creation based on the `MaterialKey`.
 #[derive(Component, Deref)]
 pub struct UntypedMaterial(pub UntypedHandle);
 
@@ -10,6 +13,8 @@ pub enum MaterialSource {
     Explicit(Entity),
 }
 
+/// Defines the current material for a batch, which can be used to determine when to flush the
+/// current batch and start a new one.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum MaterialKey {
     Color {
@@ -26,20 +31,6 @@ pub enum MaterialKey {
 }
 
 impl MaterialKey {
-    pub fn simple_2d(transparent: bool) -> Self {
-        Self::Color {
-            transparent,
-            background_image: None,
-        }
-    }
-
-    pub fn with_image(image: Handle<Image>, transparent: bool) -> Self {
-        Self::Color {
-            transparent,
-            background_image: Some(image),
-        }
-    }
-
     pub fn to_material(&self, materials: &mut ResMut<Assets<StandardMaterial>>) -> UntypedHandle {
         match self {
             MaterialKey::Color {
@@ -95,6 +86,8 @@ impl MaterialKey {
     }
 }
 
+/// A system that adds a `MeshMaterial3d` component to any entity with an `UntypedMaterial` that can
+/// be typed as a `StandardMaterial`.
 pub fn add_standard_materials(
     mut commands: Commands,
     meshes: Query<(Entity, &UntypedMaterial)>,

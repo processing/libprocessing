@@ -232,7 +232,10 @@ pub fn flush_draw_commands(
                     let mesh = create_ndc_background_quad(world_from_clip, color, false);
                     let mesh_handle = res.meshes.add(mesh);
 
-                    let material_key = MaterialKey::simple_2d(color.alpha() < 1.0);
+                    let material_key = MaterialKey::Color {
+                        transparent: color.alpha() < 1.0,
+                        background_image: None,
+                    };
                     let material_handle = material_key.to_material(&mut res.materials);
 
                     res.commands.spawn((
@@ -256,7 +259,10 @@ pub fn flush_draw_commands(
                     let mesh = create_ndc_background_quad(world_from_clip, Color::WHITE, true);
                     let mesh_handle = res.meshes.add(mesh);
 
-                    let material_key = MaterialKey::with_image(p_image.handle.clone(), false);
+                    let material_key = MaterialKey::Color {
+                        transparent: false,
+                        background_image: Some(p_image.handle.clone()),
+                    };
                     let material_handle = material_key.to_material(&mut res.materials);
 
                     res.commands.spawn((
