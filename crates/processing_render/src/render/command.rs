@@ -9,6 +9,10 @@ pub enum DrawCommand {
     StrokeColor(Color),
     NoStroke,
     StrokeWeight(f32),
+    Roughness(f32),
+    Metallic(f32),
+    Emissive(Color),
+    Unlit,
     Rect {
         x: f32,
         y: f32,
@@ -37,6 +41,7 @@ pub enum DrawCommand {
         angle: f32,
     },
     Geometry(Entity),
+    Material(Entity),
 }
 
 #[derive(Debug, Default, Component)]

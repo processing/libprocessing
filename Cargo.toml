@@ -68,6 +68,10 @@ path = "examples/custom_attribute.rs"
 name = "lights"
 path = "examples/lights.rs"
 
+[[example]]
+name = "materials"
+path = "examples/materials.rs"
+
 [profile.wasm-release]
 inherits = "release"
 opt-level = "z"

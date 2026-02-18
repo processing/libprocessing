@@ -2,9 +2,10 @@
 
 use bevy::prelude::Entity;
 use processing_render::{
-    config::Config, exit, graphics_begin_draw, graphics_end_draw, graphics_flush,
-    graphics_record_command, image_create, image_destroy, image_load, image_readback, image_resize,
-    init, render::command::DrawCommand, surface_create_from_canvas, surface_destroy,
+    config::Config, exit, geometry_box, geometry_sphere, graphics_begin_draw, graphics_end_draw,
+    graphics_flush, graphics_record_command, image_create, image_destroy, image_load,
+    image_readback, image_resize, init, material, material_create_pbr, material_destroy,
+    material_set, render::command::DrawCommand, surface_create_from_canvas, surface_destroy,
     surface_resize, transform_look_at, transform_reset, transform_rotate_axis, transform_rotate_x,
     transform_rotate_y, transform_rotate_z, transform_scale, transform_set_position,
     transform_set_rotation, transform_set_scale, transform_translate,
@@ -341,4 +342,57 @@ pub fn js_transform_look_at(
 #[wasm_bindgen(js_name = "transformReset")]
 pub fn js_transform_reset(entity_id: u64) -> Result<(), JsValue> {
     check(transform_reset(Entity::from_bits(entity_id)))
+}
+
+#[wasm_bindgen(js_name = "materialCreatePbr")]
+pub fn js_material_create_pbr() -> Result<u64, JsValue> {
+    check(material_create_pbr().map(|e| e.to_bits()))
+}
+
+#[wasm_bindgen(js_name = "materialSetFloat")]
+pub fn js_material_set_float(mat_id: u64, name: &str, value: f32) -> Result<(), JsValue> {
+    check(material_set(
+        Entity::from_bits(mat_id),
+        name,
+        material::MaterialValue::Float(value),
+    ))
+}
+
+#[wasm_bindgen(js_name = "materialSetFloat4")]
+pub fn js_material_set_float4(
+    mat_id: u64,
+    name: &str,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+) -> Result<(), JsValue> {
+    check(material_set(
+        Entity::from_bits(mat_id),
+        name,
+        material::MaterialValue::Float4([r, g, b, a]),
+    ))
+}
+
+#[wasm_bindgen(js_name = "materialDestroy")]
+pub fn js_material_destroy(mat_id: u64) -> Result<(), JsValue> {
+    check(material_destroy(Entity::from_bits(mat_id)))
+}
+
+#[wasm_bindgen(js_name = "material")]
+pub fn js_material(surface_id: u64, mat_id: u64) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Material(Entity::from_bits(mat_id)),
+    ))
+}
+
+#[wasm_bindgen(js_name = "geometryBox")]
+pub fn js_geometry_box(width: f32, height: f32, depth: f32) -> Result<u64, JsValue> {
+    check(geometry_box(width, height, depth).map(|e| e.to_bits()))
+}
+
+#[wasm_bindgen(js_name = "geometrySphere")]
+pub fn js_geometry_sphere(radius: f32, sectors: u32, stacks: u32) -> Result<u64, JsValue> {
+    check(geometry_sphere(radius, sectors, stacks).map(|e| e.to_bits()))
 }

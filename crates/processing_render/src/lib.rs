@@ -4,6 +4,7 @@ pub mod geometry;
 mod graphics;
 pub mod image;
 pub mod light;
+pub mod material;
 pub mod render;
 pub mod sketch;
 mod surface;
@@ -22,11 +23,11 @@ use bevy::{
     render::render_resource::{Extent3d, TextureFormat},
 };
 use render::{activate_cameras, clear_transient_meshes, flush_draw_commands};
+use render::material::add_standard_materials;
 use tracing::debug;
 
 use crate::geometry::{AttributeFormat, AttributeValue};
 use crate::graphics::flush;
-use crate::render::material::add_standard_materials;
 use crate::{
     graphics::GraphicsPlugin, image::ImagePlugin, light::LightPlugin, render::command::DrawCommand,
     surface::SurfacePlugin,
@@ -265,14 +266,14 @@ fn create_app(config: Config) -> App {
         SurfacePlugin,
         geometry::GeometryPlugin,
         LightPlugin,
+        material::MaterialPlugin,
     ));
     app.add_systems(First, (clear_transient_meshes, activate_cameras))
         .add_systems(
             Update,
-            (
-                flush_draw_commands.before(AssetEventSystems),
-                add_standard_materials.after(flush_draw_commands),
-            ),
+            (flush_draw_commands, add_standard_materials)
+                .chain()
+                .before(AssetEventSystems),
         );
 
     app
@@ -1226,11 +1227,49 @@ pub fn geometry_box(width: f32, height: f32, depth: f32) -> error::Result<Entity
     })
 }
 
+pub fn geometry_sphere(radius: f32, sectors: u32, stacks: u32) -> error::Result<Entity> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(geometry::create_sphere, (radius, sectors, stacks))
+            .unwrap())
+    })
+}
+
 pub fn poll_for_sketch_updates() -> error::Result<Option<sketch::Sketch>> {
     app_mut(|app| {
         Ok(app
             .world_mut()
             .run_system_cached(sketch::sketch_update_handler)
             .unwrap())
+    })
+}
+
+pub fn material_create_pbr() -> error::Result<Entity> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached(material::create_pbr)
+            .unwrap())
+    })
+}
+
+pub fn material_set(
+    entity: Entity,
+    name: impl Into<String>,
+    value: material::MaterialValue,
+) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::set_property, (entity, name.into(), value))
+            .unwrap()
+    })
+}
+
+pub fn material_destroy(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::destroy, entity)
+            .unwrap()
     })
 }

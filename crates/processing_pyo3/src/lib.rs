@@ -10,8 +10,10 @@
 //! functions that forward to a singleton Graphics object pub(crate) behind the scenes.
 mod glfw;
 mod graphics;
+pub(crate) mod material;
 
 use graphics::{Geometry, Graphics, Image, Light, Topology, get_graphics, get_graphics_mut};
+use material::Material;
 use pyo3::{
     exceptions::PyRuntimeError,
     prelude::*,
@@ -27,6 +29,7 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Image>()?;
     m.add_class::<Light>()?;
     m.add_class::<Topology>()?;
+    m.add_class::<Material>()?;
     m.add_function(wrap_pyfunction!(size, m)?)?;
     m.add_function(wrap_pyfunction!(run, m)?)?;
     m.add_function(wrap_pyfunction!(mode_3d, m)?)?;
@@ -48,6 +51,8 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_directional_light, m)?)?;
     m.add_function(wrap_pyfunction!(create_point_light, m)?)?;
     m.add_function(wrap_pyfunction!(create_spot_light, m)?)?;
+    m.add_function(wrap_pyfunction!(draw_sphere, m)?)?;
+    m.add_function(wrap_pyfunction!(use_material, m)?)?;
 
     Ok(())
 }
@@ -319,4 +324,21 @@ fn create_spot_light(
     outer_angle: f32,
 ) -> PyResult<Light> {
     get_graphics(module)?.light_spot(r, g, b, intensity, range, radius, inner_angle, outer_angle)
+}
+
+#[pyfunction]
+#[pyo3(pass_module, signature = (radius, sectors=32, stacks=18))]
+fn draw_sphere(
+    module: &Bound<'_, PyModule>,
+    radius: f32,
+    sectors: u32,
+    stacks: u32,
+) -> PyResult<()> {
+    get_graphics(module)?.draw_sphere(radius, sectors, stacks)
+}
+
+#[pyfunction]
+#[pyo3(pass_module, signature = (material))]
+fn use_material(module: &Bound<'_, PyModule>, material: &Bound<'_, Material>) -> PyResult<()> {
+    get_graphics(module)?.use_material(&*material.extract::<PyRef<Material>>()?)
 }

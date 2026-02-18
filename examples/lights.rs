@@ -28,6 +28,8 @@ fn sketch() -> error::Result<()> {
     let surface = glfw_ctx.create_surface(width, height, scale_factor)?;
     let graphics = graphics_create(surface, width, height)?;
     let box_geo = geometry_box(100.0, 100.0, 100.0)?;
+    let pbr_mat = material_create_pbr()?;
+    material_set(pbr_mat, "roughness", material::MaterialValue::Float(0.0))?;
 
     // We will only declare lights in `setup`
     // rather than calling some sort of `light()` method inside of `draw`
@@ -84,6 +86,9 @@ fn sketch() -> error::Result<()> {
             graphics,
             DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.18, 0.20, 0.15)),
         )?;
+
+        graphics_record_command(graphics, DrawCommand::Fill(bevy::color::Color::WHITE))?;
+        graphics_record_command(graphics, DrawCommand::Material(pbr_mat))?;
 
         graphics_record_command(graphics, DrawCommand::PushMatrix)?;
         graphics_record_command(graphics, DrawCommand::Rotate { angle })?;

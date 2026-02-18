@@ -293,8 +293,20 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    pub fn draw_sphere(&self, radius: f32, sectors: u32, stacks: u32) -> PyResult<()> {
+        let sphere_geo = geometry_sphere(radius, sectors, stacks)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        graphics_record_command(self.entity, DrawCommand::Geometry(sphere_geo))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     pub fn draw_geometry(&self, geometry: &Geometry) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::Geometry(geometry.entity))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn use_material(&self, material: &crate::material::Material) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Material(material.entity))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
@@ -310,6 +322,11 @@ impl Graphics {
 
     pub fn shear_y(&self, angle: f32) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::ShearY { angle })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn set_material(&self, material: &crate::material::Material) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Material(material.entity))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 

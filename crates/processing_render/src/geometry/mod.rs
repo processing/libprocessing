@@ -174,6 +174,28 @@ pub fn create_box(
     commands.spawn(Geometry::new(handle, layout_entity)).id()
 }
 
+pub fn create_sphere(
+    In((radius, sectors, stacks)): In<(f32, u32, u32)>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    builtins: Res<BuiltinAttributes>,
+) -> Entity {
+    let sphere = Sphere::new(radius);
+    let mesh = sphere.mesh().uv(sectors, stacks);
+    let handle = meshes.add(mesh);
+
+    let layout_entity = commands
+        .spawn(VertexLayout::with_attributes(vec![
+            builtins.position,
+            builtins.normal,
+            builtins.color,
+            builtins.uv,
+        ]))
+        .id();
+
+    commands.spawn(Geometry::new(handle, layout_entity)).id()
+}
+
 pub fn normal(world: &mut World, entity: Entity, nx: f32, ny: f32, nz: f32) -> Result<()> {
     let mut geometry = world
         .get_mut::<Geometry>(entity)

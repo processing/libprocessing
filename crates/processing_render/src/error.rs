@@ -30,4 +30,8 @@ pub enum ProcessingError {
     LayoutNotFound,
     #[error("Transform not found")]
     TransformNotFound,
+    #[error("Material not found")]
+    MaterialNotFound,
+    #[error("Unknown material property: {0}")]
+    UnknownMaterialProperty(String),
 }
