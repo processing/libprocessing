@@ -72,6 +72,10 @@ path = "examples/lights.rs"
 name = "materials"
 path = "examples/materials.rs"
 
+[[example]]
+name = "pbr"
+path = "examples/pbr.rs"
+
 [profile.wasm-release]
 inherits = "release"
 opt-level = "z"

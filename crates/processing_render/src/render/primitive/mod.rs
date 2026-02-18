@@ -1,4 +1,5 @@
 mod rect;
+mod shape3d;
 
 use bevy::{
     asset::RenderAssetUsages,
@@ -12,6 +13,7 @@ use lyon::{
     },
 };
 pub use rect::rect;
+pub use shape3d::{box_mesh, sphere_mesh};
 
 use super::mesh_builder::MeshBuilder;
 

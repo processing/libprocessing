@@ -42,6 +42,16 @@ pub enum DrawCommand {
     },
     Geometry(Entity),
     Material(Entity),
+    Box {
+        width: f32,
+        height: f32,
+        depth: f32,
+    },
+    Sphere {
+        radius: f32,
+        sectors: u32,
+        stacks: u32,
+    },
 }
 
 #[derive(Debug, Default, Component)]

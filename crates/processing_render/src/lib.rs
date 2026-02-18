@@ -22,8 +22,8 @@ use bevy::{
     prelude::*,
     render::render_resource::{Extent3d, TextureFormat},
 };
-use render::{activate_cameras, clear_transient_meshes, flush_draw_commands};
 use render::material::add_standard_materials;
+use render::{activate_cameras, clear_transient_meshes, flush_draw_commands};
 use tracing::debug;
 
 use crate::geometry::{AttributeFormat, AttributeValue};

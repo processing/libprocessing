@@ -82,10 +82,7 @@ impl MaterialKey {
 
 /// A system that adds a `MeshMaterial3d` component to any entity with an `UntypedMaterial` that can
 /// be typed as a `StandardMaterial`.
-pub fn add_standard_materials(
-    mut commands: Commands,
-    meshes: Query<(Entity, &UntypedMaterial)>,
-) {
+pub fn add_standard_materials(mut commands: Commands, meshes: Query<(Entity, &UntypedMaterial)>) {
     for (entity, handle) in meshes.iter() {
         let handle = handle.deref().clone();
         if let Ok(handle) = handle.try_typed::<StandardMaterial>() {

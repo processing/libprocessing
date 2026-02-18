@@ -12,7 +12,7 @@ use bevy::{
 };
 use command::{CommandBuffer, DrawCommand};
 use material::MaterialKey;
-use primitive::{TessellationMode, empty_mesh};
+use primitive::{TessellationMode, box_mesh, empty_mesh, sphere_mesh};
 use transform::TransformStack;
 
 use crate::{
@@ -124,14 +124,8 @@ pub fn flush_draw_commands(
     p_geometries: Query<&Geometry>,
     p_material_handles: Query<&UntypedMaterial>,
 ) {
-    for (
-        graphics_entity,
-        mut cmd_buffer,
-        mut state,
-        render_layers,
-        projection,
-        camera_transform,
-    ) in graphics.iter_mut()
+    for (graphics_entity, mut cmd_buffer, mut state, render_layers, projection, camera_transform) in
+        graphics.iter_mut()
     {
         let clip_from_view = projection.get_clip_from_view();
         let view_from_world = camera_transform.to_matrix().inverse();
@@ -162,9 +156,17 @@ pub fn flush_draw_commands(
                 }
                 DrawCommand::Roughness(r) => {
                     state.material_key = match state.material_key {
-                        MaterialKey::Pbr { albedo, metallic, emissive, .. } => {
-                            MaterialKey::Pbr { albedo, roughness: (r * 255.0) as u8, metallic, emissive }
-                        }
+                        MaterialKey::Pbr {
+                            albedo,
+                            metallic,
+                            emissive,
+                            ..
+                        } => MaterialKey::Pbr {
+                            albedo,
+                            roughness: (r * 255.0) as u8,
+                            metallic,
+                            emissive,
+                        },
                         _ => MaterialKey::Pbr {
                             albedo: [255, 255, 255, 255],
                             roughness: (r * 255.0) as u8,
@@ -175,9 +177,17 @@ pub fn flush_draw_commands(
                 }
                 DrawCommand::Metallic(m) => {
                     state.material_key = match state.material_key {
-                        MaterialKey::Pbr { albedo, roughness, emissive, .. } => {
-                            MaterialKey::Pbr { albedo, roughness, metallic: (m * 255.0) as u8, emissive }
-                        }
+                        MaterialKey::Pbr {
+                            albedo,
+                            roughness,
+                            emissive,
+                            ..
+                        } => MaterialKey::Pbr {
+                            albedo,
+                            roughness,
+                            metallic: (m * 255.0) as u8,
+                            emissive,
+                        },
                         _ => MaterialKey::Pbr {
                             albedo: [255, 255, 255, 255],
                             roughness: 128,
@@ -189,9 +199,17 @@ pub fn flush_draw_commands(
                 DrawCommand::Emissive(color) => {
                     let [r, g, b, a] = color.to_srgba().to_u8_array();
                     state.material_key = match state.material_key {
-                        MaterialKey::Pbr { albedo, roughness, metallic, .. } => {
-                            MaterialKey::Pbr { albedo, roughness, metallic, emissive: [r, g, b, a] }
-                        }
+                        MaterialKey::Pbr {
+                            albedo,
+                            roughness,
+                            metallic,
+                            ..
+                        } => MaterialKey::Pbr {
+                            albedo,
+                            roughness,
+                            metallic,
+                            emissive: [r, g, b, a],
+                        },
                         _ => MaterialKey::Pbr {
                             albedo: [255, 255, 255, 255],
                             roughness: 128,
@@ -287,8 +305,12 @@ pub fn flush_draw_commands(
                         continue;
                     };
 
-                    let Some(mat_handle) = p_material_handles.get(batch.active_material).ok() else {
-                        warn!("Could not find material for entity {:?}", batch.active_material);
+                    let Some(mat_handle) = p_material_handles.get(batch.active_material).ok()
+                    else {
+                        warn!(
+                            "Could not find material for entity {:?}",
+                            batch.active_material
+                        );
                         continue;
                     };
 
@@ -312,6 +334,25 @@ pub fn flush_draw_commands(
                     state.active_material = entity;
                     batch.active_material = entity;
                     flush_batch(&mut res, &mut batch);
+                }
+                DrawCommand::Box {
+                    width,
+                    height,
+                    depth,
+                } => {
+                    add_shape3d(&mut res, &mut batch, &state, box_mesh(width, height, depth));
+                }
+                DrawCommand::Sphere {
+                    radius,
+                    sectors,
+                    stacks,
+                } => {
+                    add_shape3d(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        sphere_mesh(radius, sectors, stacks),
+                    );
                 }
             }
         }
@@ -382,11 +423,18 @@ fn start_batch(
 
 fn material_key_with_color(key: &MaterialKey, color: Color) -> MaterialKey {
     match key {
-        MaterialKey::Color { background_image, .. } => MaterialKey::Color {
+        MaterialKey::Color {
+            background_image, ..
+        } => MaterialKey::Color {
             transparent: color.alpha() < 1.0,
             background_image: background_image.clone(),
         },
-        MaterialKey::Pbr { roughness, metallic, emissive, .. } => {
+        MaterialKey::Pbr {
+            roughness,
+            metallic,
+            emissive,
+            ..
+        } => {
             let [r, g, b, a] = color.to_srgba().to_u8_array();
             MaterialKey::Pbr {
                 albedo: [r, g, b, a],
@@ -397,6 +445,11 @@ fn material_key_with_color(key: &MaterialKey, color: Color) -> MaterialKey {
         }
         MaterialKey::Custom(e) => MaterialKey::Custom(*e),
     }
+}
+
+fn material_key_with_fill(state: &RenderState) -> MaterialKey {
+    let color = state.fill_color.unwrap_or(Color::WHITE);
+    material_key_with_color(&state.material_key, color)
 }
 
 fn add_fill(
@@ -447,6 +500,28 @@ fn flush_batch(res: &mut RenderResources, batch: &mut BatchState) {
         batch.draw_index += 1;
     }
     batch.material_key = None;
+}
+
+fn add_shape3d(res: &mut RenderResources, batch: &mut BatchState, state: &RenderState, mesh: Mesh) {
+    flush_batch(res, batch);
+
+    let mesh_handle = res.meshes.add(mesh);
+    let material_key = material_key_with_fill(state);
+    let material_handle = material_key.to_material(&mut res.materials);
+
+    let z_offset = -(batch.draw_index as f32 * 0.001);
+    let mut transform = state.transform.to_bevy_transform();
+    transform.translation.z += z_offset;
+
+    res.commands.spawn((
+        Mesh3d(mesh_handle),
+        UntypedMaterial(material_handle),
+        BelongsToGraphics(batch.graphics_entity),
+        transform,
+        batch.render_layers.clone(),
+    ));
+
+    batch.draw_index += 1;
 }
 
 /// Creates a fullscreen quad by transforming NDC fullscreen by inverse of the clip-from-world matrix

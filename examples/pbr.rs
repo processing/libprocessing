@@ -25,7 +25,6 @@ fn sketch() -> error::Result<()> {
 
     let surface = glfw_ctx.create_surface(width, height, 1.0)?;
     let graphics = graphics_create(surface, width, height)?;
-    let sphere = geometry_sphere(30.0, 32, 18)?;
 
     graphics_mode_3d(graphics)?;
     transform_set_position(graphics, 0.0, 0.0, 600.0)?;
@@ -40,23 +39,8 @@ fn sketch() -> error::Result<()> {
         light_create_point(graphics, bevy::color::Color::WHITE, 100_000.0, 800.0, 0.0)?;
     transform_set_position(point_light, 200.0, 200.0, 400.0)?;
 
-    // Grid of materials varying roughness (x) and metallic (y)
     let cols = 11;
     let rows = 5;
-    let mut materials = Vec::new();
-
-    for row in 0..rows {
-        for col in 0..cols {
-            let mat = material_create_pbr()?;
-            let roughness = col as f32 / (cols - 1) as f32;
-            let metallic = row as f32 / (rows - 1) as f32;
-
-            material_set(mat, "roughness", material::MaterialValue::Float(roughness))?;
-            material_set(mat, "metallic", material::MaterialValue::Float(metallic))?;
-            materials.push(mat);
-        }
-    }
-
     let base_color = bevy::color::Color::srgb(1.0, 0.85, 0.57);
     let spacing = 70.0;
     let offset_x = (cols - 1) as f32 * spacing / 2.0;
@@ -74,7 +58,11 @@ fn sketch() -> error::Result<()> {
 
         for row in 0..rows {
             for col in 0..cols {
-                let mat = materials[row * cols + col];
+                let roughness = col as f32 / (cols - 1) as f32;
+                let metallic = row as f32 / (rows - 1) as f32;
+
+                graphics_record_command(graphics, DrawCommand::Roughness(roughness))?;
+                graphics_record_command(graphics, DrawCommand::Metallic(metallic))?;
 
                 graphics_record_command(graphics, DrawCommand::PushMatrix)?;
                 graphics_record_command(
@@ -84,17 +72,19 @@ fn sketch() -> error::Result<()> {
                         y: row as f32 * spacing - offset_y,
                     },
                 )?;
-                graphics_record_command(graphics, DrawCommand::Material(mat))?;
-                graphics_record_command(graphics, DrawCommand::Geometry(sphere))?;
+                graphics_record_command(
+                    graphics,
+                    DrawCommand::Sphere {
+                        radius: 30.0,
+                        sectors: 32,
+                        stacks: 18,
+                    },
+                )?;
                 graphics_record_command(graphics, DrawCommand::PopMatrix)?;
             }
         }
 
         graphics_end_draw(graphics)?;
-    }
-
-    for mat in materials {
-        material_destroy(mat)?;
     }
 
     Ok(())
