@@ -7,12 +7,6 @@ use std::ops::Deref;
 #[derive(Component, Deref)]
 pub struct UntypedMaterial(pub UntypedHandle);
 
-#[derive(Clone, PartialEq, Debug)]
-pub enum MaterialSource {
-    Immediate(MaterialKey),
-    Explicit(Entity),
-}
-
 /// Defines the current material for a batch, which can be used to determine when to flush the
 /// current batch and start a new one.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]

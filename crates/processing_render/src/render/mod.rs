@@ -11,7 +11,7 @@ use bevy::{
     prelude::*,
 };
 use command::{CommandBuffer, DrawCommand};
-use material::{MaterialKey, MaterialSource};
+use material::MaterialKey;
 use primitive::{TessellationMode, empty_mesh};
 use transform::TransformStack;
 
@@ -19,7 +19,6 @@ use crate::{
     Flush,
     geometry::Geometry,
     image::Image,
-    material::DefaultMaterial,
     render::{material::UntypedMaterial, primitive::rect},
 };
 
@@ -40,7 +39,7 @@ pub struct RenderResources<'w, 's> {
 
 struct BatchState {
     current_mesh: Option<Mesh>,
-    material_source: Option<MaterialSource>,
+    material_key: Option<MaterialKey>,
     active_material: Entity,
     transform: Affine3A,
     draw_index: u32,
@@ -52,7 +51,7 @@ impl BatchState {
     fn new(graphics_entity: Entity, render_layers: RenderLayers, active_material: Entity) -> Self {
         Self {
             current_mesh: None,
-            material_source: None,
+            material_key: None,
             active_material,
             transform: Affine3A::IDENTITY,
             draw_index: 0,
@@ -124,7 +123,6 @@ pub fn flush_draw_commands(
     p_images: Query<&Image>,
     p_geometries: Query<&Geometry>,
     p_material_handles: Query<&UntypedMaterial>,
-    #[allow(unused)] default_material: Res<DefaultMaterial>,
 ) {
     for (
         graphics_entity,
@@ -340,7 +338,7 @@ pub fn clear_transient_meshes(
 }
 
 fn spawn_mesh(res: &mut RenderResources, batch: &mut BatchState, mesh: Mesh, z_offset: f32) {
-    let Some(material_source) = &batch.material_source else {
+    let Some(key) = &batch.material_key else {
         return;
     };
 
@@ -353,10 +351,7 @@ fn spawn_mesh(res: &mut RenderResources, batch: &mut BatchState, mesh: Mesh, z_o
         scale,
     };
 
-    let material_handle = match material_source {
-        MaterialSource::Immediate(key) => key.to_material(&mut res.materials),
-        MaterialSource::Explicit(_) => return,
-    };
+    let material_handle = key.to_material(&mut res.materials);
 
     res.commands.spawn((
         Mesh3d(mesh_handle),
@@ -367,10 +362,9 @@ fn spawn_mesh(res: &mut RenderResources, batch: &mut BatchState, mesh: Mesh, z_o
     ));
 }
 
-fn needs_new_batch(batch: &BatchState, state: &RenderState, new_source: &MaterialSource) -> bool {
-    let current_transform = state.transform.current();
-    let material_changed = batch.material_source.as_ref() != Some(new_source);
-    let transform_changed = batch.transform != current_transform;
+fn needs_batch(batch: &BatchState, state: &RenderState, material_key: &MaterialKey) -> bool {
+    let material_changed = batch.material_key.as_ref() != Some(material_key);
+    let transform_changed = batch.transform != state.transform.current();
     material_changed || transform_changed
 }
 
@@ -378,10 +372,10 @@ fn start_batch(
     res: &mut RenderResources,
     batch: &mut BatchState,
     state: &RenderState,
-    material_source: MaterialSource,
+    material_key: MaterialKey,
 ) {
     flush_batch(res, batch);
-    batch.material_source = Some(material_source);
+    batch.material_key = Some(material_key);
     batch.transform = state.transform.current();
     batch.current_mesh = Some(empty_mesh());
 }
@@ -415,10 +409,9 @@ fn add_fill(
         return;
     };
     let material_key = material_key_with_color(&state.material_key, color);
-    let material_source = MaterialSource::Immediate(material_key);
 
-    if needs_new_batch(batch, state, &material_source) {
-        start_batch(res, batch, state, material_source);
+    if needs_batch(batch, state, &material_key) {
+        start_batch(res, batch, state, material_key);
     }
 
     if let Some(ref mut mesh) = batch.current_mesh {
@@ -437,10 +430,9 @@ fn add_stroke(
     };
     let stroke_weight = state.stroke_weight;
     let material_key = material_key_with_color(&state.material_key, color);
-    let material_source = MaterialSource::Immediate(material_key);
 
-    if needs_new_batch(batch, state, &material_source) {
-        start_batch(res, batch, state, material_source);
+    if needs_batch(batch, state, &material_key) {
+        start_batch(res, batch, state, material_key);
     }
 
     if let Some(ref mut mesh) = batch.current_mesh {
@@ -454,7 +446,7 @@ fn flush_batch(res: &mut RenderResources, batch: &mut BatchState) {
         spawn_mesh(res, batch, mesh, z_offset);
         batch.draw_index += 1;
     }
-    batch.material_source = None;
+    batch.material_key = None;
 }
 
 /// Creates a fullscreen quad by transforming NDC fullscreen by inverse of the clip-from-world matrix
