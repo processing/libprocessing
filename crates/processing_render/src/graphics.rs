@@ -29,7 +29,6 @@ use crate::{
     Flush,
     error::{ProcessingError, Result},
     image::{Image, bytes_to_pixels, create_readback_buffer, pixel_size, pixels_to_bytes},
-    material::DefaultMaterial,
     render::{
         RenderState,
         command::{CommandBuffer, DrawCommand},
@@ -187,7 +186,6 @@ pub fn create(
     mut layer_manager: ResMut<RenderLayersManager>,
     p_images: Query<&Image, With<Surface>>,
     render_device: Res<RenderDevice>,
-    default_material: Res<DefaultMaterial>,
 ) -> Result<Entity> {
     // find the surface entity, if it is an image, we will render to that image
     // otherwise we will render to the window
@@ -245,7 +243,7 @@ pub fn create(
             Transform::from_xyz(0.0, 0.0, 999.9),
             render_layer,
             CommandBuffer::new(),
-            RenderState::new(default_material.0),
+            RenderState::new(),
             SurfaceSize(width, height),
             Graphics {
                 readback_buffer,
@@ -426,15 +424,11 @@ pub fn destroy(
     Ok(())
 }
 
-pub fn begin_draw(
-    In(entity): In<Entity>,
-    mut state_query: Query<&mut RenderState>,
-    default_material: Res<DefaultMaterial>,
-) -> Result<()> {
+pub fn begin_draw(In(entity): In<Entity>, mut state_query: Query<&mut RenderState>) -> Result<()> {
     let mut state = state_query
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
-    state.reset(default_material.0);
+    state.reset();
     Ok(())
 }
 

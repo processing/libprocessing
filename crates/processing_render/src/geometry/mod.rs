@@ -11,12 +11,13 @@ use std::collections::HashMap;
 
 use bevy::{
     asset::RenderAssetUsages,
-    mesh::{Indices, MeshVertexAttributeId, Meshable, VertexAttributeValues},
+    mesh::{Indices, MeshVertexAttributeId, VertexAttributeValues},
     prelude::*,
     render::render_resource::PrimitiveTopology,
 };
 
 use crate::error::{ProcessingError, Result};
+use crate::render::primitive::{box_mesh, sphere_mesh};
 
 pub struct GeometryPlugin;
 
@@ -158,9 +159,7 @@ pub fn create_box(
     mut meshes: ResMut<Assets<Mesh>>,
     builtins: Res<BuiltinAttributes>,
 ) -> Entity {
-    let cuboid = Cuboid::new(width, height, depth);
-    let mesh = cuboid.mesh().build();
-    let handle = meshes.add(mesh);
+    let handle = meshes.add(box_mesh(width, height, depth));
 
     let layout_entity = commands
         .spawn(VertexLayout::with_attributes(vec![
@@ -180,9 +179,7 @@ pub fn create_sphere(
     mut meshes: ResMut<Assets<Mesh>>,
     builtins: Res<BuiltinAttributes>,
 ) -> Entity {
-    let sphere = Sphere::new(radius);
-    let mesh = sphere.mesh().uv(sectors, stacks);
-    let handle = meshes.add(mesh);
+    let handle = meshes.add(sphere_mesh(radius, sectors, stacks));
 
     let layout_entity = commands
         .spawn(VertexLayout::with_attributes(vec![

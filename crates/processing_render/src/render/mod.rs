@@ -40,7 +40,6 @@ pub struct RenderResources<'w, 's> {
 struct BatchState {
     current_mesh: Option<Mesh>,
     material_key: Option<MaterialKey>,
-    active_material: Entity,
     transform: Affine3A,
     draw_index: u32,
     render_layers: RenderLayers,
@@ -48,11 +47,10 @@ struct BatchState {
 }
 
 impl BatchState {
-    fn new(graphics_entity: Entity, render_layers: RenderLayers, active_material: Entity) -> Self {
+    fn new(graphics_entity: Entity, render_layers: RenderLayers) -> Self {
         Self {
             current_mesh: None,
             material_key: None,
-            active_material,
             transform: Affine3A::IDENTITY,
             draw_index: 0,
             render_layers,
@@ -68,11 +66,10 @@ pub struct RenderState {
     pub stroke_weight: f32,
     pub material_key: MaterialKey,
     pub transform: TransformStack,
-    pub active_material: Entity,
 }
 
 impl RenderState {
-    pub fn new(default_material: Entity) -> Self {
+    pub fn new() -> Self {
         Self {
             fill_color: Some(Color::WHITE),
             stroke_color: Some(Color::BLACK),
@@ -82,11 +79,10 @@ impl RenderState {
                 background_image: None,
             },
             transform: TransformStack::new(),
-            active_material: default_material,
         }
     }
 
-    pub fn reset(&mut self, default_material: Entity) {
+    pub fn reset(&mut self) {
         self.fill_color = Some(Color::WHITE);
         self.stroke_color = Some(Color::BLACK);
         self.stroke_weight = 1.0;
@@ -95,7 +91,6 @@ impl RenderState {
             background_image: None,
         };
         self.transform = TransformStack::new();
-        self.active_material = default_material;
     }
 
     pub fn fill_is_transparent(&self) -> bool {
@@ -131,11 +126,7 @@ pub fn flush_draw_commands(
         let view_from_world = camera_transform.to_matrix().inverse();
         let world_from_clip = (clip_from_view * view_from_world).inverse();
         let draw_commands = std::mem::take(&mut cmd_buffer.commands);
-        let mut batch = BatchState::new(
-            graphics_entity,
-            render_layers.clone(),
-            state.active_material,
-        );
+        let mut batch = BatchState::new(graphics_entity, render_layers.clone());
 
         for cmd in draw_commands {
             match cmd {
@@ -305,13 +296,16 @@ pub fn flush_draw_commands(
                         continue;
                     };
 
-                    let Some(mat_handle) = p_material_handles.get(batch.active_material).ok()
-                    else {
-                        warn!(
-                            "Could not find material for entity {:?}",
-                            batch.active_material
-                        );
-                        continue;
+                    let material_key = material_key_with_fill(&state);
+                    let material_handle = match &material_key {
+                        MaterialKey::Custom(mat_entity) => {
+                            let Some(handle) = p_material_handles.get(*mat_entity).ok() else {
+                                warn!("Could not find material for entity {:?}", mat_entity);
+                                continue;
+                            };
+                            handle.0.clone()
+                        }
+                        _ => material_key.to_material(&mut res.materials),
                     };
 
                     flush_batch(&mut res, &mut batch);
@@ -322,7 +316,7 @@ pub fn flush_draw_commands(
 
                     res.commands.spawn((
                         Mesh3d(geometry.handle.clone()),
-                        UntypedMaterial(mat_handle.0.clone()),
+                        UntypedMaterial(material_handle),
                         BelongsToGraphics(batch.graphics_entity),
                         transform,
                         batch.render_layers.clone(),
@@ -331,9 +325,7 @@ pub fn flush_draw_commands(
                     batch.draw_index += 1;
                 }
                 DrawCommand::Material(entity) => {
-                    state.active_material = entity;
-                    batch.active_material = entity;
-                    flush_batch(&mut res, &mut batch);
+                    state.material_key = MaterialKey::Custom(entity);
                 }
                 DrawCommand::Box {
                     width,
