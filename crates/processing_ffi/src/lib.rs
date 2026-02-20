@@ -1158,13 +1158,17 @@ pub extern "C" fn processing_light_create_spot(
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_material_create_pbr() -> u64 {
     error::clear_error();
-    error::check(|| material_create_pbr())
+    error::check(material_create_pbr)
         .map(|e| e.to_bits())
         .unwrap_or(0)
 }
 
+/// Set float value for `name` field on Material.
+///
+/// # Safety
+/// - `name` must be non-null
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_material_set_float(
+pub unsafe extern "C" fn processing_material_set_float(
     mat_id: u64,
     name: *const std::ffi::c_char,
     value: f32,
@@ -1180,8 +1184,12 @@ pub extern "C" fn processing_material_set_float(
     });
 }
 
+/// Set float4 value for `name` field on Material.
+///
+/// # Safety
+/// - `name` must be non-null
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_material_set_float4(
+pub unsafe extern "C" fn processing_material_set_float4(
     mat_id: u64,
     name: *const std::ffi::c_char,
     r: f32,
