@@ -117,7 +117,7 @@ fn run(module: &Bound<'_, PyModule>) -> PyResult<()> {
         let builtins = PyModule::import(py, "builtins")?;
         let locals = builtins.getattr("locals")?.call0()?;
 
-        let mut setup_fn = locals.get_item("setup")?;
+        let setup_fn = locals.get_item("setup")?;
         let mut draw_fn = locals.get_item("draw")?;
 
         // call setup
@@ -145,7 +145,7 @@ fn run(module: &Bound<'_, PyModule>) -> PyResult<()> {
                         }
                     }
 
-                    setup_fn = locals.get_item("setup").unwrap().unwrap();
+                    // setup_fn = locals.get_item("setup").unwrap().unwrap();
                     draw_fn = locals.get_item("draw").unwrap().unwrap();
 
                     dbg!(locals);
