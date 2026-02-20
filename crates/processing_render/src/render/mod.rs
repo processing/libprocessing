@@ -102,6 +102,12 @@ impl RenderState {
     }
 }
 
+impl Default for RenderState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub fn flush_draw_commands(
     mut res: RenderResources,
     mut graphics: Query<
