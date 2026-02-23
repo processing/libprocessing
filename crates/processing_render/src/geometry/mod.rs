@@ -250,7 +250,7 @@ pub fn vertex(
         .get(geometry.layout)
         .map_err(|_| ProcessingError::LayoutNotFound)?;
 
-    let mesh = meshes
+    let mut mesh = meshes
         .get_mut(&geometry.handle)
         .ok_or(ProcessingError::GeometryNotFound)?;
 
@@ -323,7 +323,7 @@ pub fn index(
         .get(entity)
         .map_err(|_| ProcessingError::GeometryNotFound)?;
 
-    let mesh = meshes
+    let mut mesh = meshes
         .get_mut(&geometry.handle)
         .ok_or(ProcessingError::GeometryNotFound)?;
 

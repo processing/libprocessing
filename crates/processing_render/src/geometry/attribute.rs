@@ -1,6 +1,7 @@
 use std::ops::Range;
 
 use bevy::{
+    asset::AssetMut,
     mesh::{Indices, MeshVertexAttribute, VertexAttributeValues},
     prelude::*,
     render::render_resource::VertexFormat,
@@ -31,7 +32,7 @@ fn get_mesh_mut<'a>(
     entity: Entity,
     geometries: &Query<&Geometry>,
     meshes: &'a mut Assets<Mesh>,
-) -> Result<&'a mut Mesh> {
+) -> Result<AssetMut<'a, Mesh>> {
     let geometry = geometries
         .get(entity)
         .map_err(|_| ProcessingError::GeometryNotFound)?;
@@ -89,7 +90,7 @@ macro_rules! impl_setter {
             geometries: Query<&Geometry>,
             mut meshes: ResMut<Assets<Mesh>>,
         ) -> Result<()> {
-            let mesh = get_mesh_mut(entity, &geometries, &mut meshes)?;
+            let mut mesh = get_mesh_mut(entity, &geometries, &mut meshes)?;
             match mesh.attribute_mut($attr) {
                 Some(VertexAttributeValues::$variant(data)) => {
                     let idx = index as usize;
@@ -335,7 +336,7 @@ pub fn set_attribute(
     geometries: Query<&Geometry>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) -> Result<()> {
-    let mesh = get_mesh_mut(entity, &geometries, &mut meshes)?;
+    let mut mesh = get_mesh_mut(entity, &geometries, &mut meshes)?;
     let idx = index as usize;
 
     let attr = mesh.attribute_mut(attribute_id).ok_or_else(|| {

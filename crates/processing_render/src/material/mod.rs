@@ -66,10 +66,10 @@ pub fn set_property(
         .clone()
         .try_typed::<StandardMaterial>()
         .map_err(|_| ProcessingError::MaterialNotFound)?;
-    let standard = standard_materials
+    let mut standard = standard_materials
         .get_mut(&handle)
         .ok_or(ProcessingError::MaterialNotFound)?;
-    pbr::set_property(standard, &name, &value)?;
+    pbr::set_property(&mut standard, &name, &value)?;
     Ok(())
 }
 

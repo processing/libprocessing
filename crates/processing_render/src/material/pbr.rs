@@ -1,5 +1,4 @@
 use bevy::prelude::*;
-use bevy::render::alpha::AlphaMode;
 
 use super::MaterialValue;
 use crate::error::{ProcessingError, Result};

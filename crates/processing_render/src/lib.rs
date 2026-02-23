@@ -517,6 +517,7 @@ pub fn graphics_perspective(
     aspect_ratio: f32,
     near: f32,
     far: f32,
+    near_clip_plane: Vec4,
 ) -> error::Result<()> {
     app_mut(|app| {
         flush(app, graphics_entity)?;
@@ -530,6 +531,7 @@ pub fn graphics_perspective(
                         aspect_ratio,
                         near,
                         far,
+                        near_clip_plane,
                     },
                 ),
             )
