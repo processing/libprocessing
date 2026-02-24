@@ -255,7 +255,6 @@ pub fn readback(
     });
 
     render_device
-        // TODO: Should this be a timeout instead?
         .poll(PollType::wait_indefinitely())
         .expect("Failed to poll device for map async");
 

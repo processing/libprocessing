@@ -13,7 +13,7 @@ use bevy::{
     math::{Mat4, Vec3A},
     prelude::*,
     render::{
-        Render,
+        Render, RenderSystems,
         render_resource::{
             CommandEncoderDescriptor, Extent3d, MapMode, Origin3d, PollType, TexelCopyBufferInfo,
             TexelCopyBufferLayout, TexelCopyTextureInfo, TextureFormat, TextureUsages,
@@ -48,7 +48,12 @@ impl Plugin for GraphicsPlugin {
 
         let render_app = app.sub_app_mut(bevy::render::RenderApp);
         render_app
-            .add_systems(Render, send_view_targets.after(prepare_view_targets))
+            .add_systems(
+                Render,
+                send_view_targets
+                    .in_set(RenderSystems::PrepareViews)
+                    .after(prepare_view_targets),
+            )
             .insert_resource(GraphicsTargetSender(tx));
     }
 }
@@ -528,7 +533,6 @@ pub fn readback(
     });
 
     render_device
-        // TODO: should this have a timeout?
         .poll(PollType::wait_indefinitely())
         .expect("Failed to poll device for map async");
 
