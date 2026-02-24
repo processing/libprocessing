@@ -29,11 +29,12 @@ use crate::{
     Flush,
     error::{ProcessingError, Result},
     image::{Image, bytes_to_pixels, create_readback_buffer, pixel_size, pixels_to_bytes},
-    render::{RenderState, command::DrawCommand},
+    render::{
+        RenderState,
+        command::{CommandBuffer, DrawCommand},
+    },
     surface::Surface,
 };
-
-use processing_utils::CommandBuffer;
 
 pub struct GraphicsPlugin;
 
@@ -241,7 +242,7 @@ pub fn create(
             }),
             Transform::from_xyz(0.0, 0.0, 999.9),
             render_layer,
-            CommandBuffer::<DrawCommand>::new(),
+            CommandBuffer::new(),
             RenderState::default(),
             SurfaceSize(width, height),
             Graphics {
@@ -471,7 +472,7 @@ pub fn end_draw(app: &mut App, entity: Entity) -> Result<()> {
 
 pub fn record_command(
     In((graphics_entity, cmd)): In<(Entity, DrawCommand)>,
-    mut graphics_query: Query<&mut CommandBuffer<DrawCommand>>,
+    mut graphics_query: Query<&mut CommandBuffer>,
 ) -> Result<()> {
     let mut command_buffer = graphics_query
         .get_mut(graphics_entity)
