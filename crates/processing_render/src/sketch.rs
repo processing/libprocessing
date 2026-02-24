@@ -73,7 +73,7 @@ pub struct Sketch {
 ///
 /// Currently supports `.py` files, but the loader is designed to be extended
 /// for other languages in the future.
-#[derive(Default)]
+#[derive(Default, TypePath)]
 pub struct SketchLoader;
 
 impl AssetLoader for SketchLoader {

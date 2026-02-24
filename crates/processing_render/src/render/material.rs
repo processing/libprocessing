@@ -1,4 +1,4 @@
-use bevy::{prelude::*, render::alpha::AlphaMode};
+use bevy::prelude::*;
 use std::ops::Deref;
 
 /// A component that holds an untyped handle to a material. This allows the main render loop

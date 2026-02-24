@@ -25,10 +25,12 @@ bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", features =
 processing = { path = "." }
 processing_pyo3 = { path = "crates/processing_pyo3" }
 processing_render = { path = "crates/processing_render" }
+processing_midi = { path = "crates/processing_midi" }
 
 [dependencies]
 bevy = { workspace = true }
 processing_render = { workspace = true }
+processing_midi = { workspace = true }
 
 [dev-dependencies]
 glfw = "0.60.0"
@@ -75,6 +77,10 @@ path = "examples/materials.rs"
 [[example]]
 name = "pbr"
 path = "examples/pbr.rs"
+
+[[example]]
+name = "midi"
+path = "examples/midi.rs"
 
 [profile.wasm-release]
 inherits = "release"

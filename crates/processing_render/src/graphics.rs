@@ -5,7 +5,7 @@
 //! configured to render to a specific surface (either a window or an offscreen image).
 use bevy::{
     camera::{
-        CameraMainTextureUsages, CameraOutputMode, CameraProjection, ClearColorConfig,
+        CameraMainTextureUsages, CameraOutputMode, CameraProjection, ClearColorConfig, Hdr,
         ImageRenderTarget, MsaaWriteback, Projection, RenderTarget, visibility::RenderLayers,
     },
     core_pipeline::tonemapping::Tonemapping,
@@ -20,7 +20,7 @@ use bevy::{
         },
         renderer::{RenderDevice, RenderQueue},
         sync_world::MainEntity,
-        view::{Hdr, ViewTarget, prepare_view_targets},
+        view::{ViewTarget, prepare_view_targets},
     },
     window::WindowRef,
 };
@@ -52,7 +52,7 @@ impl Plugin for GraphicsPlugin {
             .add_systems(
                 Render,
                 send_view_targets
-                    .in_set(RenderSystems::ManageViews)
+                    .in_set(RenderSystems::PrepareViews)
                     .after(prepare_view_targets),
             )
             .insert_resource(GraphicsTargetSender(tx));
@@ -220,7 +220,6 @@ pub fn create(
         .spawn((
             Camera3d::default(),
             Camera {
-                target,
                 // always load the previous frame (provides sketch like behavior)
                 clear_color: ClearColorConfig::None,
                 // TODO: toggle this conditionally based on whether we need to write back MSAA
@@ -228,6 +227,7 @@ pub fn create(
                 msaa_writeback: MsaaWriteback::Always,
                 ..default()
             },
+            target,
             // default to floating point texture format
             Hdr,
             // tonemapping prevents color accurate readback, so we disable it
@@ -243,7 +243,7 @@ pub fn create(
             Transform::from_xyz(0.0, 0.0, 999.9),
             render_layer,
             CommandBuffer::new(),
-            RenderState::new(),
+            RenderState::default(),
             SurfaceSize(width, height),
             Graphics {
                 readback_buffer,
@@ -294,6 +294,10 @@ pub fn mode_3d(
     let near = camera_z / 10.0;
     let far = camera_z * 10.0;
 
+    // TODO: Setting this as a default, but we need to think about API around
+    // a user defined value
+    let near_clip_plane = vec4(0.0, 0.0, -1.0, -near);
+
     let mut projection = projections
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
@@ -303,6 +307,7 @@ pub fn mode_3d(
         aspect_ratio: aspect,
         near,
         far,
+        near_clip_plane,
     });
 
     let mut transform = transforms
@@ -352,6 +357,7 @@ pub fn perspective(
             aspect_ratio,
             near,
             far,
+            near_clip_plane,
         },
     )): In<(Entity, PerspectiveProjection)>,
     mut projections: Query<&mut Projection>,
@@ -365,6 +371,7 @@ pub fn perspective(
         aspect_ratio,
         near,
         far,
+        near_clip_plane,
     });
 
     Ok(())
@@ -527,7 +534,7 @@ pub fn readback(
     });
 
     render_device
-        .poll(PollType::Wait)
+        .poll(PollType::wait_indefinitely())
         .expect("Failed to poll device for map async");
 
     r.recv().expect("Failed to receive the map_async message");

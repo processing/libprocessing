@@ -33,6 +33,8 @@ use crate::{
     surface::SurfacePlugin,
 };
 
+use processing_midi::MidiPlugin;
+
 static IS_INIT: OnceLock<()> = OnceLock::new();
 
 thread_local! {
@@ -267,6 +269,7 @@ fn create_app(config: Config) -> App {
         geometry::GeometryPlugin,
         LightPlugin,
         material::MaterialPlugin,
+        MidiPlugin,
     ));
     app.add_systems(First, (clear_transient_meshes, activate_cameras))
         .add_systems(
@@ -514,6 +517,7 @@ pub fn graphics_perspective(
     aspect_ratio: f32,
     near: f32,
     far: f32,
+    near_clip_plane: Vec4,
 ) -> error::Result<()> {
     app_mut(|app| {
         flush(app, graphics_entity)?;
@@ -527,6 +531,7 @@ pub fn graphics_perspective(
                         aspect_ratio,
                         near,
                         far,
+                        near_clip_plane,
                     },
                 ),
             )

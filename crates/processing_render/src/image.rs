@@ -255,14 +255,14 @@ pub fn readback(
     });
 
     render_device
-        .poll(PollType::Wait)
+        .poll(PollType::wait_indefinitely())
         .expect("Failed to poll device for map async");
 
     r.recv().expect("Failed to receive the map_async message");
 
     let data = buffer_slice.get_mapped_range().to_vec();
 
-    let image = images
+    let mut image = images
         .get_mut(&p_image.handle)
         .ok_or(ProcessingError::ImageNotFound)?;
     image.data = Some(data.clone());
