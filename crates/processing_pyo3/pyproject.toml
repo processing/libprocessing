@@ -49,8 +49,9 @@ include = [
 cache-keys = [
     { file = "pyproject.toml" },
     { file = "Cargo.toml" },
+    { file = "../../Cargo.toml" },
     { file = "src/**/*.rs" },
     { file = "../../src/**/*.rs" },
-    { file = "../processing_render/src/**/*.rs" },
-    { file = "../processing_render/Cargo.toml" },
+    { file = "../*/src/**/*.rs" },
+    { file = "../*/Cargo.toml" },
 ]

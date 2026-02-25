@@ -4,7 +4,7 @@ pub mod camera;
 pub mod color;
 pub mod geometry;
 pub mod gltf;
-mod graphics;
+pub mod graphics;
 pub mod image;
 pub mod light;
 pub mod material;
@@ -26,6 +26,7 @@ use processing_core::error;
 
 use crate::geometry::{AttributeFormat, AttributeValue};
 use crate::graphics::flush;
+use crate::image::gpu_image;
 use crate::render::command::DrawCommand;
 
 #[derive(Component)]
@@ -302,8 +303,10 @@ pub fn graphics_destroy(graphics_entity: Entity) -> error::Result<()> {
 pub fn graphics_readback_raw(graphics_entity: Entity) -> error::Result<graphics::ReadbackData> {
     app_mut(|app| {
         graphics::flush(app, graphics_entity)?;
+        let vt = graphics::view_target(app, graphics_entity)?;
+        let texture = vt.main_texture().clone();
         app.world_mut()
-            .run_system_cached_with(graphics::readback_raw, graphics_entity)
+            .run_system_cached_with(graphics::readback_raw, (graphics_entity, texture))
             .unwrap()
     })
 }
@@ -325,6 +328,8 @@ pub fn graphics_readback(graphics_entity: Entity) -> error::Result<Vec<LinearRgb
 /// Update the graphics surface with new pixel data.
 pub fn graphics_update(graphics_entity: Entity, pixels: &[LinearRgba]) -> error::Result<()> {
     app_mut(|app| {
+        let vt = graphics::view_target(app, graphics_entity)?;
+        let texture = vt.main_texture().clone();
         let world = app.world_mut();
         let size = world
             .get::<graphics::Graphics>(graphics_entity)
@@ -342,6 +347,7 @@ pub fn graphics_update(graphics_entity: Entity, pixels: &[LinearRgba]) -> error:
                 graphics::update_region_write,
                 (
                     graphics_entity,
+                    texture,
                     0,
                     0,
                     size.width,
@@ -364,13 +370,15 @@ pub fn graphics_update_region(
     pixels: &[LinearRgba],
 ) -> error::Result<()> {
     app_mut(|app| {
+        let vt = graphics::view_target(app, graphics_entity)?;
+        let texture = vt.main_texture().clone();
         let world = app.world_mut();
         let (data, px_size) =
             graphics::prepare_update_region(world, graphics_entity, width, height, pixels)?;
         world
             .run_system_cached_with(
                 graphics::update_region_write,
-                (graphics_entity, x, y, width, height, data, px_size),
+                (graphics_entity, texture, x, y, width, height, data, px_size),
             )
             .unwrap()
     })
@@ -733,8 +741,9 @@ pub fn image_resize(entity: Entity, new_size: Extent3d) -> error::Result<()> {
 /// Read back image data from GPU to CPU.
 pub fn image_readback(entity: Entity) -> error::Result<Vec<LinearRgba>> {
     app_mut(|app| {
+        let texture = gpu_image(app, entity)?.texture.clone();
         app.world_mut()
-            .run_system_cached_with(image::readback, entity)
+            .run_system_cached_with(image::readback, (entity, texture))
             .unwrap()
     })
 }
@@ -742,6 +751,7 @@ pub fn image_readback(entity: Entity) -> error::Result<Vec<LinearRgba>> {
 /// Update an existing image with new pixel data.
 pub fn image_update(entity: Entity, pixels: &[LinearRgba]) -> error::Result<()> {
     app_mut(|app| {
+        let texture = gpu_image(app, entity)?.texture.clone();
         let world = app.world_mut();
         let size = world
             .get::<image::Image>(entity)
@@ -752,7 +762,16 @@ pub fn image_update(entity: Entity, pixels: &[LinearRgba]) -> error::Result<()> 
         world
             .run_system_cached_with(
                 image::update_region_write,
-                (entity, 0, 0, size.width, size.height, data, px_size),
+                (
+                    entity,
+                    texture,
+                    0,
+                    0,
+                    size.width,
+                    size.height,
+                    data,
+                    px_size,
+                ),
             )
             .unwrap()
     })
@@ -768,12 +787,13 @@ pub fn image_update_region(
     pixels: &[LinearRgba],
 ) -> error::Result<()> {
     app_mut(|app| {
+        let texture = gpu_image(app, entity)?.texture.clone();
         let world = app.world_mut();
         let (data, px_size) = image::prepare_update_region(world, entity, width, height, pixels)?;
         world
             .run_system_cached_with(
                 image::update_region_write,
-                (entity, x, y, width, height, data, px_size),
+                (entity, texture, x, y, width, height, data, px_size),
             )
             .unwrap()
     })

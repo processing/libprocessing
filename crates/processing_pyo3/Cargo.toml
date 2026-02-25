@@ -16,11 +16,13 @@ wayland = ["processing/wayland", "processing_glfw/wayland"]
 static-link = ["processing_glfw/static-link"]
 x11 = ["processing/x11"]
 webcam = ["processing/webcam", "dep:processing_webcam"]
+cuda = ["dep:processing_cuda", "processing/cuda"]
 
 [dependencies]
-pyo3 = { workspace = true, features = ["experimental-inspect"] }
+pyo3 = { workspace = true, features = ["experimental-inspect", "multiple-pymethods"] }
 processing = { workspace = true }
 processing_webcam = { workspace = true, optional = true }
 processing_glfw = { workspace = true }
 bevy = { workspace = true, features = ["file_watcher"] }
 png = "0.18"
+processing_cuda = { workspace = true, optional = true }

@@ -46,6 +46,9 @@ fn create_app(config: Config) -> App {
     app.add_plugins(processing_input::InputPlugin);
     app.add_plugins(processing_render::ProcessingRenderPlugin);
 
+    #[cfg(feature = "cuda")]
+    app.add_plugins(processing_cuda::CudaPlugin);
+
     #[cfg(feature = "webcam")]
     app.add_plugins(processing_webcam::WebcamPlugin);
 
@@ -127,6 +130,9 @@ pub fn exit(exit_code: u8) -> error::Result<()> {
 
     Ok(())
 }
+
+#[cfg(feature = "cuda")]
+pub use processing_cuda;
 
 fn setup_tracing(log_level: Option<&str>) -> error::Result<()> {
     // TODO: figure out wasm compatible tracing subscriber

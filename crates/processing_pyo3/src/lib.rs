@@ -9,6 +9,8 @@
 //! To allow Python users to create a similar experience, we provide module-level
 //! functions that forward to a singleton Graphics object pub(crate) behind the scenes.
 pub(crate) mod color;
+#[cfg(feature = "cuda")]
+pub(crate) mod cuda;
 mod glfw;
 mod gltf;
 mod graphics;
@@ -134,6 +136,9 @@ mod mewnala {
     use super::Shader;
     #[pymodule_export]
     use super::Topology;
+    #[cfg(feature = "cuda")]
+    #[pymodule_export]
+    use super::cuda::CudaImage;
 
     // Stroke cap/join
     #[pymodule_export]
@@ -567,6 +572,31 @@ mod mewnala {
 
     #[pyfunction]
     #[pyo3(pass_module)]
+    fn flush(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).flush()
+    }
+
+    #[cfg(feature = "cuda")]
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn cuda(module: &Bound<'_, PyModule>) -> PyResult<crate::cuda::CudaImage> {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        graphics.cuda()
+    }
+
+    #[cfg(feature = "cuda")]
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn update_graphics_from(
+        module: &Bound<'_, PyModule>,
+        obj: &Bound<'_, pyo3::PyAny>,
+    ) -> PyResult<()> {
+        graphics!(module).update_from(obj)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
     fn redraw(module: &Bound<'_, PyModule>) -> PyResult<()> {
         graphics!(module).present()
     }
@@ -673,13 +703,12 @@ mod mewnala {
             // call setup
             setup_fn.call0()?;
 
+            let mut frame_count: u64 = 0;
             {
                 let graphics = get_graphics(module)?
                     .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
                 input::sync_globals(&draw_fn, graphics.surface.entity)?;
             }
-
-            // start draw loop
             loop {
                 {
                     let mut graphics = get_graphics_mut(module)?
@@ -694,18 +723,13 @@ mod mewnala {
                         let cstr: &CStr = ok.as_c_str();
 
                         match py.run(cstr, None, Some(&locals)) {
-                            Ok(_) => {
-                                dbg!("Success of any kind?");
-                            }
+                            Ok(_) => {}
                             Err(e) => {
-                                dbg!(e);
+                                eprintln!("sketch reload error: {e}");
                             }
                         }
 
-                        // setup_fn = locals.get_item("setup").unwrap().unwrap();
                         draw_fn = locals.get_item("draw").unwrap().unwrap();
-
-                        dbg!(locals);
                     }
 
                     if !graphics.surface.poll_events() {
@@ -718,6 +742,9 @@ mod mewnala {
                     let graphics = get_graphics(module)?
                         .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
                     input::sync_globals(&draw_fn, graphics.surface.entity)?;
+                    let globals = draw_fn.getattr("__globals__")?;
+                    globals.set_item("frame_count", frame_count)?;
+                    frame_count += 1;
                 }
 
                 draw_fn
@@ -965,6 +992,14 @@ mod mewnala {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
         graphics.image(image_file)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn create_image(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<Image> {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        graphics.create_image(width, height)
     }
 
     #[pyfunction]

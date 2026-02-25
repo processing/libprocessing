@@ -35,7 +35,7 @@ use processing_core::error::{self, ProcessingError, Result};
 #[cfg(not(target_os = "windows"))]
 use std::ptr::NonNull;
 
-use crate::image::{Image, ImageTextures};
+use crate::image::Image;
 
 #[derive(Component, Debug, Clone)]
 pub struct Surface;
@@ -341,12 +341,10 @@ pub fn destroy(
     mut commands: Commands,
     p_images: Query<&Image, With<Surface>>,
     mut images: ResMut<Assets<bevy::image::Image>>,
-    mut p_image_textures: ResMut<ImageTextures>,
 ) -> Result<()> {
     match p_images.get(surface_entity) {
         Ok(p_image) => {
             images.remove(&p_image.handle);
-            p_image_textures.remove(&surface_entity);
             commands.entity(surface_entity).despawn();
             Ok(())
         }

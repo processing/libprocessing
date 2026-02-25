@@ -8,11 +8,11 @@ use bevy::{
         AssetPath, LoadState, RenderAssetUsages, handle_internal_asset_events,
         io::{AssetSourceId, embedded::GetAssetServer},
     },
-    ecs::{entity::EntityHashMap, system::RunSystemOnce},
+    ecs::system::RunSystemOnce,
     prelude::*,
     render::{
-        ExtractSchedule, MainWorld,
-        render_asset::{AssetExtractionSystems, RenderAssets},
+        RenderApp,
+        render_asset::RenderAssets,
         render_resource::{
             Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, Extent3d, MapMode,
             Origin3d, PollType, TexelCopyBufferInfo, TexelCopyBufferLayout, TexelCopyTextureInfo,
@@ -30,20 +30,8 @@ use processing_core::error::{ProcessingError, Result};
 pub struct ImagePlugin;
 
 impl Plugin for ImagePlugin {
-    fn build(&self, app: &mut App) {
-        app.init_resource::<ImageTextures>();
-
-        let render_app = app.sub_app_mut(bevy::render::RenderApp);
-        render_app.add_systems(ExtractSchedule, sync_textures.after(AssetExtractionSystems));
-    }
+    fn build(&self, _app: &mut App) {}
 }
-
-// In Bevy, `Image` is a `RenderResource`, which means its descriptor is stored in the main world
-// but its GPU texture is stored in the render world. To avoid tedious lookups or the need to
-// explicitly reference the render world, we store a mapping of `PImage` entities to their
-// corresponding GPU `Texture` in the main world. This is as bit hacky, but it simplifies the API.
-#[derive(Resource, Deref, DerefMut, Default)]
-pub struct ImageTextures(EntityHashMap<Texture>);
 
 #[derive(Component)]
 pub struct Image {
@@ -51,17 +39,6 @@ pub struct Image {
     readback_buffer: Buffer,
     pub texture_format: TextureFormat,
     pub size: Extent3d,
-}
-
-fn sync_textures(mut main_world: ResMut<MainWorld>, gpu_images: Res<RenderAssets<GpuImage>>) {
-    main_world.resource_scope(|world, mut p_image_textures: Mut<ImageTextures>| {
-        let mut p_images = world.query_filtered::<(Entity, &Image), Changed<Image>>();
-        for (entity, p_image) in p_images.iter(world) {
-            if let Some(gpu_image) = gpu_images.get(&p_image.handle) {
-                p_image_textures.insert(entity, gpu_image.texture.clone());
-            }
-        }
-    });
 }
 
 pub fn create(
@@ -208,9 +185,8 @@ pub fn resize(
 }
 
 pub fn readback(
-    In(entity): In<Entity>,
+    In((entity, texture)): In<(Entity, Texture)>,
     p_images: Query<&Image>,
-    p_image_textures: Res<ImageTextures>,
     mut images: ResMut<Assets<bevy::image::Image>>,
     render_device: Res<RenderDevice>,
     render_queue: ResMut<RenderQueue>,
@@ -218,9 +194,6 @@ pub fn readback(
     let p_image = p_images
         .get(entity)
         .map_err(|_| ProcessingError::ImageNotFound)?;
-    let texture = p_image_textures
-        .get(&entity)
-        .ok_or(ProcessingError::ImageNotFound)?;
 
     let mut encoder = render_device.create_command_encoder(&CommandEncoderDescriptor::default());
 
@@ -281,8 +254,9 @@ pub fn readback(
 }
 
 pub fn update_region_write(
-    In((entity, x, y, width, height, data, px_size)): In<(
+    In((entity, texture, x, y, width, height, data, px_size)): In<(
         Entity,
+        Texture,
         u32,
         u32,
         u32,
@@ -291,7 +265,6 @@ pub fn update_region_write(
         u32,
     )>,
     p_images: Query<&Image>,
-    p_image_textures: Res<ImageTextures>,
     render_queue: Res<RenderQueue>,
 ) -> Result<()> {
     let p_image = p_images
@@ -305,15 +278,11 @@ pub fn update_region_write(
         )));
     }
 
-    let texture = p_image_textures
-        .get(&entity)
-        .ok_or(ProcessingError::ImageNotFound)?;
-
     let bytes_per_row = width * px_size;
 
     render_queue.write_texture(
         TexelCopyTextureInfo {
-            texture,
+            texture: &texture,
             mip_level: 0,
             origin: Origin3d { x, y, z: 0 },
             aspect: Default::default(),
@@ -365,13 +334,11 @@ pub fn destroy(
     In(entity): In<Entity>,
     mut commands: Commands,
     p_images: Query<&Image>,
-    mut p_image_textures: ResMut<ImageTextures>,
 ) -> Result<()> {
     p_images
         .get(entity)
         .map_err(|_| ProcessingError::ImageNotFound)?;
 
-    p_image_textures.remove(&entity);
     commands.entity(entity).despawn();
     Ok(())
 }
@@ -497,4 +464,19 @@ pub fn create_readback_buffer(
         usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
         mapped_at_creation: false,
     }))
+}
+
+pub fn gpu_image(app: &mut App, entity: Entity) -> Result<&GpuImage> {
+    let handle = app
+        .world()
+        .get::<Image>(entity)
+        .ok_or(ProcessingError::ImageNotFound)?
+        .handle
+        .clone();
+    let render_world = app.sub_app(RenderApp).world();
+    let gpu_images = render_world.resource::<RenderAssets<GpuImage>>();
+    let gpu_image = gpu_images
+        .get(&handle)
+        .ok_or(ProcessingError::ImageNotFound)?;
+    Ok(gpu_image)
 }

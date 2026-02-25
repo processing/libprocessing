@@ -9,18 +9,18 @@ use bevy::{
         ImageRenderTarget, MsaaWriteback, Projection, RenderTarget, visibility::RenderLayers,
     },
     core_pipeline::tonemapping::Tonemapping,
-    ecs::{entity::EntityHashMap, query::QueryEntityError},
+    ecs::query::QueryEntityError,
     math::{Mat4, Vec3A},
     prelude::*,
     render::{
-        Render, RenderSystems,
+        RenderApp,
         render_resource::{
             CommandEncoderDescriptor, Extent3d, MapMode, Origin3d, PollType, TexelCopyBufferInfo,
-            TexelCopyBufferLayout, TexelCopyTextureInfo, TextureFormat, TextureUsages,
+            TexelCopyBufferLayout, TexelCopyTextureInfo, Texture, TextureFormat, TextureUsages,
         },
         renderer::{RenderDevice, RenderQueue},
         sync_world::MainEntity,
-        view::{ViewTarget, prepare_view_targets},
+        view::ViewTarget,
     },
     window::WindowRef,
 };
@@ -41,21 +41,6 @@ pub struct GraphicsPlugin;
 impl Plugin for GraphicsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RenderLayersManager>();
-
-        let (tx, rx) = crossbeam_channel::unbounded::<(Entity, ViewTarget)>();
-        app.init_resource::<GraphicsTargets>()
-            .insert_resource(GraphicsTargetReceiver(rx))
-            .add_systems(First, update_view_targets);
-
-        let render_app = app.sub_app_mut(bevy::render::RenderApp);
-        render_app
-            .add_systems(
-                Render,
-                send_view_targets
-                    .in_set(RenderSystems::PrepareViews)
-                    .after(prepare_view_targets),
-            )
-            .insert_resource(GraphicsTargetSender(tx));
     }
 }
 
@@ -66,36 +51,15 @@ pub struct Graphics {
     pub size: Extent3d,
 }
 
-// We store a mapping of graphics target entities to their GPU `ViewTarget`s. In the
-// Processing API, graphics *are* images, so we need to be able to look up the `ViewTarget` for a
-// given graphics entity when referencing it as an image.
-#[derive(Resource, Deref, DerefMut, Default)]
-pub struct GraphicsTargets(EntityHashMap<ViewTarget>);
-
-#[derive(Resource, Deref, DerefMut)]
-pub struct GraphicsTargetReceiver(crossbeam_channel::Receiver<(Entity, ViewTarget)>);
-
-#[derive(Resource, Deref, DerefMut)]
-pub struct GraphicsTargetSender(crossbeam_channel::Sender<(Entity, ViewTarget)>);
-
-fn send_view_targets(
-    view_targets: Query<(MainEntity, &ViewTarget), Changed<ViewTarget>>,
-    sender: Res<GraphicsTargetSender>,
-) {
-    for (main_entity, view_target) in view_targets.iter() {
-        sender
-            .send((main_entity, view_target.clone()))
-            .expect("Failed to send updated view target");
+pub fn view_target(app: &mut App, entity: Entity) -> Result<&ViewTarget> {
+    let rw = app.sub_app_mut(RenderApp).world_mut();
+    let mut query = rw.query::<(&MainEntity, &ViewTarget)>();
+    for (main_entity, vt) in query.iter(rw) {
+        if **main_entity == entity {
+            return Ok(vt);
+        }
     }
-}
-
-pub fn update_view_targets(
-    mut graphics_targets: ResMut<GraphicsTargets>,
-    receiver: Res<GraphicsTargetReceiver>,
-) {
-    while let Ok((entity, view_target)) = receiver.0.try_recv() {
-        graphics_targets.insert(entity, view_target);
-    }
+    Err(ProcessingError::GraphicsNotFound)
 }
 
 macro_rules! graphics_mut {
@@ -440,10 +404,6 @@ pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
     graphics_mut!(app, entity).insert(Flush);
     app.update();
     graphics_mut!(app, entity).remove::<Flush>();
-    // ensure graphics targets are available immediately after flush
-    app.world_mut()
-        .run_system_cached(update_view_targets)
-        .expect("Failed to run update_view_targets");
     Ok(())
 }
 
@@ -489,21 +449,14 @@ pub struct ReadbackData {
 }
 
 pub fn readback_raw(
-    In(entity): In<Entity>,
+    In((entity, texture)): In<(Entity, Texture)>,
     graphics_query: Query<&Graphics>,
-    graphics_targets: Res<GraphicsTargets>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
 ) -> Result<ReadbackData> {
     let graphics = graphics_query
         .get(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
-
-    let view_target = graphics_targets
-        .get(&entity)
-        .ok_or(ProcessingError::GraphicsNotFound)?;
-
-    let texture = view_target.main_texture();
 
     let mut encoder = render_device.create_command_encoder(&CommandEncoderDescriptor::default());
 
@@ -570,8 +523,9 @@ pub fn readback_raw(
 }
 
 pub fn update_region_write(
-    In((entity, x, y, width, height, data, px_size)): In<(
+    In((entity, texture, x, y, width, height, data, px_size)): In<(
         Entity,
+        Texture,
         u32,
         u32,
         u32,
@@ -580,7 +534,6 @@ pub fn update_region_write(
         u32,
     )>,
     graphics_query: Query<&Graphics>,
-    graphics_targets: Res<GraphicsTargets>,
     render_queue: Res<RenderQueue>,
 ) -> Result<()> {
     let graphics = graphics_query
@@ -594,17 +547,11 @@ pub fn update_region_write(
             x, y, width, height, graphics.size.width, graphics.size.height
         )));
     }
-
-    let view_target = graphics_targets
-        .get(&entity)
-        .ok_or(ProcessingError::GraphicsNotFound)?;
-
-    let texture = view_target.main_texture();
     let bytes_per_row = width * px_size;
 
     render_queue.write_texture(
         TexelCopyTextureInfo {
-            texture,
+            texture: &texture,
             mip_level: 0,
             origin: Origin3d { x, y, z: 0 },
             aspect: Default::default(),

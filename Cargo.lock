@@ -782,6 +782,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_cuda"
+version = "0.1.0"
+source = "git+https://github.com/tychedelia/bevy_cuda#f1e63bb2811eddfb6ed13ff9920f7ae2be091da1"
+dependencies = [
+ "ash",
+ "bevy",
+ "cudarc",
+ "thiserror 2.0.18",
+ "wgpu",
+ "wgpu-hal",
+ "windows 0.58.0",
+]
+
+[[package]]
 name = "bevy_derive"
 version = "0.19.0-dev"
 source = "git+https://github.com/bevyengine/bevy?branch=main#104a8c35f8c4eee092be656cf62784d6eae0841d"
@@ -2674,6 +2688,15 @@ dependencies = [
  "dispatch2",
  "nix 0.31.2",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "cudarc"
+version = "0.18.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3aa12038120eb13347a6ae2ffab1d34efe78150125108627fd85044dd4d6ff1e"
+dependencies = [
+ "libloading",
 ]
 
 [[package]]
@@ -5606,6 +5629,7 @@ dependencies = [
  "bevy",
  "js-sys",
  "processing_core",
+ "processing_cuda",
  "processing_glfw",
  "processing_input",
  "processing_midi",
@@ -5626,6 +5650,16 @@ dependencies = [
  "raw-window-handle",
  "thiserror 2.0.18",
  "tracing",
+]
+
+[[package]]
+name = "processing_cuda"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_cuda",
+ "processing_core",
+ "processing_render",
 ]
 
 [[package]]
@@ -5672,6 +5706,7 @@ dependencies = [
  "bevy",
  "png",
  "processing",
+ "processing_cuda",
  "processing_glfw",
  "processing_webcam",
  "pyo3",
@@ -5753,6 +5788,7 @@ name = "pyo3"
 version = "0.28.3"
 source = "git+https://github.com/PyO3/pyo3?branch=main#df36c7165663ec70180d71495bd52031edd075d4"
 dependencies = [
+ "inventory",
  "libc",
  "once_cell",
  "portable-atomic",
@@ -7331,6 +7367,7 @@ dependencies = [
  "js-sys",
  "log",
  "naga",
+ "parking_lot",
  "portable-atomic",
  "profiling",
  "raw-window-handle",
@@ -7370,6 +7407,7 @@ dependencies = [
  "smallvec",
  "thiserror 2.0.18",
  "wgpu-core-deps-apple",
+ "wgpu-core-deps-emscripten",
  "wgpu-core-deps-wasm",
  "wgpu-core-deps-windows-linux-android",
  "wgpu-hal",
@@ -7382,6 +7420,15 @@ name = "wgpu-core-deps-apple"
 version = "29.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43acd053312501689cd92a01a9638d37f3e41a5fd9534875efa8917ee2d11ac0"
+dependencies = [
+ "wgpu-hal",
+]
+
+[[package]]
+name = "wgpu-core-deps-emscripten"
+version = "29.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef043bf135cc68b6f667c55ff4e345ce2b5924d75bad36a47921b0287ca4b24a"
 dependencies = [
  "wgpu-hal",
 ]

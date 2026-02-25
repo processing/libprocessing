@@ -12,6 +12,7 @@ default = ["wayland"]
 wayland = ["processing_render/wayland"]
 x11 = ["processing_render/x11"]
 webcam = ["dep:processing_webcam"]
+cuda = ["dep:processing_cuda"]
 
 [workspace]
 resolver = "3"
@@ -24,12 +25,14 @@ too_many_arguments = "allow"
 [workspace.dependencies]
 bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", features = ["file_watcher", "shader_format_wesl", "free_camera", "pan_camera"] }
 bevy_naga_reflect = { git = "https://github.com/tychedelia/bevy_naga_reflect" }
+bevy_cuda = { git = "https://github.com/tychedelia/bevy_cuda" }
 naga = { version = "29", features = ["wgsl-in"] }
 wesl = { version = "0.3", default-features = false }
 pyo3 = { git = "https://github.com/PyO3/pyo3", branch = "main" }
 pyo3-introspection = { git = "https://github.com/PyO3/pyo3", branch = "main" }
 processing = { path = "." }
 processing_core = { path = "crates/processing_core" }
+processing_cuda = { path = "crates/processing_cuda" }
 processing_pyo3 = { path = "crates/processing_pyo3" }
 processing_render = { path = "crates/processing_render" }
 processing_midi = { path = "crates/processing_midi" }
@@ -44,6 +47,7 @@ processing_render = { workspace = true }
 processing_midi = { workspace = true }
 processing_input = { workspace = true }
 processing_webcam = { workspace = true, optional = true }
+processing_cuda = { workspace = true, optional = true }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

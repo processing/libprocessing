@@ -1,0 +1,17 @@
+[package]
+name = "processing_cuda"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[features]
+default = ["cuda-11040"]
+cuda-11040 = ["bevy_cuda/cuda-11040"]
+
+[dependencies]
+bevy = { workspace = true }
+bevy_cuda = { workspace = true }
+processing_core = { workspace = true }
+processing_render = { workspace = true }

@@ -6,7 +6,7 @@ use bevy::{
     color::{ColorToPacked, Srgba},
     math::Vec4,
     prelude::Entity,
-    render::render_resource::TextureFormat,
+    render::render_resource::{Extent3d, TextureFormat},
 };
 use processing::prelude::*;
 use pyo3::{
@@ -14,6 +14,43 @@ use pyo3::{
     prelude::*,
     types::{PyDict, PyTuple},
 };
+
+#[cfg(feature = "cuda")]
+use crate::cuda::CudaImage;
+
+#[cfg(feature = "cuda")]
+fn cuda_import_from_interface(
+    entity: bevy::prelude::Entity,
+    obj: &pyo3::Bound<'_, pyo3::PyAny>,
+) -> PyResult<()> {
+    let interface = obj
+        .getattr("__cuda_array_interface__")?
+        .cast_into::<PyDict>()?;
+
+    let data_tuple: (u64, bool) = interface
+        .get_item("data")?
+        .ok_or_else(|| PyRuntimeError::new_err("missing 'data' in __cuda_array_interface__"))?
+        .extract()?;
+    let src_ptr = data_tuple.0;
+
+    let shape: Vec<usize> = interface
+        .get_item("shape")?
+        .ok_or_else(|| PyRuntimeError::new_err("missing 'shape' in __cuda_array_interface__"))?
+        .extract()?;
+
+    let typestr: String = interface
+        .get_item("typestr")?
+        .ok_or_else(|| PyRuntimeError::new_err("missing 'typestr' in __cuda_array_interface__"))?
+        .extract()?;
+
+    let elem_size = processing_cuda::elem_size_for_typestr(&typestr)
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    let total_elements: usize = shape.iter().product();
+    let byte_size = (total_elements * elem_size) as u64;
+
+    processing_cuda::cuda_import(entity, src_ptr, byte_size)
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+}
 
 #[pyclass(name = "BlendMode", from_py_object)]
 #[derive(Clone)]
@@ -164,6 +201,20 @@ impl Drop for Image {
     }
 }
 
+#[cfg(feature = "cuda")]
+#[pymethods]
+impl Image {
+    pub fn cuda(&self) -> PyResult<CudaImage> {
+        processing_cuda::cuda_export(self.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(CudaImage::new(self.entity))
+    }
+
+    pub fn update_from(&self, obj: &Bound<'_, pyo3::PyAny>) -> PyResult<()> {
+        cuda_import_from_interface(self.entity, obj)
+    }
+}
+
 #[pyclass(unsendable)]
 pub struct Geometry {
     pub(crate) entity: Entity,
@@ -254,8 +305,6 @@ impl Geometry {
 pub struct Graphics {
     pub(crate) entity: Entity,
     pub surface: Surface,
-    pub width: u32,
-    pub height: u32,
 }
 
 impl Drop for Graphics {
@@ -302,8 +351,6 @@ impl Graphics {
         Ok(Self {
             entity: graphics,
             surface,
-            width,
-            height,
         })
     }
 
@@ -339,8 +386,6 @@ impl Graphics {
         Ok(Self {
             entity: graphics,
             surface,
-            width,
-            height,
         })
     }
 
@@ -739,6 +784,18 @@ impl Graphics {
         }
     }
 
+    pub fn create_image(&self, width: u32, height: u32) -> PyResult<Image> {
+        let size = Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+        let data = vec![0u8; (width * height * 4) as usize];
+        let entity = image_create(size, data, TextureFormat::Rgba8UnormSrgb)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Image { entity })
+    }
+
     pub fn push_matrix(&self) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::PushMatrix)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
@@ -980,6 +1037,10 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    pub fn flush(&self) -> PyResult<()> {
+        graphics_flush(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     pub fn begin_draw(&self) -> PyResult<()> {
         graphics_begin_draw(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
@@ -1192,6 +1253,20 @@ impl Graphics {
             Ok(light) => Ok(Light { entity: light }),
             Err(e) => Err(PyRuntimeError::new_err(format!("{e}"))),
         }
+    }
+}
+
+#[cfg(feature = "cuda")]
+#[pymethods]
+impl Graphics {
+    pub fn cuda(&self) -> PyResult<CudaImage> {
+        processing_cuda::cuda_export(self.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(CudaImage::new(self.entity))
+    }
+
+    pub fn update_from(&self, obj: &Bound<'_, pyo3::PyAny>) -> PyResult<()> {
+        cuda_import_from_interface(self.entity, obj)
     }
 }
 
