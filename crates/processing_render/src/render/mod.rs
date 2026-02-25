@@ -319,14 +319,13 @@ pub fn flush_draw_commands(
 
                     let z_offset = -(batch.draw_index as f32 * 0.001);
                     let mut transform = state.transform.to_bevy_transform();
-                    
+
                     // if the "source" geometry was parented in a gltf scene, we need to make sure that
                     // we apply the parent transform here to ensure the correct final transform
                     // TODO: think about how hierarchies should work, especially for retained
                     if let Some(nt) = node_transform {
-                        transform = Transform::from_matrix(
-                            transform.to_matrix() * nt.0.to_matrix(),
-                        );
+                        transform =
+                            Transform::from_matrix(transform.to_matrix() * nt.0.to_matrix());
                     }
                     transform.translation.z += z_offset;
 

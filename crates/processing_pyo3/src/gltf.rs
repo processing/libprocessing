@@ -33,13 +33,12 @@ impl Gltf {
     }
 
     pub fn camera(&self, index: usize) -> PyResult<()> {
-        gltf_camera(self.entity, index)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        gltf_camera(self.entity, index).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn light(&self, index: usize) -> PyResult<Light> {
-        let entity = gltf_light(self.entity, index)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let entity =
+            gltf_light(self.entity, index).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(Light { entity })
     }
 }
@@ -48,7 +47,7 @@ impl Gltf {
 #[pyo3(pass_module)]
 pub fn load_gltf(module: &Bound<'_, PyModule>, path: &str) -> PyResult<Gltf> {
     let graphics = get_graphics(module)?;
-    let entity = gltf_load(graphics.entity, path)
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    let entity =
+        gltf_load(graphics.entity, path).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
     Ok(Gltf { entity })
 }

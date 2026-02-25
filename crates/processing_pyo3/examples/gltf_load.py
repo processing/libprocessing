@@ -23,16 +23,16 @@ def draw():
     global frame
     t = frame * 0.02
 
-    radius = 150.0
+    radius = 1.5
     lx = math.cos(t) * radius
-    ly = 150.0
+    ly = 1.5
     lz = math.sin(t) * radius
     light.position(lx, ly, lz)
-    light.look_at(0.0, 80.0, 0.0)
+    light.look_at(0.0, 0.8, 0.0)
 
-    r = math.sin(t * 0.7) * 0.5 + 0.5
-    g = math.sin(t * 0.7 + 2.0) * 0.5 + 0.5
-    b = math.sin(t * 0.7 + 4.0) * 0.5 + 0.5
+    r = math.sin(t * 8.0) * 0.5 + 0.5
+    g = math.sin(t * 8.0 + 2.0) * 0.5 + 0.5
+    b = math.sin(t * 8.0 + 4.0) * 0.5 + 0.5
     duck_mat.set_float4("base_color", r, g, b, 1.0)
 
     background(25)

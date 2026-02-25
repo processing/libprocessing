@@ -6,10 +6,10 @@ use bevy::{
         AssetPath, LoadState, handle_internal_asset_events,
         io::{AssetSourceId, embedded::GetAssetServer},
     },
+    camera::visibility::RenderLayers,
     ecs::system::RunSystemOnce,
     gltf::{Gltf, GltfMeshName},
     prelude::*,
-    camera::visibility::RenderLayers,
     scene::SceneSpawner,
 };
 
@@ -52,10 +52,7 @@ fn block_on_load(world: &mut World, load_state: impl Fn(&World) -> LoadState) ->
 }
 
 fn compute_global_transform(world: &World, entity: Entity) -> Transform {
-    let local = world
-        .get::<Transform>(entity)
-        .copied()
-        .unwrap_or_default();
+    let local = world.get::<Transform>(entity).copied().unwrap_or_default();
     match world.get::<ChildOf>(entity) {
         Some(child_of) => {
             let parent_global = compute_global_transform(world, child_of.parent());
@@ -99,14 +96,12 @@ pub fn load(
 
     // we spawn the scene in to the world in a blocking fashion so that bevy runs all
     // its hooks for the gltf, ex creating standard material instances
-    let instance_id =
-        world.resource_scope(|world, mut spawner: Mut<SceneSpawner>| {
-            spawner
-                .spawn_sync(world, &scene_handle)
-                .map_err(|e| ProcessingError::GltfLoadError(format!("Scene spawn failed: {e}")))
-        })?;
+    let instance_id = world.resource_scope(|world, mut spawner: Mut<SceneSpawner>| {
+        spawner
+            .spawn_sync(world, &scene_handle)
+            .map_err(|e| ProcessingError::GltfLoadError(format!("Scene spawn failed: {e}")))
+    })?;
 
-    
     // we have to remove the existing cameras from the scene -- the user can request to set *this*
     // graphics to a camera, but the scenes cameras should not exist
     {
@@ -144,7 +139,7 @@ pub fn geometry(
 
     let (mesh_handle, global_transform) = {
         let spawner = world.resource::<SceneSpawner>();
-        
+
         // find the mesh with the given name component that bevy added post-spawn
         // name is derived from gltf node or computed
         let mesh_entity = spawner
@@ -248,17 +243,10 @@ pub fn material_names(In(gltf_entity): In<Entity>, world: &mut World) -> Result<
     let gltf = gltf_assets
         .get(&gltf_handle)
         .ok_or_else(|| ProcessingError::GltfLoadError("GLTF asset not found".into()))?;
-    Ok(gltf
-        .named_materials
-        .keys()
-        .map(|k| k.to_string())
-        .collect())
+    Ok(gltf.named_materials.keys().map(|k| k.to_string()).collect())
 }
 
-pub fn camera(
-    In((gltf_entity, index)): In<(Entity, usize)>,
-    world: &mut World,
-) -> Result<()> {
+pub fn camera(In((gltf_entity, index)): In<(Entity, usize)>, world: &mut World) -> Result<()> {
     let gltf_handle = world
         .get::<GltfHandle>(gltf_entity)
         .ok_or(ProcessingError::InvalidEntity)?;
@@ -324,10 +312,7 @@ pub fn camera(
     Ok(())
 }
 
-pub fn light(
-    In((gltf_entity, index)): In<(Entity, usize)>,
-    world: &mut World,
-) -> Result<Entity> {
+pub fn light(In((gltf_entity, index)): In<(Entity, usize)>, world: &mut World) -> Result<Entity> {
     let gltf_handle = world
         .get::<GltfHandle>(gltf_entity)
         .ok_or(ProcessingError::InvalidEntity)?;
