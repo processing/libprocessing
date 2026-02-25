@@ -21,7 +21,10 @@ type_complexity = "allow"
 too_many_arguments = "allow"
 
 [workspace.dependencies]
-bevy = { git = "https://github.com/bevyengine/bevy", branch = "main" }
+bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", features = ["file_watcher", "shader_format_wesl"] }
+bevy_naga_reflect = { path = "../../tychedelia/bevy_naga_reflect" }
+naga = { version = "28", features = ["wgsl-in"] }
+wesl = { version = "0.3", default-features = false }
 processing = { path = "." }
 processing_pyo3 = { path = "crates/processing_pyo3" }
 processing_render = { path = "crates/processing_render" }
@@ -85,6 +88,10 @@ path = "examples/midi.rs"
 [[example]]
 name = "gltf_load"
 path = "examples/gltf_load.rs"
+
+[[example]]
+name = "custom_shader"
+path = "examples/custom_shader.rs"
 
 [profile.wasm-release]
 inherits = "release"

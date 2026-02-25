@@ -252,6 +252,7 @@ pub fn vertex(
 
     let mut mesh = meshes
         .get_mut(&geometry.handle)
+        .map(|m| m.into_inner())
         .ok_or(ProcessingError::GeometryNotFound)?;
 
     if let Some(VertexAttributeValues::Float32x3(positions)) =
@@ -325,6 +326,7 @@ pub fn index(
 
     let mut mesh = meshes
         .get_mut(&geometry.handle)
+        .map(|m| m.into_inner())
         .ok_or(ProcessingError::GeometryNotFound)?;
 
     match mesh.indices_mut() {

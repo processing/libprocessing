@@ -36,4 +36,8 @@ pub enum ProcessingError {
     UnknownMaterialProperty(String),
     #[error("GLTF load error: {0}")]
     GltfLoadError(String),
+    #[error("Shader compilation error: {0}")]
+    ShaderCompilationError(String),
+    #[error("Shader not found")]
+    ShaderNotFound,
 }

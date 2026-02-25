@@ -648,10 +648,6 @@ pub fn update_region_write(
         .ok_or(ProcessingError::GraphicsNotFound)?;
 
     let texture = view_target.main_texture();
-    eprintln!(
-        "update_region: writing to texture {:p} at ({}, {}) size {}x{}",
-        texture as *const _, x, y, width, height
-    );
     let bytes_per_row = width * px_size;
 
     render_queue.write_texture(

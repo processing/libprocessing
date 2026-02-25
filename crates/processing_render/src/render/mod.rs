@@ -225,7 +225,7 @@ pub fn flush_draw_commands(
                 DrawCommand::Rect { x, y, w, h, radii } => {
                     add_fill(&mut res, &mut batch, &state, |mesh, color| {
                         rect(mesh, x, y, w, h, radii, color, TessellationMode::Fill)
-                    });
+                    }, &p_material_handles);
 
                     add_stroke(&mut res, &mut batch, &state, |mesh, color, weight| {
                         rect(
@@ -238,10 +238,10 @@ pub fn flush_draw_commands(
                             color,
                             TessellationMode::Stroke(weight),
                         )
-                    });
+                    }, &p_material_handles);
                 }
                 DrawCommand::BackgroundColor(color) => {
-                    flush_batch(&mut res, &mut batch);
+                    flush_batch(&mut res, &mut batch, &p_material_handles);
 
                     let mesh = create_ndc_background_quad(world_from_clip, color, false);
                     let mesh_handle = res.meshes.add(mesh);
@@ -268,7 +268,7 @@ pub fn flush_draw_commands(
                         continue;
                     };
 
-                    flush_batch(&mut res, &mut batch);
+                    flush_batch(&mut res, &mut batch, &p_material_handles);
 
                     let mesh = create_ndc_background_quad(world_from_clip, Color::WHITE, true);
                     let mesh_handle = res.meshes.add(mesh);
@@ -315,7 +315,7 @@ pub fn flush_draw_commands(
                         _ => material_key.to_material(&mut res.materials),
                     };
 
-                    flush_batch(&mut res, &mut batch);
+                    flush_batch(&mut res, &mut batch, &p_material_handles);
 
                     let z_offset = -(batch.draw_index as f32 * 0.001);
                     let mut transform = state.transform.to_bevy_transform();
@@ -347,7 +347,7 @@ pub fn flush_draw_commands(
                     height,
                     depth,
                 } => {
-                    add_shape3d(&mut res, &mut batch, &state, box_mesh(width, height, depth));
+                    add_shape3d(&mut res, &mut batch, &state, box_mesh(width, height, depth), &p_material_handles);
                 }
                 DrawCommand::Sphere {
                     radius,
@@ -359,12 +359,13 @@ pub fn flush_draw_commands(
                         &mut batch,
                         &state,
                         sphere_mesh(radius, sectors, stacks),
+                        &p_material_handles,
                     );
                 }
             }
         }
 
-        flush_batch(&mut res, &mut batch);
+        flush_batch(&mut res, &mut batch, &p_material_handles);
     }
 }
 
@@ -386,7 +387,13 @@ pub fn clear_transient_meshes(
     }
 }
 
-fn spawn_mesh(res: &mut RenderResources, batch: &mut BatchState, mesh: Mesh, z_offset: f32) {
+fn spawn_mesh(
+    res: &mut RenderResources,
+    batch: &mut BatchState,
+    mesh: Mesh,
+    z_offset: f32,
+    material_handles: &Query<&UntypedMaterial>,
+) {
     let Some(key) = &batch.material_key else {
         return;
     };
@@ -400,7 +407,16 @@ fn spawn_mesh(res: &mut RenderResources, batch: &mut BatchState, mesh: Mesh, z_o
         scale,
     };
 
-    let material_handle = key.to_material(&mut res.materials);
+    let material_handle = match key {
+        MaterialKey::Custom(entity) => match material_handles.get(*entity) {
+            Ok(handle) => handle.0.clone(),
+            Err(_) => {
+                warn!("Custom material entity {:?} not found", entity);
+                return;
+            }
+        },
+        _ => key.to_material(&mut res.materials),
+    };
 
     res.commands.spawn((
         Mesh3d(mesh_handle),
@@ -422,8 +438,9 @@ fn start_batch(
     batch: &mut BatchState,
     state: &RenderState,
     material_key: MaterialKey,
+    material_handles: &Query<&UntypedMaterial>,
 ) {
-    flush_batch(res, batch);
+    flush_batch(res, batch, material_handles);
     batch.material_key = Some(material_key);
     batch.transform = state.transform.current();
     batch.current_mesh = Some(empty_mesh());
@@ -465,6 +482,7 @@ fn add_fill(
     batch: &mut BatchState,
     state: &RenderState,
     tessellate: impl FnOnce(&mut Mesh, Color),
+    material_handles: &Query<&UntypedMaterial>,
 ) {
     let Some(color) = state.fill_color else {
         return;
@@ -472,7 +490,7 @@ fn add_fill(
     let material_key = material_key_with_color(&state.material_key, color);
 
     if needs_batch(batch, state, &material_key) {
-        start_batch(res, batch, state, material_key);
+        start_batch(res, batch, state, material_key, material_handles);
     }
 
     if let Some(ref mut mesh) = batch.current_mesh {
@@ -485,6 +503,7 @@ fn add_stroke(
     batch: &mut BatchState,
     state: &RenderState,
     tessellate: impl FnOnce(&mut Mesh, Color, f32),
+    material_handles: &Query<&UntypedMaterial>,
 ) {
     let Some(color) = state.stroke_color else {
         return;
@@ -493,7 +512,7 @@ fn add_stroke(
     let material_key = material_key_with_color(&state.material_key, color);
 
     if needs_batch(batch, state, &material_key) {
-        start_batch(res, batch, state, material_key);
+        start_batch(res, batch, state, material_key, material_handles);
     }
 
     if let Some(ref mut mesh) = batch.current_mesh {
@@ -501,21 +520,41 @@ fn add_stroke(
     }
 }
 
-fn flush_batch(res: &mut RenderResources, batch: &mut BatchState) {
+fn flush_batch(
+    res: &mut RenderResources,
+    batch: &mut BatchState,
+    material_handles: &Query<&UntypedMaterial>,
+) {
     if let Some(mesh) = batch.current_mesh.take() {
         let z_offset = -(batch.draw_index as f32 * 0.001);
-        spawn_mesh(res, batch, mesh, z_offset);
+        spawn_mesh(res, batch, mesh, z_offset, material_handles);
         batch.draw_index += 1;
     }
     batch.material_key = None;
 }
 
-fn add_shape3d(res: &mut RenderResources, batch: &mut BatchState, state: &RenderState, mesh: Mesh) {
-    flush_batch(res, batch);
+fn add_shape3d(
+    res: &mut RenderResources,
+    batch: &mut BatchState,
+    state: &RenderState,
+    mesh: Mesh,
+    material_handles: &Query<&UntypedMaterial>,
+) {
+    flush_batch(res, batch, material_handles);
 
     let mesh_handle = res.meshes.add(mesh);
     let material_key = material_key_with_fill(state);
-    let material_handle = material_key.to_material(&mut res.materials);
+
+    let material_handle = match &material_key {
+        MaterialKey::Custom(entity) => match material_handles.get(*entity) {
+            Ok(handle) => handle.0.clone(),
+            Err(_) => {
+                warn!("Custom material entity {:?} not found", entity);
+                return;
+            }
+        },
+        _ => material_key.to_material(&mut res.materials),
+    };
 
     let z_offset = -(batch.draw_index as f32 * 0.001);
     let mut transform = state.transform.to_bevy_transform();

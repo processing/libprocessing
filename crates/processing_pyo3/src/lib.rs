@@ -12,9 +12,11 @@ mod glfw;
 mod gltf;
 mod graphics;
 pub(crate) mod material;
+pub(crate) mod shader;
 
 use graphics::{Geometry, Graphics, Image, Light, Topology, get_graphics, get_graphics_mut};
 use material::Material;
+use shader::Shader;
 use pyo3::{
     exceptions::PyRuntimeError,
     prelude::*,
@@ -44,6 +46,7 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Topology>()?;
     m.add_class::<Material>()?;
     m.add_class::<Gltf>()?;
+    m.add_class::<Shader>()?;
     m.add_function(wrap_pyfunction!(gltf::load_gltf, m)?)?;
     m.add_function(wrap_pyfunction!(size, m)?)?;
     m.add_function(wrap_pyfunction!(run, m)?)?;

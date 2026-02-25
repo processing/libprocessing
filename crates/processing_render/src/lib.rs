@@ -25,7 +25,7 @@ use bevy::{
     prelude::*,
     render::render_resource::{Extent3d, TextureFormat},
 };
-use render::material::add_standard_materials;
+use render::material::{add_custom_materials, add_standard_materials};
 use render::{activate_cameras, clear_transient_meshes, flush_draw_commands};
 use tracing::debug;
 
@@ -282,11 +282,12 @@ fn create_app(config: Config) -> App {
         LightPlugin,
         material::MaterialPlugin,
         MidiPlugin,
+        material::custom::CustomMaterialPlugin,
     ));
     app.add_systems(First, (clear_transient_meshes, activate_cameras))
         .add_systems(
             Update,
-            (flush_draw_commands, add_standard_materials)
+            (flush_draw_commands, add_standard_materials, add_custom_materials)
                 .chain()
                 .before(AssetEventSystems),
         );
@@ -1300,6 +1301,48 @@ pub fn poll_for_sketch_updates() -> error::Result<Option<sketch::Sketch>> {
             .world_mut()
             .run_system_cached(sketch::sketch_update_handler)
             .unwrap())
+    })
+}
+
+pub fn shader_create(source: &str) -> error::Result<Entity> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::custom::create_shader, source.to_string())
+            .unwrap()
+    })
+}
+
+/// Load a shader from a file path.
+pub fn shader_load(path: &str) -> error::Result<Entity> {
+    let source = std::fs::read_to_string(path)
+        .map_err(|e| error::ProcessingError::ShaderCompilationError(format!("Failed to read {path}: {e}")))?;
+    shader_create(&source)
+}
+
+pub fn shader_destroy(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::custom::destroy_shader, entity)
+            .unwrap()
+    })
+}
+
+pub fn material_create_from_shaders(
+    vertex: Option<Entity>,
+    fragment: Option<Entity>,
+) -> error::Result<Entity> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::custom::create_from_shaders, (vertex, fragment))
+            .unwrap()
+    })
+}
+
+pub fn material_create_custom(shader_source: &str) -> error::Result<Entity> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::custom::create_custom, shader_source.to_string())
+            .unwrap()
     })
 }
 
