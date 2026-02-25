@@ -34,4 +34,6 @@ pub enum ProcessingError {
     MaterialNotFound,
     #[error("Unknown material property: {0}")]
     UnknownMaterialProperty(String),
+    #[error("GLTF load error: {0}")]
+    GltfLoadError(String),
 }

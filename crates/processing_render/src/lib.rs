@@ -1,6 +1,7 @@
 pub mod config;
 pub mod error;
 pub mod geometry;
+pub mod gltf;
 mod graphics;
 pub mod image;
 pub mod light;
@@ -1275,6 +1276,69 @@ pub fn material_destroy(entity: Entity) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(material::destroy, entity)
+            .unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn gltf_load(graphics_entity: Entity, path: &str) -> error::Result<Entity> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(gltf::load, (graphics_entity, path.to_string()))
+            .unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn gltf_geometry(gltf_entity: Entity, name: &str) -> error::Result<Entity> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(gltf::geometry, (gltf_entity, name.to_string()))
+            .unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn gltf_material(gltf_entity: Entity, name: &str) -> error::Result<Entity> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(gltf::material, (gltf_entity, name.to_string()))
+            .unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn gltf_mesh_names(gltf_entity: Entity) -> error::Result<Vec<String>> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(gltf::mesh_names, gltf_entity)
+            .unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn gltf_material_names(gltf_entity: Entity) -> error::Result<Vec<String>> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(gltf::material_names, gltf_entity)
+            .unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn gltf_camera(gltf_entity: Entity, index: usize) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(gltf::camera, (gltf_entity, index))
+            .unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn gltf_light(gltf_entity: Entity, index: usize) -> error::Result<Entity> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(gltf::light, (gltf_entity, index))
             .unwrap()
     })
 }

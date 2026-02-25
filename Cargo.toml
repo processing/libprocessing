@@ -82,6 +82,10 @@ path = "examples/pbr.rs"
 name = "midi"
 path = "examples/midi.rs"
 
+[[example]]
+name = "gltf_load"
+path = "examples/gltf_load.rs"
+
 [profile.wasm-release]
 inherits = "release"
 opt-level = "z"

@@ -9,6 +9,7 @@
 //! To allow Python users to create a similar experience, we provide module-level
 //! functions that forward to a singleton Graphics object pub(crate) behind the scenes.
 mod glfw;
+mod gltf;
 mod graphics;
 pub(crate) mod material;
 
@@ -21,6 +22,7 @@ use pyo3::{
 };
 use std::ffi::{CStr, CString};
 
+use gltf::Gltf;
 use std::env;
 
 #[pymodule]
@@ -30,6 +32,8 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Light>()?;
     m.add_class::<Topology>()?;
     m.add_class::<Material>()?;
+    m.add_class::<Gltf>()?;
+    m.add_function(wrap_pyfunction!(gltf::load_gltf, m)?)?;
     m.add_function(wrap_pyfunction!(size, m)?)?;
     m.add_function(wrap_pyfunction!(run, m)?)?;
     m.add_function(wrap_pyfunction!(mode_3d, m)?)?;

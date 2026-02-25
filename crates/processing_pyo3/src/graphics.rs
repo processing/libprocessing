@@ -1,3 +1,4 @@
+use bevy::math::Vec4;
 use bevy::prelude::Entity;
 use processing::prelude::*;
 use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyDict};
@@ -26,7 +27,7 @@ impl Drop for Surface {
 #[pyclass]
 #[derive(Debug)]
 pub struct Light {
-    entity: Entity,
+    pub(crate) entity: Entity,
 }
 
 #[pymethods]
@@ -62,7 +63,7 @@ impl Drop for Image {
 
 #[pyclass(unsendable)]
 pub struct Geometry {
-    entity: Entity,
+    pub(crate) entity: Entity,
 }
 
 #[pyclass]
@@ -132,7 +133,7 @@ impl Geometry {
 
 #[pyclass(unsendable)]
 pub struct Graphics {
-    entity: Entity,
+    pub(crate) entity: Entity,
     pub surface: Surface,
 }
 
@@ -357,8 +358,15 @@ impl Graphics {
     }
 
     pub fn perspective(&self, fov: f32, aspect: f32, near: f32, far: f32) -> PyResult<()> {
-        graphics_perspective(self.entity, fov, aspect, near, far)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        graphics_perspective(
+            self.entity,
+            fov,
+            aspect,
+            near,
+            far,
+            Vec4::new(0.0, 0.0, -1.0, -near),
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     #[allow(clippy::too_many_arguments)]
