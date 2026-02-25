@@ -1281,10 +1281,10 @@ pub fn material_destroy(entity: Entity) -> error::Result<()> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn gltf_load(path: &str) -> error::Result<Entity> {
+pub fn gltf_load(graphics_entity: Entity, path: &str) -> error::Result<Entity> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(gltf::load, path.to_string())
+            .run_system_cached_with(gltf::load, (graphics_entity, path.to_string()))
             .unwrap()
     })
 }
@@ -1326,27 +1326,19 @@ pub fn gltf_material_names(gltf_entity: Entity) -> error::Result<Vec<String>> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn gltf_camera(
-    gltf_entity: Entity,
-    graphics_entity: Entity,
-    index: usize,
-) -> error::Result<()> {
+pub fn gltf_camera(gltf_entity: Entity, index: usize) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(gltf::camera, (gltf_entity, graphics_entity, index))
+            .run_system_cached_with(gltf::camera, (gltf_entity, index))
             .unwrap()
     })
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn gltf_light(
-    gltf_entity: Entity,
-    graphics_entity: Entity,
-    index: usize,
-) -> error::Result<Entity> {
+pub fn gltf_light(gltf_entity: Entity, index: usize) -> error::Result<Entity> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(gltf::light, (gltf_entity, graphics_entity, index))
+            .run_system_cached_with(gltf::light, (gltf_entity, index))
             .unwrap()
     })
 }

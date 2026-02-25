@@ -8,7 +8,6 @@ use crate::material::Material;
 #[pyclass(unsendable)]
 pub struct Gltf {
     entity: Entity,
-    graphics_entity: Entity,
 }
 
 #[pymethods]
@@ -34,12 +33,12 @@ impl Gltf {
     }
 
     pub fn camera(&self, index: usize) -> PyResult<()> {
-        gltf_camera(self.entity, self.graphics_entity, index)
+        gltf_camera(self.entity, index)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn light(&self, index: usize) -> PyResult<Light> {
-        let entity = gltf_light(self.entity, self.graphics_entity, index)
+        let entity = gltf_light(self.entity, index)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(Light { entity })
     }
@@ -49,9 +48,7 @@ impl Gltf {
 #[pyo3(pass_module)]
 pub fn load_gltf(module: &Bound<'_, PyModule>, path: &str) -> PyResult<Gltf> {
     let graphics = get_graphics(module)?;
-    let entity = gltf_load(path).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-    Ok(Gltf {
-        entity,
-        graphics_entity: graphics.entity,
-    })
+    let entity = gltf_load(graphics.entity, path)
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    Ok(Gltf { entity })
 }

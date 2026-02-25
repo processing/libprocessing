@@ -18,6 +18,7 @@ use transform::TransformStack;
 use crate::{
     Flush,
     geometry::Geometry,
+    gltf::GltfNodeTransform,
     image::Image,
     render::{material::UntypedMaterial, primitive::rect},
 };
@@ -122,7 +123,7 @@ pub fn flush_draw_commands(
         With<Flush>,
     >,
     p_images: Query<&Image>,
-    p_geometries: Query<&Geometry>,
+    p_geometries: Query<(&Geometry, Option<&GltfNodeTransform>)>,
     p_material_handles: Query<&UntypedMaterial>,
 ) {
     for (graphics_entity, mut cmd_buffer, mut state, render_layers, projection, camera_transform) in
@@ -297,7 +298,7 @@ pub fn flush_draw_commands(
                 DrawCommand::ShearX { angle } => state.transform.shear_x(angle),
                 DrawCommand::ShearY { angle } => state.transform.shear_y(angle),
                 DrawCommand::Geometry(entity) => {
-                    let Some(geometry) = p_geometries.get(entity).ok() else {
+                    let Some((geometry, node_transform)) = p_geometries.get(entity).ok() else {
                         warn!("Could not find Geometry for entity {:?}", entity);
                         continue;
                     };
@@ -318,6 +319,15 @@ pub fn flush_draw_commands(
 
                     let z_offset = -(batch.draw_index as f32 * 0.001);
                     let mut transform = state.transform.to_bevy_transform();
+                    
+                    // if the "source" geometry was parented in a gltf scene, we need to make sure that
+                    // we apply the parent transform here to ensure the correct final transform
+                    // TODO: think about how hierarchies should work, especially for retained
+                    if let Some(nt) = node_transform {
+                        transform = Transform::from_matrix(
+                            transform.to_matrix() * nt.0.to_matrix(),
+                        );
+                    }
                     transform.translation.z += z_offset;
 
                     res.commands.spawn((

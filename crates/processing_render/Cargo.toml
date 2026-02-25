@@ -13,7 +13,6 @@ x11 = ["bevy/x11"]
 
 [dependencies]
 bevy = { workspace = true }
-gltf = { version = "1.4.0", default-features = false, features = ["KHR_lights_punctual", "names"] }
 lyon = "1.0"
 raw-window-handle = "0.6"
 thiserror = "2"
