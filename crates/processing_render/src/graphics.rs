@@ -181,7 +181,7 @@ impl CameraProjection for ProcessingProjection {
 }
 
 pub fn create(
-    In((width, height, surface_entity)): In<(u32, u32, Entity)>,
+    In((width, height, surface_entity, texture_format)): In<(u32, u32, Entity, TextureFormat)>,
     mut commands: Commands,
     mut layer_manager: ResMut<RenderLayersManager>,
     p_images: Query<&Image, With<Surface>>,
@@ -200,8 +200,6 @@ pub fn create(
     // drawn to this camera will only be visible to this camera
     let render_layer = layer_manager.allocate();
 
-    // TODO: make this configurable, right now we are hard-coding hdr camera
-    let texture_format = TextureFormat::Rgba16Float;
     let size = Extent3d {
         width,
         height,
@@ -216,42 +214,51 @@ pub fn create(
     )
     .expect("Failed to create readback buffer");
 
-    let entity = commands
-        .spawn((
-            Camera3d::default(),
-            Camera {
-                // always load the previous frame (provides sketch like behavior)
-                clear_color: ClearColorConfig::None,
-                // TODO: toggle this conditionally based on whether we need to write back MSAA
-                // when doing manual pixel udpates
-                msaa_writeback: MsaaWriteback::Always,
-                ..default()
-            },
-            target,
-            // default to floating point texture format
-            Hdr,
-            // tonemapping prevents color accurate readback, so we disable it
-            Tonemapping::None,
-            // we need to be able to write to the texture
-            CameraMainTextureUsages::default().with(TextureUsages::COPY_DST),
-            Projection::custom(ProcessingProjection {
-                width: width as f32,
-                height: height as f32,
-                near: 0.0,
-                far: 1000.0,
-            }),
-            Transform::from_xyz(0.0, 0.0, 999.9),
-            render_layer,
-            CommandBuffer::new(),
-            RenderState::default(),
-            SurfaceSize(width, height),
-            Graphics {
-                readback_buffer,
-                texture_format,
-                size,
-            },
-        ))
-        .id();
+    let is_hdr = matches!(
+        texture_format,
+        TextureFormat::Rgba16Float | TextureFormat::Rgba32Float
+    );
+
+    let mut entity_commands = commands.spawn((
+        Camera3d::default(),
+        Camera {
+            // always load the previous frame (provides sketch like behavior)
+            clear_color: ClearColorConfig::None,
+            // TODO: toggle this conditionally based on whether we need to write back MSAA
+            // when doing manual pixel updates
+            msaa_writeback: MsaaWriteback::Off,
+            ..default()
+        },
+        target,
+        // tonemapping prevents color accurate readback, so we disable it
+        Tonemapping::None,
+        // we need to be able to write to the texture
+        CameraMainTextureUsages::default().with(TextureUsages::COPY_DST),
+        Projection::custom(ProcessingProjection {
+            width: width as f32,
+            height: height as f32,
+            near: 0.0,
+            far: 1000.0,
+        }),
+        Msaa::Off,
+        Transform::from_xyz(0.0, 0.0, 999.9),
+        render_layer,
+        CommandBuffer::new(),
+        RenderState::default(),
+        SurfaceSize(width, height),
+        Graphics {
+            readback_buffer,
+            texture_format,
+            size,
+        },
+    ));
+
+    // only enable Hdr for floating-point texture formats
+    if is_hdr {
+        entity_commands.insert(Hdr);
+    }
+
+    let entity = entity_commands.id();
 
     Ok(entity)
 }
@@ -447,12 +454,12 @@ pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
     app.world_mut()
         .run_system_cached(update_view_targets)
         .expect("Failed to run update_view_targets");
-
     Ok(())
 }
 
-pub fn end_draw(app: &mut App, entity: Entity) -> Result<()> {
-    // Enable output to present the frame, but don't clear (preserve pixel writes)
+/// Present the current frame to the surface. Flushes any pending draw commands,
+/// enables camera output for one frame, then disables it again.
+pub fn present(app: &mut App, entity: Entity) -> Result<()> {
     graphics_mut!(app, entity)
         .get_mut::<Camera>()
         .ok_or(ProcessingError::GraphicsNotFound)?
@@ -460,14 +467,53 @@ pub fn end_draw(app: &mut App, entity: Entity) -> Result<()> {
         blend_state: None,
         clear_color: ClearColorConfig::None,
     };
-    // flush any remaining draw commands, this ensures that the frame is presented even if there
-    // is no remaining draw commands
     flush(app, entity)?;
     graphics_mut!(app, entity)
         .get_mut::<Camera>()
         .ok_or(ProcessingError::GraphicsNotFound)?
         .output_mode = CameraOutputMode::Skip;
+
+    // // Sync ViewTarget textures: copy main_texture → main_texture_other.
+    // // This ensures both A and B have identical content regardless of whether
+    // // post-processing effects called post_process_write() (which swaps A/B).
+    // app.world_mut()
+    //     .run_system_cached_with(sync_view_target_textures, entity)
+    //     .unwrap()?;
+
     Ok(())
+}
+
+/// Copy the current main_texture to main_texture_other so both ViewTarget
+/// textures have identical content. This ensures pixel persistence works
+/// regardless of post-processing effects that may swap the A/B texture selector.
+fn sync_view_target_textures(
+    In(entity): In<Entity>,
+    graphics_query: Query<&Graphics>,
+    graphics_targets: Res<GraphicsTargets>,
+    render_device: Res<RenderDevice>,
+    render_queue: Res<RenderQueue>,
+) -> Result<()> {
+    let graphics = graphics_query
+        .get(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    let view_target = graphics_targets
+        .get(&entity)
+        .ok_or(ProcessingError::GraphicsNotFound)?;
+
+    let src = view_target.main_texture();
+    let dst = view_target.main_texture_other();
+
+    let mut encoder = render_device.create_command_encoder(&CommandEncoderDescriptor::default());
+    encoder.copy_texture_to_texture(src.as_image_copy(), dst.as_image_copy(), graphics.size);
+    render_queue.submit(std::iter::once(encoder.finish()));
+
+    Ok(())
+}
+
+/// End the current draw
+pub fn end_draw(app: &mut App, entity: Entity) -> Result<()> {
+    present(app, entity)
 }
 
 pub fn record_command(
@@ -482,13 +528,21 @@ pub fn record_command(
     Ok(())
 }
 
-pub fn readback(
+/// Raw readback result containing bytes and format metadata.
+pub struct ReadbackData {
+    pub bytes: Vec<u8>,
+    pub format: TextureFormat,
+    pub width: u32,
+    pub height: u32,
+}
+
+pub fn readback_raw(
     In(entity): In<Entity>,
     graphics_query: Query<&Graphics>,
     graphics_targets: Res<GraphicsTargets>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
-) -> Result<Vec<LinearRgba>> {
+) -> Result<ReadbackData> {
     let graphics = graphics_query
         .get(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
@@ -543,13 +597,24 @@ pub fn readback(
 
     graphics.readback_buffer.unmap();
 
-    bytes_to_pixels(
-        &data,
-        graphics.texture_format,
-        graphics.size.width,
-        graphics.size.height,
-        padded_bytes_per_row,
-    )
+    // strip row padding
+    let bytes_per_row = graphics.size.width as usize * px_size;
+    let unpadded = if padded_bytes_per_row != bytes_per_row {
+        data.chunks_exact(padded_bytes_per_row)
+            .take(graphics.size.height as usize)
+            .flat_map(|row| &row[..bytes_per_row])
+            .copied()
+            .collect()
+    } else {
+        data
+    };
+
+    Ok(ReadbackData {
+        bytes: unpadded,
+        format: graphics.texture_format,
+        width: graphics.size.width,
+        height: graphics.size.height,
+    })
 }
 
 pub fn update_region_write(

@@ -17,6 +17,8 @@ use config::*;
 
 #[cfg(not(target_arch = "wasm32"))]
 use bevy::log::tracing_subscriber;
+use bevy::render::RenderPlugin;
+use bevy::render::settings::{RenderCreation, WgpuSettings};
 use bevy::{
     app::{App, AppExit},
     asset::{AssetEventSystems, io::AssetSourceBuilder},
@@ -227,18 +229,28 @@ fn create_app(config: Config) -> App {
         );
     }
 
-    if let Some(sketch_path) = config.get(ConfigKey::SketchRootPath) {
-        app.register_asset_source(
-            "sketch_directory",
-            AssetSourceBuilder::platform_default(sketch_path, None),
-        );
+    let has_sketch_file = config
+        .get(ConfigKey::SketchFileName)
+        .is_some_and(|f| !f.is_empty());
+    if has_sketch_file {
+        if let Some(sketch_path) = config.get(ConfigKey::SketchRootPath) {
+            app.register_asset_source(
+                "sketch_directory",
+                AssetSourceBuilder::platform_default(sketch_path, None),
+            );
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     let plugins = DefaultPlugins
         .build()
+        .set(RenderPlugin {
+            synchronous_pipeline_compilation: true,
+            ..default()
+        })
         .disable::<bevy::winit::WinitPlugin>()
         .disable::<bevy::log::LogPlugin>()
+        .disable::<bevy::render::pipelined_rendering::PipelinedRenderingPlugin>()
         .set(WindowPlugin {
             primary_window: None,
             exit_condition: bevy::window::ExitCondition::DontExit,
@@ -258,8 +270,7 @@ fn create_app(config: Config) -> App {
 
     app.add_plugins(plugins);
 
-    if config.get(ConfigKey::SketchRootPath).is_some() {
-        info!("Adding plugin");
+    if has_sketch_file {
         app.add_plugins(sketch::LivecodePlugin);
     }
 
@@ -307,10 +318,10 @@ fn set_app(app: App) {
 /// be called concurrently from multiple threads.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn init(config: Config) -> error::Result<()> {
-    setup_tracing()?;
     if is_already_init()? {
         return Ok(());
     }
+    setup_tracing(config.get(ConfigKey::LogLevel).map(|s| s.as_str()))?;
 
     let mut app = create_app(config);
     // contrary to what the following methods might imply, this is just finishing plugin setup
@@ -332,10 +343,10 @@ pub fn init(config: Config) -> error::Result<()> {
 pub async fn init(config: Config) -> error::Result<()> {
     use bevy::app::PluginsState;
 
-    setup_tracing()?;
     if is_already_init()? {
         return Ok(());
     }
+    setup_tracing(config.get(ConfigKey::LogLevel).map(|s| s.as_str()))?;
 
     let mut app = create_app(config);
 
@@ -361,10 +372,18 @@ pub async fn init(config: Config) -> error::Result<()> {
 }
 
 /// Create a new graphics surface for rendering.
-pub fn graphics_create(surface_entity: Entity, width: u32, height: u32) -> error::Result<Entity> {
+pub fn graphics_create(
+    surface_entity: Entity,
+    width: u32,
+    height: u32,
+    texture_format: TextureFormat,
+) -> error::Result<Entity> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(graphics::create, (width, height, surface_entity))
+            .run_system_cached_with(
+                graphics::create,
+                (width, height, surface_entity, texture_format),
+            )
             .unwrap()
     })
 }
@@ -383,6 +402,11 @@ pub fn graphics_flush(graphics_entity: Entity) -> error::Result<()> {
     app_mut(|app| graphics::flush(app, graphics_entity))
 }
 
+/// Present the current frame to the surface.
+pub fn graphics_present(graphics_entity: Entity) -> error::Result<()> {
+    app_mut(|app| graphics::present(app, graphics_entity))
+}
+
 /// End the current draw pass for the graphics surface.
 pub fn graphics_end_draw(graphics_entity: Entity) -> error::Result<()> {
     app_mut(|app| graphics::end_draw(app, graphics_entity))
@@ -397,14 +421,28 @@ pub fn graphics_destroy(graphics_entity: Entity) -> error::Result<()> {
     })
 }
 
-/// Read back pixel data from the graphics surface.
-pub fn graphics_readback(graphics_entity: Entity) -> error::Result<Vec<LinearRgba>> {
+/// Read back raw pixel data from the graphics surface.
+pub fn graphics_readback_raw(graphics_entity: Entity) -> error::Result<graphics::ReadbackData> {
     app_mut(|app| {
         graphics::flush(app, graphics_entity)?;
         app.world_mut()
-            .run_system_cached_with(graphics::readback, graphics_entity)
+            .run_system_cached_with(graphics::readback_raw, graphics_entity)
             .unwrap()
     })
+}
+
+/// Read back pixel data from the graphics surface as LinearRgba.
+pub fn graphics_readback(graphics_entity: Entity) -> error::Result<Vec<LinearRgba>> {
+    let raw = graphics_readback_raw(graphics_entity)?;
+    let px_size = image::pixel_size(raw.format)?;
+    let padded_bytes_per_row = raw.width as usize * px_size;
+    image::bytes_to_pixels(
+        &raw.bytes,
+        raw.format,
+        raw.width,
+        raw.height,
+        padded_bytes_per_row,
+    )
 }
 
 /// Update the graphics surface with new pixel data.
@@ -483,11 +521,17 @@ pub fn exit(exit_code: u8) -> error::Result<()> {
     Ok(())
 }
 
-fn setup_tracing() -> error::Result<()> {
+fn setup_tracing(log_level: Option<&str>) -> error::Result<()> {
     // TODO: figure out wasm compatible tracing subscriber
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let subscriber = tracing_subscriber::FmtSubscriber::new();
+        use tracing_subscriber::EnvFilter;
+
+        let filter = EnvFilter::try_new(log_level.unwrap_or("info"))
+            .unwrap_or_else(|_| EnvFilter::new("info"));
+        let subscriber = tracing_subscriber::FmtSubscriber::builder()
+            .with_env_filter(filter)
+            .finish();
         tracing::subscriber::set_global_default(subscriber)?;
     }
     Ok(())

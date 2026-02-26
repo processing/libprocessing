@@ -26,7 +26,7 @@ fn sketch() -> error::Result<()> {
     let scale_factor = 1.0;
 
     let surface = glfw_ctx.create_surface(width, height, scale_factor)?;
-    let graphics = graphics_create(surface, width, height)?;
+    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
     let image = image_load("images/logo.png")?;
 
     while glfw_ctx.poll_events() {

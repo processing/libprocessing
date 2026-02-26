@@ -31,7 +31,7 @@ def draw():
 
     push_matrix()
     rotate(angle)
-    draw_box(100.0, 100.0, 100.0)
+    box(100.0, 100.0, 100.0)
     pop_matrix()
 
     angle += 0.02

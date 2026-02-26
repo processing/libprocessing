@@ -18,11 +18,13 @@ use material::Material;
 use pyo3::{
     exceptions::PyRuntimeError,
     prelude::*,
+    py_run,
     types::{PyDict, PyTuple},
 };
 use std::ffi::{CStr, CString};
 
 use gltf::Gltf;
+use bevy::log::warn;
 use std::env;
 
 #[pymodule]
@@ -36,6 +38,12 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(gltf::load_gltf, m)?)?;
     m.add_function(wrap_pyfunction!(size, m)?)?;
     m.add_function(wrap_pyfunction!(run, m)?)?;
+    m.add_function(wrap_pyfunction!(_poll_events, m)?)?;
+    m.add_function(wrap_pyfunction!(_begin_draw, m)?)?;
+    m.add_function(wrap_pyfunction!(_end_draw, m)?)?;
+    m.add_function(wrap_pyfunction!(_present, m)?)?;
+    m.add_function(wrap_pyfunction!(_readback_png, m)?)?;
+    m.add_function(wrap_pyfunction!(redraw, m)?)?;
     m.add_function(wrap_pyfunction!(mode_3d, m)?)?;
     m.add_function(wrap_pyfunction!(camera_position, m)?)?;
     m.add_function(wrap_pyfunction!(camera_look_at, m)?)?;
@@ -57,6 +65,10 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(create_spot_light, m)?)?;
     m.add_function(wrap_pyfunction!(draw_sphere, m)?)?;
     m.add_function(wrap_pyfunction!(use_material, m)?)?;
+    m.add_function(wrap_pyfunction!(roughness, m)?)?;
+    m.add_function(wrap_pyfunction!(metallic, m)?)?;
+    m.add_function(wrap_pyfunction!(emissive, m)?)?;
+    m.add_function(wrap_pyfunction!(unlit, m)?)?;
 
     Ok(())
 }
@@ -69,9 +81,18 @@ fn get_asset_root() -> PyResult<String> {
     Python::attach(|py| {
         let sys = PyModule::import(py, "sys")?;
         let argv: Vec<String> = sys.getattr("argv")?.extract()?;
-        let filename: &str = argv[0].as_str();
+        let filename = argv.first().map(|s| s.as_str()).unwrap_or("");
         let os = PyModule::import(py, "os")?;
         let path = os.getattr("path")?;
+
+        // in ipython/jupyter argv[0] is weird so we use cwd
+        // todo: what is the correct way to get notebook path
+        if filename.is_empty() || !path.getattr("isfile")?.call1((filename,))?.is_truthy()? {
+            let cwd = os.getattr("getcwd")?.call0()?.to_string();
+            let asset_root = path.getattr("join")?.call1((cwd, "assets"))?.to_string();
+            return Ok(asset_root);
+        }
+
         let dirname = path.getattr("dirname")?.call1((filename,))?;
         let abspath = path.getattr("abspath")?.call1((dirname,))?;
         let asset_root = path
@@ -86,9 +107,15 @@ fn get_sketch_info() -> PyResult<(String, String)> {
     Python::attach(|py| {
         let sys = PyModule::import(py, "sys")?;
         let argv: Vec<String> = sys.getattr("argv")?.extract()?;
-        let filename: &str = argv[0].as_str();
+        let filename = argv.first().map(|s| s.as_str()).unwrap_or("");
         let os = PyModule::import(py, "os")?;
         let path = os.getattr("path")?;
+
+        if filename.is_empty() || !path.getattr("isfile")?.call1((filename,))?.is_truthy()? {
+            let cwd = os.getattr("getcwd")?.call0()?.to_string();
+            return Ok((cwd, String::new()));
+        }
+
         let dirname = path.getattr("dirname")?.call1((filename,))?;
         let abspath = path.getattr("abspath")?.call1((dirname,))?;
         let basename = path.getattr("basename")?.call1((filename,))?;
@@ -98,25 +125,130 @@ fn get_sketch_info() -> PyResult<(String, String)> {
 
 #[pyfunction]
 #[pyo3(pass_module)]
+fn _poll_events(module: &Bound<'_, PyModule>) -> PyResult<bool> {
+    let mut graphics = get_graphics_mut(module)?;
+    Ok(graphics.surface.poll_events())
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn _begin_draw(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    get_graphics(module)?.begin_draw()
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn _end_draw(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    get_graphics(module)?.end_draw()
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn _present(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    get_graphics(module)?.present()
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn _readback_png(module: &Bound<'_, PyModule>) -> PyResult<Vec<u8>> {
+    get_graphics(module)?.readback_png()
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn redraw(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    get_graphics(module)?.present()
+}
+
+const DETECT_ENV_CODE: &str = include_str!("python/detect_env.py");
+const REGISTER_INPUTHOOK_CODE: &str = include_str!("python/register_inputhook.py");
+const IPYTHON_POST_EXECUTE_CODE: &str = include_str!("python/ipython_post_execute.py");
+const JUPYTER_POST_EXECUTE_CODE: &str = include_str!("python/jupyter_post_execute.py");
+
+fn detect_environment(py: Python<'_>) -> PyResult<String> {
+    let locals = PyDict::new(py);
+    let code = CString::new(DETECT_ENV_CODE)?;
+    py.run(code.as_c_str(), None, Some(&locals))?;
+    locals
+        .get_item("_env")?
+        .ok_or_else(|| PyRuntimeError::new_err("Failed to detect environment"))?
+        .extract()
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
 fn size(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<()> {
-    let asset_path: String = get_asset_root()?;
-    let (sketch_root_path, sketch_filename) = get_sketch_info()?;
-    // let sketch_root_path: String = get_sketch_root()?;
-    // let sketch_filename: String = get_sketch_filename()?;
-    let graphics = Graphics::new(
-        width,
-        height,
-        asset_path.as_str(),
-        sketch_root_path.as_str(),
-        sketch_filename.as_str(),
-    )?;
-    module.setattr("_graphics", graphics)?;
+    let py = module.py();
+    let env = detect_environment(py)?;
+
+    let interactive = env != "script";
+    let log_level = if interactive { Some("error") } else { None };
+
+    match env.as_str() {
+        "jupyter" => {
+            let asset_path = get_asset_root()?;
+            let graphics = Graphics::new_offscreen(width, height, asset_path.as_str(), log_level)?;
+            module.setattr("_graphics", graphics)?;
+
+            let code = CString::new(JUPYTER_POST_EXECUTE_CODE)?;
+            py.run(code.as_c_str(), None, None).map_err(|e| {
+                PyRuntimeError::new_err(format!("Failed to register Jupyter hooks: {e}"))
+            })?;
+        }
+        "ipython" => {
+            let asset_path = get_asset_root()?;
+            let (sketch_root, sketch_file) = get_sketch_info()?;
+            let graphics = Graphics::new(
+                width,
+                height,
+                asset_path.as_str(),
+                sketch_root.as_str(),
+                sketch_file.as_str(),
+                log_level,
+            )?;
+            module.setattr("_graphics", graphics)?;
+
+            let hook_code = CString::new(REGISTER_INPUTHOOK_CODE)?;
+            py.run(hook_code.as_c_str(), None, None).map_err(|e| {
+                PyRuntimeError::new_err(format!("Failed to register inputhook: {e}"))
+            })?;
+
+            let post_code = CString::new(IPYTHON_POST_EXECUTE_CODE)?;
+            py.run(post_code.as_c_str(), None, None).map_err(|e| {
+                PyRuntimeError::new_err(format!("Failed to register post-execute hook: {e}"))
+            })?;
+        }
+
+        // this is the default "script" mode where we assume the user will call run() to start the draw loop
+        _ => {
+            let asset_path = get_asset_root()?;
+            let (sketch_root, sketch_file) = get_sketch_info()?;
+            let graphics = Graphics::new(
+                width,
+                height,
+                asset_path.as_str(),
+                sketch_root.as_str(),
+                sketch_file.as_str(),
+                log_level,
+            )?;
+            module.setattr("_graphics", graphics)?;
+        }
+    }
+
     Ok(())
 }
 
 #[pyfunction]
 #[pyo3(pass_module)]
 fn run(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    let py = module.py();
+    let env = detect_environment(py)?;
+
+    if env != "script" {
+        warn!("run() was called, but we're in an interactive environment ({env}).");
+        return Ok(());
+    }
+
     Python::attach(|py| {
         let builtins = PyModule::import(py, "builtins")?;
         let locals = builtins.getattr("locals")?.call0()?;
@@ -213,7 +345,7 @@ fn rotate(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
     get_graphics(module)?.rotate(angle)
 }
 
-#[pyfunction]
+#[pyfunction(name = "box")]
 #[pyo3(pass_module)]
 fn draw_box(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<()> {
     get_graphics(module)?.draw_box(x, y, z)
@@ -330,7 +462,7 @@ fn create_spot_light(
     get_graphics(module)?.light_spot(r, g, b, intensity, range, radius, inner_angle, outer_angle)
 }
 
-#[pyfunction]
+#[pyfunction(name = "sphere")]
 #[pyo3(pass_module, signature = (radius, sectors=32, stacks=18))]
 fn draw_sphere(
     module: &Bound<'_, PyModule>,
@@ -345,4 +477,29 @@ fn draw_sphere(
 #[pyo3(pass_module, signature = (material))]
 fn use_material(module: &Bound<'_, PyModule>, material: &Bound<'_, Material>) -> PyResult<()> {
     get_graphics(module)?.use_material(&*material.extract::<PyRef<Material>>()?)
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn roughness(module: &Bound<'_, PyModule>, value: f32) -> PyResult<()> {
+    get_graphics(module)?.roughness(value)
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn metallic(module: &Bound<'_, PyModule>, value: f32) -> PyResult<()> {
+    get_graphics(module)?.metallic(value)
+}
+
+#[pyfunction]
+#[pyo3(pass_module, signature = (*args))]
+fn emissive(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+    let args: Vec<f32> = args.extract()?;
+    get_graphics(module)?.emissive(args)
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn unlit(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    get_graphics(module)?.unlit()
 }

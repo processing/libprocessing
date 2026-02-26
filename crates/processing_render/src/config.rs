@@ -10,6 +10,7 @@ pub enum ConfigKey {
     AssetRootPath,
     SketchRootPath,
     SketchFileName,
+    LogLevel,
 }
 
 // TODO: Consider Box<dyn Any> instead of String

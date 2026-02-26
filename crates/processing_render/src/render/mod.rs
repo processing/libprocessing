@@ -133,6 +133,11 @@ pub fn flush_draw_commands(
         let view_from_world = camera_transform.to_matrix().inverse();
         let world_from_clip = (clip_from_view * view_from_world).inverse();
         let draw_commands = std::mem::take(&mut cmd_buffer.commands);
+        info!(
+            "[flush_draw_commands] processing {} draw commands for entity {:?}",
+            draw_commands.len(),
+            graphics_entity
+        );
         let mut batch = BatchState::new(graphics_entity, render_layers.clone());
 
         for cmd in draw_commands {
@@ -370,7 +375,9 @@ pub fn flush_draw_commands(
 
 pub fn activate_cameras(mut cameras: Query<(&mut Camera, Option<&Flush>)>) {
     for (mut camera, flush) in cameras.iter_mut() {
-        camera.is_active = flush.is_some();
+        let active = flush.is_some();
+        info!("[activate_cameras] is_active={active}");
+        camera.is_active = active;
     }
 }
 
@@ -379,6 +386,10 @@ pub fn clear_transient_meshes(
     surfaces: Query<&TransientMeshes, With<Flush>>,
 ) {
     for transient_meshes in surfaces.iter() {
+        info!(
+            "[clear_transient_meshes] despawning {} meshes",
+            transient_meshes.0.len()
+        );
         for &mesh_entity in transient_meshes.0.iter() {
             commands.entity(mesh_entity).despawn();
         }
@@ -389,6 +400,7 @@ fn spawn_mesh(res: &mut RenderResources, batch: &mut BatchState, mesh: Mesh, z_o
     let Some(key) = &batch.material_key else {
         return;
     };
+    info!("[spawn_mesh] spawning mesh with z_offset={z_offset} material={key:?}");
 
     let mesh_handle = res.meshes.add(mesh);
 
