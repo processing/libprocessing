@@ -320,7 +320,7 @@ pub fn init(config: Config) -> error::Result<()> {
     // also, we need to run the main schedule once to ensure all systems are initialized before we
     // return from init, to ensure any plugins that need to do setup in their first update can rely
     // on that
-    app.main_mut().run_default_schedule();
+    app.update();
     set_app(app);
 
     Ok(())
@@ -353,7 +353,7 @@ pub async fn init(config: Config) -> error::Result<()> {
 
     app.finish();
     app.cleanup();
-    app.main_mut().run_default_schedule();
+    app.update();
     set_app(app);
 
     Ok(())
