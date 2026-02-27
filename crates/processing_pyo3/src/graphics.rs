@@ -581,20 +581,34 @@ fn parse_color(args: &[f32]) -> PyResult<(f32, f32, f32, f32)> {
     }
 }
 
-pub fn get_graphics<'py>(module: &Bound<'py, PyModule>) -> PyResult<PyRef<'py, Graphics>> {
-    module
-        .getattr("_graphics")?
+pub fn get_graphics<'py>(module: &Bound<'py, PyModule>) -> PyResult<Option<PyRef<'py, Graphics>>> {
+    let Ok(attr) = module.getattr("_graphics") else {
+        return Ok(None);
+    };
+    if attr.is_none() {
+        return Ok(None);
+    }
+    let g = attr
         .cast_into::<Graphics>()
-        .map_err(|_| PyRuntimeError::new_err("no graphics context"))?
+        .map_err(|_| PyRuntimeError::new_err("invalid graphics context"))?
         .try_borrow()
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    Ok(Some(g))
 }
 
-pub fn get_graphics_mut<'py>(module: &Bound<'py, PyModule>) -> PyResult<PyRefMut<'py, Graphics>> {
-    module
-        .getattr("_graphics")?
+pub fn get_graphics_mut<'py>(
+    module: &Bound<'py, PyModule>,
+) -> PyResult<Option<PyRefMut<'py, Graphics>>> {
+    let Ok(attr) = module.getattr("_graphics") else {
+        return Ok(None);
+    };
+    if attr.is_none() {
+        return Ok(None);
+    }
+    let g = attr
         .cast_into::<Graphics>()
-        .map_err(|_| PyRuntimeError::new_err("no graphics context"))?
+        .map_err(|_| PyRuntimeError::new_err("invalid graphics context"))?
         .try_borrow_mut()
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    Ok(Some(g))
 }
