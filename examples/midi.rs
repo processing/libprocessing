@@ -28,7 +28,8 @@ fn sketch() -> error::Result<()> {
     let surface = glfw_ctx.create_surface(width, height, scale_factor)?;
     let graphics = graphics_create(surface, width, height)?;
 
-    processing_midi::connect(0);
+    midi_refresh_ports()?;
+    midi_connect(0)?;
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;
@@ -45,6 +46,8 @@ fn sketch() -> error::Result<()> {
         )?;
 
         graphics_end_draw(graphics)?;
+
+        midi_play_notes(60)?;
     }
     Ok(())
 }

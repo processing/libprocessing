@@ -20,7 +20,7 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 half = "2.7"
 crossbeam-channel = "0.5"
-processing_midi = { workspace = true }
+bevy_midi = { git = "https://github.com/BlackPhlox/bevy_midi", branch = "latest" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { version = "0.6", default-features = false }
