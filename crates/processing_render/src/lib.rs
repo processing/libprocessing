@@ -312,8 +312,15 @@ pub fn init(config: Config) -> error::Result<()> {
     }
 
     let mut app = create_app(config);
+    // contrary to what the following methods might imply, this is just finishing plugin setup
+    // which normally happens in the app runner (i.e. in a "normal" bevy app), but since we don't
+    // have one we need to do it manually here
     app.finish();
     app.cleanup();
+    // also, we need to run the main schedule once to ensure all systems are initialized before we
+    // return from init, to ensure any plugins that need to do setup in their first update can rely
+    // on that
+    app.main_mut().run_default_schedule();
     set_app(app);
 
     Ok(())
@@ -346,6 +353,7 @@ pub async fn init(config: Config) -> error::Result<()> {
 
     app.finish();
     app.cleanup();
+    app.main_mut().run_default_schedule();
     set_app(app);
 
     Ok(())
