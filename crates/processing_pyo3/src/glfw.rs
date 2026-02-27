@@ -81,10 +81,16 @@ impl GlfwContext {
 
         for (_, event) in glfw::flush_messages(&self.events) {
             if event == WindowEvent::Close {
+                self.window.hide();
                 return false;
             }
         }
 
-        !self.window.should_close()
+        if self.window.should_close() {
+            self.window.hide();
+            return false;
+        }
+
+        true
     }
 }

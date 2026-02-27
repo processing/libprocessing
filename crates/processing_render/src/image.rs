@@ -77,7 +77,8 @@ pub fn create(
         texture_format,
         RenderAssetUsages::all(),
     );
-    // When used as a render target (offscreen surface), the texture needs RENDER_ATTACHMENT
+    // we need to mark this as a render attachment so it can be used as a render target for
+    // drawing and readback
     image.texture_descriptor.usage |= TextureUsages::RENDER_ATTACHMENT;
 
     let handle = images.add(image);
