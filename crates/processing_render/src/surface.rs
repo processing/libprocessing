@@ -329,6 +329,7 @@ pub fn prepare_offscreen(
         TextureFormat::R8Unorm => 1,
         TextureFormat::Rg8Unorm => 2,
         TextureFormat::Rgba8Unorm
+        | TextureFormat::Rgba8UnormSrgb
         | TextureFormat::Bgra8Unorm
         | TextureFormat::Rgba16Float
         | TextureFormat::Rgba32Float => 4,

@@ -46,7 +46,8 @@ impl Gltf {
 #[pyfunction]
 #[pyo3(pass_module)]
 pub fn load_gltf(module: &Bound<'_, PyModule>, path: &str) -> PyResult<Gltf> {
-    let graphics = get_graphics(module)?;
+    let graphics = get_graphics(module)?
+        .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
     let entity =
         gltf_load(graphics.entity, path).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
     Ok(Gltf { entity })

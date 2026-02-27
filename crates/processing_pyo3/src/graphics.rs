@@ -1,5 +1,9 @@
-use bevy::math::Vec4;
-use bevy::prelude::Entity;
+use bevy::{
+    color::{ColorToPacked, Srgba},
+    math::Vec4,
+    prelude::Entity,
+    render::render_resource::TextureFormat,
+};
 use processing::prelude::*;
 use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyDict};
 
@@ -8,13 +12,16 @@ use crate::glfw::GlfwContext;
 #[pyclass(unsendable)]
 pub struct Surface {
     entity: Entity,
-    glfw_ctx: GlfwContext,
+    glfw_ctx: Option<GlfwContext>,
 }
 
 #[pymethods]
 impl Surface {
     pub fn poll_events(&mut self) -> bool {
-        self.glfw_ctx.poll_events()
+        match &mut self.glfw_ctx {
+            Some(ctx) => ctx.poll_events(),
+            None => true, // no-op, offscreen surfaces never close
+        }
     }
 }
 
@@ -135,6 +142,8 @@ impl Geometry {
 pub struct Graphics {
     pub(crate) entity: Entity,
     pub surface: Surface,
+    pub width: u32,
+    pub height: u32,
 }
 
 impl Drop for Graphics {
@@ -152,6 +161,7 @@ impl Graphics {
         asset_path: &str,
         sketch_root_path: &str,
         sketch_file_name: &str,
+        log_level: Option<&str>,
     ) -> PyResult<Self> {
         let glfw_ctx =
             GlfwContext::new(width, height).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
@@ -160,6 +170,9 @@ impl Graphics {
         config.set(ConfigKey::AssetRootPath, asset_path.to_string());
         config.set(ConfigKey::SketchRootPath, sketch_root_path.to_string());
         config.set(ConfigKey::SketchFileName, sketch_file_name.to_string());
+        if let Some(level) = log_level {
+            config.set(ConfigKey::LogLevel, level.to_string());
+        }
         init(config).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let surface = glfw_ctx
@@ -168,16 +181,90 @@ impl Graphics {
 
         let surface = Surface {
             entity: surface,
-            glfw_ctx,
+            glfw_ctx: Some(glfw_ctx),
         };
 
-        let graphics = graphics_create(surface.entity, width, height)
+        let graphics = graphics_create(surface.entity, width, height, TextureFormat::Rgba16Float)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         Ok(Self {
             entity: graphics,
             surface,
+            width,
+            height,
         })
+    }
+
+    #[staticmethod]
+    pub fn new_offscreen(
+        width: u32,
+        height: u32,
+        asset_path: &str,
+        log_level: Option<&str>,
+    ) -> PyResult<Self> {
+        let mut config = Config::new();
+        config.set(ConfigKey::AssetRootPath, asset_path.to_string());
+        if let Some(level) = log_level {
+            config.set(ConfigKey::LogLevel, level.to_string());
+        }
+        init(config).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+
+        // todo: allow caller to specify texture format? we use an sRGB format by default since
+        // it plays well with converting to PNG
+        let texture_format = TextureFormat::Rgba8UnormSrgb;
+
+        let surface_entity = surface_create_offscreen(width, height, 1.0, texture_format)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+
+        let surface = Surface {
+            entity: surface_entity,
+            glfw_ctx: None,
+        };
+
+        let graphics = graphics_create(surface.entity, width, height, texture_format)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+
+        Ok(Self {
+            entity: graphics,
+            surface,
+            width,
+            height,
+        })
+    }
+
+    pub fn readback_png(&self) -> PyResult<Vec<u8>> {
+        let raw = graphics_readback_raw(self.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+
+        // png-ify our raw data, for srgb formats we're already good
+        let rgba_bytes = match raw.format {
+            TextureFormat::Rgba8UnormSrgb => raw.bytes,
+            _ => {
+                let pixels = graphics_readback(self.entity)
+                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+                pixels
+                    .iter()
+                    .flat_map(|pixel| Srgba::from(*pixel).to_u8_array())
+                    .collect()
+            }
+        };
+
+        let mut png_buf: Vec<u8> = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut png_buf, raw.width, raw.height);
+            // todo: infer these from the texture format instead of hardcoding
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            encoder.set_source_srgb(png::SrgbRenderingIntent::Perceptual);
+            let mut writer = encoder
+                .write_header()
+                .map_err(|e| PyRuntimeError::new_err(format!("PNG header: {e}")))?;
+            writer
+                .write_image_data(&rgba_bytes)
+                .map_err(|e| PyRuntimeError::new_err(format!("PNG write: {e}")))?;
+        }
+
+        Ok(png_buf)
     }
 
     pub fn poll_for_sketch_update(&self) -> PyResult<Sketch> {
@@ -288,16 +375,49 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn draw_box(&self, x: f32, y: f32, z: f32) -> PyResult<()> {
-        let box_geo = geometry_box(x, y, z).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        graphics_record_command(self.entity, DrawCommand::Geometry(box_geo))
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    pub fn draw_box(&self, width: f32, height: f32, depth: f32) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Box {
+                width,
+                height,
+                depth,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn draw_sphere(&self, radius: f32, sectors: u32, stacks: u32) -> PyResult<()> {
-        let sphere_geo = geometry_sphere(radius, sectors, stacks)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        graphics_record_command(self.entity, DrawCommand::Geometry(sphere_geo))
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Sphere {
+                radius,
+                sectors,
+                stacks,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn roughness(&self, value: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Roughness(value))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn metallic(&self, value: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Metallic(value))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn emissive(&self, args: Vec<f32>) -> PyResult<()> {
+        let (r, g, b, a) = parse_color(&args)?;
+        let color = bevy::color::Color::srgba(r, g, b, a);
+        graphics_record_command(self.entity, DrawCommand::Emissive(color))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn unlit(&self) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Unlit)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
@@ -333,6 +453,10 @@ impl Graphics {
 
     pub fn begin_draw(&self) -> PyResult<()> {
         graphics_begin_draw(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn present(&self) -> PyResult<()> {
+        graphics_present(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn end_draw(&self) -> PyResult<()> {
@@ -457,20 +581,34 @@ fn parse_color(args: &[f32]) -> PyResult<(f32, f32, f32, f32)> {
     }
 }
 
-pub fn get_graphics<'py>(module: &Bound<'py, PyModule>) -> PyResult<PyRef<'py, Graphics>> {
-    module
-        .getattr("_graphics")?
+pub fn get_graphics<'py>(module: &Bound<'py, PyModule>) -> PyResult<Option<PyRef<'py, Graphics>>> {
+    let Ok(attr) = module.getattr("_graphics") else {
+        return Ok(None);
+    };
+    if attr.is_none() {
+        return Ok(None);
+    }
+    let g = attr
         .cast_into::<Graphics>()
-        .map_err(|_| PyRuntimeError::new_err("no graphics context"))?
+        .map_err(|_| PyRuntimeError::new_err("invalid graphics context"))?
         .try_borrow()
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    Ok(Some(g))
 }
 
-pub fn get_graphics_mut<'py>(module: &Bound<'py, PyModule>) -> PyResult<PyRefMut<'py, Graphics>> {
-    module
-        .getattr("_graphics")?
+pub fn get_graphics_mut<'py>(
+    module: &Bound<'py, PyModule>,
+) -> PyResult<Option<PyRefMut<'py, Graphics>>> {
+    let Ok(attr) = module.getattr("_graphics") else {
+        return Ok(None);
+    };
+    if attr.is_none() {
+        return Ok(None);
+    }
+    let g = attr
         .cast_into::<Graphics>()
-        .map_err(|_| PyRuntimeError::new_err("no graphics context"))?
+        .map_err(|_| PyRuntimeError::new_err("invalid graphics context"))?
         .try_borrow_mut()
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    Ok(Some(g))
 }

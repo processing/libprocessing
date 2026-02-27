@@ -24,7 +24,7 @@ fn sketch() -> error::Result<()> {
     init(Config::default())?;
 
     let surface = glfw_ctx.create_surface(width, height, 1.0)?;
-    let graphics = graphics_create(surface, width, height)?;
+    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
     let sphere = geometry_sphere(30.0, 32, 18)?;
 
     graphics_mode_3d(graphics)?;

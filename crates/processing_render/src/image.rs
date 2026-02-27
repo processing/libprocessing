@@ -16,7 +16,7 @@ use bevy::{
         render_resource::{
             Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, Extent3d, MapMode,
             Origin3d, PollType, TexelCopyBufferInfo, TexelCopyBufferLayout, TexelCopyTextureInfo,
-            Texture, TextureDimension, TextureFormat,
+            Texture, TextureDimension, TextureFormat, TextureUsages,
         },
         renderer::{RenderDevice, RenderQueue},
         texture::GpuImage,
@@ -70,13 +70,16 @@ pub fn create(
     mut images: ResMut<Assets<bevy::image::Image>>,
     render_device: Res<RenderDevice>,
 ) -> Entity {
-    let image = bevy::image::Image::new(
+    let mut image = bevy::image::Image::new(
         size,
         TextureDimension::D2,
         data,
         texture_format,
         RenderAssetUsages::all(),
     );
+    // we need to mark this as a render attachment so it can be used as a render target for
+    // drawing and readback
+    image.texture_descriptor.usage |= TextureUsages::RENDER_ATTACHMENT;
 
     let handle = images.add(image);
     let readback_buffer = create_readback_buffer(

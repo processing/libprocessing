@@ -370,7 +370,8 @@ pub fn flush_draw_commands(
 
 pub fn activate_cameras(mut cameras: Query<(&mut Camera, Option<&Flush>)>) {
     for (mut camera, flush) in cameras.iter_mut() {
-        camera.is_active = flush.is_some();
+        let active = flush.is_some();
+        camera.is_active = active;
     }
 }
 

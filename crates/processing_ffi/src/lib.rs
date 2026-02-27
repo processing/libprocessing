@@ -118,7 +118,7 @@ pub extern "C" fn processing_surface_create_x11(
 pub extern "C" fn processing_graphics_create(surface_id: u64, width: u32, height: u32) -> u64 {
     error::clear_error();
     let surface_entity = Entity::from_bits(surface_id);
-    error::check(|| graphics_create(surface_entity, width, height))
+    error::check(|| graphics_create(surface_entity, width, height, TextureFormat::Rgba16Float))
         .map(|e| e.to_bits())
         .unwrap_or(0)
 }
