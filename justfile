@@ -6,16 +6,16 @@ default:
     @just --list
 
 py-build:
-    cd crates/processing_pyo3 && uv run maturin develop --release
+    cd crates/processing_pyo3; uv run maturin develop --release
 
 py-run file: py-build
-    cd crates/processing_pyo3 && uv run python ./examples/{{file}}
+    cd crates/processing_pyo3; uv run python ./examples/{{file}}
 
 py-jupyter file: py-build
-    cd crates/processing_pyo3 && uv run jupyter notebook ./examples/{{file}}
+    cd crates/processing_pyo3; uv run jupyter notebook ./examples/{{file}}
 
 py-ipython: py-build
-    cd crates/processing_pyo3 && ipython
+    cd crates/processing_pyo3; ipython
 
 wasm-build:
     wasm-pack build crates/processing_wasm --target web --out-dir ../../target/wasm
