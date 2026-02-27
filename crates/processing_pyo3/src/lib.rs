@@ -161,10 +161,11 @@ fn _present(module: &Bound<'_, PyModule>) -> PyResult<()> {
 
 #[pyfunction]
 #[pyo3(pass_module)]
-fn _readback_png(module: &Bound<'_, PyModule>) -> PyResult<Vec<u8>> {
-    let graphics =
-        get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-    graphics.readback_png()
+fn _readback_png(module: &Bound<'_, PyModule>) -> PyResult<Option<Vec<u8>>> {
+    let Some(graphics) = get_graphics(module)? else {
+        return Ok(None);
+    };
+    graphics.readback_png().map(Some)
 }
 
 #[pyfunction]
