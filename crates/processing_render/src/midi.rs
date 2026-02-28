@@ -33,10 +33,12 @@ pub fn refresh_ports(output: Res<MidiOutput>) -> Result<()> {
     Ok(())
 }
 
-pub fn play_notes(In(note): In<u8>, output: Res<MidiOutput>) -> Result<()> {
+pub fn play_notes(In((note, duration)): In<(u8, u64)>, output: Res<MidiOutput>) -> Result<()> {
     output.send([0b1001_0000, note, 127].into()); // Note on, channel 1, max velocity
 
-    // output.send([0b1000_0000, note, 127].into()); // Note on, channel 1, max velocity
+    std::thread::sleep(std::time::Duration::from_millis(duration));
+
+    output.send([0b1000_0000, note, 127].into()); // Note on, channel 1, max velocity
 
     Ok(())
 }
