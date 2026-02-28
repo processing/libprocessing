@@ -49,6 +49,7 @@ web-sys = { version = "0.3", features = ["Window"] }
 
 [dev-dependencies]
 glfw = "0.60.0"
+rand = "0.10.0"
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 glfw = { version = "0.60.0", features = ["wayland"] }
