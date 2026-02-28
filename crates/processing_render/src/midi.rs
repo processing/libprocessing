@@ -24,7 +24,8 @@ pub fn connect(In(port): In<usize>, output: Res<MidiOutput>) -> Result<()> {
     Ok(())
 }
 
-pub fn disconnect() -> Result<()> {
+pub fn disconnect(output: Res<MidiOutput>) -> Result<()> {
+    output.disconnect();
     Ok(())
 }
 
