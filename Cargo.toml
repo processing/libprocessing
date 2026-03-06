@@ -21,7 +21,7 @@ type_complexity = "allow"
 too_many_arguments = "allow"
 
 [workspace.dependencies]
-bevy = { path = "../../bevyengine/bevy" }
+bevy = { git = "https://github.com/bevyengine/bevy", branch = "main" }
 processing = { path = "." }
 processing_pyo3 = { path = "crates/processing_pyo3" }
 processing_render = { path = "crates/processing_render" }
@@ -93,9 +93,6 @@ path = "examples/stroke_2d.rs"
 [[example]]
 name = "stroke_3d"
 path = "examples/stroke_3d.rs"
-
-[patch."https://github.com/bevyengine/bevy"]
-bevy = { path = "../../bevyengine/bevy" }
 
 [profile.wasm-release]
 inherits = "release"
