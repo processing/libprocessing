@@ -15,6 +15,7 @@ use lyon::{
 pub use rect::rect;
 pub use shape3d::{box_mesh, sphere_mesh};
 
+use super::command::{StrokeCapMode, StrokeJoinMode};
 use super::mesh_builder::MeshBuilder;
 
 pub enum TessellationMode {
@@ -22,7 +23,48 @@ pub enum TessellationMode {
     Stroke(f32),
 }
 
-pub fn tessellate_path(mesh: &mut Mesh, path: &Path, color: Color, mode: TessellationMode) {
+#[derive(Debug, Clone, Copy)]
+pub struct StrokeConfig {
+    pub line_cap: StrokeCapMode,
+    pub line_join: StrokeJoinMode,
+}
+
+impl Default for StrokeConfig {
+    fn default() -> Self {
+        Self {
+            line_cap: StrokeCapMode::Round,
+            line_join: StrokeJoinMode::Round,
+        }
+    }
+}
+
+impl StrokeCapMode {
+    pub fn to_lyon(self) -> LineCap {
+        match self {
+            Self::Round => LineCap::Round,
+            Self::Square => LineCap::Square,
+            Self::Project => LineCap::Butt,
+        }
+    }
+}
+
+impl StrokeJoinMode {
+    pub fn to_lyon(self) -> LineJoin {
+        match self {
+            Self::Round => LineJoin::Round,
+            Self::Miter => LineJoin::Miter,
+            Self::Bevel => LineJoin::Bevel,
+        }
+    }
+}
+
+pub fn tessellate_path(
+    mesh: &mut Mesh,
+    path: &Path,
+    color: Color,
+    mode: TessellationMode,
+    stroke_config: &StrokeConfig,
+) {
     let mut builder = MeshBuilder::new(mesh, color);
     match mode {
         TessellationMode::Fill => {
@@ -35,8 +77,8 @@ pub fn tessellate_path(mesh: &mut Mesh, path: &Path, color: Color, mode: Tessell
             let mut tessellator = StrokeTessellator::new();
             let options = StrokeOptions::default()
                 .with_line_width(weight)
-                .with_line_cap(LineCap::Round)
-                .with_line_join(LineJoin::Round);
+                .with_line_cap(stroke_config.line_cap.to_lyon())
+                .with_line_join(stroke_config.line_join.to_lyon());
 
             tessellator
                 .tessellate_path(path, &options, &mut builder)

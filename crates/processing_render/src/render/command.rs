@@ -1,5 +1,45 @@
 use bevy::prelude::*;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub enum StrokeCapMode {
+    #[default]
+    Round = 0,
+    Square = 1,
+    Project = 2,
+}
+
+impl From<u8> for StrokeCapMode {
+    fn from(v: u8) -> Self {
+        match v {
+            0 => Self::Round,
+            1 => Self::Square,
+            2 => Self::Project,
+            _ => Self::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub enum StrokeJoinMode {
+    #[default]
+    Round = 0,
+    Miter = 1,
+    Bevel = 2,
+}
+
+impl From<u8> for StrokeJoinMode {
+    fn from(v: u8) -> Self {
+        match v {
+            0 => Self::Round,
+            1 => Self::Miter,
+            2 => Self::Bevel,
+            _ => Self::default(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum DrawCommand {
     BackgroundColor(Color),
@@ -9,6 +49,8 @@ pub enum DrawCommand {
     StrokeColor(Color),
     NoStroke,
     StrokeWeight(f32),
+    StrokeCap(StrokeCapMode),
+    StrokeJoin(StrokeJoinMode),
     Roughness(f32),
     Metallic(f32),
     Emissive(Color),

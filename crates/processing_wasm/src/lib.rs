@@ -105,6 +105,24 @@ pub fn js_stroke_weight(surface_id: u64, weight: f32) -> Result<(), JsValue> {
     ))
 }
 
+#[wasm_bindgen(js_name = "strokeCap")]
+pub fn js_stroke_cap(surface_id: u64, cap: u8) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::StrokeCap(processing_render::render::command::StrokeCapMode::from(cap)),
+    ))
+}
+
+#[wasm_bindgen(js_name = "strokeJoin")]
+pub fn js_stroke_join(surface_id: u64, join: u8) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::StrokeJoin(processing_render::render::command::StrokeJoinMode::from(
+            join,
+        )),
+    ))
+}
+
 #[wasm_bindgen(js_name = "noFill")]
 pub fn js_no_fill(surface_id: u64) -> Result<(), JsValue> {
     check(graphics_record_command(

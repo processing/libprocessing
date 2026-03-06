@@ -282,6 +282,7 @@ fn create_app(config: Config) -> App {
         LightPlugin,
         material::MaterialPlugin,
         MidiPlugin,
+        bevy::pbr::wireframe::WireframePlugin::default(),
     ));
     app.add_systems(First, (clear_transient_meshes, activate_cameras))
         .add_systems(

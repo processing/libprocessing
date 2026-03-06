@@ -12,7 +12,7 @@ use bevy::{
 };
 use command::{CommandBuffer, DrawCommand};
 use material::MaterialKey;
-use primitive::{TessellationMode, box_mesh, empty_mesh, sphere_mesh};
+use primitive::{StrokeConfig, TessellationMode, box_mesh, empty_mesh, sphere_mesh};
 use transform::TransformStack;
 
 use crate::{
@@ -65,6 +65,7 @@ pub struct RenderState {
     pub fill_color: Option<Color>,
     pub stroke_color: Option<Color>,
     pub stroke_weight: f32,
+    pub stroke_config: StrokeConfig,
     pub material_key: MaterialKey,
     pub transform: TransformStack,
 }
@@ -75,6 +76,7 @@ impl RenderState {
             fill_color: Some(Color::WHITE),
             stroke_color: Some(Color::BLACK),
             stroke_weight: 1.0,
+            stroke_config: StrokeConfig::default(),
             material_key: MaterialKey::Color {
                 transparent: false,
                 background_image: None,
@@ -87,6 +89,7 @@ impl RenderState {
         self.fill_color = Some(Color::WHITE);
         self.stroke_color = Some(Color::BLACK);
         self.stroke_weight = 1.0;
+        self.stroke_config = StrokeConfig::default();
         self.material_key = MaterialKey::Color {
             transparent: false,
             background_image: None,
@@ -151,6 +154,12 @@ pub fn flush_draw_commands(
                 }
                 DrawCommand::StrokeWeight(weight) => {
                     state.stroke_weight = weight;
+                }
+                DrawCommand::StrokeCap(cap) => {
+                    state.stroke_config.line_cap = cap;
+                }
+                DrawCommand::StrokeJoin(join) => {
+                    state.stroke_config.line_join = join;
                 }
                 DrawCommand::Roughness(r) => {
                     state.material_key = match state.material_key {
@@ -223,8 +232,19 @@ pub fn flush_draw_commands(
                     };
                 }
                 DrawCommand::Rect { x, y, w, h, radii } => {
+                    let stroke_config = state.stroke_config;
                     add_fill(&mut res, &mut batch, &state, |mesh, color| {
-                        rect(mesh, x, y, w, h, radii, color, TessellationMode::Fill)
+                        rect(
+                            mesh,
+                            x,
+                            y,
+                            w,
+                            h,
+                            radii,
+                            color,
+                            TessellationMode::Fill,
+                            &stroke_config,
+                        )
                     });
 
                     add_stroke(&mut res, &mut batch, &state, |mesh, color, weight| {
@@ -237,6 +257,7 @@ pub fn flush_draw_commands(
                             radii,
                             color,
                             TessellationMode::Stroke(weight),
+                            &stroke_config,
                         )
                     });
                 }
@@ -511,23 +532,60 @@ fn flush_batch(res: &mut RenderResources, batch: &mut BatchState) {
 }
 
 fn add_shape3d(res: &mut RenderResources, batch: &mut BatchState, state: &RenderState, mesh: Mesh) {
+    use bevy::pbr::wireframe::{Wireframe, WireframeColor, WireframeLineWidth, WireframeTopology};
+
     flush_batch(res, batch);
 
     let mesh_handle = res.meshes.add(mesh);
-    let material_key = material_key_with_fill(state);
-    let material_handle = material_key.to_material(&mut res.materials);
+    let fill_color = state.fill_color.unwrap_or(Color::WHITE);
+    let material_handle = match &state.material_key {
+        // TODO: in 2d, we use vertex colors. `to_material` becomes complicated if we also encode
+        // a base color in the material, so for simplicity we just create a new material here
+        // that is unlit and uses the fill color as the base color
+        MaterialKey::Color { transparent, .. } => {
+            let mat = StandardMaterial {
+                base_color: fill_color,
+                unlit: true,
+                cull_mode: None,
+                alpha_mode: if *transparent {
+                    AlphaMode::Blend
+                } else {
+                    AlphaMode::Opaque
+                },
+                ..default()
+            };
+            res.materials.add(mat).untyped()
+        }
+        _ => {
+            let key = material_key_with_fill(state);
+            key.to_material(&mut res.materials)
+        }
+    };
 
     let z_offset = -(batch.draw_index as f32 * 0.001);
     let mut transform = state.transform.to_bevy_transform();
     transform.translation.z += z_offset;
 
-    res.commands.spawn((
+    let mut entity = res.commands.spawn((
         Mesh3d(mesh_handle),
         UntypedMaterial(material_handle),
         BelongsToGraphics(batch.graphics_entity),
         transform,
         batch.render_layers.clone(),
     ));
+
+    if let Some(stroke_color) = state.stroke_color {
+        entity.insert((
+            Wireframe,
+            WireframeColor {
+                color: stroke_color,
+            },
+            WireframeLineWidth {
+                width: state.stroke_weight,
+            },
+            WireframeTopology::Quads,
+        ));
+    }
 
     batch.draw_index += 1;
 }

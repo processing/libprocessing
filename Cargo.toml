@@ -86,6 +86,14 @@ path = "examples/midi.rs"
 name = "gltf_load"
 path = "examples/gltf_load.rs"
 
+[[example]]
+name = "stroke_2d"
+path = "examples/stroke_2d.rs"
+
+[[example]]
+name = "stroke_3d"
+path = "examples/stroke_3d.rs"
+
 [profile.wasm-release]
 inherits = "release"
 opt-level = "z"

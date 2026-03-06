@@ -281,6 +281,32 @@ pub extern "C" fn processing_set_stroke_weight(graphics_id: u64, weight: f32) {
     error::check(|| graphics_record_command(graphics_entity, DrawCommand::StrokeWeight(weight)));
 }
 
+/// Set the stroke cap mode.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_set_stroke_cap(graphics_id: u64, cap: u8) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::StrokeCap(processing::prelude::StrokeCapMode::from(cap)),
+        )
+    });
+}
+
+/// Set the stroke join mode.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_set_stroke_join(graphics_id: u64, join: u8) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::StrokeJoin(processing::prelude::StrokeJoinMode::from(join)),
+        )
+    });
+}
+
 /// Disable fill for subsequent shapes.
 ///
 /// SAFETY:
@@ -693,6 +719,14 @@ pub const PROCESSING_TOPOLOGY_LINE_LIST: u8 = 1;
 pub const PROCESSING_TOPOLOGY_LINE_STRIP: u8 = 2;
 pub const PROCESSING_TOPOLOGY_TRIANGLE_LIST: u8 = 3;
 pub const PROCESSING_TOPOLOGY_TRIANGLE_STRIP: u8 = 4;
+
+pub const PROCESSING_STROKE_CAP_ROUND: u8 = 0;
+pub const PROCESSING_STROKE_CAP_SQUARE: u8 = 1;
+pub const PROCESSING_STROKE_CAP_PROJECT: u8 = 2;
+
+pub const PROCESSING_STROKE_JOIN_ROUND: u8 = 0;
+pub const PROCESSING_STROKE_JOIN_MITER: u8 = 1;
+pub const PROCESSING_STROKE_JOIN_BEVEL: u8 = 2;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_geometry_layout_create() -> u64 {
