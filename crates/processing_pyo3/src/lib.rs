@@ -12,12 +12,14 @@ mod glfw;
 mod gltf;
 mod graphics;
 pub(crate) mod material;
+mod midi;
 pub(crate) mod shader;
 #[cfg(feature = "webcam")]
 mod webcam;
 
 use graphics::{Geometry, Graphics, Image, Light, Topology, get_graphics, get_graphics_mut};
 use material::Material;
+
 use pyo3::{
     exceptions::PyRuntimeError,
     prelude::*,
@@ -94,6 +96,10 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(metallic, m)?)?;
     m.add_function(wrap_pyfunction!(emissive, m)?)?;
     m.add_function(wrap_pyfunction!(unlit, m)?)?;
+    m.add_function(wrap_pyfunction!(midi_connect, m)?)?;
+    m.add_function(wrap_pyfunction!(midi_disconnect, m)?)?;
+    m.add_function(wrap_pyfunction!(midi_refresh_ports, m)?)?;
+    m.add_function(wrap_pyfunction!(midi_play_notes, m)?)?;
 
     #[cfg(feature = "webcam")]
     {
@@ -588,4 +594,25 @@ fn create_webcam(
     framerate: Option<u32>,
 ) -> PyResult<webcam::Webcam> {
     webcam::Webcam::new(width, height, framerate)
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn midi_connect(module: &Bound<'_, PyModule>, port: usize) -> PyResult<()> {
+    midi::connect(port)
+}
+#[pyfunction]
+#[pyo3(pass_module)]
+fn midi_disconnect(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    midi::disconnect()
+}
+#[pyfunction]
+#[pyo3(pass_module)]
+fn midi_refresh_ports(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    midi::refresh_ports()
+}
+#[pyfunction]
+#[pyo3(pass_module)]
+fn midi_play_notes(module: &Bound<'_, PyModule>, note: u8, duration: u64) -> PyResult<()> {
+    midi::play_notes(note, duration)
 }
