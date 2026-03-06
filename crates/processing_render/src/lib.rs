@@ -6,6 +6,7 @@ mod graphics;
 pub mod image;
 pub mod light;
 pub mod material;
+pub mod midi;
 pub mod render;
 pub mod sketch;
 mod surface;
@@ -18,7 +19,6 @@ use config::*;
 #[cfg(not(target_arch = "wasm32"))]
 use bevy::log::tracing_subscriber;
 use bevy::render::RenderPlugin;
-use bevy::render::settings::{RenderCreation, WgpuSettings};
 use bevy::{
     app::{App, AppExit},
     asset::{AssetEventSystems, io::AssetSourceBuilder},
@@ -35,8 +35,6 @@ use crate::{
     graphics::GraphicsPlugin, image::ImagePlugin, light::LightPlugin, render::command::DrawCommand,
     surface::SurfacePlugin,
 };
-
-use processing_midi::MidiPlugin;
 
 static IS_INIT: OnceLock<()> = OnceLock::new();
 
@@ -281,7 +279,7 @@ fn create_app(config: Config) -> App {
         geometry::GeometryPlugin,
         LightPlugin,
         material::MaterialPlugin,
-        MidiPlugin,
+        midi::MidiPlugin,
     ));
     app.add_systems(First, (clear_transient_meshes, activate_cameras))
         .add_systems(
@@ -1391,6 +1389,40 @@ pub fn gltf_light(gltf_entity: Entity, index: usize) -> error::Result<Entity> {
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(gltf::light, (gltf_entity, index))
+            .unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn midi_refresh_ports() -> error::Result<()> {
+    app_mut(|app| {
+        let world = app.world_mut();
+        world.run_system_cached(midi::refresh_ports).unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn midi_connect(port: usize) -> error::Result<()> {
+    app_mut(|app| {
+        let world = app.world_mut();
+        world.run_system_cached_with(midi::connect, port).unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn midi_disconnect() -> error::Result<()> {
+    app_mut(|app| {
+        let world = app.world_mut();
+        world.run_system_cached(midi::disconnect).unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn midi_play_notes(note: u8, duration: u64) -> error::Result<()> {
+    app_mut(|app| {
+        let world = app.world_mut();
+        world
+            .run_system_cached_with(midi::play_notes, (note, duration))
             .unwrap()
     })
 }
