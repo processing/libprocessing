@@ -18,8 +18,8 @@ def draw():
 
     # pick a random note value, and duration value for that note
     # then send the midi command
-    note = random.randit(57,68)
-    note_duration = random.randit(25, 250)
+    note = random.randint(57,68)
+    note_duration = random.randint(25, 250)
     midi_play_notes(note, note_duration)
 
 # TODO: this should happen implicitly on module load somehow

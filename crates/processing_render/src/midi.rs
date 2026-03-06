@@ -10,7 +10,7 @@ impl Plugin for MidiPlugin {
         // TODO: Update `bevy_midi` to treat connections as entities
         // in order to support hot-plugging
         app.insert_resource(MidiOutputSettings {
-            port_name: "output",
+            port_name: "libprocessing output",
         });
 
         app.add_plugins(MidiOutputPlugin);
