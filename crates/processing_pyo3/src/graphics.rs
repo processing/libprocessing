@@ -176,7 +176,7 @@ impl Graphics {
         init(config).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let surface = glfw_ctx
-            .create_surface(width, height, 1.0)
+            .create_surface(width, height)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let surface = Surface {

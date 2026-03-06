@@ -31,8 +31,9 @@ impl GlfwContext {
     }
 
     #[cfg(target_os = "macos")]
-    pub fn create_surface(&self, width: u32, height: u32, scale_factor: f32) -> Result<Entity> {
+    pub fn create_surface(&self, width: u32, height: u32) -> Result<Entity> {
         use processing_render::surface_create_macos;
+        let (scale_factor, _) = self.window.get_content_scale();
         surface_create_macos(
             self.window.get_cocoa_window() as u64,
             width,
@@ -42,8 +43,9 @@ impl GlfwContext {
     }
 
     #[cfg(target_os = "windows")]
-    pub fn create_surface(&self, width: u32, height: u32, scale_factor: f32) -> Result<Entity> {
+    pub fn create_surface(&self, width: u32, height: u32) -> Result<Entity> {
         use processing_render::surface_create_windows;
+        let (scale_factor, _) = self.window.get_content_scale();
         surface_create_windows(
             self.window.get_win32_window() as u64,
             width,
@@ -53,8 +55,9 @@ impl GlfwContext {
     }
 
     #[cfg(all(target_os = "linux", feature = "wayland"))]
-    pub fn create_surface(&self, width: u32, height: u32, scale_factor: f32) -> Result<Entity> {
+    pub fn create_surface(&self, width: u32, height: u32) -> Result<Entity> {
         use processing_render::surface_create_wayland;
+        let (scale_factor, _) = self.window.get_content_scale();
         surface_create_wayland(
             self.window.get_wayland_window() as u64,
             self.glfw.get_wayland_display() as u64,
@@ -65,8 +68,9 @@ impl GlfwContext {
     }
 
     #[cfg(all(target_os = "linux", feature = "x11"))]
-    pub fn create_surface(&self, width: u32, height: u32, scale_factor: f32) -> Result<Entity> {
+    pub fn create_surface(&self, width: u32, height: u32) -> Result<Entity> {
         use processing_render::surface_create_x11;
+        let (scale_factor, _) = self.window.get_content_scale();
         surface_create_x11(
             self.window.get_x11_window() as u64,
             self.glfw.get_x11_display() as u64,

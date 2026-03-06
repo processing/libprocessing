@@ -22,8 +22,8 @@ use pyo3::{
 };
 use std::ffi::{CStr, CString};
 
-use gltf::Gltf;
 use bevy::log::warn;
+use gltf::Gltf;
 use std::env;
 
 /// Get a shared ref to the Graphics context, or return Ok(()) if not yet initialized.
