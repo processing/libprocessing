@@ -50,8 +50,9 @@ use crate::render::material::UntypedMaterial;
 #[derive(Asset, TypePath, Clone)]
 pub struct CustomMaterial {
     pub shader: DynamicShader,
-    pub vertex_shader: Option<Handle<ShaderAsset>>,
-    pub fragment_shader: Option<Handle<ShaderAsset>>,
+    pub shader_handle: Handle<ShaderAsset>,
+    pub has_vertex: bool,
+    pub has_fragment: bool,
 }
 
 #[derive(Component)]
@@ -197,34 +198,35 @@ pub fn destroy_shader(In(entity): In<Entity>, mut commands: Commands) -> Result<
 }
 
 pub fn create_custom(
-    In((vertex_entity, fragment_entity)): In<(Option<Entity>, Option<Entity>)>,
+    In(shader_entity): In<Entity>,
     mut commands: Commands,
     shader_programs: Query<&Shader>,
     mut custom_materials: ResMut<Assets<CustomMaterial>>,
 ) -> Result<Entity> {
-    let vertex_program = vertex_entity
-        .map(|e| shader_programs.get(e))
-        .transpose()
-        .map_err(|_| ProcessingError::ShaderNotFound)?;
-    let fragment_program = fragment_entity
-        .map(|e| shader_programs.get(e))
-        .transpose()
+    let program = shader_programs
+        .get(shader_entity)
         .map_err(|_| ProcessingError::ShaderNotFound)?;
 
-    // Prefer fragment module for reflection, fall back to vertex.
-    let reflection_module = fragment_program
-        .map(|p| &p.module)
-        .or(vertex_program.map(|p| &p.module))
-        .ok_or(ProcessingError::ShaderNotFound)?;
+    let has_vertex = program
+        .module
+        .entry_points
+        .iter()
+        .any(|ep| ep.stage == naga::ShaderStage::Vertex);
+    let has_fragment = program
+        .module
+        .entry_points
+        .iter()
+        .any(|ep| ep.stage == naga::ShaderStage::Fragment);
 
-    let mut shader = DynamicShader::new(reflection_module.clone())
+    let mut shader = DynamicShader::new(program.module.clone())
         .map_err(|e| ProcessingError::ShaderCompilationError(e.to_string()))?;
     shader.init();
 
     let material = CustomMaterial {
         shader,
-        vertex_shader: vertex_program.map(|p| p.shader_handle.clone()),
-        fragment_shader: fragment_program.map(|p| p.shader_handle.clone()),
+        shader_handle: program.shader_handle.clone(),
+        has_vertex,
+        has_fragment,
     };
     let handle = custom_materials.add(material);
     Ok(commands.spawn(UntypedMaterial(handle.untyped())).id())
@@ -401,11 +403,11 @@ impl ErasedRenderAsset for CustomMaterial {
             ..Default::default()
         };
         properties.add_draw_function(MainPassOpaqueDrawFunction, draw_function);
-        if let Some(vertex) = &source_asset.vertex_shader {
-            properties.add_shader(MaterialVertexShader, vertex.clone());
+        if source_asset.has_vertex {
+            properties.add_shader(MaterialVertexShader, source_asset.shader_handle.clone());
         }
-        if let Some(fragment) = &source_asset.fragment_shader {
-            properties.add_shader(MaterialFragmentShader, fragment.clone());
+        if source_asset.has_fragment {
+            properties.add_shader(MaterialFragmentShader, source_asset.shader_handle.clone());
         }
 
         Ok(PreparedMaterial {

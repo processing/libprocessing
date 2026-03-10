@@ -1333,13 +1333,10 @@ pub fn shader_destroy(entity: Entity) -> error::Result<()> {
     })
 }
 
-pub fn material_create_custom(
-    vertex: Option<Entity>,
-    fragment: Option<Entity>,
-) -> error::Result<Entity> {
+pub fn material_create_custom(shader: Entity) -> error::Result<Entity> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(material::custom::create_custom, (vertex, fragment))
+            .run_system_cached_with(material::custom::create_custom, shader)
             .unwrap()
     })
 }

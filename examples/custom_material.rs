@@ -31,8 +31,8 @@ fn sketch() -> error::Result<()> {
     transform_set_position(graphics, 100.0, 100.0, 300.0)?;
     transform_look_at(graphics, 0.0, 0.0, 0.0)?;
 
-    let frag = shader_load("shaders/custom_material.wesl")?;
-    let mat = material_create_custom(None, Some(frag))?;
+    let shader = shader_load("shaders/custom_material.wesl")?;
+    let mat = material_create_custom(shader)?;
     material_set(
         mat,
         "color",
@@ -61,7 +61,7 @@ fn sketch() -> error::Result<()> {
     }
 
     material_destroy(mat)?;
-    shader_destroy(frag)?;
+    shader_destroy(shader)?;
 
     Ok(())
 }

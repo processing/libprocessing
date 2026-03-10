@@ -37,14 +37,10 @@ fn py_to_material_value(value: &Bound<'_, PyAny>) -> PyResult<material::Material
 #[pymethods]
 impl Material {
     #[new]
-    #[pyo3(signature = (vertex=None, fragment=None, **kwargs))]
-    pub fn new(
-        vertex: Option<&Shader>,
-        fragment: Option<&Shader>,
-        kwargs: Option<&Bound<'_, PyDict>>,
-    ) -> PyResult<Self> {
-        let entity = if vertex.is_some() || fragment.is_some() {
-            material_create_custom(vertex.map(|s| s.entity), fragment.map(|s| s.entity))
+    #[pyo3(signature = (shader=None, **kwargs))]
+    pub fn new(shader: Option<&Shader>, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+        let entity = if let Some(shader) = shader {
+            material_create_custom(shader.entity)
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?
         } else {
             material_create_pbr().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?
