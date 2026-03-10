@@ -42,6 +42,7 @@ use bevy_naga_reflect::dynamic_shader::DynamicShader;
 
 use bevy::shader::Shader as ShaderAsset;
 
+use crate::config::{Config, ConfigKey};
 use crate::error::{ProcessingError, Result};
 use crate::material::MaterialValue;
 use crate::render::material::UntypedMaterial;
@@ -133,6 +134,56 @@ pub fn create_shader(
     let (compiled_wgsl, module) = compile_shader(&source)?;
     let shader_handle = shaders.add(ShaderAsset::from_wgsl(compiled_wgsl, "custom_material"));
     Ok(commands
+        .spawn(Shader {
+            module,
+            shader_handle,
+        })
+        .id())
+}
+
+pub fn load_shader(In(path): In<std::path::PathBuf>, world: &mut World) -> Result<Entity> {
+    use bevy::asset::{
+        AssetPath, LoadState, handle_internal_asset_events,
+        io::{AssetSourceId, embedded::GetAssetServer},
+    };
+    use bevy::ecs::system::RunSystemOnce;
+
+    let config = world.resource::<Config>();
+    let asset_path: AssetPath = match config.get(ConfigKey::AssetRootPath) {
+        Some(_) => {
+            AssetPath::from_path_buf(path).with_source(AssetSourceId::from("assets_directory"))
+        }
+        None => AssetPath::from_path_buf(path),
+    };
+
+    let handle: Handle<ShaderAsset> = world.get_asset_server().load(asset_path);
+
+    while let LoadState::Loading = world.get_asset_server().load_state(&handle) {
+        world.run_system_once(handle_internal_asset_events).unwrap();
+    }
+
+    let source = {
+        let shader_assets = world.resource::<Assets<ShaderAsset>>();
+        let shader = shader_assets
+            .get(&handle)
+            .ok_or(ProcessingError::ShaderNotFound)?;
+        match &shader.source {
+            bevy::shader::Source::Wesl(s) | bevy::shader::Source::Wgsl(s) => s.to_string(),
+            _ => {
+                return Err(ProcessingError::ShaderCompilationError(
+                    "Unsupported shader source format".to_string(),
+                ));
+            }
+        }
+    };
+
+    let (compiled_wgsl, module) = compile_shader(&source)?;
+
+    let shader_handle = world
+        .resource_mut::<Assets<ShaderAsset>>()
+        .add(ShaderAsset::from_wgsl(compiled_wgsl, "custom_material"));
+
+    Ok(world
         .spawn(Shader {
             module,
             shader_handle,

@@ -7,7 +7,7 @@ def setup():
     size(800, 600)
     mode_3d()
 
-    frag = Shader.load("assets/shaders/custom_material.wesl")
+    frag = Shader.load("shaders/custom_material.wesl")
     mat = Material(fragment=frag, color=[1.0, 0.2, 0.4, 1.0])
 
 def draw():

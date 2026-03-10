@@ -1317,10 +1317,12 @@ pub fn shader_create(source: &str) -> error::Result<Entity> {
 
 /// Load a shader from a file path.
 pub fn shader_load(path: &str) -> error::Result<Entity> {
-    let source = std::fs::read_to_string(path).map_err(|e| {
-        error::ProcessingError::ShaderCompilationError(format!("Failed to read {path}: {e}"))
-    })?;
-    shader_create(&source)
+    let path = std::path::PathBuf::from(path);
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::custom::load_shader, path)
+            .unwrap()
+    })
 }
 
 pub fn shader_destroy(entity: Entity) -> error::Result<()> {

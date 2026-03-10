@@ -31,9 +31,7 @@ fn sketch() -> error::Result<()> {
     transform_set_position(graphics, 100.0, 100.0, 300.0)?;
     transform_look_at(graphics, 0.0, 0.0, 0.0)?;
 
-    let frag_source = std::fs::read_to_string("assets/shaders/custom_material.wesl")
-        .map_err(|e| error::ProcessingError::ShaderCompilationError(e.to_string()))?;
-    let frag = shader_create(&frag_source)?;
+    let frag = shader_load("shaders/custom_material.wesl")?;
     let mat = material_create_custom(None, Some(frag))?;
     material_set(
         mat,
