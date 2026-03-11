@@ -26,6 +26,8 @@ bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", features =
 bevy_naga_reflect = { git = "https://github.com/tychedelia/bevy_naga_reflect" }
 naga = { version = "28", features = ["wgsl-in"] }
 wesl = { version = "0.3", default-features = false }
+pyo3 = { git = "https://github.com/PyO3/pyo3", branch = "main" }
+pyo3-introspection = { git = "https://github.com/PyO3/pyo3", branch = "main" }
 processing = { path = "." }
 processing_core = { path = "crates/processing_core" }
 processing_pyo3 = { path = "crates/processing_pyo3" }

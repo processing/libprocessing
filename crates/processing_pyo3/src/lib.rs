@@ -17,7 +17,7 @@ pub(crate) mod shader;
 #[cfg(feature = "webcam")]
 mod webcam;
 
-use graphics::{Geometry, Graphics, Image, Light, Topology, get_graphics, get_graphics_mut};
+use graphics::{get_graphics, get_graphics_mut, Geometry, Graphics, Image, Light, Topology};
 use material::Material;
 
 use pyo3::{
@@ -40,75 +40,6 @@ macro_rules! graphics {
             None => return Ok(()),
         }
     };
-}
-
-#[pymodule]
-fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<Graphics>()?;
-    m.add_class::<Image>()?;
-    m.add_class::<Light>()?;
-    m.add_class::<Topology>()?;
-    m.add_class::<Material>()?;
-    m.add_class::<Gltf>()?;
-    m.add_class::<Shader>()?;
-    m.add_class::<Geometry>()?;
-    m.add_function(wrap_pyfunction!(gltf::load_gltf, m)?)?;
-    m.add_function(wrap_pyfunction!(size, m)?)?;
-    m.add_function(wrap_pyfunction!(run, m)?)?;
-    m.add_function(wrap_pyfunction!(_poll_events, m)?)?;
-    m.add_function(wrap_pyfunction!(_begin_draw, m)?)?;
-    m.add_function(wrap_pyfunction!(_end_draw, m)?)?;
-    m.add_function(wrap_pyfunction!(_present, m)?)?;
-    m.add_function(wrap_pyfunction!(_readback_png, m)?)?;
-    m.add_function(wrap_pyfunction!(redraw, m)?)?;
-    m.add_function(wrap_pyfunction!(mode_3d, m)?)?;
-    m.add_function(wrap_pyfunction!(camera_position, m)?)?;
-    m.add_function(wrap_pyfunction!(camera_look_at, m)?)?;
-    m.add_function(wrap_pyfunction!(push_matrix, m)?)?;
-    m.add_function(wrap_pyfunction!(pop_matrix, m)?)?;
-    m.add_function(wrap_pyfunction!(rotate, m)?)?;
-    m.add_function(wrap_pyfunction!(draw_box, m)?)?;
-    m.add_function(wrap_pyfunction!(background, m)?)?;
-    m.add_function(wrap_pyfunction!(fill, m)?)?;
-    m.add_function(wrap_pyfunction!(no_fill, m)?)?;
-    m.add_function(wrap_pyfunction!(stroke, m)?)?;
-    m.add_function(wrap_pyfunction!(no_stroke, m)?)?;
-    m.add_function(wrap_pyfunction!(stroke_weight, m)?)?;
-    m.add_function(wrap_pyfunction!(stroke_cap, m)?)?;
-    m.add_function(wrap_pyfunction!(stroke_join, m)?)?;
-
-    m.add("ROUND", 0u8)?;
-    m.add("SQUARE", 1u8)?;
-    m.add("PROJECT", 2u8)?;
-
-    m.add("MITER", 1u8)?;
-    m.add("BEVEL", 2u8)?;
-
-    m.add_function(wrap_pyfunction!(rect, m)?)?;
-    m.add_function(wrap_pyfunction!(image, m)?)?;
-    m.add_function(wrap_pyfunction!(draw_geometry, m)?)?;
-    m.add_function(wrap_pyfunction!(create_directional_light, m)?)?;
-    m.add_function(wrap_pyfunction!(create_point_light, m)?)?;
-    m.add_function(wrap_pyfunction!(create_spot_light, m)?)?;
-    m.add_function(wrap_pyfunction!(draw_sphere, m)?)?;
-    m.add_function(wrap_pyfunction!(use_material, m)?)?;
-    m.add_function(wrap_pyfunction!(roughness, m)?)?;
-    m.add_function(wrap_pyfunction!(metallic, m)?)?;
-    m.add_function(wrap_pyfunction!(emissive, m)?)?;
-    m.add_function(wrap_pyfunction!(unlit, m)?)?;
-    m.add_function(wrap_pyfunction!(midi_connect, m)?)?;
-    m.add_function(wrap_pyfunction!(midi_disconnect, m)?)?;
-    m.add_function(wrap_pyfunction!(midi_refresh_ports, m)?)?;
-    m.add_function(wrap_pyfunction!(midi_list_ports, m)?)?;
-    m.add_function(wrap_pyfunction!(midi_play_notes, m)?)?;
-
-    #[cfg(feature = "webcam")]
-    {
-        m.add_class::<webcam::Webcam>()?;
-        m.add_function(wrap_pyfunction!(create_webcam, m)?)?;
-    }
-
-    Ok(())
 }
 
 fn get_asset_root() -> PyResult<String> {
@@ -161,48 +92,6 @@ fn get_sketch_info() -> PyResult<(String, String)> {
     })
 }
 
-#[pyfunction]
-#[pyo3(pass_module)]
-fn _poll_events(module: &Bound<'_, PyModule>) -> PyResult<bool> {
-    let Some(mut graphics) = get_graphics_mut(module)? else {
-        return Ok(true);
-    };
-    Ok(graphics.surface.poll_events())
-}
-
-#[pyfunction]
-#[pyo3(pass_module)]
-fn _begin_draw(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    graphics!(module).begin_draw()
-}
-
-#[pyfunction]
-#[pyo3(pass_module)]
-fn _end_draw(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    graphics!(module).end_draw()
-}
-
-#[pyfunction]
-#[pyo3(pass_module)]
-fn _present(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    graphics!(module).present()
-}
-
-#[pyfunction]
-#[pyo3(pass_module)]
-fn _readback_png(module: &Bound<'_, PyModule>) -> PyResult<Option<Vec<u8>>> {
-    let Some(graphics) = get_graphics(module)? else {
-        return Ok(None);
-    };
-    graphics.readback_png().map(Some)
-}
-
-#[pyfunction]
-#[pyo3(pass_module)]
-fn redraw(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    graphics!(module).present()
-}
-
 const DETECT_ENV_CODE: &str = include_str!("python/detect_env.py");
 const REGISTER_INPUTHOOK_CODE: &str = include_str!("python/register_inputhook.py");
 const IPYTHON_POST_EXECUTE_CODE: &str = include_str!("python/ipython_post_execute.py");
@@ -218,402 +107,494 @@ fn detect_environment(py: Python<'_>) -> PyResult<String> {
         .extract()
 }
 
-#[pyfunction]
-#[pyo3(pass_module)]
-fn size(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<()> {
-    let py = module.py();
-    let env = detect_environment(py)?;
+#[pymodule]
+mod processing {
+    use super::*;
 
-    let interactive = env != "script";
-    let log_level = if interactive { Some("error") } else { None };
+    #[pymodule_export]
+    use super::Graphics;
+    #[pymodule_export]
+    use super::Image;
+    #[pymodule_export]
+    use super::Light;
+    #[pymodule_export]
+    use super::Topology;
+    #[pymodule_export]
+    use super::Material;
+    #[pymodule_export]
+    use super::Gltf;
+    #[pymodule_export]
+    use super::Geometry;
+    #[pymodule_export]
+    use super::Shader;
 
-    // Check if we already have a graphics context (i.e. size() was called before).
-    // Drop the old one first so the window and GPU resources are released.
-    let has_existing = module
-        .getattr("_graphics")
-        .ok()
-        .map(|a| !a.is_none())
-        .unwrap_or(false);
-    if has_existing {
-        module.setattr("_graphics", py.None())?;
+    #[pymodule_export]
+    const ROUND: u8 = 0;
+    #[pymodule_export]
+    const SQUARE: u8 = 1;
+    #[pymodule_export]
+    const PROJECT: u8 = 2;
+    #[pymodule_export]
+    const MITER: u8 = 1;
+    #[pymodule_export]
+    const BEVEL: u8 = 2;
+
+    #[cfg(feature = "webcam")]
+    #[pymodule_export]
+    use super::webcam::Webcam;
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn load_gltf(module: &Bound<'_, PyModule>, path: &str) -> PyResult<Gltf> {
+        let graphics = get_graphics(module)?
+            .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        let entity = ::processing::prelude::gltf_load(graphics.entity, path)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Gltf::from_entity(entity))
     }
 
-    match env.as_str() {
-        "jupyter" => {
-            let asset_path = get_asset_root()?;
-            let graphics = Graphics::new_offscreen(width, height, asset_path.as_str(), log_level)?;
-            module.setattr("_graphics", graphics)?;
-
-            if !has_existing {
-                let code = CString::new(JUPYTER_POST_EXECUTE_CODE)?;
-                py.run(code.as_c_str(), None, None).map_err(|e| {
-                    PyRuntimeError::new_err(format!("Failed to register Jupyter hooks: {e}"))
-                })?;
-            }
-        }
-        "ipython" => {
-            let asset_path = get_asset_root()?;
-            let (sketch_root, sketch_file) = get_sketch_info()?;
-            let graphics = Graphics::new(
-                width,
-                height,
-                asset_path.as_str(),
-                sketch_root.as_str(),
-                sketch_file.as_str(),
-                log_level,
-            )?;
-            module.setattr("_graphics", graphics)?;
-
-            if !has_existing {
-                let hook_code = CString::new(REGISTER_INPUTHOOK_CODE)?;
-                py.run(hook_code.as_c_str(), None, None).map_err(|e| {
-                    PyRuntimeError::new_err(format!("Failed to register inputhook: {e}"))
-                })?;
-
-                let post_code = CString::new(IPYTHON_POST_EXECUTE_CODE)?;
-                py.run(post_code.as_c_str(), None, None).map_err(|e| {
-                    PyRuntimeError::new_err(format!("Failed to register post-execute hook: {e}"))
-                })?;
-            }
-        }
-
-        // this is the default "script" mode where we assume the user will call run() to start the draw loop
-        _ => {
-            let asset_path = get_asset_root()?;
-            let (sketch_root, sketch_file) = get_sketch_info()?;
-            let graphics = Graphics::new(
-                width,
-                height,
-                asset_path.as_str(),
-                sketch_root.as_str(),
-                sketch_file.as_str(),
-                log_level,
-            )?;
-            module.setattr("_graphics", graphics)?;
-        }
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn _poll_events(module: &Bound<'_, PyModule>) -> PyResult<bool> {
+        let Some(mut graphics) = get_graphics_mut(module)? else {
+            return Ok(true);
+        };
+        Ok(graphics.surface.poll_events())
     }
 
-    Ok(())
-}
-
-#[pyfunction]
-#[pyo3(pass_module)]
-fn run(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    let py = module.py();
-    let env = detect_environment(py)?;
-
-    if env != "script" {
-        warn!("run() was called, but we're in an interactive environment ({env}).");
-        return Ok(());
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn _begin_draw(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).begin_draw()
     }
 
-    Python::attach(|py| {
-        let builtins = PyModule::import(py, "builtins")?;
-        let locals = builtins.getattr("locals")?.call0()?;
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn _end_draw(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).end_draw()
+    }
 
-        let setup_fn = locals.get_item("setup")?;
-        let mut draw_fn = locals.get_item("draw")?;
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn _present(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).present()
+    }
 
-        // call setup
-        setup_fn.call0()?;
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn _readback_png(module: &Bound<'_, PyModule>) -> PyResult<Option<Vec<u8>>> {
+        let Some(graphics) = get_graphics(module)? else {
+            return Ok(None);
+        };
+        graphics.readback_png().map(Some)
+    }
 
-        // start draw loop
-        loop {
-            {
-                let mut graphics = get_graphics_mut(module)?
-                    .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn redraw(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).present()
+    }
 
-                // TODO: this shouldn't be on the graphics object
-                let sketch = graphics.poll_for_sketch_update()?;
-                if !sketch.source.is_empty() {
-                    let locals = PyDict::new(py);
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn size(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<()> {
+        let py = module.py();
+        let env = detect_environment(py)?;
 
-                    let ok = CString::new(sketch.source.as_str()).unwrap();
-                    let cstr: &CStr = ok.as_c_str();
+        let interactive = env != "script";
+        let log_level = if interactive { Some("error") } else { None };
 
-                    match py.run(cstr, None, Some(&locals)) {
-                        Ok(_) => {
-                            dbg!("Success of any kind?");
-                        }
-                        Err(e) => {
-                            dbg!(e);
-                        }
-                    }
+        // Check if we already have a graphics context (i.e. size() was called before).
+        // Drop the old one first so the window and GPU resources are released.
+        let has_existing = module
+            .getattr("_graphics")
+            .ok()
+            .map(|a| !a.is_none())
+            .unwrap_or(false);
+        if has_existing {
+            module.setattr("_graphics", py.None())?;
+        }
 
-                    // setup_fn = locals.get_item("setup").unwrap().unwrap();
-                    draw_fn = locals.get_item("draw").unwrap().unwrap();
+        match env.as_str() {
+            "jupyter" => {
+                let asset_path = get_asset_root()?;
+                let graphics =
+                    Graphics::new_offscreen(width, height, asset_path.as_str(), log_level)?;
+                module.setattr("_graphics", graphics)?;
 
-                    dbg!(locals);
+                if !has_existing {
+                    let code = CString::new(JUPYTER_POST_EXECUTE_CODE)?;
+                    py.run(code.as_c_str(), None, None).map_err(|e| {
+                        PyRuntimeError::new_err(format!("Failed to register Jupyter hooks: {e}"))
+                    })?;
                 }
+            }
+            "ipython" => {
+                let asset_path = get_asset_root()?;
+                let (sketch_root, sketch_file) = get_sketch_info()?;
+                let graphics = Graphics::new(
+                    width,
+                    height,
+                    asset_path.as_str(),
+                    sketch_root.as_str(),
+                    sketch_file.as_str(),
+                    log_level,
+                )?;
+                module.setattr("_graphics", graphics)?;
 
-                if !graphics.surface.poll_events() {
-                    break;
+                if !has_existing {
+                    let hook_code = CString::new(REGISTER_INPUTHOOK_CODE)?;
+                    py.run(hook_code.as_c_str(), None, None).map_err(|e| {
+                        PyRuntimeError::new_err(format!("Failed to register inputhook: {e}"))
+                    })?;
+
+                    let post_code = CString::new(IPYTHON_POST_EXECUTE_CODE)?;
+                    py.run(post_code.as_c_str(), None, None).map_err(|e| {
+                        PyRuntimeError::new_err(format!(
+                            "Failed to register post-execute hook: {e}"
+                        ))
+                    })?;
                 }
-                graphics.begin_draw()?;
             }
 
-            draw_fn
-                .call0()
-                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-
-            get_graphics(module)?
-                .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?
-                .end_draw()?;
+            // this is the default "script" mode where we assume the user will call run() to start the draw loop
+            _ => {
+                let asset_path = get_asset_root()?;
+                let (sketch_root, sketch_file) = get_sketch_info()?;
+                let graphics = Graphics::new(
+                    width,
+                    height,
+                    asset_path.as_str(),
+                    sketch_root.as_str(),
+                    sketch_file.as_str(),
+                    log_level,
+                )?;
+                module.setattr("_graphics", graphics)?;
+            }
         }
 
         Ok(())
-    })
-}
-
-#[pyfunction]
-#[pyo3(pass_module)]
-fn mode_3d(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    graphics!(module).mode_3d()
-}
-
-#[pyfunction]
-#[pyo3(pass_module)]
-fn camera_position(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<()> {
-    graphics!(module).camera_position(x, y, z)
-}
-
-#[pyfunction]
-#[pyo3(pass_module)]
-fn camera_look_at(
-    module: &Bound<'_, PyModule>,
-    target_x: f32,
-    target_y: f32,
-    target_z: f32,
-) -> PyResult<()> {
-    graphics!(module).camera_look_at(target_x, target_y, target_z)
-}
-
-#[pyfunction]
-#[pyo3(pass_module)]
-fn push_matrix(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    graphics!(module).push_matrix()
-}
-
-#[pyfunction]
-#[pyo3(pass_module)]
-fn pop_matrix(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    graphics!(module).pop_matrix()
-}
-
-#[pyfunction]
-#[pyo3(pass_module)]
-fn rotate(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
-    graphics!(module).rotate(angle)
-}
-
-#[pyfunction(name = "box")]
-#[pyo3(pass_module)]
-fn draw_box(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<()> {
-    graphics!(module).draw_box(x, y, z)
-}
-
-#[pyfunction]
-#[pyo3(pass_module, signature = (geometry))]
-fn draw_geometry(module: &Bound<'_, PyModule>, geometry: &Bound<'_, Geometry>) -> PyResult<()> {
-    graphics!(module).draw_geometry(&*geometry.extract::<PyRef<Geometry>>()?)
-}
-
-#[pyfunction]
-#[pyo3(pass_module, signature = (*args))]
-fn background(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-    let graphics = graphics!(module);
-    let first = args.get_item(0)?;
-    if first.is_instance_of::<Image>() {
-        graphics.background_image(&*first.extract::<PyRef<Image>>()?)
-    } else {
-        graphics.background(args.extract()?)
     }
-}
 
-#[pyfunction]
-#[pyo3(pass_module, signature = (*args))]
-fn fill(module: &Bound<'_, PyModule>, args: Vec<f32>) -> PyResult<()> {
-    graphics!(module).fill(args)
-}
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn run(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        let py = module.py();
+        let env = detect_environment(py)?;
 
-#[pyfunction]
-#[pyo3(pass_module)]
-fn no_fill(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    graphics!(module).no_fill()
-}
+        if env != "script" {
+            warn!("run() was called, but we're in an interactive environment ({env}).");
+            return Ok(());
+        }
 
-#[pyfunction]
-#[pyo3(pass_module, signature = (*args))]
-fn stroke(module: &Bound<'_, PyModule>, args: Vec<f32>) -> PyResult<()> {
-    graphics!(module).stroke(args)
-}
+        Python::attach(|py| {
+            let builtins = PyModule::import(py, "builtins")?;
+            let locals = builtins.getattr("locals")?.call0()?;
 
-#[pyfunction]
-#[pyo3(pass_module)]
-fn no_stroke(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    graphics!(module).no_stroke()
-}
+            let setup_fn = locals.get_item("setup")?;
+            let mut draw_fn = locals.get_item("draw")?;
 
-#[pyfunction]
-#[pyo3(pass_module)]
-fn stroke_weight(module: &Bound<'_, PyModule>, weight: f32) -> PyResult<()> {
-    graphics!(module).stroke_weight(weight)
-}
+            // call setup
+            setup_fn.call0()?;
 
-#[pyfunction]
-#[pyo3(pass_module)]
-fn stroke_cap(module: &Bound<'_, PyModule>, cap: u8) -> PyResult<()> {
-    graphics!(module).stroke_cap(cap)
-}
+            // start draw loop
+            loop {
+                {
+                    let mut graphics = get_graphics_mut(module)?
+                        .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
 
-#[pyfunction]
-#[pyo3(pass_module)]
-fn stroke_join(module: &Bound<'_, PyModule>, join: u8) -> PyResult<()> {
-    graphics!(module).stroke_join(join)
-}
+                    // TODO: this shouldn't be on the graphics object
+                    let sketch = graphics.poll_for_sketch_update()?;
+                    if !sketch.source.is_empty() {
+                        let locals = PyDict::new(py);
 
-#[pyfunction]
-#[pyo3(pass_module, signature = (x, y, w, h, tl=0.0, tr=0.0, br=0.0, bl=0.0))]
-fn rect(
-    module: &Bound<'_, PyModule>,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-    tl: f32,
-    tr: f32,
-    br: f32,
-    bl: f32,
-) -> PyResult<()> {
-    graphics!(module).rect(x, y, w, h, tl, tr, br, bl)
-}
+                        let ok = CString::new(sketch.source.as_str()).unwrap();
+                        let cstr: &CStr = ok.as_c_str();
 
-#[pyfunction]
-#[pyo3(pass_module, signature = (image_file))]
-fn image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<Image> {
-    let graphics =
-        get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-    graphics.image(image_file)
-}
+                        match py.run(cstr, None, Some(&locals)) {
+                            Ok(_) => {
+                                dbg!("Success of any kind?");
+                            }
+                            Err(e) => {
+                                dbg!(e);
+                            }
+                        }
 
-#[pyfunction]
-#[pyo3(pass_module, signature = (r, g, b, illuminance))]
-fn create_directional_light(
-    module: &Bound<'_, PyModule>,
-    r: f32,
-    g: f32,
-    b: f32,
-    illuminance: f32,
-) -> PyResult<Light> {
-    let graphics =
-        get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-    graphics.light_directional(r, g, b, illuminance)
-}
+                        // setup_fn = locals.get_item("setup").unwrap().unwrap();
+                        draw_fn = locals.get_item("draw").unwrap().unwrap();
 
-#[pyfunction]
-#[pyo3(pass_module, signature = (r, g, b, intensity, range, radius))]
-fn create_point_light(
-    module: &Bound<'_, PyModule>,
-    r: f32,
-    g: f32,
-    b: f32,
-    intensity: f32,
-    range: f32,
-    radius: f32,
-) -> PyResult<Light> {
-    let graphics =
-        get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-    graphics.light_point(r, g, b, intensity, range, radius)
-}
+                        dbg!(locals);
+                    }
 
-#[pyfunction]
-#[pyo3(pass_module, signature = (r, g, b, intensity, range, radius, inner_angle, outer_angle))]
-fn create_spot_light(
-    module: &Bound<'_, PyModule>,
-    r: f32,
-    g: f32,
-    b: f32,
-    intensity: f32,
-    range: f32,
-    radius: f32,
-    inner_angle: f32,
-    outer_angle: f32,
-) -> PyResult<Light> {
-    let graphics =
-        get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-    graphics.light_spot(r, g, b, intensity, range, radius, inner_angle, outer_angle)
-}
+                    if !graphics.surface.poll_events() {
+                        break;
+                    }
+                    graphics.begin_draw()?;
+                }
 
-#[pyfunction(name = "sphere")]
-#[pyo3(pass_module, signature = (radius, sectors=32, stacks=18))]
-fn draw_sphere(
-    module: &Bound<'_, PyModule>,
-    radius: f32,
-    sectors: u32,
-    stacks: u32,
-) -> PyResult<()> {
-    graphics!(module).draw_sphere(radius, sectors, stacks)
-}
+                draw_fn
+                    .call0()
+                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
-#[pyfunction]
-#[pyo3(pass_module, signature = (material))]
-fn use_material(module: &Bound<'_, PyModule>, material: &Bound<'_, Material>) -> PyResult<()> {
-    graphics!(module).use_material(&*material.extract::<PyRef<Material>>()?)
-}
+                get_graphics(module)?
+                    .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?
+                    .end_draw()?;
+            }
 
-#[pyfunction]
-#[pyo3(pass_module)]
-fn roughness(module: &Bound<'_, PyModule>, value: f32) -> PyResult<()> {
-    graphics!(module).roughness(value)
-}
+            Ok(())
+        })
+    }
 
-#[pyfunction]
-#[pyo3(pass_module)]
-fn metallic(module: &Bound<'_, PyModule>, value: f32) -> PyResult<()> {
-    graphics!(module).metallic(value)
-}
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn mode_3d(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).mode_3d()
+    }
 
-#[pyfunction]
-#[pyo3(pass_module, signature = (*args))]
-fn emissive(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-    let args: Vec<f32> = args.extract()?;
-    graphics!(module).emissive(args)
-}
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn camera_position(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<()> {
+        graphics!(module).camera_position(x, y, z)
+    }
 
-#[pyfunction]
-#[pyo3(pass_module)]
-fn unlit(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    graphics!(module).unlit()
-}
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn camera_look_at(
+        module: &Bound<'_, PyModule>,
+        target_x: f32,
+        target_y: f32,
+        target_z: f32,
+    ) -> PyResult<()> {
+        graphics!(module).camera_look_at(target_x, target_y, target_z)
+    }
 
-#[cfg(feature = "webcam")]
-#[pyfunction]
-#[pyo3(signature = (width=None, height=None, framerate=None))]
-fn create_webcam(
-    width: Option<u32>,
-    height: Option<u32>,
-    framerate: Option<u32>,
-) -> PyResult<webcam::Webcam> {
-    webcam::Webcam::new(width, height, framerate)
-}
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn push_matrix(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).push_matrix()
+    }
 
-#[pyfunction]
-fn midi_connect(port: usize) -> PyResult<()> {
-    midi::connect(port)
-}
-#[pyfunction]
-fn midi_disconnect() -> PyResult<()> {
-    midi::disconnect()
-}
-#[pyfunction]
-fn midi_refresh_ports() -> PyResult<()> {
-    midi::refresh_ports()
-}
-#[pyfunction]
-fn midi_list_ports() -> PyResult<Vec<String>> {
-    midi::list_ports()
-}
-#[pyfunction]
-fn midi_play_notes(note: u8, duration: u64) -> PyResult<()> {
-    midi::play_notes(note, duration)
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn pop_matrix(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).pop_matrix()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn rotate(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
+        graphics!(module).rotate(angle)
+    }
+
+    #[pyfunction(name = "box")]
+    #[pyo3(pass_module)]
+    fn draw_box(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<()> {
+        graphics!(module).draw_box(x, y, z)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (geometry))]
+    fn draw_geometry(module: &Bound<'_, PyModule>, geometry: &Bound<'_, Geometry>) -> PyResult<()> {
+        graphics!(module).draw_geometry(&*geometry.extract::<PyRef<Geometry>>()?)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (*args))]
+    fn background(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let graphics = graphics!(module);
+        let first = args.get_item(0)?;
+        if first.is_instance_of::<Image>() {
+            graphics.background_image(&*first.extract::<PyRef<Image>>()?)
+        } else {
+            graphics.background(args.extract()?)
+        }
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (*args))]
+    fn fill(module: &Bound<'_, PyModule>, args: Vec<f32>) -> PyResult<()> {
+        graphics!(module).fill(args)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn no_fill(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).no_fill()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (*args))]
+    fn stroke(module: &Bound<'_, PyModule>, args: Vec<f32>) -> PyResult<()> {
+        graphics!(module).stroke(args)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn no_stroke(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).no_stroke()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn stroke_weight(module: &Bound<'_, PyModule>, weight: f32) -> PyResult<()> {
+        graphics!(module).stroke_weight(weight)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn stroke_cap(module: &Bound<'_, PyModule>, cap: u8) -> PyResult<()> {
+        graphics!(module).stroke_cap(cap)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn stroke_join(module: &Bound<'_, PyModule>, join: u8) -> PyResult<()> {
+        graphics!(module).stroke_join(join)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (x, y, w, h, tl=0.0, tr=0.0, br=0.0, bl=0.0))]
+    fn rect(
+        module: &Bound<'_, PyModule>,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        tl: f32,
+        tr: f32,
+        br: f32,
+        bl: f32,
+    ) -> PyResult<()> {
+        graphics!(module).rect(x, y, w, h, tl, tr, br, bl)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (image_file))]
+    fn image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<Image> {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        graphics.image(image_file)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (r, g, b, illuminance))]
+    fn create_directional_light(
+        module: &Bound<'_, PyModule>,
+        r: f32,
+        g: f32,
+        b: f32,
+        illuminance: f32,
+    ) -> PyResult<Light> {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        graphics.light_directional(r, g, b, illuminance)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (r, g, b, intensity, range, radius))]
+    fn create_point_light(
+        module: &Bound<'_, PyModule>,
+        r: f32,
+        g: f32,
+        b: f32,
+        intensity: f32,
+        range: f32,
+        radius: f32,
+    ) -> PyResult<Light> {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        graphics.light_point(r, g, b, intensity, range, radius)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (r, g, b, intensity, range, radius, inner_angle, outer_angle))]
+    fn create_spot_light(
+        module: &Bound<'_, PyModule>,
+        r: f32,
+        g: f32,
+        b: f32,
+        intensity: f32,
+        range: f32,
+        radius: f32,
+        inner_angle: f32,
+        outer_angle: f32,
+    ) -> PyResult<Light> {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        graphics.light_spot(r, g, b, intensity, range, radius, inner_angle, outer_angle)
+    }
+
+    #[pyfunction(name = "sphere")]
+    #[pyo3(pass_module, signature = (radius, sectors=32, stacks=18))]
+    fn draw_sphere(
+        module: &Bound<'_, PyModule>,
+        radius: f32,
+        sectors: u32,
+        stacks: u32,
+    ) -> PyResult<()> {
+        graphics!(module).draw_sphere(radius, sectors, stacks)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (material))]
+    fn use_material(module: &Bound<'_, PyModule>, material: &Bound<'_, Material>) -> PyResult<()> {
+        graphics!(module).use_material(&*material.extract::<PyRef<Material>>()?)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn roughness(module: &Bound<'_, PyModule>, value: f32) -> PyResult<()> {
+        graphics!(module).roughness(value)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn metallic(module: &Bound<'_, PyModule>, value: f32) -> PyResult<()> {
+        graphics!(module).metallic(value)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (*args))]
+    fn emissive(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let args: Vec<f32> = args.extract()?;
+        graphics!(module).emissive(args)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn unlit(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).unlit()
+    }
+
+    #[cfg(feature = "webcam")]
+    #[pyfunction]
+    #[pyo3(signature = (width=None, height=None, framerate=None))]
+    fn create_webcam(
+        width: Option<u32>,
+        height: Option<u32>,
+        framerate: Option<u32>,
+    ) -> PyResult<webcam::Webcam> {
+        webcam::Webcam::new(width, height, framerate)
+    }
+
+    #[pyfunction]
+    fn midi_connect(port: usize) -> PyResult<()> {
+        midi::connect(port)
+    }
+    #[pyfunction]
+    fn midi_disconnect() -> PyResult<()> {
+        midi::disconnect()
+    }
+    #[pyfunction]
+    fn midi_refresh_ports() -> PyResult<()> {
+        midi::refresh_ports()
+    }
+    #[pyfunction]
+    fn midi_list_ports() -> PyResult<Vec<String>> {
+        midi::list_ports()
+    }
+    #[pyfunction]
+    fn midi_play_notes(note: u8, duration: u64) -> PyResult<()> {
+        midi::play_notes(note, duration)
+    }
 }

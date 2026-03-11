@@ -1,0 +1,8 @@
+[package]
+name = "generate_stubs"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+pyo3-introspection = { workspace = true }

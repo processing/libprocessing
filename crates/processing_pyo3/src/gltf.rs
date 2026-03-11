@@ -2,12 +2,18 @@ use bevy::prelude::Entity;
 use processing::prelude::*;
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
-use crate::graphics::{Geometry, Light, get_graphics};
+use crate::graphics::{Geometry, Light};
 use crate::material::Material;
 
 #[pyclass(unsendable)]
 pub struct Gltf {
     entity: Entity,
+}
+
+impl Gltf {
+    pub fn from_entity(entity: Entity) -> Self {
+        Self { entity }
+    }
 }
 
 #[pymethods]
@@ -43,12 +49,3 @@ impl Gltf {
     }
 }
 
-#[pyfunction]
-#[pyo3(pass_module)]
-pub fn load_gltf(module: &Bound<'_, PyModule>, path: &str) -> PyResult<Gltf> {
-    let graphics =
-        get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-    let entity =
-        gltf_load(graphics.entity, path).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-    Ok(Gltf { entity })
-}
