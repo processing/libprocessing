@@ -47,6 +47,7 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Material>()?;
     m.add_class::<Gltf>()?;
     m.add_class::<Shader>()?;
+    m.add_class::<Geometry>()?;
     m.add_function(wrap_pyfunction!(gltf::load_gltf, m)?)?;
     m.add_function(wrap_pyfunction!(size, m)?)?;
     m.add_function(wrap_pyfunction!(run, m)?)?;
