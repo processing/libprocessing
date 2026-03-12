@@ -37,6 +37,8 @@ use crate::{
     image::{Image, ImageTextures},
 };
 
+use std::ptr::NonNull;
+
 #[derive(Component, Debug, Clone)]
 pub struct Surface;
 
@@ -222,7 +224,7 @@ pub fn create_surface_wayland(
             HandleError::Unavailable,
         ));
     }
-    let window_handle_ptr = NonNull::new(window_handle as *mut c_void).unwrap();
+    let window_handle_ptr = NonNull::new(window_handle as *mut std::ffi::c_void).unwrap();
     let window = WaylandWindowHandle::new(window_handle_ptr);
 
     if display_handle == 0 {
@@ -230,7 +232,7 @@ pub fn create_surface_wayland(
             HandleError::Unavailable,
         ));
     }
-    let display_handle_ptr = NonNull::new(display_handle as *mut c_void).unwrap();
+    let display_handle_ptr = NonNull::new(display_handle as *mut std::ffi::c_void).unwrap();
     let display = WaylandDisplayHandle::new(display_handle_ptr);
 
     spawn_surface(
