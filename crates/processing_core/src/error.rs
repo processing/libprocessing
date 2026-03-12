@@ -38,4 +38,8 @@ pub enum ProcessingError {
     GltfLoadError(String),
     #[error("Webcam not connected")]
     WebcamNotConnected,
+    #[error("Shader compilation error: {0}")]
+    ShaderCompilationError(String),
+    #[error("Shader not found")]
+    ShaderNotFound,
 }

@@ -24,8 +24,8 @@ fn sketch() -> error::Result<()> {
     let mut glfw_ctx = GlfwContext::new(width, height)?;
     init(Config::default())?;
 
-    let surface = glfw_ctx.create_surface(width, height, 1.0)?;
-    let graphics = graphics_create(surface, width, height)?;
+    let surface = glfw_ctx.create_surface(width, height)?;
+    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
 
     let gltf = gltf_load(graphics, "gltf/Duck.glb")?;
     let duck = gltf_geometry(gltf, "LOD3spShape")?;

@@ -28,7 +28,7 @@ use bevy::{
 use processing_core::error::{ProcessingError, Result};
 use crate::{
     Flush,
-    image::{Image, bytes_to_pixels, create_readback_buffer, pixel_size, pixels_to_bytes},
+    image::{Image, create_readback_buffer, pixel_size, pixels_to_bytes},
     render::{
         RenderState,
         command::{CommandBuffer, DrawCommand},
@@ -457,8 +457,6 @@ pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
     Ok(())
 }
 
-/// Present the current frame to the surface. Flushes any pending draw commands,
-/// enables camera output for one frame, then disables it again.
 pub fn present(app: &mut App, entity: Entity) -> Result<()> {
     graphics_mut!(app, entity)
         .get_mut::<Camera>()
@@ -472,41 +470,6 @@ pub fn present(app: &mut App, entity: Entity) -> Result<()> {
         .get_mut::<Camera>()
         .ok_or(ProcessingError::GraphicsNotFound)?
         .output_mode = CameraOutputMode::Skip;
-
-    // // Sync ViewTarget textures: copy main_texture → main_texture_other.
-    // // This ensures both A and B have identical content regardless of whether
-    // // post-processing effects called post_process_write() (which swaps A/B).
-    // app.world_mut()
-    //     .run_system_cached_with(sync_view_target_textures, entity)
-    //     .unwrap()?;
-
-    Ok(())
-}
-
-/// Copy the current main_texture to main_texture_other so both ViewTarget
-/// textures have identical content. This ensures pixel persistence works
-/// regardless of post-processing effects that may swap the A/B texture selector.
-fn sync_view_target_textures(
-    In(entity): In<Entity>,
-    graphics_query: Query<&Graphics>,
-    graphics_targets: Res<GraphicsTargets>,
-    render_device: Res<RenderDevice>,
-    render_queue: Res<RenderQueue>,
-) -> Result<()> {
-    let graphics = graphics_query
-        .get(entity)
-        .map_err(|_| ProcessingError::GraphicsNotFound)?;
-
-    let view_target = graphics_targets
-        .get(&entity)
-        .ok_or(ProcessingError::GraphicsNotFound)?;
-
-    let src = view_target.main_texture();
-    let dst = view_target.main_texture_other();
-
-    let mut encoder = render_device.create_command_encoder(&CommandEncoderDescriptor::default());
-    encoder.copy_texture_to_texture(src.as_image_copy(), dst.as_image_copy(), graphics.size);
-    render_queue.submit(std::iter::once(encoder.finish()));
 
     Ok(())
 }
@@ -528,7 +491,6 @@ pub fn record_command(
     Ok(())
 }
 
-/// Raw readback result containing bytes and format metadata.
 pub struct ReadbackData {
     pub bytes: Vec<u8>,
     pub format: TextureFormat,
@@ -648,10 +610,6 @@ pub fn update_region_write(
         .ok_or(ProcessingError::GraphicsNotFound)?;
 
     let texture = view_target.main_texture();
-    eprintln!(
-        "update_region: writing to texture {:p} at ({}, {}) size {}x{}",
-        texture as *const _, x, y, width, height
-    );
     let bytes_per_row = width * px_size;
 
     render_queue.write_texture(

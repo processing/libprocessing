@@ -182,7 +182,7 @@ impl Graphics {
         init(config).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let surface = glfw_ctx
-            .create_surface(width, height, 1.0)
+            .create_surface(width, height)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let surface = Surface {
@@ -323,6 +323,22 @@ impl Graphics {
     pub fn stroke_weight(&self, weight: f32) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::StrokeWeight(weight))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn stroke_cap(&self, cap: u8) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::StrokeCap(processing::prelude::StrokeCapMode::from(cap)),
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn stroke_join(&self, join: u8) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::StrokeJoin(processing::prelude::StrokeJoinMode::from(join)),
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn rect(

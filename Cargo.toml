@@ -22,7 +22,10 @@ type_complexity = "allow"
 too_many_arguments = "allow"
 
 [workspace.dependencies]
-bevy = { git = "https://github.com/bevyengine/bevy", branch = "main" }
+bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", features = ["file_watcher", "shader_format_wesl"] }
+bevy_naga_reflect = { git = "https://github.com/tychedelia/bevy_naga_reflect" }
+naga = { version = "28", features = ["wgsl-in"] }
+wesl = { version = "0.3", default-features = false }
 processing = { path = "." }
 processing_core = { path = "crates/processing_core" }
 processing_pyo3 = { path = "crates/processing_pyo3" }
@@ -102,6 +105,18 @@ path = "examples/gltf_load.rs"
 name = "webcam"
 path = "examples/webcam.rs"
 required-features = ["webcam"]
+
+[[example]]
+name = "stroke_2d"
+path = "examples/stroke_2d.rs"
+
+[[example]]
+name = "stroke_3d"
+path = "examples/stroke_3d.rs"
+
+[[example]]
+name = "custom_material"
+path = "examples/custom_material.rs"
 
 [profile.wasm-release]
 inherits = "release"
