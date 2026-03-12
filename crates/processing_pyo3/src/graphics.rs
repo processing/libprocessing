@@ -319,6 +319,22 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    pub fn stroke_cap(&self, cap: u8) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::StrokeCap(processing::prelude::StrokeCapMode::from(cap)),
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn stroke_join(&self, join: u8) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::StrokeJoin(processing::prelude::StrokeJoinMode::from(join)),
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     pub fn rect(
         &self,
         x: f32,

@@ -70,6 +70,16 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(stroke, m)?)?;
     m.add_function(wrap_pyfunction!(no_stroke, m)?)?;
     m.add_function(wrap_pyfunction!(stroke_weight, m)?)?;
+    m.add_function(wrap_pyfunction!(stroke_cap, m)?)?;
+    m.add_function(wrap_pyfunction!(stroke_join, m)?)?;
+
+    m.add("ROUND", 0u8)?;
+    m.add("SQUARE", 1u8)?;
+    m.add("PROJECT", 2u8)?;
+
+    m.add("MITER", 1u8)?;
+    m.add("BEVEL", 2u8)?;
+
     m.add_function(wrap_pyfunction!(rect, m)?)?;
     m.add_function(wrap_pyfunction!(image, m)?)?;
     m.add_function(wrap_pyfunction!(draw_geometry, m)?)?;
@@ -433,6 +443,18 @@ fn no_stroke(module: &Bound<'_, PyModule>) -> PyResult<()> {
 #[pyo3(pass_module)]
 fn stroke_weight(module: &Bound<'_, PyModule>, weight: f32) -> PyResult<()> {
     graphics!(module).stroke_weight(weight)
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn stroke_cap(module: &Bound<'_, PyModule>, cap: u8) -> PyResult<()> {
+    graphics!(module).stroke_cap(cap)
+}
+
+#[pyfunction]
+#[pyo3(pass_module)]
+fn stroke_join(module: &Bound<'_, PyModule>, join: u8) -> PyResult<()> {
+    graphics!(module).stroke_join(join)
 }
 
 #[pyfunction]

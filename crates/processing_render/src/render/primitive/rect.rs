@@ -4,7 +4,7 @@ use bevy::{
 };
 use lyon::{geom::Point, path::Path};
 
-use crate::render::primitive::{TessellationMode, tessellate_path};
+use crate::render::primitive::{StrokeConfig, TessellationMode, tessellate_path};
 
 fn rect_path(x: f32, y: f32, w: f32, h: f32, radii: [f32; 4]) -> Path {
     let mut path_builder = Path::builder();
@@ -56,12 +56,13 @@ pub fn rect(
     radii: [f32; 4], // [tl, tr, br, bl]
     color: Color,
     mode: TessellationMode,
+    stroke_config: &StrokeConfig,
 ) {
     if radii == [0.0; 4] && matches!(mode, TessellationMode::Fill) {
         simple_rect(mesh, x, y, w, h, color);
     } else {
         let path = rect_path(x, y, w, h, radii);
-        tessellate_path(mesh, &path, color, mode);
+        tessellate_path(mesh, &path, color, mode, stroke_config);
     }
 }
 
