@@ -247,11 +247,12 @@ pub fn set_property(
     let param_name = find_param_containing_field(&material.shader, name);
     if let Some(param_name) = param_name
         && let Some(param) = material.shader.field_mut(&param_name)
-            && let ReflectMut::Struct(s) = param.reflect_mut()
-                && let Some(field) = s.field_mut(name) {
-                    field.apply(&*reflect_value);
-                    return Ok(());
-                }
+        && let ReflectMut::Struct(s) = param.reflect_mut()
+        && let Some(field) = s.field_mut(name)
+    {
+        field.apply(&*reflect_value);
+        return Ok(());
+    }
 
     Err(ProcessingError::UnknownMaterialProperty(name.to_string()))
 }
@@ -280,9 +281,10 @@ fn find_param_containing_field(shader: &DynamicShader, field_name: &str) -> Opti
     for i in 0..shader.field_len() {
         if let Some(field) = shader.field_at(i)
             && let ReflectRef::Struct(s) = field.reflect_ref()
-                && s.field(field_name).is_some() {
-                    return shader.name_at(i).map(|s: &str| s.to_string());
-                }
+            && s.field(field_name).is_some()
+        {
+            return shader.name_at(i).map(|s: &str| s.to_string());
+        }
     }
     None
 }
