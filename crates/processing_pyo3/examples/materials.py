@@ -12,9 +12,9 @@ def setup():
     point_light.position(200.0, 200.0, 400.0)
 
     mat = Material()
-    mat.set_float("roughness", 0.3)
-    mat.set_float("metallic", 0.8)
-    mat.set_float4("base_color", 1.0, 0.85, 0.57, 1.0)
+    mat.set(roughness=0.3)
+    mat.set(metallic=0.8)
+    mat.set(base_color=[1.0, 0.85, 0.57, 1.0])
 
 def draw():
     camera_position(0.0, 0.0, 200.0)
@@ -22,6 +22,6 @@ def draw():
     background(12, 12, 18)
 
     use_material(mat)
-    draw_sphere(50.0)
+    sphere(50.0)
 
 run()

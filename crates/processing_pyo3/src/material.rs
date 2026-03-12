@@ -1,32 +1,75 @@
 use bevy::prelude::Entity;
 use processing::prelude::*;
+use pyo3::types::PyDict;
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
+
+use crate::shader::Shader;
 
 #[pyclass(unsendable)]
 pub struct Material {
     pub(crate) entity: Entity,
 }
 
+fn py_to_material_value(value: &Bound<'_, PyAny>) -> PyResult<material::MaterialValue> {
+    if let Ok(v) = value.extract::<f32>() {
+        return Ok(material::MaterialValue::Float(v));
+    }
+    if let Ok(v) = value.extract::<i32>() {
+        return Ok(material::MaterialValue::Int(v));
+    }
+
+    if let Ok(v) = value.extract::<[f32; 4]>() {
+        return Ok(material::MaterialValue::Float4(v));
+    }
+    if let Ok(v) = value.extract::<[f32; 3]>() {
+        return Ok(material::MaterialValue::Float3(v));
+    }
+    if let Ok(v) = value.extract::<[f32; 2]>() {
+        return Ok(material::MaterialValue::Float2(v));
+    }
+
+    Err(PyRuntimeError::new_err(format!(
+        "unsupported material value type: {}",
+        value.get_type().name()?
+    )))
+}
+
 #[pymethods]
 impl Material {
     #[new]
-    pub fn new() -> PyResult<Self> {
-        let entity = material_create_pbr().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        Ok(Self { entity })
+    #[pyo3(signature = (shader=None, **kwargs))]
+    pub fn new(shader: Option<&Shader>, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+        let entity = if let Some(shader) = shader {
+            material_create_custom(shader.entity)
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?
+        } else {
+            material_create_pbr().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?
+        };
+
+        let mat = Self { entity };
+        if let Some(kwargs) = kwargs {
+            for (key, value) in kwargs.iter() {
+                let name: String = key.extract()?;
+                let mat_value = py_to_material_value(&value)?;
+                material_set(mat.entity, &name, mat_value)
+                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+            }
+        }
+        Ok(mat)
     }
 
-    pub fn set_float(&self, name: &str, value: f32) -> PyResult<()> {
-        material_set(self.entity, name, material::MaterialValue::Float(value))
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
-    }
-
-    pub fn set_float4(&self, name: &str, r: f32, g: f32, b: f32, a: f32) -> PyResult<()> {
-        material_set(
-            self.entity,
-            name,
-            material::MaterialValue::Float4([r, g, b, a]),
-        )
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    #[pyo3(signature = (**kwargs))]
+    pub fn set(&self, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<()> {
+        let Some(kwargs) = kwargs else {
+            return Ok(());
+        };
+        for (key, value) in kwargs.iter() {
+            let name: String = key.extract()?;
+            let mat_value = py_to_material_value(&value)?;
+            material_set(self.entity, &name, mat_value)
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        }
+        Ok(())
     }
 }
 

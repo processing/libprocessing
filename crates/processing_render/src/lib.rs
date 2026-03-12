@@ -18,14 +18,13 @@ use config::*;
 #[cfg(not(target_arch = "wasm32"))]
 use bevy::log::tracing_subscriber;
 use bevy::render::RenderPlugin;
-use bevy::render::settings::{RenderCreation, WgpuSettings};
 use bevy::{
     app::{App, AppExit},
     asset::{AssetEventSystems, io::AssetSourceBuilder},
     prelude::*,
     render::render_resource::{Extent3d, TextureFormat},
 };
-use render::material::add_standard_materials;
+use render::material::{add_custom_materials, add_standard_materials};
 use render::{activate_cameras, clear_transient_meshes, flush_draw_commands};
 use tracing::debug;
 
@@ -232,13 +231,11 @@ fn create_app(config: Config) -> App {
     let has_sketch_file = config
         .get(ConfigKey::SketchFileName)
         .is_some_and(|f| !f.is_empty());
-    if has_sketch_file {
-        if let Some(sketch_path) = config.get(ConfigKey::SketchRootPath) {
-            app.register_asset_source(
-                "sketch_directory",
-                AssetSourceBuilder::platform_default(sketch_path, None),
-            );
-        }
+    if has_sketch_file && let Some(sketch_path) = config.get(ConfigKey::SketchRootPath) {
+        app.register_asset_source(
+            "sketch_directory",
+            AssetSourceBuilder::platform_default(sketch_path, None),
+        );
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -283,11 +280,16 @@ fn create_app(config: Config) -> App {
         material::MaterialPlugin,
         MidiPlugin,
         bevy::pbr::wireframe::WireframePlugin::default(),
+        material::custom::CustomMaterialPlugin,
     ));
     app.add_systems(First, (clear_transient_meshes, activate_cameras))
         .add_systems(
             Update,
-            (flush_draw_commands, add_standard_materials)
+            (
+                flush_draw_commands,
+                add_standard_materials,
+                add_custom_materials,
+            )
                 .chain()
                 .before(AssetEventSystems),
         );
@@ -1301,6 +1303,40 @@ pub fn poll_for_sketch_updates() -> error::Result<Option<sketch::Sketch>> {
             .world_mut()
             .run_system_cached(sketch::sketch_update_handler)
             .unwrap())
+    })
+}
+
+pub fn shader_create(source: &str) -> error::Result<Entity> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::custom::create_shader, source.to_string())
+            .unwrap()
+    })
+}
+
+/// Load a shader from a file path.
+pub fn shader_load(path: &str) -> error::Result<Entity> {
+    let path = std::path::PathBuf::from(path);
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::custom::load_shader, path)
+            .unwrap()
+    })
+}
+
+pub fn shader_destroy(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::custom::destroy_shader, entity)
+            .unwrap()
+    })
+}
+
+pub fn material_create_custom(shader: Entity) -> error::Result<Entity> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::custom::create_custom, shader)
+            .unwrap()
     })
 }
 

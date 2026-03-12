@@ -12,6 +12,7 @@ mod glfw;
 mod gltf;
 mod graphics;
 pub(crate) mod material;
+pub(crate) mod shader;
 
 use graphics::{Geometry, Graphics, Image, Light, Topology, get_graphics, get_graphics_mut};
 use material::Material;
@@ -20,6 +21,7 @@ use pyo3::{
     prelude::*,
     types::{PyDict, PyTuple},
 };
+use shader::Shader;
 use std::ffi::{CStr, CString};
 
 use bevy::log::warn;
@@ -44,6 +46,8 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Topology>()?;
     m.add_class::<Material>()?;
     m.add_class::<Gltf>()?;
+    m.add_class::<Shader>()?;
+    m.add_class::<Geometry>()?;
     m.add_function(wrap_pyfunction!(gltf::load_gltf, m)?)?;
     m.add_function(wrap_pyfunction!(size, m)?)?;
     m.add_function(wrap_pyfunction!(run, m)?)?;
@@ -378,7 +382,7 @@ fn push_matrix(module: &Bound<'_, PyModule>) -> PyResult<()> {
 #[pyfunction]
 #[pyo3(pass_module)]
 fn pop_matrix(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    graphics!(module).push_matrix()
+    graphics!(module).pop_matrix()
 }
 
 #[pyfunction]

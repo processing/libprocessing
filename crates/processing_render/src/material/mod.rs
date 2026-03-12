@@ -1,3 +1,4 @@
+pub mod custom;
 pub mod pbr;
 
 use bevy::prelude::*;
@@ -57,20 +58,29 @@ pub fn set_property(
     In((entity, name, value)): In<(Entity, String, MaterialValue)>,
     material_handles: Query<&UntypedMaterial>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
+    mut custom_materials: ResMut<Assets<custom::CustomMaterial>>,
 ) -> Result<()> {
     let untyped = material_handles
         .get(entity)
         .map_err(|_| ProcessingError::MaterialNotFound)?;
-    let handle = untyped
-        .0
-        .clone()
-        .try_typed::<StandardMaterial>()
-        .map_err(|_| ProcessingError::MaterialNotFound)?;
-    let mut standard = standard_materials
-        .get_mut(&handle)
-        .ok_or(ProcessingError::MaterialNotFound)?;
-    pbr::set_property(&mut standard, &name, &value)?;
-    Ok(())
+
+    // Try StandardMaterial
+    if let Ok(handle) = untyped.0.clone().try_typed::<StandardMaterial>() {
+        let mut standard = standard_materials
+            .get_mut(&handle)
+            .ok_or(ProcessingError::MaterialNotFound)?;
+        return pbr::set_property(&mut standard, &name, &value);
+    }
+
+    // Try CustomMaterial
+    if let Ok(handle) = untyped.0.clone().try_typed::<custom::CustomMaterial>() {
+        let mut mat = custom_materials
+            .get_mut(&handle)
+            .ok_or(ProcessingError::MaterialNotFound)?;
+        return custom::set_property(&mut mat, &name, &value);
+    }
+
+    Err(ProcessingError::MaterialNotFound)
 }
 
 pub fn destroy(
@@ -78,12 +88,16 @@ pub fn destroy(
     mut commands: Commands,
     material_handles: Query<&UntypedMaterial>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
+    mut custom_materials: ResMut<Assets<custom::CustomMaterial>>,
 ) -> Result<()> {
     let untyped = material_handles
         .get(entity)
         .map_err(|_| ProcessingError::MaterialNotFound)?;
     if let Ok(handle) = untyped.0.clone().try_typed::<StandardMaterial>() {
         standard_materials.remove(&handle);
+    }
+    if let Ok(handle) = untyped.0.clone().try_typed::<custom::CustomMaterial>() {
+        custom_materials.remove(&handle);
     }
     commands.entity(entity).despawn();
     Ok(())

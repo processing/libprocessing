@@ -15,7 +15,7 @@ fn sketch() -> error::Result<()> {
     let mut glfw_ctx = GlfwContext::new(400, 400)?;
     init(Config::default())?;
 
-    let surface = glfw_ctx.create_surface(400, 400, 1.0)?;
+    let surface = glfw_ctx.create_surface(400, 400)?;
     let graphics = graphics_create(surface, 400, 400, TextureFormat::Rgba16Float)?;
 
     let mut t: f32 = 0.0;

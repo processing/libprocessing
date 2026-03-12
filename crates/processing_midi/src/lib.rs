@@ -12,9 +12,7 @@ impl Plugin for MidiPlugin {
     }
 }
 
-enum MidiCommand {}
-
-pub fn connect(port: usize) {
+pub fn connect(_port: usize) {
     // we need to work with the ECS
     // do we pass a MidiCommand to Bevy?
 }

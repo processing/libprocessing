@@ -17,10 +17,6 @@
 //! - macOS: `create_surface_macos`
 //! - Windows: `create_surface_windows`
 //! - WebAssembly: `create_surface_web`
-#[cfg(any(target_os = "linux", target_arch = "wasm32"))]
-use std::ffi::c_void;
-#[cfg(not(target_os = "windows"))]
-use std::ptr::NonNull;
 
 use bevy::{
     app::{App, Plugin},
@@ -40,6 +36,8 @@ use crate::{
     error::{ProcessingError, Result},
     image::{Image, ImageTextures},
 };
+
+use std::ptr::NonNull;
 
 #[derive(Component, Debug, Clone)]
 pub struct Surface;
@@ -226,7 +224,7 @@ pub fn create_surface_wayland(
             HandleError::Unavailable,
         ));
     }
-    let window_handle_ptr = NonNull::new(window_handle as *mut c_void).unwrap();
+    let window_handle_ptr = NonNull::new(window_handle as *mut std::ffi::c_void).unwrap();
     let window = WaylandWindowHandle::new(window_handle_ptr);
 
     if display_handle == 0 {
@@ -234,7 +232,7 @@ pub fn create_surface_wayland(
             HandleError::Unavailable,
         ));
     }
-    let display_handle_ptr = NonNull::new(display_handle as *mut c_void).unwrap();
+    let display_handle_ptr = NonNull::new(display_handle as *mut std::ffi::c_void).unwrap();
     let display = WaylandDisplayHandle::new(display_handle_ptr);
 
     spawn_surface(

@@ -13,6 +13,9 @@ x11 = ["bevy/x11"]
 
 [dependencies]
 bevy = { workspace = true }
+bevy_naga_reflect = { workspace = true }
+naga = { workspace = true }
+wesl = { workspace = true }
 lyon = "1.0"
 raw-window-handle = "0.6"
 thiserror = "2"
@@ -21,6 +24,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 half = "2.7"
 crossbeam-channel = "0.5"
 processing_midi = { workspace = true }
+
+[build-dependencies]
+wesl = { workspace = true, features = ["package"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { version = "0.6", default-features = false }

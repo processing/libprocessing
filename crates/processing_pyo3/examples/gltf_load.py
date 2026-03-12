@@ -33,7 +33,7 @@ def draw():
     r = math.sin(t * 8.0) * 0.5 + 0.5
     g = math.sin(t * 8.0 + 2.0) * 0.5 + 0.5
     b = math.sin(t * 8.0 + 4.0) * 0.5 + 0.5
-    duck_mat.set_float4("base_color", r, g, b, 1.0)
+    duck_mat.set(base_color=[r, g, b, 1.0])
 
     background(25)
     use_material(duck_mat)

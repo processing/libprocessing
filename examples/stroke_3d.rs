@@ -13,7 +13,7 @@ fn sketch() -> error::Result<()> {
     let mut glfw_ctx = GlfwContext::new(600, 400)?;
     init(Config::default())?;
 
-    let surface = glfw_ctx.create_surface(600, 400, 1.0)?;
+    let surface = glfw_ctx.create_surface(600, 400)?;
     let graphics = graphics_create(surface, 600, 400, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;

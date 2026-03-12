@@ -24,9 +24,7 @@ fn sketch() -> error::Result<()> {
 
     let width = 600;
     let height = 600;
-    let scale_factor = 1.0;
-
-    let surface = glfw_ctx.create_surface(width, height, scale_factor)?;
+    let surface = glfw_ctx.create_surface(width, height)?;
     let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
 
     let custom_attr = geometry_attribute_create("Custom", AttributeFormat::Float)?;

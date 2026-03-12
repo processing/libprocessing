@@ -1,14 +1,11 @@
 use bevy::prelude::*;
 use std::ops::Deref;
 
-/// A component that holds an untyped handle to a material. This allows the main render loop
-/// to be agnostic of the specific material types being used, and allows for dynamic material
-/// creation based on the `MaterialKey`.
+use crate::material::custom::{CustomMaterial, CustomMaterial3d};
+
 #[derive(Component, Deref)]
 pub struct UntypedMaterial(pub UntypedHandle);
 
-/// Defines the current material for a batch, which can be used to determine when to flush the
-/// current batch and start a new one.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum MaterialKey {
     Color {
@@ -73,20 +70,25 @@ impl MaterialKey {
                 };
                 materials.add(mat).untyped()
             }
-            MaterialKey::Custom(_entity) => {
-                todo!("implement custom materials")
-            }
+            MaterialKey::Custom(_) => unreachable!(),
         }
     }
 }
 
-/// A system that adds a `MeshMaterial3d` component to any entity with an `UntypedMaterial` that can
-/// be typed as a `StandardMaterial`.
 pub fn add_standard_materials(mut commands: Commands, meshes: Query<(Entity, &UntypedMaterial)>) {
     for (entity, handle) in meshes.iter() {
         let handle = handle.deref().clone();
         if let Ok(handle) = handle.try_typed::<StandardMaterial>() {
             commands.entity(entity).insert(MeshMaterial3d(handle));
+        }
+    }
+}
+
+pub fn add_custom_materials(mut commands: Commands, meshes: Query<(Entity, &UntypedMaterial)>) {
+    for (entity, handle) in meshes.iter() {
+        let handle = handle.deref().clone();
+        if let Ok(handle) = handle.try_typed::<CustomMaterial>() {
+            commands.entity(entity).insert(CustomMaterial3d(handle));
         }
     }
 }
