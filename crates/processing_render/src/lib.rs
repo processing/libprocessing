@@ -231,14 +231,13 @@ fn create_app(config: Config) -> App {
     let has_sketch_file = config
         .get(ConfigKey::SketchFileName)
         .is_some_and(|f| !f.is_empty());
-    if has_sketch_file {
-        if let Some(sketch_path) = config.get(ConfigKey::SketchRootPath) {
+    if has_sketch_file
+        && let Some(sketch_path) = config.get(ConfigKey::SketchRootPath) {
             app.register_asset_source(
                 "sketch_directory",
                 AssetSourceBuilder::platform_default(sketch_path, None),
             );
         }
-    }
 
     #[cfg(not(target_arch = "wasm32"))]
     let plugins = DefaultPlugins

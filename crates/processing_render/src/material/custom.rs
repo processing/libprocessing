@@ -245,16 +245,13 @@ pub fn set_property(
     }
 
     let param_name = find_param_containing_field(&material.shader, name);
-    if let Some(param_name) = param_name {
-        if let Some(param) = material.shader.field_mut(&param_name) {
-            if let ReflectMut::Struct(s) = param.reflect_mut() {
-                if let Some(field) = s.field_mut(name) {
+    if let Some(param_name) = param_name
+        && let Some(param) = material.shader.field_mut(&param_name)
+            && let ReflectMut::Struct(s) = param.reflect_mut()
+                && let Some(field) = s.field_mut(name) {
                     field.apply(&*reflect_value);
                     return Ok(());
                 }
-            }
-        }
-    }
 
     Err(ProcessingError::UnknownMaterialProperty(name.to_string()))
 }
@@ -281,13 +278,11 @@ fn material_value_to_reflect(value: &MaterialValue) -> Result<Box<dyn PartialRef
 
 fn find_param_containing_field(shader: &DynamicShader, field_name: &str) -> Option<String> {
     for i in 0..shader.field_len() {
-        if let Some(field) = shader.field_at(i) {
-            if let ReflectRef::Struct(s) = field.reflect_ref() {
-                if s.field(field_name).is_some() {
+        if let Some(field) = shader.field_at(i)
+            && let ReflectRef::Struct(s) = field.reflect_ref()
+                && s.field(field_name).is_some() {
                     return shader.name_at(i).map(|s: &str| s.to_string());
                 }
-            }
-        }
     }
     None
 }
