@@ -63,6 +63,7 @@ pub struct Image {
 }
 
 impl Image {
+    #[expect(dead_code)] // it's only used by webcam atm
     pub(crate) fn from_entity(entity: Entity) -> Self {
         Self { entity }
     }
