@@ -24,8 +24,8 @@ use bevy::{
 };
 use half::f16;
 
-use crate::config::{Config, ConfigKey};
-use crate::error::{ProcessingError, Result};
+use processing_core::config::{Config, ConfigKey};
+use processing_core::error::{ProcessingError, Result};
 
 pub struct ImagePlugin;
 
@@ -112,7 +112,6 @@ pub fn is_loaded(world: &World, handle: &Handle<bevy::image::Image>) -> bool {
     )
 }
 
-#[cfg(target_arch = "wasm32")]
 pub fn from_handle(
     In(handle): In<Handle<bevy::image::Image>>,
     world: &mut World,
@@ -365,15 +364,13 @@ pub fn prepare_update_region(
 pub fn destroy(
     In(entity): In<Entity>,
     mut commands: Commands,
-    mut p_images: Query<&mut Image>,
-    mut images: ResMut<Assets<bevy::image::Image>>,
+    p_images: Query<&Image>,
     mut p_image_textures: ResMut<ImageTextures>,
 ) -> Result<()> {
-    let p_image = p_images
-        .get_mut(entity)
+    p_images
+        .get(entity)
         .map_err(|_| ProcessingError::ImageNotFound)?;
 
-    images.remove(&p_image.handle);
     p_image_textures.remove(&entity);
     commands.entity(entity).despawn();
     Ok(())

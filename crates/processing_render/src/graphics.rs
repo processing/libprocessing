@@ -27,7 +27,6 @@ use bevy::{
 
 use crate::{
     Flush,
-    error::{ProcessingError, Result},
     image::{Image, create_readback_buffer, pixel_size, pixels_to_bytes},
     render::{
         RenderState,
@@ -35,6 +34,7 @@ use crate::{
     },
     surface::Surface,
 };
+use processing_core::error::{ProcessingError, Result};
 
 pub struct GraphicsPlugin;
 

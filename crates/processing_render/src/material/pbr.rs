@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use super::MaterialValue;
-use crate::error::{ProcessingError, Result};
+use processing_core::error::{ProcessingError, Result};
 
 /// Set a property on a StandardMaterial by name.
 pub fn set_property(

@@ -18,12 +18,9 @@ naga = { workspace = true }
 wesl = { workspace = true }
 lyon = "1.0"
 raw-window-handle = "0.6"
-thiserror = "2"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 half = "2.7"
 crossbeam-channel = "0.5"
-processing_midi = { workspace = true }
+processing_core = { workspace = true }
 
 [build-dependencies]
 wesl = { workspace = true, features = ["package"] }

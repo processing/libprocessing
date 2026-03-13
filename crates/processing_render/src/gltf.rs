@@ -13,11 +13,11 @@ use bevy::{
     scene::SceneSpawner,
 };
 
-use crate::config::{Config, ConfigKey};
-use crate::error::{ProcessingError, Result};
 use crate::geometry::{BuiltinAttributes, Geometry, layout::VertexLayout};
 use crate::graphics;
 use crate::render::material::UntypedMaterial;
+use processing_core::config::{Config, ConfigKey};
+use processing_core::error::{ProcessingError, Result};
 
 #[derive(Component)]
 pub struct GltfNodeTransform(pub Transform);

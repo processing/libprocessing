@@ -1,5 +1,3 @@
-pub mod config;
-pub mod error;
 pub mod geometry;
 pub mod gltf;
 mod graphics;
@@ -8,53 +6,82 @@ pub mod light;
 pub mod material;
 pub mod render;
 pub mod sketch;
-mod surface;
+pub(crate) mod surface;
 pub mod transform;
 
-use std::{cell::RefCell, num::NonZero, path::PathBuf, sync::OnceLock};
+use std::path::PathBuf;
 
-use config::*;
-
-#[cfg(not(target_arch = "wasm32"))]
-use bevy::log::tracing_subscriber;
-use bevy::render::RenderPlugin;
 use bevy::{
-    app::{App, AppExit},
     asset::{AssetEventSystems, io::AssetSourceBuilder},
     prelude::*,
     render::render_resource::{Extent3d, TextureFormat},
 };
-use render::material::{add_custom_materials, add_standard_materials};
-use render::{activate_cameras, clear_transient_meshes, flush_draw_commands};
-use tracing::debug;
+use processing_core::app_mut;
+use processing_core::config::*;
+use processing_core::error;
 
 use crate::geometry::{AttributeFormat, AttributeValue};
 use crate::graphics::flush;
-use crate::{
-    graphics::GraphicsPlugin, image::ImagePlugin, light::LightPlugin, render::command::DrawCommand,
-    surface::SurfacePlugin,
-};
-
-use processing_midi::MidiPlugin;
-
-static IS_INIT: OnceLock<()> = OnceLock::new();
-
-thread_local! {
-    static APP: RefCell<Option<App>> = const { RefCell::new(None) };
-}
+use crate::render::command::DrawCommand;
 
 #[derive(Component)]
 pub struct Flush;
 
-fn app_mut<T>(cb: impl FnOnce(&mut App) -> error::Result<T>) -> error::Result<T> {
-    let res = APP.with(|app_cell| {
-        let mut app_borrow = app_cell.borrow_mut();
-        let app = app_borrow
-            .as_mut()
-            .ok_or(error::ProcessingError::AppAccess)?;
-        cb(app)
-    })?;
-    Ok(res)
+pub struct ProcessingRenderPlugin;
+
+impl Plugin for ProcessingRenderPlugin {
+    fn build(&self, app: &mut App) {
+        use render::material::{add_custom_materials, add_standard_materials};
+        use render::{activate_cameras, clear_transient_meshes, flush_draw_commands};
+
+        let config = app.world().resource::<Config>().clone();
+
+        if let Some(asset_path) = config.get(ConfigKey::AssetRootPath) {
+            app.register_asset_source(
+                "assets_directory",
+                AssetSourceBuilder::platform_default(asset_path, None),
+            );
+        }
+
+        let has_sketch_file = config
+            .get(ConfigKey::SketchFileName)
+            .is_some_and(|f| !f.is_empty());
+        if has_sketch_file {
+            if let Some(sketch_path) = config.get(ConfigKey::SketchRootPath) {
+                app.register_asset_source(
+                    "sketch_directory",
+                    AssetSourceBuilder::platform_default(sketch_path, None),
+                );
+            }
+        }
+
+        if has_sketch_file {
+            app.add_plugins(sketch::LivecodePlugin);
+        }
+
+        app.add_plugins((
+            image::ImagePlugin,
+            graphics::GraphicsPlugin,
+            surface::SurfacePlugin,
+            geometry::GeometryPlugin,
+            light::LightPlugin,
+            material::MaterialPlugin,
+            bevy::pbr::wireframe::WireframePlugin::default(),
+            material::custom::CustomMaterialPlugin,
+        ));
+
+        app.add_systems(First, (clear_transient_meshes, activate_cameras))
+            .add_systems(
+                Update,
+                (
+                    flush_draw_commands,
+                    add_standard_materials,
+                    add_custom_materials,
+                )
+                    .chain()
+                    .before(AssetEventSystems),
+            );
+    }
 }
 
 /// Create a WebGPU surface from a macOS NSWindow handle.
@@ -216,164 +243,6 @@ pub fn surface_resize(graphics_entity: Entity, width: u32, height: u32) -> error
     })
 }
 
-fn create_app(config: Config) -> App {
-    let mut app = App::new();
-
-    app.insert_resource(config.clone());
-
-    if let Some(asset_path) = config.get(ConfigKey::AssetRootPath) {
-        app.register_asset_source(
-            "assets_directory",
-            AssetSourceBuilder::platform_default(asset_path, None),
-        );
-    }
-
-    let has_sketch_file = config
-        .get(ConfigKey::SketchFileName)
-        .is_some_and(|f| !f.is_empty());
-    if has_sketch_file && let Some(sketch_path) = config.get(ConfigKey::SketchRootPath) {
-        app.register_asset_source(
-            "sketch_directory",
-            AssetSourceBuilder::platform_default(sketch_path, None),
-        );
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    let plugins = DefaultPlugins
-        .build()
-        .set(RenderPlugin {
-            synchronous_pipeline_compilation: true,
-            ..default()
-        })
-        .disable::<bevy::winit::WinitPlugin>()
-        .disable::<bevy::log::LogPlugin>()
-        .disable::<bevy::render::pipelined_rendering::PipelinedRenderingPlugin>()
-        .set(WindowPlugin {
-            primary_window: None,
-            exit_condition: bevy::window::ExitCondition::DontExit,
-            ..default()
-        });
-
-    #[cfg(target_arch = "wasm32")]
-    let plugins = DefaultPlugins
-        .build()
-        .disable::<bevy::winit::WinitPlugin>()
-        .disable::<bevy::log::LogPlugin>()
-        .set(WindowPlugin {
-            primary_window: None,
-            exit_condition: bevy::window::ExitCondition::DontExit,
-            ..default()
-        });
-
-    app.add_plugins(plugins);
-
-    if has_sketch_file {
-        app.add_plugins(sketch::LivecodePlugin);
-    }
-
-    app.add_plugins((
-        ImagePlugin,
-        GraphicsPlugin,
-        SurfacePlugin,
-        geometry::GeometryPlugin,
-        LightPlugin,
-        material::MaterialPlugin,
-        MidiPlugin,
-        bevy::pbr::wireframe::WireframePlugin::default(),
-        material::custom::CustomMaterialPlugin,
-    ));
-    app.add_systems(First, (clear_transient_meshes, activate_cameras))
-        .add_systems(
-            Update,
-            (
-                flush_draw_commands,
-                add_standard_materials,
-                add_custom_materials,
-            )
-                .chain()
-                .before(AssetEventSystems),
-        );
-
-    app
-}
-
-fn is_already_init() -> error::Result<bool> {
-    let is_init = IS_INIT.get().is_some();
-    let thread_has_app = APP.with(|app_cell| app_cell.borrow().is_some());
-    if is_init && !thread_has_app {
-        return Err(error::ProcessingError::AppAccess);
-    }
-    if is_init && thread_has_app {
-        debug!("App already initialized");
-        return Ok(true);
-    }
-    Ok(false)
-}
-
-fn set_app(app: App) {
-    APP.with(|app_cell| {
-        IS_INIT.get_or_init(|| ());
-        *app_cell.borrow_mut() = Some(app);
-    });
-}
-
-/// Initialize the app, if not already initialized. Must be called from the main thread and cannot
-/// be called concurrently from multiple threads.
-#[cfg(not(target_arch = "wasm32"))]
-pub fn init(config: Config) -> error::Result<()> {
-    if is_already_init()? {
-        return Ok(());
-    }
-    setup_tracing(config.get(ConfigKey::LogLevel).map(|s| s.as_str()))?;
-
-    let mut app = create_app(config);
-    // contrary to what the following methods might imply, this is just finishing plugin setup
-    // which normally happens in the app runner (i.e. in a "normal" bevy app), but since we don't
-    // have one we need to do it manually here
-    app.finish();
-    app.cleanup();
-    // also, we need to run the main schedule once to ensure all systems are initialized before we
-    // return from init, to ensure any plugins that need to do setup in their first update can rely
-    // on that
-    app.update();
-    set_app(app);
-
-    Ok(())
-}
-
-/// Initialize the app asynchronously
-#[cfg(target_arch = "wasm32")]
-pub async fn init(config: Config) -> error::Result<()> {
-    use bevy::app::PluginsState;
-
-    if is_already_init()? {
-        return Ok(());
-    }
-    setup_tracing(config.get(ConfigKey::LogLevel).map(|s| s.as_str()))?;
-
-    let mut app = create_app(config);
-
-    // we need to avoid blocking the main thread while waiting for plugins to initialize
-    while app.plugins_state() == PluginsState::Adding {
-        // yield to event loop
-        wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |resolve, _| {
-            web_sys::window()
-                .unwrap()
-                .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, 0)
-                .unwrap();
-        }))
-        .await
-        .unwrap();
-    }
-
-    app.finish();
-    app.cleanup();
-    app.update();
-    set_app(app);
-
-    Ok(())
-}
-
 /// Create a new graphics surface for rendering.
 pub fn graphics_create(
     surface_entity: Entity,
@@ -500,44 +369,6 @@ pub fn graphics_update_region(
             )
             .unwrap()
     })
-}
-
-pub fn exit(exit_code: u8) -> error::Result<()> {
-    app_mut(|app| {
-        app.world_mut().write_message(match exit_code {
-            0 => AppExit::Success,
-            _ => AppExit::Error(NonZero::new(exit_code).unwrap()),
-        });
-
-        // one final update to process the exit message
-        app.update();
-        Ok(())
-    })?;
-
-    // we need to drop the app in a deterministic manner to ensure resources are cleaned up
-    // otherwise we'll get wgpu graphics backend errors on exit
-    APP.with(|app_cell| {
-        let app = app_cell.borrow_mut().take();
-        drop(app);
-    });
-
-    Ok(())
-}
-
-fn setup_tracing(log_level: Option<&str>) -> error::Result<()> {
-    // TODO: figure out wasm compatible tracing subscriber
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        use tracing_subscriber::EnvFilter;
-
-        let filter = EnvFilter::try_new(log_level.unwrap_or("info"))
-            .unwrap_or_else(|_| EnvFilter::new("info"));
-        let subscriber = tracing_subscriber::FmtSubscriber::builder()
-            .with_env_filter(filter)
-            .finish();
-        tracing::subscriber::set_global_default(subscriber)?;
-    }
-    Ok(())
 }
 
 /// Record a drawing command for a window

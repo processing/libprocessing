@@ -9,7 +9,7 @@ use bevy::{
 };
 use std::path::Path;
 
-use crate::config::{Config, ConfigKey};
+use processing_core::config::{Config, ConfigKey};
 
 /// Plugin that registers the Sketch asset type and its loader.
 pub struct LivecodePlugin;

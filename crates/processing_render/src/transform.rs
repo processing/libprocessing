@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::error::{ProcessingError, Result};
+use processing_core::error::{ProcessingError, Result};
 
 pub fn set_position(
     In((entity, x, y, z)): In<(Entity, f32, f32, f32)>,

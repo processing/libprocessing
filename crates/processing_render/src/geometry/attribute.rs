@@ -7,7 +7,7 @@ use bevy::{
     render::render_resource::VertexFormat,
 };
 
-use crate::error::{ProcessingError, Result};
+use processing_core::error::{ProcessingError, Result};
 
 use super::{Geometry, hash_attr_name};
 

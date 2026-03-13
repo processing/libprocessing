@@ -14,10 +14,12 @@ crate-type = ["cdylib"]
 default = ["wayland"]
 wayland = ["processing/wayland", "glfw/wayland"]
 x11 = ["processing/x11"]
+webcam = ["processing/webcam", "dep:processing_webcam"]
 
 [dependencies]
 pyo3 = "0.27.0"
 processing = { workspace = true }
+processing_webcam = { workspace = true, optional = true }
 bevy = { workspace = true, features = ["file_watcher"] }
 glfw = { version = "0.60.0"}
 png = "0.18"

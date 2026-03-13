@@ -1,7 +1,7 @@
 /// Minimal GLFW helper for Processing examples
 use bevy::prelude::Entity;
 use glfw::{Glfw, GlfwReceiver, PWindow, WindowEvent, WindowMode};
-use processing_render::error::Result;
+use processing_core::error::Result;
 
 pub struct GlfwContext {
     glfw: Glfw,

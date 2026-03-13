@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 
 use super::BuiltinAttributes;
-use crate::error::{ProcessingError, Result};
+use processing_core::error::{ProcessingError, Result};
 
 // bevy requires an attribute id for each unique vertex attribute. we don't really want to
 // expose this to users, so we hash the attribute name to generate a unique id. in theory

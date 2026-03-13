@@ -13,6 +13,8 @@ mod gltf;
 mod graphics;
 pub(crate) mod material;
 pub(crate) mod shader;
+#[cfg(feature = "webcam")]
+mod webcam;
 
 use graphics::{Geometry, Graphics, Image, Light, Topology, get_graphics, get_graphics_mut};
 use material::Material;
@@ -92,6 +94,12 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(metallic, m)?)?;
     m.add_function(wrap_pyfunction!(emissive, m)?)?;
     m.add_function(wrap_pyfunction!(unlit, m)?)?;
+
+    #[cfg(feature = "webcam")]
+    {
+        m.add_class::<webcam::Webcam>()?;
+        m.add_function(wrap_pyfunction!(create_webcam, m)?)?;
+    }
 
     Ok(())
 }
@@ -569,4 +577,15 @@ fn emissive(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult
 #[pyo3(pass_module)]
 fn unlit(module: &Bound<'_, PyModule>) -> PyResult<()> {
     graphics!(module).unlit()
+}
+
+#[cfg(feature = "webcam")]
+#[pyfunction]
+#[pyo3(signature = (width=None, height=None, framerate=None))]
+fn create_webcam(
+    width: Option<u32>,
+    height: Option<u32>,
+    framerate: Option<u32>,
+) -> PyResult<webcam::Webcam> {
+    webcam::Webcam::new(width, height, framerate)
 }

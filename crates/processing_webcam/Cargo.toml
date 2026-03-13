@@ -1,0 +1,13 @@
+[package]
+name = "processing_webcam"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+bevy = { workspace = true }
+nannou_webcam = { git = "https://github.com/nannou-org/nannou", branch = "bevy-refactor" }
+processing_core = { workspace = true }
+processing_render = { workspace = true }

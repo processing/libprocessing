@@ -11,6 +11,7 @@ workspace = true
 default = ["wayland"]
 wayland = ["processing_render/wayland"]
 x11 = ["processing_render/x11"]
+webcam = ["dep:processing_webcam"]
 
 [workspace]
 resolver = "3"
@@ -26,14 +27,25 @@ bevy_naga_reflect = { git = "https://github.com/tychedelia/bevy_naga_reflect" }
 naga = { version = "28", features = ["wgsl-in"] }
 wesl = { version = "0.3", default-features = false }
 processing = { path = "." }
+processing_core = { path = "crates/processing_core" }
 processing_pyo3 = { path = "crates/processing_pyo3" }
 processing_render = { path = "crates/processing_render" }
 processing_midi = { path = "crates/processing_midi" }
+processing_webcam = { path = "crates/processing_webcam" }
 
 [dependencies]
 bevy = { workspace = true }
+processing_core = { workspace = true }
 processing_render = { workspace = true }
 processing_midi = { workspace = true }
+processing_webcam = { workspace = true, optional = true }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = ["Window"] }
 
 [dev-dependencies]
 glfw = "0.60.0"
@@ -88,6 +100,11 @@ path = "examples/midi.rs"
 [[example]]
 name = "gltf_load"
 path = "examples/gltf_load.rs"
+
+[[example]]
+name = "webcam"
+path = "examples/webcam.rs"
+required-features = ["webcam"]
 
 [[example]]
 name = "stroke_2d"

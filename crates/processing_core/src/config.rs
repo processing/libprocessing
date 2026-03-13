@@ -1,7 +1,3 @@
-//! Options object for configuring various aspects of libprocessing.
-//!
-//! To add a new Config just add a new enum with associated value
-
 use bevy::prelude::Resource;
 use std::collections::HashMap;
 
