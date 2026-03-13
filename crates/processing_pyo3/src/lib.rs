@@ -12,9 +12,9 @@ mod glfw;
 mod gltf;
 mod graphics;
 pub(crate) mod material;
+pub(crate) mod shader;
 #[cfg(feature = "webcam")]
 mod webcam;
-pub(crate) mod shader;
 
 use graphics::{Geometry, Graphics, Image, Light, Topology, get_graphics, get_graphics_mut};
 use material::Material;

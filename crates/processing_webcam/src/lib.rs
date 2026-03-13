@@ -15,9 +15,7 @@ use processing_render::image;
 pub struct ProcessingWebcam;
 
 fn create(In(()): In<()>, mut commands: Commands) -> Entity {
-    commands
-        .spawn((ProcessingWebcam, Webcam::default()))
-        .id()
+    commands.spawn((ProcessingWebcam, Webcam::default())).id()
 }
 
 fn create_with_format(In(format): In<WebcamFormat>, mut commands: Commands) -> Entity {
@@ -62,12 +60,7 @@ fn destroy(In(entity): In<Entity>, mut commands: Commands) -> Result<()> {
 }
 
 pub fn webcam_create() -> Result<Entity> {
-    app_mut(|app| {
-        Ok(app
-            .world_mut()
-            .run_system_cached_with(create, ())
-            .unwrap())
-    })
+    app_mut(|app| Ok(app.world_mut().run_system_cached_with(create, ()).unwrap()))
 }
 
 pub fn webcam_create_with_format(format: WebcamFormat) -> Result<Entity> {

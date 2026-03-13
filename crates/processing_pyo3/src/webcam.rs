@@ -16,19 +16,15 @@ pub struct Webcam {
 impl Webcam {
     #[new]
     #[pyo3(signature = (width=None, height=None, framerate=None))]
-    pub fn new(
-        width: Option<u32>,
-        height: Option<u32>,
-        framerate: Option<u32>,
-    ) -> PyResult<Self> {
+    pub fn new(width: Option<u32>, height: Option<u32>, framerate: Option<u32>) -> PyResult<Self> {
         let entity = match (width, height, framerate) {
             (Some(w), Some(h), Some(fps)) => webcam_create_with_format(WebcamFormat::Exact {
                 resolution: bevy::math::UVec2::new(w, h),
                 framerate: fps,
             }),
-            (Some(w), Some(h), None) => webcam_create_with_format(WebcamFormat::Resolution(
-                bevy::math::UVec2::new(w, h),
-            )),
+            (Some(w), Some(h), None) => {
+                webcam_create_with_format(WebcamFormat::Resolution(bevy::math::UVec2::new(w, h)))
+            }
             (None, None, Some(fps)) => webcam_create_with_format(WebcamFormat::FrameRate(fps)),
             _ => webcam_create(),
         }
@@ -38,18 +34,16 @@ impl Webcam {
     }
 
     pub fn is_connected(&self) -> PyResult<bool> {
-        webcam_is_connected(self.entity)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        webcam_is_connected(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn resolution(&self) -> PyResult<(u32, u32)> {
-        webcam_resolution(self.entity)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        webcam_resolution(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn image(&self) -> PyResult<Image> {
-        let entity = webcam_image(self.entity)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let entity =
+            webcam_image(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(Image::from_entity(entity))
     }
 }

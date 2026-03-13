@@ -42,10 +42,10 @@ use bevy_naga_reflect::dynamic_shader::DynamicShader;
 
 use bevy::shader::Shader as ShaderAsset;
 
-use processing_core::config::{Config, ConfigKey};
-use processing_core::error::{ProcessingError, Result};
 use crate::material::MaterialValue;
 use crate::render::material::UntypedMaterial;
+use processing_core::config::{Config, ConfigKey};
+use processing_core::error::{ProcessingError, Result};
 
 #[derive(Asset, TypePath, Clone)]
 pub struct CustomMaterial {
