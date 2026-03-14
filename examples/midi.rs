@@ -4,6 +4,8 @@ use glfw::GlfwContext;
 use processing::prelude::*;
 use processing_render::render::command::DrawCommand;
 
+use rand::prelude::*;
+
 fn main() {
     match sketch() {
         Ok(_) => {
@@ -26,7 +28,10 @@ fn sketch() -> error::Result<()> {
     let surface = glfw_ctx.create_surface(width, height)?;
     let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
 
-    processing_midi::connect(0);
+    midi_refresh_ports()?;
+    midi_connect(0)?;
+
+    let mut rng = rand::rng();
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;
@@ -43,6 +48,11 @@ fn sketch() -> error::Result<()> {
         )?;
 
         graphics_end_draw(graphics)?;
+
+        let note = rng.random_range(57..68);
+        let note_duration = rng.random_range(25..250);
+        midi_play_notes(note, note_duration)?;
     }
+
     Ok(())
 }

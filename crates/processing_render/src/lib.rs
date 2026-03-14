@@ -46,13 +46,11 @@ impl Plugin for ProcessingRenderPlugin {
         let has_sketch_file = config
             .get(ConfigKey::SketchFileName)
             .is_some_and(|f| !f.is_empty());
-        if has_sketch_file {
-            if let Some(sketch_path) = config.get(ConfigKey::SketchRootPath) {
-                app.register_asset_source(
-                    "sketch_directory",
-                    AssetSourceBuilder::platform_default(sketch_path, None),
-                );
-            }
+        if has_sketch_file && let Some(sketch_path) = config.get(ConfigKey::SketchRootPath) {
+            app.register_asset_source(
+                "sketch_directory",
+                AssetSourceBuilder::platform_default(sketch_path, None),
+            );
         }
 
         if has_sketch_file {
@@ -1259,6 +1257,46 @@ pub fn gltf_light(gltf_entity: Entity, index: usize) -> error::Result<Entity> {
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(gltf::light, (gltf_entity, index))
+            .unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn midi_refresh_ports() -> error::Result<()> {
+    app_mut(|app| {
+        let world = app.world_mut();
+        world
+            .run_system_cached(processing_midi::refresh_ports)
+            .unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn midi_connect(port: usize) -> error::Result<()> {
+    app_mut(|app| {
+        let world = app.world_mut();
+        world
+            .run_system_cached_with(processing_midi::connect, port)
+            .unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn midi_disconnect() -> error::Result<()> {
+    app_mut(|app| {
+        let world = app.world_mut();
+        world
+            .run_system_cached(processing_midi::disconnect)
+            .unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn midi_play_notes(note: u8, duration: u64) -> error::Result<()> {
+    app_mut(|app| {
+        let world = app.world_mut();
+        world
+            .run_system_cached_with(processing_midi::play_notes, (note, duration))
             .unwrap()
     })
 }
