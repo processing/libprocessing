@@ -597,22 +597,18 @@ fn create_webcam(
 }
 
 #[pyfunction]
-#[pyo3(pass_module)]
-fn midi_connect(module: &Bound<'_, PyModule>, port: usize) -> PyResult<()> {
+fn midi_connect(port: usize) -> PyResult<()> {
     midi::connect(port)
 }
 #[pyfunction]
-#[pyo3(pass_module)]
-fn midi_disconnect(module: &Bound<'_, PyModule>) -> PyResult<()> {
+fn midi_disconnect() -> PyResult<()> {
     midi::disconnect()
 }
 #[pyfunction]
-#[pyo3(pass_module)]
-fn midi_refresh_ports(module: &Bound<'_, PyModule>) -> PyResult<()> {
+fn midi_refresh_ports() -> PyResult<()> {
     midi::refresh_ports()
 }
 #[pyfunction]
-#[pyo3(pass_module)]
-fn midi_play_notes(module: &Bound<'_, PyModule>, note: u8, duration: u64) -> PyResult<()> {
+fn midi_play_notes(note: u8, duration: u64) -> PyResult<()> {
     midi::play_notes(note, duration)
 }
