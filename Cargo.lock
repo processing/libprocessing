@@ -5365,6 +5365,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_midi",
+ "processing_core",
 ]
 
 [[package]]
@@ -5393,6 +5394,7 @@ dependencies = [
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "processing_core",
+ "processing_midi",
  "raw-window-handle",
  "wasm-bindgen",
  "wasm-bindgen-futures",

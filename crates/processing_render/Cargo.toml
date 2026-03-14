@@ -21,6 +21,7 @@ raw-window-handle = "0.6"
 half = "2.7"
 crossbeam-channel = "0.5"
 processing_core = { workspace = true }
+processing_midi = { workspace = true }
 
 [build-dependencies]
 wesl = { workspace = true, features = ["package"] }
