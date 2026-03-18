@@ -32,8 +32,8 @@ pub enum ProcessingError {
     TransformNotFound,
     #[error("Material not found")]
     MaterialNotFound,
-    #[error("Unknown material property: {0}")]
-    UnknownMaterialProperty(String),
+    #[error("Unknown shader property: {0}")]
+    UnknownShaderProperty(String),
     #[error("GLTF load error: {0}")]
     GltfLoadError(String),
     #[error("Webcam not connected")]
@@ -46,4 +46,14 @@ pub enum ProcessingError {
     MidiPortNotFound(usize),
     #[error("CUDA error: {0}")]
     CudaError(String),
+    #[error("Compute shader not found")]
+    ComputeNotFound,
+    #[error("Buffer not found")]
+    BufferNotFound,
+    #[error("Buffer map error: {0}")]
+    BufferMapError(String),
+    #[error("Pipeline compile error: {0}")]
+    PipelineCompileError(String),
+    #[error("Pipeline not ready after {0} frames")]
+    PipelineNotReady(u32),
 }

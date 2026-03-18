@@ -3,6 +3,7 @@ use processing::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
+use crate::compute::Buffer;
 use crate::math::{PyVec2, PyVec3, PyVec4};
 use crate::shader::Shader;
 
@@ -11,34 +12,38 @@ pub struct Material {
     pub(crate) entity: Entity,
 }
 
-fn py_to_material_value(value: &Bound<'_, PyAny>) -> PyResult<material::MaterialValue> {
+pub(crate) fn py_to_shader_value(value: &Bound<'_, PyAny>) -> PyResult<shader_value::ShaderValue> {
     if let Ok(v) = value.extract::<f32>() {
-        return Ok(material::MaterialValue::Float(v));
+        return Ok(shader_value::ShaderValue::Float(v));
     }
     if let Ok(v) = value.extract::<i32>() {
-        return Ok(material::MaterialValue::Int(v));
+        return Ok(shader_value::ShaderValue::Int(v));
     }
 
     // Accept PyVec types
     if let Ok(v) = value.extract::<PyRef<PyVec4>>() {
-        return Ok(material::MaterialValue::Float4(v.0.to_array()));
+        return Ok(shader_value::ShaderValue::Float4(v.0.to_array()));
     }
     if let Ok(v) = value.extract::<PyRef<PyVec3>>() {
-        return Ok(material::MaterialValue::Float3(v.0.to_array()));
+        return Ok(shader_value::ShaderValue::Float3(v.0.to_array()));
     }
     if let Ok(v) = value.extract::<PyRef<PyVec2>>() {
-        return Ok(material::MaterialValue::Float2(v.0.to_array()));
+        return Ok(shader_value::ShaderValue::Float2(v.0.to_array()));
+    }
+
+    if let Ok(buf) = value.extract::<PyRef<Buffer>>() {
+        return Ok(shader_value::ShaderValue::Buffer(buf.entity));
     }
 
     // Fall back to raw arrays
     if let Ok(v) = value.extract::<[f32; 4]>() {
-        return Ok(material::MaterialValue::Float4(v));
+        return Ok(shader_value::ShaderValue::Float4(v));
     }
     if let Ok(v) = value.extract::<[f32; 3]>() {
-        return Ok(material::MaterialValue::Float3(v));
+        return Ok(shader_value::ShaderValue::Float3(v));
     }
     if let Ok(v) = value.extract::<[f32; 2]>() {
-        return Ok(material::MaterialValue::Float2(v));
+        return Ok(shader_value::ShaderValue::Float2(v));
     }
 
     Err(PyRuntimeError::new_err(format!(
@@ -63,8 +68,8 @@ impl Material {
         if let Some(kwargs) = kwargs {
             for (key, value) in kwargs.iter() {
                 let name: String = key.extract()?;
-                let mat_value = py_to_material_value(&value)?;
-                material_set(mat.entity, &name, mat_value)
+                let value = py_to_shader_value(&value)?;
+                material_set(mat.entity, &name, value)
                     .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
             }
         }
@@ -78,8 +83,8 @@ impl Material {
         };
         for (key, value) in kwargs.iter() {
             let name: String = key.extract()?;
-            let mat_value = py_to_material_value(&value)?;
-            material_set(self.entity, &name, mat_value)
+            let value = py_to_shader_value(&value)?;
+            material_set(self.entity, &name, value)
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         }
         Ok(())

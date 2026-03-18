@@ -15,7 +15,9 @@ thread_local! {
 
 pub fn app_mut<T>(cb: impl FnOnce(&mut App) -> error::Result<T>) -> error::Result<T> {
     let res = APP.with(|app_cell| {
-        let mut app_borrow = app_cell.borrow_mut();
+        let mut app_borrow = app_cell
+            .try_borrow_mut()
+            .map_err(|_| error::ProcessingError::AppAccess)?;
         let app = app_borrow
             .as_mut()
             .ok_or(error::ProcessingError::AppAccess)?;

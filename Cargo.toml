@@ -161,6 +161,10 @@ path = "examples/blend_modes.rs"
 name = "camera_controllers"
 path = "examples/camera_controllers.rs"
 
+[[example]]
+name = "compute_readback"
+path = "examples/compute_readback.rs"
+
 [profile.wasm-release]
 inherits = "release"
 opt-level = "z"

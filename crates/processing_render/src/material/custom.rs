@@ -51,8 +51,8 @@ use bevy_naga_reflect::dynamic_shader::DynamicShader;
 
 use bevy::shader::Shader as ShaderAsset;
 
-use crate::material::MaterialValue;
 use crate::render::material::UntypedMaterial;
+use crate::shader_value::ShaderValue;
 use processing_core::config::{Config, ConfigKey};
 use processing_core::error::{ProcessingError, Result};
 
@@ -265,52 +265,63 @@ pub fn create_custom(
     Ok(commands.spawn(UntypedMaterial(handle.untyped())).id())
 }
 
-pub fn set_property(
-    material: &mut CustomMaterial,
-    name: &str,
-    value: &MaterialValue,
-) -> Result<()> {
-    let reflect_value: Box<dyn PartialReflect> = material_value_to_reflect(value)?;
+pub fn set_property(material: &mut CustomMaterial, name: &str, value: &ShaderValue) -> Result<()> {
+    let reflect_value: Box<dyn PartialReflect> = shader_value_to_reflect(value)?;
+    apply_reflect_field(&mut material.shader, name, &*reflect_value)
+}
 
-    if let Some(field) = material.shader.field_mut(name) {
-        field.apply(&*reflect_value);
+pub(crate) fn apply_reflect_field(
+    shader: &mut DynamicShader,
+    name: &str,
+    value: &dyn PartialReflect,
+) -> Result<()> {
+    if let Some(field) = shader.field_mut(name) {
+        field.apply(value);
         return Ok(());
     }
 
-    let param_name = find_param_containing_field(&material.shader, name);
+    let param_name = find_param_containing_field(shader, name);
     if let Some(param_name) = param_name
-        && let Some(param) = material.shader.field_mut(&param_name)
+        && let Some(param) = shader.field_mut(&param_name)
         && let ReflectMut::Struct(s) = param.reflect_mut()
         && let Some(field) = s.field_mut(name)
     {
-        field.apply(&*reflect_value);
+        field.apply(value);
         return Ok(());
     }
 
-    Err(ProcessingError::UnknownMaterialProperty(name.to_string()))
+    Err(ProcessingError::UnknownShaderProperty(name.to_string()))
 }
 
-fn material_value_to_reflect(value: &MaterialValue) -> Result<Box<dyn PartialReflect>> {
+pub(crate) fn shader_value_to_reflect(value: &ShaderValue) -> Result<Box<dyn PartialReflect>> {
     Ok(match value {
-        MaterialValue::Float(v) => Box::new(*v),
-        MaterialValue::Float2(v) => Box::new(Vec2::from_array(*v)),
-        MaterialValue::Float3(v) => Box::new(Vec3::from_array(*v)),
-        MaterialValue::Float4(v) => Box::new(Vec4::from_array(*v)),
-        MaterialValue::Int(v) => Box::new(*v),
-        MaterialValue::Int2(v) => Box::new(IVec2::from_array(*v)),
-        MaterialValue::Int3(v) => Box::new(IVec3::from_array(*v)),
-        MaterialValue::Int4(v) => Box::new(IVec4::from_array(*v)),
-        MaterialValue::UInt(v) => Box::new(*v),
-        MaterialValue::Mat4(v) => Box::new(Mat4::from_cols_array(v)),
-        MaterialValue::Texture(_) => {
-            return Err(ProcessingError::UnknownMaterialProperty(
+        ShaderValue::Float(v) => Box::new(*v),
+        ShaderValue::Float2(v) => Box::new(Vec2::from_array(*v)),
+        ShaderValue::Float3(v) => Box::new(Vec3::from_array(*v)),
+        ShaderValue::Float4(v) => Box::new(Vec4::from_array(*v)),
+        ShaderValue::Int(v) => Box::new(*v),
+        ShaderValue::Int2(v) => Box::new(IVec2::from_array(*v)),
+        ShaderValue::Int3(v) => Box::new(IVec3::from_array(*v)),
+        ShaderValue::Int4(v) => Box::new(IVec4::from_array(*v)),
+        ShaderValue::UInt(v) => Box::new(*v),
+        ShaderValue::Mat4(v) => Box::new(Mat4::from_cols_array(v)),
+        ShaderValue::Texture(_) => {
+            return Err(ProcessingError::UnknownShaderProperty(
                 "Texture properties not yet supported for custom materials".to_string(),
+            ));
+        }
+        ShaderValue::Buffer(_) => {
+            return Err(ProcessingError::UnknownShaderProperty(
+                "Buffer properties not supported for custom materials".to_string(),
             ));
         }
     })
 }
 
-fn find_param_containing_field(shader: &DynamicShader, field_name: &str) -> Option<String> {
+pub(crate) fn find_param_containing_field(
+    shader: &DynamicShader,
+    field_name: &str,
+) -> Option<String> {
     for i in 0..shader.field_len() {
         if let Some(field) = shader.field_at(i)
             && let ReflectRef::Struct(s) = field.reflect_ref()

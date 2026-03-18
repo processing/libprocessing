@@ -2,6 +2,7 @@
 
 pub mod camera;
 pub mod color;
+pub mod compute;
 pub mod geometry;
 pub mod gltf;
 pub mod graphics;
@@ -10,6 +11,7 @@ pub mod light;
 pub mod material;
 pub mod monitor;
 pub mod render;
+pub mod shader_value;
 pub mod sketch;
 pub mod surface;
 pub mod time;
@@ -1416,7 +1418,7 @@ pub fn material_create_pbr() -> error::Result<Entity> {
 pub fn material_set(
     entity: Entity,
     name: impl Into<String>,
-    value: material::MaterialValue,
+    value: shader_value::ShaderValue,
 ) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
@@ -1630,6 +1632,172 @@ pub fn gltf_light(gltf_entity: Entity, index: usize) -> error::Result<Entity> {
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(gltf::light, (gltf_entity, index))
+            .unwrap()
+    })
+}
+
+pub fn buffer_create(size: u64) -> error::Result<Entity> {
+    app_mut(|app| {
+        let entity = app
+            .world_mut()
+            .run_system_cached_with(compute::create_buffer, size)
+            .unwrap();
+        app.update();
+        Ok(entity)
+    })
+}
+
+pub fn buffer_create_with_data(data: Vec<u8>) -> error::Result<Entity> {
+    app_mut(|app| {
+        let entity = app
+            .world_mut()
+            .run_system_cached_with(compute::create_buffer_with_data, data)
+            .unwrap();
+        app.update();
+        Ok(entity)
+    })
+}
+
+pub fn buffer_size(entity: Entity) -> error::Result<u64> {
+    app_mut(|app| {
+        Ok(app
+            .world()
+            .get::<compute::Buffer>(entity)
+            .ok_or(error::ProcessingError::BufferNotFound)?
+            .size)
+    })
+}
+
+pub fn buffer_write(entity: Entity, data: Vec<u8>) -> error::Result<()> {
+    buffer_write_range(entity, 0, data, true)
+}
+
+pub fn buffer_write_element(entity: Entity, offset: u64, data: Vec<u8>) -> error::Result<()> {
+    buffer_write_range(entity, offset, data, false)
+}
+
+fn buffer_write_range(
+    entity: Entity,
+    offset: u64,
+    data: Vec<u8>,
+    exact_size: bool,
+) -> error::Result<()> {
+    app_mut(|app| {
+        let (handle, size) = {
+            let buf = app
+                .world()
+                .get::<compute::Buffer>(entity)
+                .ok_or(error::ProcessingError::BufferNotFound)?;
+            (buf.handle.clone(), buf.size)
+        };
+        let end = offset.checked_add(data.len() as u64).ok_or_else(|| {
+            error::ProcessingError::InvalidArgument("offset + len overflow".to_string())
+        })?;
+        if exact_size && (offset != 0 || end != size) {
+            return Err(error::ProcessingError::InvalidArgument(format!(
+                "buffer_write data length {} does not match buffer size {size}; \
+                 destroy and re-create to resize, or use buffer_write_element for partial writes",
+                data.len()
+            )));
+        }
+        if end > size {
+            return Err(error::ProcessingError::InvalidArgument(format!(
+                "buffer write out of bounds: offset {offset} + len {} > size {size}",
+                data.len()
+            )));
+        }
+        app.sub_app_mut(bevy::render::RenderApp)
+            .world_mut()
+            .run_system_cached_with(compute::write_buffer_gpu, (handle, offset, data))
+            .unwrap()
+    })
+}
+
+pub fn buffer_read_element(entity: Entity, offset: u64, len: u64) -> error::Result<Vec<u8>> {
+    buffer_read_range(entity, offset, len)
+}
+
+pub fn buffer_read(entity: Entity) -> error::Result<Vec<u8>> {
+    let size = buffer_size(entity)?;
+    buffer_read_range(entity, 0, size)
+}
+
+fn buffer_read_range(entity: Entity, offset: u64, len: u64) -> error::Result<Vec<u8>> {
+    app_mut(|app| {
+        let (handle, readback_buffer, size) = {
+            let buf = app
+                .world()
+                .get::<compute::Buffer>(entity)
+                .ok_or(error::ProcessingError::BufferNotFound)?;
+            (buf.handle.clone(), buf.readback_buffer.clone(), buf.size)
+        };
+        let end = offset.checked_add(len).ok_or_else(|| {
+            error::ProcessingError::InvalidArgument("offset + len overflow".to_string())
+        })?;
+        if end > size {
+            return Err(error::ProcessingError::InvalidArgument(format!(
+                "buffer read out of bounds: offset {offset} + len {len} > size {size}"
+            )));
+        }
+        app.sub_app_mut(bevy::render::RenderApp)
+            .world_mut()
+            .run_system_cached_with(
+                compute::read_buffer_gpu,
+                (handle, readback_buffer, offset, len),
+            )
+            .unwrap()
+    })
+}
+
+pub fn buffer_destroy(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(compute::destroy_buffer, entity)
+            .unwrap()
+    })
+}
+
+pub fn compute_create(shader_entity: Entity) -> error::Result<Entity> {
+    app_mut(|app| compute::create_compute(app, shader_entity))
+}
+
+pub fn compute_set(
+    entity: Entity,
+    name: impl Into<String>,
+    value: shader_value::ShaderValue,
+) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(compute::set_compute_property, (entity, name.into(), value))
+            .unwrap()
+    })
+}
+
+pub fn compute_dispatch(entity: Entity, x: u32, y: u32, z: u32) -> error::Result<()> {
+    app_mut(|app| {
+        let c = app
+            .world()
+            .get::<compute::Compute>(entity)
+            .ok_or(error::ProcessingError::ComputeNotFound)?;
+        let args = (
+            c.pipeline_id,
+            c.bind_group_layout_descriptors.clone(),
+            c.shader.clone(),
+            x,
+            y,
+            z,
+        );
+        app.sub_app_mut(bevy::render::RenderApp)
+            .world_mut()
+            .run_system_cached_with(compute::dispatch, args)
+            .unwrap()
+    })
+}
+
+pub fn compute_destroy(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(compute::destroy_compute, entity)
             .unwrap()
     })
 }

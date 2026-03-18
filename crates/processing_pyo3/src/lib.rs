@@ -9,6 +9,7 @@
 //! To allow Python users to create a similar experience, we provide module-level
 //! functions that forward to a singleton Graphics object pub(crate) behind the scenes.
 pub(crate) mod color;
+pub(crate) mod compute;
 #[cfg(feature = "cuda")]
 pub(crate) mod cuda;
 mod glfw;
@@ -25,6 +26,7 @@ mod time;
 #[cfg(feature = "webcam")]
 mod webcam;
 
+use compute::{Buffer, Compute};
 use graphics::{
     Geometry, Graphics, Image, Light, PyBlendMode, Topology, get_graphics, get_graphics_mut,
 };
@@ -325,6 +327,10 @@ fn detect_environment(py: Python<'_>) -> PyResult<String> {
 mod mewnala {
     use super::*;
 
+    #[pymodule_export]
+    use super::Buffer;
+    #[pymodule_export]
+    use super::Compute;
     #[pymodule_export]
     use super::Geometry;
     #[pymodule_export]
