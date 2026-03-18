@@ -10,6 +10,9 @@ pub fn disconnect() -> PyResult<()> {
 pub fn refresh_ports() -> PyResult<()> {
     midi_refresh_ports().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }
+pub fn list_ports() -> PyResult<Vec<String>> {
+    midi_list_ports().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+}
 pub fn play_notes(note: u8, duration: u64) -> PyResult<()> {
     midi_play_notes(note, duration).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }

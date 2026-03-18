@@ -4,8 +4,10 @@ import random
 def setup():
     size(800, 600)
 
-    # Refresh midi port list, and connect to first one
+    # Refresh midi port list, print available ports, and connect to first one
     midi_refresh_ports()
+    for port in midi_list_ports():
+        print(port)
     midi_connect(0)
 
 def draw():

@@ -42,4 +42,6 @@ pub enum ProcessingError {
     ShaderCompilationError(String),
     #[error("Shader not found")]
     ShaderNotFound,
+    #[error("MIDI port {0} not found")]
+    MidiPortNotFound(usize),
 }

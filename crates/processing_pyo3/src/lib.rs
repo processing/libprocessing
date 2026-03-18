@@ -99,6 +99,7 @@ fn processing(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(midi_connect, m)?)?;
     m.add_function(wrap_pyfunction!(midi_disconnect, m)?)?;
     m.add_function(wrap_pyfunction!(midi_refresh_ports, m)?)?;
+    m.add_function(wrap_pyfunction!(midi_list_ports, m)?)?;
     m.add_function(wrap_pyfunction!(midi_play_notes, m)?)?;
 
     #[cfg(feature = "webcam")]
@@ -607,6 +608,10 @@ fn midi_disconnect() -> PyResult<()> {
 #[pyfunction]
 fn midi_refresh_ports() -> PyResult<()> {
     midi::refresh_ports()
+}
+#[pyfunction]
+fn midi_list_ports() -> PyResult<Vec<String>> {
+    midi::list_ports()
 }
 #[pyfunction]
 fn midi_play_notes(note: u8, duration: u64) -> PyResult<()> {

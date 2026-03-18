@@ -29,7 +29,10 @@ fn sketch() -> error::Result<()> {
     let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
 
     midi_refresh_ports()?;
-    midi_connect(0)?;
+    for port in midi_list_ports()? {
+        println!("{port}");
+    }
+    midi_connect(1)?;
 
     let mut rng = rand::rng();
 
