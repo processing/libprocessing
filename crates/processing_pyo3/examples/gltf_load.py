@@ -1,5 +1,5 @@
 import math
-from processing import *
+from mewnala import *
 
 gltf = None
 duck_geo = None
