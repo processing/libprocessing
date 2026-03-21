@@ -48,4 +48,3 @@ impl Gltf {
         Ok(Light { entity })
     }
 }
-

@@ -1,5 +1,6 @@
 mod glfw;
 
+use bevy::math::Vec3;
 use glfw::GlfwContext;
 use processing::prelude::*;
 use processing_render::render::command::DrawCommand;
@@ -28,8 +29,8 @@ fn sketch() -> error::Result<()> {
     let box_geo = geometry_box(100.0, 100.0, 100.0)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, 100.0, 100.0, 300.0)?;
-    transform_look_at(graphics, 0.0, 0.0, 0.0)?;
+    transform_set_position(graphics, Vec3::new(100.0, 100.0, 300.0))?;
+    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
     let mut angle = 0.0;
 

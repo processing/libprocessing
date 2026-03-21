@@ -1,5 +1,6 @@
 mod glfw;
 
+use bevy::math::{Vec2, Vec3};
 use glfw::GlfwContext;
 use processing::prelude::*;
 use processing_render::render::command::DrawCommand;
@@ -27,17 +28,17 @@ fn sketch() -> error::Result<()> {
     let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, 0.0, 0.0, 600.0)?;
-    transform_look_at(graphics, 0.0, 0.0, 0.0)?;
+    transform_set_position(graphics, Vec3::new(0.0, 0.0, 600.0))?;
+    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
     let dir_light =
         light_create_directional(graphics, bevy::color::Color::srgb(1.0, 0.98, 0.95), 1_500.0)?;
-    transform_set_position(dir_light, 300.0, 400.0, 300.0)?;
-    transform_look_at(dir_light, 0.0, 0.0, 0.0)?;
+    transform_set_position(dir_light, Vec3::new(300.0, 400.0, 300.0))?;
+    transform_look_at(dir_light, Vec3::new(0.0, 0.0, 0.0))?;
 
     let point_light =
         light_create_point(graphics, bevy::color::Color::WHITE, 100_000.0, 800.0, 0.0)?;
-    transform_set_position(point_light, 200.0, 200.0, 400.0)?;
+    transform_set_position(point_light, Vec3::new(200.0, 200.0, 400.0))?;
 
     let cols = 11;
     let rows = 5;
@@ -67,10 +68,10 @@ fn sketch() -> error::Result<()> {
                 graphics_record_command(graphics, DrawCommand::PushMatrix)?;
                 graphics_record_command(
                     graphics,
-                    DrawCommand::Translate {
-                        x: col as f32 * spacing - offset_x,
-                        y: row as f32 * spacing - offset_y,
-                    },
+                    DrawCommand::Translate(Vec2::new(
+                        col as f32 * spacing - offset_x,
+                        row as f32 * spacing - offset_y,
+                    )),
                 )?;
                 graphics_record_command(
                     graphics,

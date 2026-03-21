@@ -455,26 +455,26 @@ pub fn graphics_ortho(
     })
 }
 
-pub fn transform_set_position(entity: Entity, x: f32, y: f32, z: f32) -> error::Result<()> {
+pub fn transform_set_position(entity: Entity, position: Vec3) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(transform::set_position, (entity, x, y, z))
+            .run_system_cached_with(transform::set_position, (entity, position))
             .unwrap()
     })
 }
 
-pub fn transform_translate(entity: Entity, x: f32, y: f32, z: f32) -> error::Result<()> {
+pub fn transform_translate(entity: Entity, offset: Vec3) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(transform::translate, (entity, x, y, z))
+            .run_system_cached_with(transform::translate, (entity, offset))
             .unwrap()
     })
 }
 
-pub fn transform_set_rotation(entity: Entity, x: f32, y: f32, z: f32) -> error::Result<()> {
+pub fn transform_set_rotation(entity: Entity, euler: Vec3) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(transform::set_rotation, (entity, x, y, z))
+            .run_system_cached_with(transform::set_rotation, (entity, euler))
             .unwrap()
     })
 }
@@ -503,48 +503,34 @@ pub fn transform_rotate_z(entity: Entity, angle: f32) -> error::Result<()> {
     })
 }
 
-pub fn transform_rotate_axis(
-    entity: Entity,
-    angle: f32,
-    axis_x: f32,
-    axis_y: f32,
-    axis_z: f32,
-) -> error::Result<()> {
+pub fn transform_rotate_axis(entity: Entity, angle: f32, axis: Vec3) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(
-                transform::rotate_axis,
-                (entity, angle, axis_x, axis_y, axis_z),
-            )
+            .run_system_cached_with(transform::rotate_axis, (entity, angle, axis))
             .unwrap()
     })
 }
 
-pub fn transform_set_scale(entity: Entity, x: f32, y: f32, z: f32) -> error::Result<()> {
+pub fn transform_set_scale(entity: Entity, scale: Vec3) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(transform::set_scale, (entity, x, y, z))
+            .run_system_cached_with(transform::set_scale, (entity, scale))
             .unwrap()
     })
 }
 
-pub fn transform_scale(entity: Entity, x: f32, y: f32, z: f32) -> error::Result<()> {
+pub fn transform_scale(entity: Entity, factor: Vec3) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(transform::scale, (entity, x, y, z))
+            .run_system_cached_with(transform::scale, (entity, factor))
             .unwrap()
     })
 }
 
-pub fn transform_look_at(
-    entity: Entity,
-    target_x: f32,
-    target_y: f32,
-    target_z: f32,
-) -> error::Result<()> {
+pub fn transform_look_at(entity: Entity, target: Vec3) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(transform::look_at, (entity, target_x, target_y, target_z))
+            .run_system_cached_with(transform::look_at, (entity, target))
             .unwrap()
     })
 }
@@ -850,12 +836,12 @@ pub fn geometry_create_with_layout(
     })
 }
 
-pub fn geometry_normal(entity: Entity, nx: f32, ny: f32, nz: f32) -> error::Result<()> {
-    app_mut(|app| geometry::normal(app.world_mut(), entity, nx, ny, nz))
+pub fn geometry_normal(entity: Entity, normal: Vec3) -> error::Result<()> {
+    app_mut(|app| geometry::normal(app.world_mut(), entity, normal))
 }
 
-pub fn geometry_color(entity: Entity, r: f32, g: f32, b: f32, a: f32) -> error::Result<()> {
-    app_mut(|app| geometry::color(app.world_mut(), entity, r, g, b, a))
+pub fn geometry_color(entity: Entity, color: Vec4) -> error::Result<()> {
+    app_mut(|app| geometry::color(app.world_mut(), entity, color))
 }
 
 pub fn geometry_uv(entity: Entity, u: f32, v: f32) -> error::Result<()> {
@@ -912,10 +898,10 @@ pub fn geometry_attribute_float4(
     )
 }
 
-pub fn geometry_vertex(entity: Entity, x: f32, y: f32, z: f32) -> error::Result<()> {
+pub fn geometry_vertex(entity: Entity, position: Vec3) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(geometry::vertex, (entity, x, y, z))
+            .run_system_cached_with(geometry::vertex, (entity, position))
             .unwrap()
     })
 }
@@ -1004,53 +990,34 @@ pub fn geometry_destroy(entity: Entity) -> error::Result<()> {
     })
 }
 
-pub fn geometry_set_vertex(
-    entity: Entity,
-    index: u32,
-    x: f32,
-    y: f32,
-    z: f32,
-) -> error::Result<()> {
+pub fn geometry_set_vertex(entity: Entity, index: u32, position: Vec3) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(geometry::set_vertex, (entity, index, x, y, z))
+            .run_system_cached_with(geometry::set_vertex, (entity, index, position))
             .unwrap()
     })
 }
 
-pub fn geometry_set_normal(
-    entity: Entity,
-    index: u32,
-    nx: f32,
-    ny: f32,
-    nz: f32,
-) -> error::Result<()> {
+pub fn geometry_set_normal(entity: Entity, index: u32, normal: Vec3) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(geometry::set_normal, (entity, index, nx, ny, nz))
+            .run_system_cached_with(geometry::set_normal, (entity, index, normal))
             .unwrap()
     })
 }
 
-pub fn geometry_set_color(
-    entity: Entity,
-    index: u32,
-    r: f32,
-    g: f32,
-    b: f32,
-    a: f32,
-) -> error::Result<()> {
+pub fn geometry_set_color(entity: Entity, index: u32, color: Vec4) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(geometry::set_color, (entity, index, r, g, b, a))
+            .run_system_cached_with(geometry::set_color, (entity, index, color))
             .unwrap()
     })
 }
 
-pub fn geometry_set_uv(entity: Entity, index: u32, u: f32, v: f32) -> error::Result<()> {
+pub fn geometry_set_uv(entity: Entity, index: u32, uv: Vec2) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(geometry::set_uv, (entity, index, u, v))
+            .run_system_cached_with(geometry::set_uv, (entity, index, uv))
             .unwrap()
     })
 }

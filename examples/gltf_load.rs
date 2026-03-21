@@ -1,5 +1,6 @@
 mod glfw;
 
+use bevy::math::Vec3;
 use glfw::GlfwContext;
 use processing::prelude::*;
 use processing_render::material::MaterialValue;
@@ -44,8 +45,8 @@ fn sketch() -> error::Result<()> {
         let lx = t.cos() * radius;
         let ly = 1.5;
         let lz = t.sin() * radius;
-        transform_set_position(light, lx, ly, lz)?;
-        transform_look_at(light, 0.0, 0.8, 0.0)?;
+        transform_set_position(light, Vec3::new(lx, ly, lz))?;
+        transform_look_at(light, Vec3::new(0.0, 0.8, 0.0))?;
 
         let r = (t * 8.0).sin() * 0.5 + 0.5;
         let g = (t * 8.0 + 2.0).sin() * 0.5 + 0.5;
