@@ -1,5 +1,6 @@
 mod glfw;
 
+use bevy::math::{Vec2, Vec3};
 use glfw::GlfwContext;
 use processing::prelude::*;
 use processing_render::render::command::DrawCommand;
@@ -17,8 +18,8 @@ fn sketch() -> error::Result<()> {
     let graphics = graphics_create(surface, 600, 400, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, 200.0, 150.0, 350.0)?;
-    transform_look_at(graphics, 0.0, 0.0, 0.0)?;
+    transform_set_position(graphics, Vec3::new(200.0, 150.0, 350.0))?;
+    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
     let _light =
         light_create_directional(graphics, bevy::color::Color::srgb(0.9, 0.85, 0.8), 800.0)?;
@@ -35,7 +36,7 @@ fn sketch() -> error::Result<()> {
 
         // thin wireframe box
         graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(graphics, DrawCommand::Translate { x: -80.0, y: 0.0 })?;
+        graphics_record_command(graphics, DrawCommand::Translate(Vec2::new(-80.0, 0.0)))?;
         graphics_record_command(graphics, DrawCommand::Rotate { angle })?;
 
         graphics_record_command(
@@ -60,7 +61,7 @@ fn sketch() -> error::Result<()> {
 
         // thick wireframe box
         graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(graphics, DrawCommand::Translate { x: 0.0, y: 0.0 })?;
+        graphics_record_command(graphics, DrawCommand::Translate(Vec2::ZERO))?;
         graphics_record_command(graphics, DrawCommand::Rotate { angle: angle * 0.7 })?;
 
         graphics_record_command(
@@ -85,7 +86,7 @@ fn sketch() -> error::Result<()> {
 
         // thick wireframe sphere
         graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(graphics, DrawCommand::Translate { x: 80.0, y: 0.0 })?;
+        graphics_record_command(graphics, DrawCommand::Translate(Vec2::new(80.0, 0.0)))?;
         graphics_record_command(graphics, DrawCommand::Rotate { angle: angle * 0.5 })?;
 
         graphics_record_command(
@@ -110,7 +111,7 @@ fn sketch() -> error::Result<()> {
 
         // wireframe-only sphere (no fill)
         graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(graphics, DrawCommand::Translate { x: 160.0, y: 0.0 })?;
+        graphics_record_command(graphics, DrawCommand::Translate(Vec2::new(160.0, 0.0)))?;
         graphics_record_command(
             graphics,
             DrawCommand::Rotate {

@@ -1,5 +1,6 @@
 mod glfw;
 
+use bevy::math::{Vec3, Vec4};
 use glfw::GlfwContext;
 use processing::prelude::*;
 use processing_render::geometry::{AttributeFormat, Topology};
@@ -37,18 +38,18 @@ fn sketch() -> error::Result<()> {
 
     let mesh = geometry_create_with_layout(layout, Topology::LineStrip)?;
 
-    geometry_color(mesh, 1.0, 0.0, 0.0, 1.0)?;
-    geometry_normal(mesh, 0.0, 0.0, 1.0)?;
+    geometry_color(mesh, Vec4::new(1.0, 0.0, 0.0, 1.0))?;
+    geometry_normal(mesh, Vec3::new(0.0, 0.0, 1.0))?;
     geometry_attribute_float(mesh, custom_attr, 0.0)?;
-    geometry_vertex(mesh, -50.0, -50.0, 0.0)?;
+    geometry_vertex(mesh, Vec3::new(-50.0, -50.0, 0.0))?;
 
-    geometry_color(mesh, 0.0, 1.0, 0.0, 1.0)?;
+    geometry_color(mesh, Vec4::new(0.0, 1.0, 0.0, 1.0))?;
     geometry_attribute_float(mesh, custom_attr, 0.5)?;
-    geometry_vertex(mesh, 50.0, -50.0, 0.0)?;
+    geometry_vertex(mesh, Vec3::new(50.0, -50.0, 0.0))?;
 
-    geometry_color(mesh, 0.0, 0.0, 1.0, 1.0)?;
+    geometry_color(mesh, Vec4::new(0.0, 0.0, 1.0, 1.0))?;
     geometry_attribute_float(mesh, custom_attr, 1.0)?;
-    geometry_vertex(mesh, 0.0, 50.0, 0.0)?;
+    geometry_vertex(mesh, Vec3::new(0.0, 50.0, 0.0))?;
 
     geometry_index(mesh, 0)?;
     geometry_index(mesh, 1)?;
@@ -56,8 +57,8 @@ fn sketch() -> error::Result<()> {
     geometry_index(mesh, 0)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, 0.0, 0.0, 200.0)?;
-    transform_look_at(graphics, 0.0, 0.0, 0.0)?;
+    transform_set_position(graphics, Vec3::new(0.0, 0.0, 200.0))?;
+    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;

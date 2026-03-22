@@ -84,9 +84,9 @@ pub fn get_indices(
 }
 
 macro_rules! impl_setter {
-    ($name:ident, $attr:expr, $variant:ident, [$($arg:ident: $arg_ty:ty),+], $arr:expr) => {
+    ($name:ident, $attr:expr, $variant:ident, $vec_ty:ty) => {
         pub fn $name(
-            In((entity, index, $($arg),+)): In<(Entity, u32, $($arg_ty),+)>,
+            In((entity, index, value)): In<(Entity, u32, $vec_ty)>,
             geometries: Query<&Geometry>,
             mut meshes: ResMut<Assets<Mesh>>,
         ) -> Result<()> {
@@ -95,11 +95,13 @@ macro_rules! impl_setter {
                 Some(VertexAttributeValues::$variant(data)) => {
                     let idx = index as usize;
                     if idx < data.len() {
-                        data[idx] = $arr;
+                        data[idx] = value.to_array();
                         Ok(())
                     } else {
                         Err(ProcessingError::InvalidArgument(format!(
-                            "Index {} out of bounds (count: {})", index, data.len()
+                            "Index {} out of bounds (count: {})",
+                            index,
+                            data.len()
                         )))
                     }
                 }
@@ -114,10 +116,10 @@ macro_rules! impl_setter {
     };
 }
 
-impl_setter!(set_vertex, Mesh::ATTRIBUTE_POSITION, Float32x3, [x: f32, y: f32, z: f32], [x, y, z]);
-impl_setter!(set_normal, Mesh::ATTRIBUTE_NORMAL, Float32x3, [nx: f32, ny: f32, nz: f32], [nx, ny, nz]);
-impl_setter!(set_color, Mesh::ATTRIBUTE_COLOR, Float32x4, [r: f32, g: f32, b: f32, a: f32], [r, g, b, a]);
-impl_setter!(set_uv, Mesh::ATTRIBUTE_UV_0, Float32x2, [u: f32, v: f32], [u, v]);
+impl_setter!(set_vertex, Mesh::ATTRIBUTE_POSITION, Float32x3, Vec3);
+impl_setter!(set_normal, Mesh::ATTRIBUTE_NORMAL, Float32x3, Vec3);
+impl_setter!(set_color, Mesh::ATTRIBUTE_COLOR, Float32x4, Vec4);
+impl_setter!(set_uv, Mesh::ATTRIBUTE_UV_0, Float32x2, Vec2);
 
 #[derive(Clone, Debug)]
 pub enum AttributeValue {

@@ -1,5 +1,6 @@
 mod glfw;
 
+use bevy::math::{Vec3, Vec4};
 use glfw::GlfwContext;
 use processing::prelude::*;
 use processing_render::geometry::Topology;
@@ -39,13 +40,15 @@ fn sketch() -> error::Result<()> {
             let pz = z as f32 * spacing - offset;
             geometry_color(
                 mesh,
-                x as f32 / grid_size as f32,
-                0.5,
-                z as f32 / grid_size as f32,
-                1.0,
+                Vec4::new(
+                    x as f32 / grid_size as f32,
+                    0.5,
+                    z as f32 / grid_size as f32,
+                    1.0,
+                ),
             )?;
-            geometry_normal(mesh, 0.0, 1.0, 0.0)?;
-            geometry_vertex(mesh, px, 0.0, pz)?;
+            geometry_normal(mesh, Vec3::new(0.0, 1.0, 0.0))?;
+            geometry_vertex(mesh, Vec3::new(px, 0.0, pz))?;
         }
     }
 
@@ -67,8 +70,8 @@ fn sketch() -> error::Result<()> {
     }
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, 150.0, 150.0, 150.0)?;
-    transform_look_at(graphics, 0.0, 0.0, 0.0)?;
+    transform_set_position(graphics, Vec3::new(150.0, 150.0, 150.0))?;
+    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
     let mut time = 0.0f32;
 
@@ -79,7 +82,7 @@ fn sketch() -> error::Result<()> {
                 let px = x as f32 * spacing - offset;
                 let pz = z as f32 * spacing - offset;
                 let wave = (px * 0.1 + time).sin() * (pz * 0.1 + time).cos() * 20.0;
-                geometry_set_vertex(mesh, idx, px, wave, pz)?;
+                geometry_set_vertex(mesh, idx, Vec3::new(px, wave, pz))?;
             }
         }
 

@@ -3,6 +3,7 @@ use processing::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
+use crate::math::{PyVec2, PyVec3, PyVec4};
 use crate::shader::Shader;
 
 #[pyclass(unsendable)]
@@ -18,6 +19,18 @@ fn py_to_material_value(value: &Bound<'_, PyAny>) -> PyResult<material::Material
         return Ok(material::MaterialValue::Int(v));
     }
 
+    // Accept PyVec types
+    if let Ok(v) = value.extract::<PyRef<PyVec4>>() {
+        return Ok(material::MaterialValue::Float4(v.0.to_array()));
+    }
+    if let Ok(v) = value.extract::<PyRef<PyVec3>>() {
+        return Ok(material::MaterialValue::Float3(v.0.to_array()));
+    }
+    if let Ok(v) = value.extract::<PyRef<PyVec2>>() {
+        return Ok(material::MaterialValue::Float2(v.0.to_array()));
+    }
+
+    // Fall back to raw arrays
     if let Ok(v) = value.extract::<[f32; 4]>() {
         return Ok(material::MaterialValue::Float4(v));
     }

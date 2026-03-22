@@ -5,9 +5,14 @@ use bevy::{
     render::render_resource::TextureFormat,
 };
 use processing::prelude::*;
-use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyDict};
+use pyo3::{
+    exceptions::PyRuntimeError,
+    prelude::*,
+    types::{PyDict, PyTuple},
+};
 
 use crate::glfw::GlfwContext;
+use crate::math::{extract_vec2, extract_vec3, extract_vec4};
 
 #[pyclass(unsendable)]
 pub struct Surface {
@@ -39,13 +44,16 @@ pub struct Light {
 
 #[pymethods]
 impl Light {
-    pub fn position(&self, x: f32, y: f32, z: f32) -> PyResult<()> {
-        transform_set_position(self.entity, x, y, z)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    #[pyo3(signature = (*args))]
+    pub fn position(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let v = extract_vec3(args)?;
+        transform_set_position(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn look_at(&self, x: f32, y: f32, z: f32) -> PyResult<()> {
-        transform_look_at(self.entity, x, y, z).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    #[pyo3(signature = (*args))]
+    pub fn look_at(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let v = extract_vec3(args)?;
+        transform_look_at(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 }
 
@@ -122,26 +130,32 @@ impl Geometry {
         Ok(Self { entity: geometry })
     }
 
-    pub fn color(&self, r: f32, g: f32, b: f32, a: f32) -> PyResult<()> {
-        geometry_color(self.entity, r, g, b, a).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    #[pyo3(signature = (*args))]
+    pub fn color(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let v = extract_vec4(args)?;
+        geometry_color(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn normal(&self, nx: f32, ny: f32, nz: f32) -> PyResult<()> {
-        geometry_normal(self.entity, nx, ny, nz)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    #[pyo3(signature = (*args))]
+    pub fn normal(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let v = extract_vec3(args)?;
+        geometry_normal(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn vertex(&self, x: f32, y: f32, z: f32) -> PyResult<()> {
-        geometry_vertex(self.entity, x, y, z).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    #[pyo3(signature = (*args))]
+    pub fn vertex(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let v = extract_vec3(args)?;
+        geometry_vertex(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn index(&self, i: u32) -> PyResult<()> {
         geometry_index(self.entity, i).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn set_vertex(&self, i: u32, x: f32, y: f32, z: f32) -> PyResult<()> {
-        geometry_set_vertex(self.entity, i, x, y, z)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    #[pyo3(signature = (i, *args))]
+    pub fn set_vertex(&self, i: u32, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let v = extract_vec3(args)?;
+        geometry_set_vertex(self.entity, i, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 }
 
@@ -388,8 +402,10 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn translate(&self, x: f32, y: f32) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::Translate { x, y })
+    #[pyo3(signature = (*args))]
+    pub fn translate(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let v = extract_vec2(args)?;
+        graphics_record_command(self.entity, DrawCommand::Translate(v))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
@@ -454,8 +470,10 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn scale(&self, x: f32, y: f32) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::Scale { x, y })
+    #[pyo3(signature = (*args))]
+    pub fn scale(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let v = extract_vec2(args)?;
+        graphics_record_command(self.entity, DrawCommand::Scale(v))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
@@ -494,14 +512,16 @@ impl Graphics {
         graphics_mode_2d(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn camera_position(&self, x: f32, y: f32, z: f32) -> PyResult<()> {
-        transform_set_position(self.entity, x, y, z)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    #[pyo3(signature = (*args))]
+    pub fn camera_position(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let v = extract_vec3(args)?;
+        transform_set_position(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn camera_look_at(&self, target_x: f32, target_y: f32, target_z: f32) -> PyResult<()> {
-        transform_look_at(self.entity, target_x, target_y, target_z)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    #[pyo3(signature = (*args))]
+    pub fn camera_look_at(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let v = extract_vec3(args)?;
+        transform_look_at(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn perspective(&self, fov: f32, aspect: f32, near: f32, far: f32) -> PyResult<()> {

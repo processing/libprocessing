@@ -193,19 +193,19 @@ pub fn create_sphere(
     commands.spawn(Geometry::new(handle, layout_entity)).id()
 }
 
-pub fn normal(world: &mut World, entity: Entity, nx: f32, ny: f32, nz: f32) -> Result<()> {
+pub fn normal(world: &mut World, entity: Entity, normal: Vec3) -> Result<()> {
     let mut geometry = world
         .get_mut::<Geometry>(entity)
         .ok_or(ProcessingError::GeometryNotFound)?;
-    geometry.current_normal = [nx, ny, nz];
+    geometry.current_normal = normal.to_array();
     Ok(())
 }
 
-pub fn color(world: &mut World, entity: Entity, r: f32, g: f32, b: f32, a: f32) -> Result<()> {
+pub fn color(world: &mut World, entity: Entity, color: Vec4) -> Result<()> {
     let mut geometry = world
         .get_mut::<Geometry>(entity)
         .ok_or(ProcessingError::GeometryNotFound)?;
-    geometry.current_color = [r, g, b, a];
+    geometry.current_color = color.to_array();
     Ok(())
 }
 
@@ -235,7 +235,7 @@ pub fn attribute(
 }
 
 pub fn vertex(
-    In((entity, x, y, z)): In<(Entity, f32, f32, f32)>,
+    In((entity, position)): In<(Entity, Vec3)>,
     geometries: Query<&Geometry>,
     layouts: Query<&VertexLayout>,
     attrs: Query<&Attribute>,
@@ -258,7 +258,7 @@ pub fn vertex(
     if let Some(VertexAttributeValues::Float32x3(positions)) =
         mesh.attribute_mut(Mesh::ATTRIBUTE_POSITION)
     {
-        positions.push([x, y, z]);
+        positions.push(position.to_array());
     }
 
     if layout.has_attribute(builtins.normal)

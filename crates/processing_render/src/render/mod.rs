@@ -325,9 +325,9 @@ pub fn flush_draw_commands(
                 DrawCommand::PushMatrix => state.transform.push(),
                 DrawCommand::PopMatrix => state.transform.pop(),
                 DrawCommand::ResetMatrix => state.transform.reset(),
-                DrawCommand::Translate { x, y } => state.transform.translate(x, y),
+                DrawCommand::Translate(v) => state.transform.translate(v.x, v.y),
                 DrawCommand::Rotate { angle } => state.transform.rotate(angle),
-                DrawCommand::Scale { x, y } => state.transform.scale(x, y),
+                DrawCommand::Scale(v) => state.transform.scale(v.x, v.y),
                 DrawCommand::ShearX { angle } => state.transform.shear_x(angle),
                 DrawCommand::ShearY { angle } => state.transform.shear_y(angle),
                 DrawCommand::Geometry(entity) => {

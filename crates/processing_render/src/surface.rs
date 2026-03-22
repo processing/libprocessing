@@ -32,6 +32,7 @@ use raw_window_handle::{
 };
 
 use processing_core::error::{self, ProcessingError, Result};
+#[cfg(not(target_os = "windows"))]
 use std::ptr::NonNull;
 
 use crate::image::{Image, ImageTextures};

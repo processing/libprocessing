@@ -1,6 +1,9 @@
 #![cfg(target_arch = "wasm32")]
 
-use bevy::prelude::Entity;
+use bevy::{
+    math::{Vec2, Vec3},
+    prelude::Entity,
+};
 use processing_render::{
     config::Config, exit, geometry_box, geometry_sphere, graphics_begin_draw, graphics_end_draw,
     graphics_flush, graphics_record_command, image_create, image_destroy, image_load,
@@ -191,7 +194,7 @@ pub fn js_reset_matrix(surface_id: u64) -> Result<(), JsValue> {
 pub fn js_translate(surface_id: u64, x: f32, y: f32) -> Result<(), JsValue> {
     check(graphics_record_command(
         Entity::from_bits(surface_id),
-        DrawCommand::Translate { x, y },
+        DrawCommand::Translate(Vec2::new(x, y)),
     ))
 }
 
@@ -207,7 +210,7 @@ pub fn js_rotate(surface_id: u64, angle: f32) -> Result<(), JsValue> {
 pub fn js_scale(surface_id: u64, x: f32, y: f32) -> Result<(), JsValue> {
     check(graphics_record_command(
         Entity::from_bits(surface_id),
-        DrawCommand::Scale { x, y },
+        DrawCommand::Scale(Vec2::new(x, y)),
     ))
 }
 
@@ -279,24 +282,23 @@ pub fn js_image_destroy(image_id: u64) -> Result<(), JsValue> {
 pub fn js_transform_set_position(entity_id: u64, x: f32, y: f32, z: f32) -> Result<(), JsValue> {
     check(transform_set_position(
         Entity::from_bits(entity_id),
-        x,
-        y,
-        z,
+        Vec3::new(x, y, z),
     ))
 }
 
 #[wasm_bindgen(js_name = "transformTranslate")]
 pub fn js_transform_translate(entity_id: u64, x: f32, y: f32, z: f32) -> Result<(), JsValue> {
-    check(transform_translate(Entity::from_bits(entity_id), x, y, z))
+    check(transform_translate(
+        Entity::from_bits(entity_id),
+        Vec3::new(x, y, z),
+    ))
 }
 
 #[wasm_bindgen(js_name = "transformSetRotation")]
 pub fn js_transform_set_rotation(entity_id: u64, x: f32, y: f32, z: f32) -> Result<(), JsValue> {
     check(transform_set_rotation(
         Entity::from_bits(entity_id),
-        x,
-        y,
-        z,
+        Vec3::new(x, y, z),
     ))
 }
 
@@ -326,20 +328,24 @@ pub fn js_transform_rotate_axis(
     check(transform_rotate_axis(
         Entity::from_bits(entity_id),
         angle,
-        axis_x,
-        axis_y,
-        axis_z,
+        Vec3::new(axis_x, axis_y, axis_z),
     ))
 }
 
 #[wasm_bindgen(js_name = "transformSetScale")]
 pub fn js_transform_set_scale(entity_id: u64, x: f32, y: f32, z: f32) -> Result<(), JsValue> {
-    check(transform_set_scale(Entity::from_bits(entity_id), x, y, z))
+    check(transform_set_scale(
+        Entity::from_bits(entity_id),
+        Vec3::new(x, y, z),
+    ))
 }
 
 #[wasm_bindgen(js_name = "transformScale")]
 pub fn js_transform_scale(entity_id: u64, x: f32, y: f32, z: f32) -> Result<(), JsValue> {
-    check(transform_scale(Entity::from_bits(entity_id), x, y, z))
+    check(transform_scale(
+        Entity::from_bits(entity_id),
+        Vec3::new(x, y, z),
+    ))
 }
 
 #[wasm_bindgen(js_name = "transformLookAt")]
@@ -351,9 +357,7 @@ pub fn js_transform_look_at(
 ) -> Result<(), JsValue> {
     check(transform_look_at(
         Entity::from_bits(entity_id),
-        target_x,
-        target_y,
-        target_z,
+        Vec3::new(target_x, target_y, target_z),
     ))
 }
 

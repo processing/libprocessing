@@ -1,4 +1,5 @@
 use bevy::{
+    math::{Vec2, Vec3, Vec4},
     prelude::Entity,
     render::render_resource::{Extent3d, TextureFormat},
 };
@@ -376,7 +377,9 @@ pub extern "C" fn processing_reset_matrix(graphics_id: u64) {
 pub extern "C" fn processing_translate(graphics_id: u64, x: f32, y: f32) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Translate { x, y }));
+    error::check(|| {
+        graphics_record_command(graphics_entity, DrawCommand::Translate(Vec2::new(x, y)))
+    });
 }
 
 /// Rotate the coordinate system.
@@ -400,7 +403,7 @@ pub extern "C" fn processing_rotate(graphics_id: u64, angle: f32) {
 pub extern "C" fn processing_scale(graphics_id: u64, x: f32, y: f32) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Scale { x, y }));
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Scale(Vec2::new(x, y))));
 }
 
 /// Shear along the X axis.
@@ -625,21 +628,21 @@ pub extern "C" fn processing_ortho(
 pub extern "C" fn processing_transform_set_position(entity_id: u64, x: f32, y: f32, z: f32) {
     error::clear_error();
     let entity = Entity::from_bits(entity_id);
-    error::check(|| transform_set_position(entity, x, y, z));
+    error::check(|| transform_set_position(entity, Vec3::new(x, y, z)));
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_transform_translate(entity_id: u64, x: f32, y: f32, z: f32) {
     error::clear_error();
     let entity = Entity::from_bits(entity_id);
-    error::check(|| transform_translate(entity, x, y, z));
+    error::check(|| transform_translate(entity, Vec3::new(x, y, z)));
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_transform_set_rotation(entity_id: u64, x: f32, y: f32, z: f32) {
     error::clear_error();
     let entity = Entity::from_bits(entity_id);
-    error::check(|| transform_set_rotation(entity, x, y, z));
+    error::check(|| transform_set_rotation(entity, Vec3::new(x, y, z)));
 }
 
 #[unsafe(no_mangle)]
@@ -673,21 +676,21 @@ pub extern "C" fn processing_transform_rotate_axis(
 ) {
     error::clear_error();
     let entity = Entity::from_bits(entity_id);
-    error::check(|| transform_rotate_axis(entity, angle, axis_x, axis_y, axis_z));
+    error::check(|| transform_rotate_axis(entity, angle, Vec3::new(axis_x, axis_y, axis_z)));
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_transform_set_scale(entity_id: u64, x: f32, y: f32, z: f32) {
     error::clear_error();
     let entity = Entity::from_bits(entity_id);
-    error::check(|| transform_set_scale(entity, x, y, z));
+    error::check(|| transform_set_scale(entity, Vec3::new(x, y, z)));
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_transform_scale(entity_id: u64, x: f32, y: f32, z: f32) {
     error::clear_error();
     let entity = Entity::from_bits(entity_id);
-    error::check(|| transform_scale(entity, x, y, z));
+    error::check(|| transform_scale(entity, Vec3::new(x, y, z)));
 }
 
 #[unsafe(no_mangle)]
@@ -699,7 +702,7 @@ pub extern "C" fn processing_transform_look_at(
 ) {
     error::clear_error();
     let entity = Entity::from_bits(entity_id);
-    error::check(|| transform_look_at(entity, target_x, target_y, target_z));
+    error::check(|| transform_look_at(entity, Vec3::new(target_x, target_y, target_z)));
 }
 
 #[unsafe(no_mangle)]
@@ -808,14 +811,14 @@ pub extern "C" fn processing_geometry_create(topology: u8) -> u64 {
 pub extern "C" fn processing_geometry_normal(geo_id: u64, nx: f32, ny: f32, nz: f32) {
     error::clear_error();
     let entity = Entity::from_bits(geo_id);
-    error::check(|| geometry_normal(entity, nx, ny, nz));
+    error::check(|| geometry_normal(entity, Vec3::new(nx, ny, nz)));
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_geometry_color(geo_id: u64, r: f32, g: f32, b: f32, a: f32) {
     error::clear_error();
     let entity = Entity::from_bits(geo_id);
-    error::check(|| geometry_color(entity, r, g, b, a));
+    error::check(|| geometry_color(entity, Vec4::new(r, g, b, a)));
 }
 
 #[unsafe(no_mangle)]
@@ -932,7 +935,7 @@ pub extern "C" fn processing_geometry_attribute_float4(
 pub extern "C" fn processing_geometry_vertex(geo_id: u64, x: f32, y: f32, z: f32) {
     error::clear_error();
     let entity = Entity::from_bits(geo_id);
-    error::check(|| geometry_vertex(entity, x, y, z));
+    error::check(|| geometry_vertex(entity, Vec3::new(x, y, z)));
 }
 
 #[unsafe(no_mangle)]
@@ -1075,7 +1078,7 @@ pub unsafe extern "C" fn processing_geometry_get_indices(
 pub extern "C" fn processing_geometry_set_vertex(geo_id: u64, index: u32, x: f32, y: f32, z: f32) {
     error::clear_error();
     let entity = Entity::from_bits(geo_id);
-    error::check(|| geometry_set_vertex(entity, index, x, y, z));
+    error::check(|| geometry_set_vertex(entity, index, Vec3::new(x, y, z)));
 }
 
 #[unsafe(no_mangle)]
@@ -1088,7 +1091,7 @@ pub extern "C" fn processing_geometry_set_normal(
 ) {
     error::clear_error();
     let entity = Entity::from_bits(geo_id);
-    error::check(|| geometry_set_normal(entity, index, nx, ny, nz));
+    error::check(|| geometry_set_normal(entity, index, Vec3::new(nx, ny, nz)));
 }
 
 #[unsafe(no_mangle)]
@@ -1102,14 +1105,14 @@ pub extern "C" fn processing_geometry_set_color(
 ) {
     error::clear_error();
     let entity = Entity::from_bits(geo_id);
-    error::check(|| geometry_set_color(entity, index, r, g, b, a));
+    error::check(|| geometry_set_color(entity, index, Vec4::new(r, g, b, a)));
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_geometry_set_uv(geo_id: u64, index: u32, u: f32, v: f32) {
     error::clear_error();
     let entity = Entity::from_bits(geo_id);
-    error::check(|| geometry_set_uv(entity, index, u, v));
+    error::check(|| geometry_set_uv(entity, index, Vec2::new(u, v)));
 }
 
 #[unsafe(no_mangle)]
