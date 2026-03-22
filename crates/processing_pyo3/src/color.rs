@@ -1,8 +1,6 @@
-use std::hash::{Hash, Hasher};
-
 use bevy::color::{
-    Alpha, Color, ColorToComponents, Gray, Hsla, Hsva, Hue, Hwba, Laba, Lcha, LinearRgba,
-    Luminance, Mix, Oklaba, Oklcha, Saturation, Srgba, Xyza, color_difference::EuclideanDistance,
+    Alpha, Color, Gray, Hsla, Hsva, Hue, Hwba, Laba, Lcha, LinearRgba, Luminance, Mix, Oklaba,
+    Oklcha, Saturation, Srgba, Xyza, color_difference::EuclideanDistance,
 };
 use pyo3::{exceptions::PyTypeError, prelude::*, types::PyTuple};
 
@@ -253,9 +251,7 @@ impl PyColor {
     }
 
     fn mix(&self, other: &Self, t: f32) -> Self {
-        let a = to_srgba(&self.0);
-        let b = to_srgba(&other.0);
-        Self(Color::Srgba(a.mix(&b, t)))
+        Self(self.0.mix(&other.0, t))
     }
 
     fn lerp(&self, other: &Self, t: f32) -> Self {
@@ -291,14 +287,11 @@ impl PyColor {
     }
 
     fn saturation(&self) -> f32 {
-        let h: Hsla = self.0.into();
-        h.saturation
+        self.0.saturation()
     }
 
     fn with_saturation(&self, saturation: f32) -> Self {
-        let mut h: Hsla = self.0.into();
-        h.saturation = saturation;
-        Self(Color::Hsla(h))
+        Self(self.0.with_saturation(saturation))
     }
 
     fn is_fully_transparent(&self) -> bool {
@@ -412,56 +405,13 @@ impl ColorLike {
 }
 
 pub(crate) fn extract_color(args: &Bound<'_, PyTuple>) -> PyResult<Color> {
-    match args.len() {
-        0 => Err(PyTypeError::new_err("color requires at least 1 argument")),
-        1 => {
-            let first = args.get_item(0)?;
-            if let Ok(c) = first.extract::<PyRef<PyColor>>() {
-                return Ok(c.0);
-            }
-            if let Ok(s) = first.extract::<String>() {
-                return parse_hex(&s);
-            }
-            if let Ok(v) = first.extract::<PyRef<PyVec4>>() {
-                return Ok(Color::srgba(v.0.x, v.0.y, v.0.z, v.0.w));
-            }
-            let v = extract_component(&first)?;
-            Ok(Color::srgba(v, v, v, 1.0))
-        }
-        2 => {
-            let v = extract_component(&args.get_item(0)?)?;
-            let a = extract_component(&args.get_item(1)?)?;
-            Ok(Color::srgba(v, v, v, a))
-        }
-        3 => {
-            let r = extract_component(&args.get_item(0)?)?;
-            let g = extract_component(&args.get_item(1)?)?;
-            let b = extract_component(&args.get_item(2)?)?;
-            Ok(Color::srgba(r, g, b, 1.0))
-        }
-        4 => {
-            let r = extract_component(&args.get_item(0)?)?;
-            let g = extract_component(&args.get_item(1)?)?;
-            let b = extract_component(&args.get_item(2)?)?;
-            let a = extract_component(&args.get_item(3)?)?;
-            Ok(Color::srgba(r, g, b, a))
-        }
-        _ => Err(PyTypeError::new_err("color takes 1-4 arguments")),
-    }
+    PyColor::py_new(args).map(|c| c.0)
 }
 
-pub fn parse_hex(s: &str) -> PyResult<Color> {
+fn parse_hex(s: &str) -> PyResult<Color> {
     Srgba::hex(s)
         .map(|srgba| Color::Srgba(srgba))
         .map_err(|e| PyTypeError::new_err(format!("invalid hex color: {e}")))
-}
-
-pub fn make_color(args: &Bound<'_, PyTuple>) -> PyResult<PyColor> {
-    PyColor::py_new(args)
-}
-
-pub fn make_hex(s: &str) -> PyResult<PyColor> {
-    parse_hex(s).map(PyColor)
 }
 
 #[cfg(test)]

@@ -158,26 +158,26 @@ mod mewnala {
 
         #[pyfunction]
         #[pyo3(signature = (*args))]
-        fn vec2(args: &Bound<'_, PyTuple>) -> PyResult<crate::math::PyVec2> {
-            crate::math::PyVec2::py_new(args)
+        fn vec2(args: &Bound<'_, PyTuple>) -> PyResult<PyVec2> {
+            PyVec2::py_new(args)
         }
 
         #[pyfunction]
         #[pyo3(signature = (*args))]
-        fn vec3(args: &Bound<'_, PyTuple>) -> PyResult<crate::math::PyVec3> {
-            crate::math::PyVec3::py_new(args)
+        fn vec3(args: &Bound<'_, PyTuple>) -> PyResult<PyVec3> {
+            PyVec3::py_new(args)
         }
 
         #[pyfunction]
         #[pyo3(signature = (*args))]
-        fn vec4(args: &Bound<'_, PyTuple>) -> PyResult<crate::math::PyVec4> {
-            crate::math::PyVec4::py_new(args)
+        fn vec4(args: &Bound<'_, PyTuple>) -> PyResult<PyVec4> {
+            PyVec4::py_new(args)
         }
 
         #[pyfunction]
         #[pyo3(signature = (*args))]
-        fn quat(args: &Bound<'_, PyTuple>) -> PyResult<crate::math::PyQuat> {
-            crate::math::PyQuat::py_new(args)
+        fn quat(args: &Bound<'_, PyTuple>) -> PyResult<PyQuat> {
+            PyQuat::py_new(args)
         }
     }
 
@@ -186,77 +186,77 @@ mod mewnala {
         use super::*;
 
         #[pymodule_export]
-        use super::super::color::PyColor;
+        use crate::color::PyColor;
 
         #[pyfunction]
         #[pyo3(signature = (*args))]
-        fn color(args: &Bound<'_, PyTuple>) -> PyResult<super::super::color::PyColor> {
-            super::super::color::PyColor::py_new(args)
+        fn color(args: &Bound<'_, PyTuple>) -> PyResult<PyColor> {
+            PyColor::py_new(args)
         }
 
         #[pyfunction]
-        fn hex(s: &str) -> PyResult<super::super::color::PyColor> {
-            super::super::color::make_hex(s)
-        }
-
-        #[pyfunction]
-        #[pyo3(signature = (r, g, b, a=1.0))]
-        fn srgb(r: f32, g: f32, b: f32, a: f32) -> super::super::color::PyColor {
-            super::super::color::PyColor::from_srgb(r, g, b, a)
+        fn hex(s: &str) -> PyResult<PyColor> {
+            PyColor::from_hex(s)
         }
 
         #[pyfunction]
         #[pyo3(signature = (r, g, b, a=1.0))]
-        fn linear(r: f32, g: f32, b: f32, a: f32) -> super::super::color::PyColor {
-            super::super::color::PyColor::from_linear(r, g, b, a)
+        fn srgb(r: f32, g: f32, b: f32, a: f32) -> PyColor {
+            PyColor::from_srgb(r, g, b, a)
+        }
+
+        #[pyfunction]
+        #[pyo3(signature = (r, g, b, a=1.0))]
+        fn linear(r: f32, g: f32, b: f32, a: f32) -> PyColor {
+            PyColor::from_linear(r, g, b, a)
         }
 
         #[pyfunction]
         #[pyo3(signature = (h, s, l, a=1.0))]
-        fn hsla(h: f32, s: f32, l: f32, a: f32) -> super::super::color::PyColor {
-            super::super::color::PyColor::from_hsla(h, s, l, a)
+        fn hsla(h: f32, s: f32, l: f32, a: f32) -> PyColor {
+            PyColor::from_hsla(h, s, l, a)
         }
 
         #[pyfunction]
         #[pyo3(signature = (h, s, v, a=1.0))]
-        fn hsva(h: f32, s: f32, v: f32, a: f32) -> super::super::color::PyColor {
-            super::super::color::PyColor::from_hsva(h, s, v, a)
+        fn hsva(h: f32, s: f32, v: f32, a: f32) -> PyColor {
+            PyColor::from_hsva(h, s, v, a)
         }
 
         #[pyfunction]
         #[pyo3(signature = (h, w, b, a=1.0))]
-        fn hwba(h: f32, w: f32, b: f32, a: f32) -> super::super::color::PyColor {
-            super::super::color::PyColor::from_hwba(h, w, b, a)
+        fn hwba(h: f32, w: f32, b: f32, a: f32) -> PyColor {
+            PyColor::from_hwba(h, w, b, a)
         }
 
         #[pyfunction]
         #[pyo3(signature = (l, a_axis, b_axis, alpha=1.0))]
-        fn oklab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> super::super::color::PyColor {
-            super::super::color::PyColor::from_oklab(l, a_axis, b_axis, alpha)
+        fn oklab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> PyColor {
+            PyColor::from_oklab(l, a_axis, b_axis, alpha)
         }
 
         #[pyfunction]
         #[pyo3(signature = (l, c, h, a=1.0))]
-        fn oklch(l: f32, c: f32, h: f32, a: f32) -> super::super::color::PyColor {
-            super::super::color::PyColor::from_oklch(l, c, h, a)
+        fn oklch(l: f32, c: f32, h: f32, a: f32) -> PyColor {
+            PyColor::from_oklch(l, c, h, a)
         }
 
         #[pyfunction]
         #[pyo3(signature = (l, a_axis, b_axis, alpha=1.0))]
-        fn lab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> super::super::color::PyColor {
-            super::super::color::PyColor::from_lab(l, a_axis, b_axis, alpha)
+        fn lab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> PyColor {
+            PyColor::from_lab(l, a_axis, b_axis, alpha)
         }
 
         #[pyfunction]
         #[pyo3(signature = (l, c, h, a=1.0))]
-        fn lch(l: f32, c: f32, h: f32, a: f32) -> super::super::color::PyColor {
-            super::super::color::PyColor::from_lch(l, c, h, a)
+        fn lch(l: f32, c: f32, h: f32, a: f32) -> PyColor {
+            PyColor::from_lch(l, c, h, a)
         }
 
         #[pyfunction]
         #[pyo3(signature = (x, y, z, a=1.0))]
-        fn xyz(x: f32, y: f32, z: f32, a: f32) -> super::super::color::PyColor {
-            super::super::color::PyColor::from_xyz(x, y, z, a)
+        fn xyz(x: f32, y: f32, z: f32, a: f32) -> PyColor {
+            PyColor::from_xyz(x, y, z, a)
         }
     }
 
