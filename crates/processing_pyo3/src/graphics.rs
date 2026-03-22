@@ -12,6 +12,7 @@ use pyo3::{
 };
 
 use crate::glfw::GlfwContext;
+use crate::math::{extract_vec2, extract_vec3, extract_vec4};
 
 #[pyclass(unsendable)]
 pub struct Surface {
@@ -45,13 +46,13 @@ pub struct Light {
 impl Light {
     #[pyo3(signature = (*args))]
     pub fn position(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let v = crate::math::extract_vec3(args)?;
+        let v = extract_vec3(args)?;
         transform_set_position(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     #[pyo3(signature = (*args))]
     pub fn look_at(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let v = crate::math::extract_vec3(args)?;
+        let v = extract_vec3(args)?;
         transform_look_at(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 }
@@ -131,19 +132,19 @@ impl Geometry {
 
     #[pyo3(signature = (*args))]
     pub fn color(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let v = crate::math::extract_vec4(args)?;
+        let v = extract_vec4(args)?;
         geometry_color(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     #[pyo3(signature = (*args))]
     pub fn normal(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let v = crate::math::extract_vec3(args)?;
+        let v = extract_vec3(args)?;
         geometry_normal(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     #[pyo3(signature = (*args))]
     pub fn vertex(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let v = crate::math::extract_vec3(args)?;
+        let v = extract_vec3(args)?;
         geometry_vertex(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
@@ -153,7 +154,7 @@ impl Geometry {
 
     #[pyo3(signature = (i, *args))]
     pub fn set_vertex(&self, i: u32, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let v = crate::math::extract_vec3(args)?;
+        let v = extract_vec3(args)?;
         geometry_set_vertex(self.entity, i, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 }
@@ -403,7 +404,7 @@ impl Graphics {
 
     #[pyo3(signature = (*args))]
     pub fn translate(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let v = crate::math::extract_vec2(args)?;
+        let v = extract_vec2(args)?;
         graphics_record_command(self.entity, DrawCommand::Translate(v))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
@@ -471,7 +472,7 @@ impl Graphics {
 
     #[pyo3(signature = (*args))]
     pub fn scale(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let v = crate::math::extract_vec2(args)?;
+        let v = extract_vec2(args)?;
         graphics_record_command(self.entity, DrawCommand::Scale(v))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
@@ -513,13 +514,13 @@ impl Graphics {
 
     #[pyo3(signature = (*args))]
     pub fn camera_position(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let v = crate::math::extract_vec3(args)?;
+        let v = extract_vec3(args)?;
         transform_set_position(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     #[pyo3(signature = (*args))]
     pub fn camera_look_at(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let v = crate::math::extract_vec3(args)?;
+        let v = extract_vec3(args)?;
         transform_look_at(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 

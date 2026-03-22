@@ -145,38 +145,38 @@ mod mewnala {
         use super::*;
 
         #[pymodule_export]
-        use super::super::math::PyQuat;
+        use crate::math::PyQuat;
         #[pymodule_export]
-        use super::super::math::PyVec2;
+        use crate::math::PyVec2;
         #[pymodule_export]
-        use super::super::math::PyVec3;
+        use crate::math::PyVec3;
         #[pymodule_export]
-        use super::super::math::PyVec4;
+        use crate::math::PyVec4;
         #[pymodule_export]
-        use super::super::math::PyVecIter;
+        use crate::math::PyVecIter;
 
         #[pyfunction]
         #[pyo3(signature = (*args))]
-        fn vec2(args: &Bound<'_, PyTuple>) -> PyResult<super::super::math::PyVec2> {
-            super::super::math::PyVec2::py_new(args)
+        fn vec2(args: &Bound<'_, PyTuple>) -> PyResult<crate::math::PyVec2> {
+            crate::math::PyVec2::py_new(args)
         }
 
         #[pyfunction]
         #[pyo3(signature = (*args))]
-        fn vec3(args: &Bound<'_, PyTuple>) -> PyResult<super::super::math::PyVec3> {
-            super::super::math::PyVec3::py_new(args)
+        fn vec3(args: &Bound<'_, PyTuple>) -> PyResult<crate::math::PyVec3> {
+            crate::math::PyVec3::py_new(args)
         }
 
         #[pyfunction]
         #[pyo3(signature = (*args))]
-        fn vec4(args: &Bound<'_, PyTuple>) -> PyResult<super::super::math::PyVec4> {
-            super::super::math::PyVec4::py_new(args)
+        fn vec4(args: &Bound<'_, PyTuple>) -> PyResult<crate::math::PyVec4> {
+            crate::math::PyVec4::py_new(args)
         }
 
         #[pyfunction]
         #[pyo3(signature = (*args))]
-        fn quat(args: &Bound<'_, PyTuple>) -> PyResult<super::super::math::PyQuat> {
-            super::super::math::PyQuat::py_new(args)
+        fn quat(args: &Bound<'_, PyTuple>) -> PyResult<crate::math::PyQuat> {
+            crate::math::PyQuat::py_new(args)
         }
     }
 

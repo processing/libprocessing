@@ -378,10 +378,7 @@ pub extern "C" fn processing_translate(graphics_id: u64, x: f32, y: f32) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
     error::check(|| {
-        graphics_record_command(
-            graphics_entity,
-            DrawCommand::Translate(bevy::math::Vec2::new(x, y)),
-        )
+        graphics_record_command(graphics_entity, DrawCommand::Translate(Vec2::new(x, y)))
     });
 }
 
@@ -406,12 +403,7 @@ pub extern "C" fn processing_rotate(graphics_id: u64, angle: f32) {
 pub extern "C" fn processing_scale(graphics_id: u64, x: f32, y: f32) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    error::check(|| {
-        graphics_record_command(
-            graphics_entity,
-            DrawCommand::Scale(bevy::math::Vec2::new(x, y)),
-        )
-    });
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Scale(Vec2::new(x, y))));
 }
 
 /// Shear along the X axis.
