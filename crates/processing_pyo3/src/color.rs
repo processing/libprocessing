@@ -87,66 +87,66 @@ impl PyColor {
 
     #[staticmethod]
     #[pyo3(signature = (r, g, b, a=1.0))]
-    pub fn from_srgb(r: f32, g: f32, b: f32, a: f32) -> Self {
+    pub fn srgb(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self(Color::Srgba(Srgba::new(r, g, b, a)))
     }
 
     #[staticmethod]
     #[pyo3(signature = (r, g, b, a=1.0))]
-    pub fn from_linear(r: f32, g: f32, b: f32, a: f32) -> Self {
+    pub fn linear(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self(Color::LinearRgba(LinearRgba::new(r, g, b, a)))
     }
 
     #[staticmethod]
     #[pyo3(signature = (h, s, l, a=1.0))]
-    pub fn from_hsla(h: f32, s: f32, l: f32, a: f32) -> Self {
+    pub fn hsla(h: f32, s: f32, l: f32, a: f32) -> Self {
         Self(Color::Hsla(Hsla::new(h, s, l, a)))
     }
 
     #[staticmethod]
     #[pyo3(signature = (h, s, v, a=1.0))]
-    pub fn from_hsva(h: f32, s: f32, v: f32, a: f32) -> Self {
+    pub fn hsva(h: f32, s: f32, v: f32, a: f32) -> Self {
         Self(Color::Hsva(Hsva::new(h, s, v, a)))
     }
 
     #[staticmethod]
     #[pyo3(signature = (h, w, b, a=1.0))]
-    pub fn from_hwba(h: f32, w: f32, b: f32, a: f32) -> Self {
+    pub fn hwba(h: f32, w: f32, b: f32, a: f32) -> Self {
         Self(Color::Hwba(Hwba::new(h, w, b, a)))
     }
 
     #[staticmethod]
     #[pyo3(signature = (l, a_axis, b_axis, alpha=1.0))]
-    pub fn from_oklab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> Self {
+    pub fn oklab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> Self {
         Self(Color::Oklaba(Oklaba::new(l, a_axis, b_axis, alpha)))
     }
 
     #[staticmethod]
     #[pyo3(signature = (l, c, h, a=1.0))]
-    pub fn from_oklch(l: f32, c: f32, h: f32, a: f32) -> Self {
+    pub fn oklch(l: f32, c: f32, h: f32, a: f32) -> Self {
         Self(Color::Oklcha(Oklcha::new(l, c, h, a)))
     }
 
     #[staticmethod]
     #[pyo3(signature = (l, a_axis, b_axis, alpha=1.0))]
-    pub fn from_lab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> Self {
+    pub fn lab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> Self {
         Self(Color::Laba(Laba::new(l, a_axis, b_axis, alpha)))
     }
 
     #[staticmethod]
     #[pyo3(signature = (l, c, h, a=1.0))]
-    pub fn from_lch(l: f32, c: f32, h: f32, a: f32) -> Self {
+    pub fn lch(l: f32, c: f32, h: f32, a: f32) -> Self {
         Self(Color::Lcha(Lcha::new(l, c, h, a)))
     }
 
     #[staticmethod]
     #[pyo3(signature = (x, y, z, a=1.0))]
-    pub fn from_xyz(x: f32, y: f32, z: f32, a: f32) -> Self {
+    pub fn xyz(x: f32, y: f32, z: f32, a: f32) -> Self {
         Self(Color::Xyza(Xyza::new(x, y, z, a)))
     }
 
     #[staticmethod]
-    pub fn from_hex(s: &str) -> PyResult<Self> {
+    pub fn hex(s: &str) -> PyResult<Self> {
         parse_hex(s).map(Self)
     }
 
@@ -242,7 +242,7 @@ impl PyColor {
         self.0.set_alpha(val);
     }
 
-    fn hex(&self) -> String {
+    fn to_hex(&self) -> String {
         to_srgba(&self.0).to_hex()
     }
 
@@ -493,7 +493,7 @@ mod tests {
 
     #[test]
     fn test_hsla_roundtrip() {
-        let c = PyColor::from_hsla(0.0, 1.0, 0.5, 1.0);
+        let c = PyColor::hsla(0.0, 1.0, 0.5, 1.0);
         let s = to_srgba(&c.0);
         assert!((s.red - 1.0).abs() < 0.01);
         assert!(s.green < 0.01);
@@ -508,7 +508,7 @@ mod tests {
 
     #[test]
     fn test_oklch_roundtrip() {
-        let c = PyColor::from_oklch(0.7, 0.15, 30.0, 1.0);
+        let c = PyColor::oklch(0.7, 0.15, 30.0, 1.0);
         let (l, ch, h, a) = c.to_oklch();
         assert!((l - 0.7).abs() < 0.01);
         assert!((ch - 0.15).abs() < 0.01);
@@ -518,7 +518,7 @@ mod tests {
 
     #[test]
     fn test_linear_roundtrip() {
-        let c = PyColor::from_linear(0.5, 0.25, 0.1, 0.8);
+        let c = PyColor::linear(0.5, 0.25, 0.1, 0.8);
         let (r, g, b, a) = c.to_linear();
         assert!((r - 0.5).abs() < 0.01);
         assert!((g - 0.25).abs() < 0.01);

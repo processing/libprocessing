@@ -196,67 +196,67 @@ mod mewnala {
 
         #[pyfunction]
         fn hex(s: &str) -> PyResult<PyColor> {
-            PyColor::from_hex(s)
+            PyColor::hex(s)
         }
 
         #[pyfunction]
         #[pyo3(signature = (r, g, b, a=1.0))]
         fn srgb(r: f32, g: f32, b: f32, a: f32) -> PyColor {
-            PyColor::from_srgb(r, g, b, a)
+            PyColor::srgb(r, g, b, a)
         }
 
         #[pyfunction]
         #[pyo3(signature = (r, g, b, a=1.0))]
         fn linear(r: f32, g: f32, b: f32, a: f32) -> PyColor {
-            PyColor::from_linear(r, g, b, a)
+            PyColor::linear(r, g, b, a)
         }
 
         #[pyfunction]
         #[pyo3(signature = (h, s, l, a=1.0))]
         fn hsla(h: f32, s: f32, l: f32, a: f32) -> PyColor {
-            PyColor::from_hsla(h, s, l, a)
+            PyColor::hsla(h, s, l, a)
         }
 
         #[pyfunction]
         #[pyo3(signature = (h, s, v, a=1.0))]
         fn hsva(h: f32, s: f32, v: f32, a: f32) -> PyColor {
-            PyColor::from_hsva(h, s, v, a)
+            PyColor::hsva(h, s, v, a)
         }
 
         #[pyfunction]
         #[pyo3(signature = (h, w, b, a=1.0))]
         fn hwba(h: f32, w: f32, b: f32, a: f32) -> PyColor {
-            PyColor::from_hwba(h, w, b, a)
+            PyColor::hwba(h, w, b, a)
         }
 
         #[pyfunction]
         #[pyo3(signature = (l, a_axis, b_axis, alpha=1.0))]
         fn oklab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> PyColor {
-            PyColor::from_oklab(l, a_axis, b_axis, alpha)
+            PyColor::oklab(l, a_axis, b_axis, alpha)
         }
 
         #[pyfunction]
         #[pyo3(signature = (l, c, h, a=1.0))]
         fn oklch(l: f32, c: f32, h: f32, a: f32) -> PyColor {
-            PyColor::from_oklch(l, c, h, a)
+            PyColor::oklch(l, c, h, a)
         }
 
         #[pyfunction]
         #[pyo3(signature = (l, a_axis, b_axis, alpha=1.0))]
         fn lab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> PyColor {
-            PyColor::from_lab(l, a_axis, b_axis, alpha)
+            PyColor::lab(l, a_axis, b_axis, alpha)
         }
 
         #[pyfunction]
         #[pyo3(signature = (l, c, h, a=1.0))]
         fn lch(l: f32, c: f32, h: f32, a: f32) -> PyColor {
-            PyColor::from_lch(l, c, h, a)
+            PyColor::lch(l, c, h, a)
         }
 
         #[pyfunction]
         #[pyo3(signature = (x, y, z, a=1.0))]
         fn xyz(x: f32, y: f32, z: f32, a: f32) -> PyColor {
-            PyColor::from_xyz(x, y, z, a)
+            PyColor::xyz(x, y, z, a)
         }
     }
 
