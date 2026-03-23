@@ -44,6 +44,7 @@ fn to_srgba(color: &Color) -> Srgba {
 
 #[pymethods]
 impl PyColor {
+    // Varargs ctor for positional calls like color(255, 0, 0). ColorLike handles single-value extraction.
     #[new]
     #[pyo3(signature = (*args))]
     pub fn py_new(args: &Bound<'_, PyTuple>) -> PyResult<Self> {
