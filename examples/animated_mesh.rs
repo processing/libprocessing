@@ -75,7 +75,7 @@ fn sketch() -> error::Result<()> {
     while glfw_ctx.poll_events() {
         for z in 0..grid_size {
             for x in 0..grid_size {
-                let idx = (z * grid_size + x) as u32;
+                let idx = z * grid_size + x;
                 let px = x as f32 * spacing - offset;
                 let pz = z as f32 * spacing - offset;
                 let wave = (px * 0.1 + time).sin() * (pz * 0.1 + time).cos() * 20.0;

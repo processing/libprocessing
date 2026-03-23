@@ -17,7 +17,7 @@ pub(crate) mod shader;
 #[cfg(feature = "webcam")]
 mod webcam;
 
-use graphics::{get_graphics, get_graphics_mut, Geometry, Graphics, Image, Light, Topology};
+use graphics::{Geometry, Graphics, Image, Light, Topology, get_graphics, get_graphics_mut};
 use material::Material;
 
 use pyo3::{
@@ -112,21 +112,21 @@ mod mewnala {
     use super::*;
 
     #[pymodule_export]
+    use super::Geometry;
+    #[pymodule_export]
+    use super::Gltf;
+    #[pymodule_export]
     use super::Graphics;
     #[pymodule_export]
     use super::Image;
     #[pymodule_export]
     use super::Light;
     #[pymodule_export]
-    use super::Topology;
-    #[pymodule_export]
     use super::Material;
     #[pymodule_export]
-    use super::Gltf;
-    #[pymodule_export]
-    use super::Geometry;
-    #[pymodule_export]
     use super::Shader;
+    #[pymodule_export]
+    use super::Topology;
 
     #[pymodule_export]
     const ROUND: u8 = 0;
@@ -146,8 +146,8 @@ mod mewnala {
     #[pyfunction]
     #[pyo3(pass_module)]
     fn load_gltf(module: &Bound<'_, PyModule>, path: &str) -> PyResult<Gltf> {
-        let graphics = get_graphics(module)?
-            .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
         let entity = ::processing::prelude::gltf_load(graphics.entity, path)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(Gltf::from_entity(entity))

@@ -1,3 +1,5 @@
+#![allow(clippy::module_inception)]
+
 pub mod geometry;
 pub mod gltf;
 mod graphics;
