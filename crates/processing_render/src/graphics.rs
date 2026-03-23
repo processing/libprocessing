@@ -29,7 +29,7 @@ use crate::{
     Flush,
     image::{Image, create_readback_buffer, pixel_size, pixels_to_bytes},
     render::{
-        RenderState,
+        BATCH_INDEX_STEP, RenderState,
         command::{CommandBuffer, DrawCommand},
     },
     surface::Surface,
@@ -112,7 +112,6 @@ pub struct SurfaceSize(pub u32, pub u32);
 /// Custom orthographic projection for Processing's coordinate system.
 /// Origin at top-left, Y-axis down, in pixel units (aka screen space).
 #[derive(Debug, Clone, Reflect)]
-#[reflect(Default)]
 pub struct ProcessingProjection {
     pub width: f32,
     pub height: f32,
@@ -120,11 +119,11 @@ pub struct ProcessingProjection {
     pub far: f32,
 }
 
-impl Default for ProcessingProjection {
-    fn default() -> Self {
+impl ProcessingProjection {
+    pub fn new(width: f32, height: f32) -> Self {
         Self {
-            width: 1.0,
-            height: 1.0,
+            width,
+            height,
             near: 0.0,
             far: 1000.0,
         }
@@ -234,14 +233,9 @@ pub fn create(
         Tonemapping::None,
         // we need to be able to write to the texture
         CameraMainTextureUsages::default().with(TextureUsages::COPY_DST),
-        Projection::custom(ProcessingProjection {
-            width: width as f32,
-            height: height as f32,
-            near: 0.0,
-            far: 1000.0,
-        }),
+        Projection::custom(ProcessingProjection::new(width as f32, height as f32)),
         Msaa::Off,
-        Transform::from_xyz(0.0, 0.0, 999.9),
+        Transform::from_xyz(0.0, 0.0, BATCH_INDEX_STEP),
         render_layer,
         CommandBuffer::new(),
         RenderState::default(),
@@ -340,18 +334,13 @@ pub fn mode_2d(
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
-    *projection = Projection::custom(ProcessingProjection {
-        width: *width as f32,
-        height: *height as f32,
-        near: 0.0,
-        far: 1000.0,
-    });
+    *projection = Projection::custom(ProcessingProjection::new(*width as f32, *height as f32));
 
     let mut transform = transforms
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
-    *transform = Transform::from_xyz(0.0, 0.0, 999.9);
+    *transform = Transform::from_xyz(0.0, 0.0, BATCH_INDEX_STEP);
 
     Ok(())
 }

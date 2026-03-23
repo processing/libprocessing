@@ -23,6 +23,8 @@ use crate::{
     render::{material::UntypedMaterial, primitive::rect},
 };
 
+pub(crate) const BATCH_INDEX_STEP: f32 = 0.001;
+
 #[derive(Component)]
 #[relationship(relationship_target = TransientMeshes)]
 pub struct BelongsToGraphics(pub Entity);
@@ -350,7 +352,7 @@ pub fn flush_draw_commands(
 
                     flush_batch(&mut res, &mut batch, &p_material_handles);
 
-                    let z_offset = -(batch.draw_index as f32 * 0.001);
+                    let z_offset = -(batch.draw_index as f32 * BATCH_INDEX_STEP);
                     let mut transform = state.transform.to_bevy_transform();
 
                     // if the "source" geometry was parented in a gltf scene, we need to make sure that
@@ -565,7 +567,7 @@ fn flush_batch(
     material_handles: &Query<&UntypedMaterial>,
 ) {
     if let Some(mesh) = batch.current_mesh.take() {
-        let z_offset = -(batch.draw_index as f32 * 0.001);
+        let z_offset = -(batch.draw_index as f32 * BATCH_INDEX_STEP);
         spawn_mesh(res, batch, mesh, z_offset, material_handles);
         batch.draw_index += 1;
     }
@@ -616,7 +618,7 @@ fn add_shape3d(
         }
     };
 
-    let z_offset = -(batch.draw_index as f32 * 0.001);
+    let z_offset = -(batch.draw_index as f32 * BATCH_INDEX_STEP);
     let mut transform = state.transform.to_bevy_transform();
     transform.translation.z += z_offset;
 
