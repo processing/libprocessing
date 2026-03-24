@@ -1444,9 +1444,17 @@ pub extern "C" fn processing_input_mouse_button(surface_id: u64, button: u8, pre
             PROCESSING_MOUSE_MIDDLE => MouseButton::Middle,
             PROCESSING_MOUSE_RIGHT => MouseButton::Right,
             _ => {
+<<<<<<< HEAD
                 return Err(ProcessingError::InvalidArgument(format!(
                     "invalid mouse button: {button}"
                 )));
+=======
+                return Err(
+                    ProcessingError::InvalidArgument(format!(
+                        "invalid mouse button: {button}"
+                    )),
+                );
+>>>>>>> 6ad893c (Add input support; extract glfw crate.)
             }
         };
         input_set_mouse_button(Entity::from_bits(surface_id), btn, pressed)
@@ -1474,7 +1482,13 @@ pub extern "C" fn processing_input_char(surface_id: u64, key_code: u32, codepoin
     error::check(|| {
         let kc = key_code_from_u32(key_code)?;
         let ch = char::from_u32(codepoint).ok_or_else(|| {
+<<<<<<< HEAD
             ProcessingError::InvalidArgument(format!("invalid codepoint: {codepoint}"))
+=======
+            ProcessingError::InvalidArgument(format!(
+                "invalid codepoint: {codepoint}"
+            ))
+>>>>>>> 6ad893c (Add input support; extract glfw crate.)
         })?;
         input_set_char(Entity::from_bits(surface_id), kc, ch)
     });
@@ -1501,7 +1515,11 @@ pub extern "C" fn processing_input_focus(surface_id: u64, focused: bool) {
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_input_flush() {
     error::clear_error();
+<<<<<<< HEAD
     error::check(input_flush);
+=======
+    error::check(|| input_flush());
+>>>>>>> 6ad893c (Add input support; extract glfw crate.)
 }
 
 #[unsafe(no_mangle)]
@@ -1531,7 +1549,11 @@ pub extern "C" fn processing_pmouse_y(surface_id: u64) -> f32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_mouse_is_pressed() -> bool {
     error::clear_error();
+<<<<<<< HEAD
     error::check(input_mouse_is_pressed).unwrap_or(false)
+=======
+    error::check(|| input_mouse_is_pressed()).unwrap_or(false)
+>>>>>>> 6ad893c (Add input support; extract glfw crate.)
 }
 
 #[unsafe(no_mangle)]
@@ -1551,7 +1573,11 @@ pub extern "C" fn processing_mouse_button() -> i8 {
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_key_is_pressed() -> bool {
     error::clear_error();
+<<<<<<< HEAD
     error::check(input_key_is_pressed).unwrap_or(false)
+=======
+    error::check(|| input_key_is_pressed()).unwrap_or(false)
+>>>>>>> 6ad893c (Add input support; extract glfw crate.)
 }
 
 #[unsafe(no_mangle)]
@@ -1573,25 +1599,42 @@ pub extern "C" fn processing_key() -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_key_code() -> u32 {
     error::clear_error();
+<<<<<<< HEAD
     error::check(|| input_key_code().map(|opt| opt.map(key_code_to_u32).unwrap_or(0))).unwrap_or(0)
+=======
+    error::check(|| input_key_code().map(|opt| opt.map(key_code_to_u32).unwrap_or(0)))
+        .unwrap_or(0)
+>>>>>>> 6ad893c (Add input support; extract glfw crate.)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_moved_x() -> f32 {
     error::clear_error();
+<<<<<<< HEAD
     error::check(input_moved_x).unwrap_or(0.0)
+=======
+    error::check(|| input_moved_x()).unwrap_or(0.0)
+>>>>>>> 6ad893c (Add input support; extract glfw crate.)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_moved_y() -> f32 {
     error::clear_error();
+<<<<<<< HEAD
     error::check(input_moved_y).unwrap_or(0.0)
+=======
+    error::check(|| input_moved_y()).unwrap_or(0.0)
+>>>>>>> 6ad893c (Add input support; extract glfw crate.)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_mouse_wheel() -> f32 {
     error::clear_error();
+<<<<<<< HEAD
     error::check(input_mouse_wheel).unwrap_or(0.0)
+=======
+    error::check(|| input_mouse_wheel()).unwrap_or(0.0)
+>>>>>>> 6ad893c (Add input support; extract glfw crate.)
 }
 
 fn key_code_from_u32(val: u32) -> processing::prelude::error::Result<KeyCode> {
@@ -1701,9 +1744,15 @@ fn key_code_from_u32(val: u32) -> processing::prelude::error::Result<KeyCode> {
         PROCESSING_KEY_ALT_RIGHT => Ok(KeyCode::AltRight),
         PROCESSING_KEY_SUPER_RIGHT => Ok(KeyCode::SuperRight),
         PROCESSING_KEY_CONTEXT_MENU => Ok(KeyCode::ContextMenu),
+<<<<<<< HEAD
         _ => Err(ProcessingError::InvalidArgument(format!(
             "unknown key code: {val}"
         ))),
+=======
+        _ => Err(ProcessingError::InvalidArgument(
+            format!("unknown key code: {val}"),
+        )),
+>>>>>>> 6ad893c (Add input support; extract glfw crate.)
     }
 }
 

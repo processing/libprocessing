@@ -319,6 +319,7 @@ mod mewnala {
     #[pymodule_export]
     const F12: u32 = 301;
 
+<<<<<<< HEAD
     // color space constants for color_mode()
     #[pymodule_export]
     const SRGB: u8 = 0;
@@ -341,6 +342,8 @@ mod mewnala {
     #[pymodule_export]
     const XYZ: u8 = 9;
 
+=======
+>>>>>>> 6ad893c (Add input support; extract glfw crate.)
     #[pymodule]
     mod math {
         use super::*;
