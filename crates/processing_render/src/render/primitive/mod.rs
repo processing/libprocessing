@@ -6,6 +6,7 @@ mod quad;
 mod rect;
 mod shape;
 mod shape3d;
+pub mod text;
 mod triangle;
 
 pub use arc::{arc_fill, arc_stroke};

@@ -4,6 +4,112 @@ use processing_core::error::{self, ProcessingError};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[repr(u8)]
+pub enum TextAlignH {
+    #[default]
+    Left = 0,
+    Center = 1,
+    Right = 2,
+}
+
+impl From<u8> for TextAlignH {
+    fn from(v: u8) -> Self {
+        match v {
+            0 => Self::Left,
+            1 => Self::Center,
+            2 => Self::Right,
+            _ => Self::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub enum TextAlignV {
+    #[default]
+    Baseline = 0,
+    Top = 1,
+    Center = 2,
+    Bottom = 3,
+}
+
+impl From<u8> for TextAlignV {
+    fn from(v: u8) -> Self {
+        match v {
+            0 => Self::Baseline,
+            1 => Self::Top,
+            2 => Self::Center,
+            3 => Self::Bottom,
+            _ => Self::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub enum TextWrapMode {
+    #[default]
+    Word = 0,
+    Char = 1,
+}
+
+impl From<u8> for TextWrapMode {
+    fn from(v: u8) -> Self {
+        match v {
+            0 => Self::Word,
+            1 => Self::Char,
+            _ => Self::default(),
+        }
+    }
+}
+
+/// Text direction for BiDi layout.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub enum TextDirection {
+    /// Auto-detect from Unicode character properties.
+    #[default]
+    Auto = 0,
+    /// Left-to-right.
+    Ltr = 1,
+    /// Right-to-left.
+    Rtl = 2,
+}
+
+impl From<u8> for TextDirection {
+    fn from(v: u8) -> Self {
+        match v {
+            0 => Self::Auto,
+            1 => Self::Ltr,
+            2 => Self::Rtl,
+            _ => Self::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub enum TextStyle {
+    #[default]
+    Normal = 0,
+    Italic = 1,
+    Bold = 2,
+    BoldItalic = 3,
+}
+
+impl From<u8> for TextStyle {
+    fn from(v: u8) -> Self {
+        match v {
+            0 => Self::Normal,
+            1 => Self::Italic,
+            2 => Self::Bold,
+            3 => Self::BoldItalic,
+            _ => Self::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[repr(u8)]
 pub enum StrokeCapMode {
     #[default]
     Round = 0,
@@ -499,6 +605,39 @@ pub enum DrawCommand {
     },
     Tetrahedron {
         radius: f32,
+    },
+    TextFont(Option<Entity>),
+    TextStyle(TextStyle),
+    TextWeight(f32),
+    TextVariation {
+        tag: [u8; 4],
+        value: f32,
+    },
+    ClearTextVariations,
+    TextFeature {
+        tag: [u8; 4],
+        value: u16,
+    },
+    NoTextFeature {
+        tag: [u8; 4],
+    },
+    ClearTextFeatures,
+    TextSize(f32),
+    TextAlign {
+        h: TextAlignH,
+        v: TextAlignV,
+    },
+    TextLeading(f32),
+    TextWrap(TextWrapMode),
+    TextDirection(TextDirection),
+    TextGlyphColors(Vec<Color>),
+    Text {
+        content: String,
+        x: f32,
+        y: f32,
+        z: f32,
+        max_w: Option<f32>,
+        max_h: Option<f32>,
     },
 }
 
