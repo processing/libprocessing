@@ -53,8 +53,8 @@ jobs:
           manylinux: 2_28
           before-script-linux: |
             apt-get update && apt-get install -y cmake g++ \
-              libX11-devel libXrandr-devel libXinerama-devel libXcursor-devel libXi-devel \
-              wayland-devel libxkbcommon-devel
+              libx11-devel libxrandr-devel libxinerama-devel libxcursor-devel libxi-devel \
+              libwayland-dev libxkbcommon-devel
           working-directory: crates/processing_pyo3
       - uses: actions/upload-artifact@v4
         with:
