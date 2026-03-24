@@ -17,6 +17,9 @@ bevy_naga_reflect = { workspace = true }
 naga = { workspace = true }
 wesl = { workspace = true }
 lyon = "1.0"
+parley = { version = "0.7", features = ["system"] }
+skrifa = "0.37"
+notosans = "0.1"
 raw-window-handle = "0.6"
 half = "2.7"
 crossbeam-channel = "0.5"

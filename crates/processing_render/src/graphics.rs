@@ -9,7 +9,8 @@ use bevy::{
         ImageRenderTarget, MsaaWriteback, Projection, RenderTarget, visibility::RenderLayers,
     },
     core_pipeline::tonemapping::Tonemapping,
-    ecs::query::QueryEntityError,
+    post_process::bloom::Bloom,
+    ecs::{entity::EntityHashMap, query::QueryEntityError},
     math::{Mat4, Vec3A},
     prelude::*,
     render::{
@@ -207,7 +208,7 @@ pub fn create(
             ..default()
         },
         target,
-        // tonemapping prevents color accurate readback, so we disable it
+        // tonemapping is conditionally set below based on HDR mode
         Tonemapping::None,
         // we need to be able to write to the texture
         CameraMainTextureUsages::default().with(TextureUsages::COPY_DST),
@@ -225,9 +226,9 @@ pub fn create(
         },
     ));
 
-    // only enable Hdr for floating-point texture formats
+    // enable Hdr, Bloom, and tonemapping for floating-point texture formats
     if is_hdr {
-        entity_commands.insert(Hdr);
+        entity_commands.insert((Hdr, Bloom::NATURAL, Tonemapping::TonyMcMapface));
     }
 
     let entity = entity_commands.id();

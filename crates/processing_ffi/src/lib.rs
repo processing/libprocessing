@@ -983,6 +983,451 @@ pub extern "C" fn processing_end_contour(graphics_id: u64) {
     error::check(|| graphics_record_command(graphics_entity, DrawCommand::EndContour));
 }
 
+// --- Font ---
+
+/// Load a font file and return a font entity ID.
+/// Returns 0 on error.
+///
+/// SAFETY:
+/// - path_ptr is a valid pointer to a null-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_load_font(path_ptr: *const std::ffi::c_char) -> u64 {
+    error::clear_error();
+    let path = unsafe { std::ffi::CStr::from_ptr(path_ptr) }
+        .to_string_lossy();
+    error::check(|| font_load(&path).map(|e| e.to_bits()))
+        .unwrap_or(0)
+}
+
+/// Create a font handle from an existing font family name.
+/// Returns 0 on error.
+///
+/// SAFETY:
+/// - name_ptr is a valid pointer to a null-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_create_font(name_ptr: *const std::ffi::c_char) -> u64 {
+    error::clear_error();
+    let name = unsafe { std::ffi::CStr::from_ptr(name_ptr) }
+        .to_string_lossy();
+    error::check(|| font_create(&name).map(|e| e.to_bits()))
+        .unwrap_or(0)
+}
+
+/// Query the number of variable font axes for a font.
+/// Returns 0 if the font is not variable or not found.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_font_variation_count(font_id: u64) -> u32 {
+    error::clear_error();
+    let font_entity = Entity::from_bits(font_id);
+    error::check(|| font_variations(font_entity).map(|v| v.len() as u32))
+        .unwrap_or(0)
+}
+
+/// Query variable font axis info.
+/// Writes tag (4 bytes), min, max, default to out buffer at the given index.
+///
+/// SAFETY:
+/// - out_tag is a valid pointer to at least 4 bytes.
+/// - out_min, out_max, out_default are valid pointers.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_font_variation(
+    font_id: u64,
+    index: u32,
+    out_tag: *mut u8,
+    out_min: *mut f32,
+    out_max: *mut f32,
+    out_default: *mut f32,
+) -> bool {
+    error::clear_error();
+    let font_entity = Entity::from_bits(font_id);
+    let axes = error::check(|| font_variations(font_entity));
+    if let Some(axes) = axes {
+        if let Some(axis) = axes.get(index as usize) {
+            let tag_bytes = axis.tag.as_bytes();
+            let len = tag_bytes.len().min(4);
+            unsafe {
+                std::ptr::copy_nonoverlapping(tag_bytes.as_ptr(), out_tag, len);
+                for i in len..4 {
+                    *out_tag.add(i) = b' ';
+                }
+                *out_min = axis.min;
+                *out_max = axis.max;
+                *out_default = axis.default;
+            }
+            return true;
+        }
+    }
+    false
+}
+
+/// Set the current text font.
+/// Pass 0 to reset to the default font.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_text_font(graphics_id: u64, font_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let font_entity = if font_id == 0 {
+        None
+    } else {
+        Some(Entity::from_bits(font_id))
+    };
+    error::check(|| graphics_text_font(graphics_entity, font_entity));
+}
+
+// --- Text ---
+
+/// Draw text at a position.
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - str_ptr is a valid pointer to a null-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_text(
+    graphics_id: u64,
+    str_ptr: *const std::ffi::c_char,
+    x: f32,
+    y: f32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let content = unsafe { std::ffi::CStr::from_ptr(str_ptr) }
+        .to_string_lossy()
+        .into_owned();
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Text {
+                content,
+                x,
+                y,
+                z: 0.0,
+                max_w: None,
+                max_h: None,
+            },
+        )
+    });
+}
+
+/// Draw text at a 3D position.
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - str_ptr is a valid pointer to a null-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_text_3d(
+    graphics_id: u64,
+    str_ptr: *const std::ffi::c_char,
+    x: f32,
+    y: f32,
+    z: f32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let content = unsafe { std::ffi::CStr::from_ptr(str_ptr) }
+        .to_string_lossy()
+        .into_owned();
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Text {
+                content,
+                x,
+                y,
+                z,
+                max_w: None,
+                max_h: None,
+            },
+        )
+    });
+}
+
+/// Draw an integer as text at a position.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_text_int(graphics_id: u64, value: i32, x: f32, y: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let content = value.to_string();
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Text {
+                content,
+                x,
+                y,
+                z: 0.0,
+                max_w: None,
+                max_h: None,
+            },
+        )
+    });
+}
+
+/// Draw a float as text at a position (formatted to 3 decimal places).
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_text_float(graphics_id: u64, value: f32, x: f32, y: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let content = format!("{:.3}", value);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Text {
+                content,
+                x,
+                y,
+                z: 0.0,
+                max_w: None,
+                max_h: None,
+            },
+        )
+    });
+}
+
+/// Draw text within a bounding box (with word wrapping).
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - str_ptr is a valid pointer to a null-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_text_box(
+    graphics_id: u64,
+    str_ptr: *const std::ffi::c_char,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let content = unsafe { std::ffi::CStr::from_ptr(str_ptr) }
+        .to_string_lossy()
+        .into_owned();
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Text {
+                content,
+                x,
+                y,
+                z: 0.0,
+                max_w: Some(w),
+                max_h: Some(h),
+            },
+        )
+    });
+}
+
+/// Set the text style. 0=NORMAL, 1=ITALIC, 2=BOLD, 3=BOLDITALIC
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_text_style(graphics_id: u64, style: u8) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_text_style(graphics_entity, style));
+}
+
+/// Compute the bounding box of text. Writes [x, y, w, h] to out_bounds.
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - str_ptr is a valid pointer to a null-terminated UTF-8 string.
+/// - out_bounds is a valid pointer to a float array of at least 4 elements.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_text_bounds(
+    graphics_id: u64,
+    str_ptr: *const std::ffi::c_char,
+    x: f32,
+    y: f32,
+    out_bounds: *mut f32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let content = unsafe { std::ffi::CStr::from_ptr(str_ptr) }
+        .to_string_lossy();
+    if let Some(bounds) =
+        error::check(|| graphics_text_bounds(graphics_entity, &content, x, y, None, None))
+    {
+        unsafe {
+            *out_bounds = bounds[0];
+            *out_bounds.add(1) = bounds[1];
+            *out_bounds.add(2) = bounds[2];
+            *out_bounds.add(3) = bounds[3];
+        }
+    }
+}
+
+/// Set a font variation axis value (e.g. "wdth", 75.0).
+///
+/// SAFETY:
+/// - tag_ptr is a valid pointer to a null-terminated UTF-8 string of exactly 4 characters.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_text_variation(
+    graphics_id: u64,
+    tag_ptr: *const std::ffi::c_char,
+    value: f32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let tag = unsafe { std::ffi::CStr::from_ptr(tag_ptr) }.to_string_lossy();
+    error::check(|| graphics_text_variation(graphics_entity, &tag, value));
+}
+
+/// Clear all font variation axis overrides.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_clear_text_variations(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_clear_text_variations(graphics_entity));
+}
+
+/// Enable/configure an OpenType font feature (e.g. "smcp", 1).
+///
+/// SAFETY:
+/// - tag_ptr is a valid pointer to a null-terminated UTF-8 string of exactly 4 characters.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_text_feature(
+    graphics_id: u64,
+    tag_ptr: *const std::ffi::c_char,
+    value: u16,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let tag = unsafe { std::ffi::CStr::from_ptr(tag_ptr) }.to_string_lossy();
+    error::check(|| graphics_text_feature(graphics_entity, &tag, value));
+}
+
+/// Disable an OpenType font feature.
+///
+/// SAFETY:
+/// - tag_ptr is a valid pointer to a null-terminated UTF-8 string of exactly 4 characters.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_no_text_feature(
+    graphics_id: u64,
+    tag_ptr: *const std::ffi::c_char,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let tag = unsafe { std::ffi::CStr::from_ptr(tag_ptr) }.to_string_lossy();
+    error::check(|| graphics_no_text_feature(graphics_entity, &tag));
+}
+
+/// Clear all OpenType font feature overrides.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_clear_text_features(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_clear_text_features(graphics_entity));
+}
+
+/// Set per-glyph colors for the next text() call.
+/// colors_ptr points to an array of (r, g, b, a) float tuples.
+///
+/// SAFETY:
+/// - colors_ptr is a valid pointer to count * 4 floats.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_text_glyph_colors(
+    graphics_id: u64,
+    colors_ptr: *const f32,
+    count: u32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let colors: Vec<bevy::color::Color> = (0..count as usize)
+        .map(|i| unsafe {
+            let base = colors_ptr.add(i * 4);
+            bevy::color::Color::srgba(*base, *base.add(1), *base.add(2), *base.add(3))
+        })
+        .collect();
+    error::check(|| graphics_text_glyph_colors(graphics_entity, colors));
+}
+
+/// Set the font weight for variable fonts (e.g. 100-900).
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_text_weight(graphics_id: u64, weight: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_text_weight(graphics_entity, weight));
+}
+
+/// Set the text size.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_text_size(graphics_id: u64, size: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::TextSize(size)));
+}
+
+/// Set the text alignment.
+/// h: 0=LEFT, 1=CENTER, 2=RIGHT
+/// v: 0=BASELINE, 1=TOP, 2=CENTER, 3=BOTTOM
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_text_align(graphics_id: u64, h: u8, v: u8) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_text_align(graphics_entity, h, v)
+    });
+}
+
+/// Set the text leading (line spacing).
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_text_leading(graphics_id: u64, leading: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::TextLeading(leading)));
+}
+
+/// Set the text direction. 0=AUTO, 1=LTR, 2=RTL
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_text_direction(graphics_id: u64, dir: u8) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_text_direction(graphics_entity, dir));
+}
+
+/// Set the text wrap mode. 0=WORD, 1=CHAR
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_text_wrap(graphics_id: u64, mode: u8) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_text_wrap(graphics_entity, mode));
+}
+
+/// Measure the width of text.
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - str_ptr is a valid pointer to a null-terminated UTF-8 string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_text_width(
+    graphics_id: u64,
+    str_ptr: *const std::ffi::c_char,
+) -> f32 {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let content = unsafe { std::ffi::CStr::from_ptr(str_ptr) }
+        .to_string_lossy();
+    error::check(|| graphics_text_width(graphics_entity, &content))
+        .unwrap_or(0.0)
+}
+
+/// Get the text ascent for the current font size.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_text_ascent(graphics_id: u64) -> f32 {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_text_ascent(graphics_entity))
+        .unwrap_or(0.0)
+}
+
+/// Get the text descent for the current font size.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_text_descent(graphics_id: u64) -> f32 {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_text_descent(graphics_entity))
+        .unwrap_or(0.0)
+}
+
 /// Create an image from raw pixel data.
 ///
 /// # Safety
