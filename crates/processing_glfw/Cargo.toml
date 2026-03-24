@@ -8,6 +8,8 @@ workspace = true
 
 [features]
 wayland = ["glfw/wayland"]
+x11 = []
+static-link = ["glfw/static-link"]
 
 [dependencies]
 bevy = { workspace = true }

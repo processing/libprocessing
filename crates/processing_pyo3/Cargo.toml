@@ -11,8 +11,9 @@ name = "mewnala"
 crate-type = ["cdylib"]
 
 [features]
-default = ["wayland"]
+default = ["wayland", "static-link"]
 wayland = ["processing/wayland", "processing_glfw/wayland"]
+static-link = ["processing_glfw/static-link"]
 x11 = ["processing/x11"]
 webcam = ["processing/webcam", "dep:processing_webcam"]
 

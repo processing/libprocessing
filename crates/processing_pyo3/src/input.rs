@@ -1,4 +1,4 @@
-use Entity;
+use bevy::prelude::Entity;
 use processing::prelude::*;
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
