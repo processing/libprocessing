@@ -1445,6 +1445,7 @@ pub extern "C" fn processing_input_mouse_button(surface_id: u64, button: u8, pre
             PROCESSING_MOUSE_RIGHT => MouseButton::Right,
             _ => {
 <<<<<<< HEAD
+<<<<<<< HEAD
                 return Err(ProcessingError::InvalidArgument(format!(
                     "invalid mouse button: {button}"
                 )));
@@ -1455,6 +1456,11 @@ pub extern "C" fn processing_input_mouse_button(surface_id: u64, button: u8, pre
                     )),
                 );
 >>>>>>> 6ad893c (Add input support; extract glfw crate.)
+=======
+                return Err(ProcessingError::InvalidArgument(format!(
+                    "invalid mouse button: {button}"
+                )));
+>>>>>>> 2715c70 (Fmt.)
             }
         };
         input_set_mouse_button(Entity::from_bits(surface_id), btn, pressed)
@@ -1483,12 +1489,16 @@ pub extern "C" fn processing_input_char(surface_id: u64, key_code: u32, codepoin
         let kc = key_code_from_u32(key_code)?;
         let ch = char::from_u32(codepoint).ok_or_else(|| {
 <<<<<<< HEAD
+<<<<<<< HEAD
             ProcessingError::InvalidArgument(format!("invalid codepoint: {codepoint}"))
 =======
             ProcessingError::InvalidArgument(format!(
                 "invalid codepoint: {codepoint}"
             ))
 >>>>>>> 6ad893c (Add input support; extract glfw crate.)
+=======
+            ProcessingError::InvalidArgument(format!("invalid codepoint: {codepoint}"))
+>>>>>>> 2715c70 (Fmt.)
         })?;
         input_set_char(Entity::from_bits(surface_id), kc, ch)
     });
@@ -1600,11 +1610,15 @@ pub extern "C" fn processing_key() -> u32 {
 pub extern "C" fn processing_key_code() -> u32 {
     error::clear_error();
 <<<<<<< HEAD
+<<<<<<< HEAD
     error::check(|| input_key_code().map(|opt| opt.map(key_code_to_u32).unwrap_or(0))).unwrap_or(0)
 =======
     error::check(|| input_key_code().map(|opt| opt.map(key_code_to_u32).unwrap_or(0)))
         .unwrap_or(0)
 >>>>>>> 6ad893c (Add input support; extract glfw crate.)
+=======
+    error::check(|| input_key_code().map(|opt| opt.map(key_code_to_u32).unwrap_or(0))).unwrap_or(0)
+>>>>>>> 2715c70 (Fmt.)
 }
 
 #[unsafe(no_mangle)]
@@ -1745,6 +1759,7 @@ fn key_code_from_u32(val: u32) -> processing::prelude::error::Result<KeyCode> {
         PROCESSING_KEY_SUPER_RIGHT => Ok(KeyCode::SuperRight),
         PROCESSING_KEY_CONTEXT_MENU => Ok(KeyCode::ContextMenu),
 <<<<<<< HEAD
+<<<<<<< HEAD
         _ => Err(ProcessingError::InvalidArgument(format!(
             "unknown key code: {val}"
         ))),
@@ -1753,6 +1768,11 @@ fn key_code_from_u32(val: u32) -> processing::prelude::error::Result<KeyCode> {
             format!("unknown key code: {val}"),
         )),
 >>>>>>> 6ad893c (Add input support; extract glfw crate.)
+=======
+        _ => Err(ProcessingError::InvalidArgument(format!(
+            "unknown key code: {val}"
+        ))),
+>>>>>>> 2715c70 (Fmt.)
     }
 }
 
