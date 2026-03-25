@@ -1,19 +1,39 @@
+mod arc;
+mod curves;
+mod ellipse;
+mod line;
+mod quad;
 mod rect;
+mod shape;
 mod shape3d;
+mod triangle;
 
+pub use arc::{arc_fill, arc_stroke};
 use bevy::{
     asset::RenderAssetUsages,
     mesh::{Indices, PrimitiveTopology},
     prelude::*,
 };
+pub use curves::{bezier, curve};
+pub use ellipse::ellipse;
+pub use line::line;
 use lyon::{
     path::Path,
     tessellation::{
         FillOptions, FillTessellator, LineCap, LineJoin, StrokeOptions, StrokeTessellator,
     },
 };
+pub use quad::quad;
 pub use rect::rect;
-pub use shape3d::{box_mesh, sphere_mesh};
+pub use shape::{
+    ShapeBuilder, VertexType, build_direct_fill, build_direct_stroke, build_polygon_fill,
+    build_polygon_stroke,
+};
+pub use shape3d::{
+    box_mesh, capsule_mesh, cone_mesh, conical_frustum_mesh, cylinder_mesh, plane_mesh,
+    sphere_mesh, tetrahedron_mesh, torus_mesh,
+};
+pub use triangle::triangle;
 
 use super::command::{StrokeCapMode, StrokeJoinMode};
 use super::mesh_builder::MeshBuilder;
@@ -42,8 +62,11 @@ impl StrokeCapMode {
     pub fn to_lyon(self) -> LineCap {
         match self {
             Self::Round => LineCap::Round,
-            Self::Square => LineCap::Square,
-            Self::Project => LineCap::Butt,
+            // lyon's naming is swapped vs processing:
+            // processing SQUARE = flush at endpoint = lyon Butt
+            // processing PROJECT = extends past endpoint = lyon Square
+            Self::Square => LineCap::Butt,
+            Self::Project => LineCap::Square,
         }
     }
 }

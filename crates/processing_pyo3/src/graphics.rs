@@ -363,6 +363,22 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    pub fn rect_mode(&self, mode: u8) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::RectMode(processing::prelude::ShapeMode::from(mode)),
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn ellipse_mode(&self, mode: u8) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::EllipseMode(processing::prelude::ShapeMode::from(mode)),
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     pub fn stroke_cap(&self, cap: u8) -> PyResult<()> {
         graphics_record_command(
             self.entity,
@@ -401,6 +417,229 @@ impl Graphics {
             },
         )
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn ellipse(&self, cx: f32, cy: f32, w: f32, h: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Ellipse { cx, cy, w, h })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn circle(&self, cx: f32, cy: f32, d: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Ellipse { cx, cy, w: d, h: d })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn line(&self, x1: f32, y1: f32, x2: f32, y2: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Line { x1, y1, x2, y2 })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn triangle(&self, x1: f32, y1: f32, x2: f32, y2: f32, x3: f32, y3: f32) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Triangle {
+                x1,
+                y1,
+                x2,
+                y2,
+                x3,
+                y3,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn quad(
+        &self,
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        x3: f32,
+        y3: f32,
+        x4: f32,
+        y4: f32,
+    ) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Quad {
+                x1,
+                y1,
+                x2,
+                y2,
+                x3,
+                y3,
+                x4,
+                y4,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn point(&self, x: f32, y: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Point { x, y })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn square(&self, x: f32, y: f32, s: f32) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Rect {
+                x,
+                y,
+                w: s,
+                h: s,
+                radii: [0.0; 4],
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn arc(
+        &self,
+        cx: f32,
+        cy: f32,
+        w: f32,
+        h: f32,
+        start: f32,
+        stop: f32,
+        mode: u8,
+    ) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Arc {
+                cx,
+                cy,
+                w,
+                h,
+                start,
+                stop,
+                mode: processing::prelude::ArcMode::from(mode),
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn bezier(
+        &self,
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        x3: f32,
+        y3: f32,
+        x4: f32,
+        y4: f32,
+    ) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Bezier {
+                x1,
+                y1,
+                x2,
+                y2,
+                x3,
+                y3,
+                x4,
+                y4,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn curve(
+        &self,
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        x3: f32,
+        y3: f32,
+        x4: f32,
+        y4: f32,
+    ) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Curve {
+                x1,
+                y1,
+                x2,
+                y2,
+                x3,
+                y3,
+                x4,
+                y4,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn begin_shape(&self, kind: u8) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::BeginShape {
+                kind: processing::prelude::ShapeKind::from(kind),
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn end_shape(&self, close: bool) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::EndShape { close })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn vertex(&self, x: f32, y: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::ShapeVertex { x, y })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn bezier_vertex(
+        &self,
+        cx1: f32,
+        cy1: f32,
+        cx2: f32,
+        cy2: f32,
+        x: f32,
+        y: f32,
+    ) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::ShapeBezierVertex {
+                cx1,
+                cy1,
+                cx2,
+                cy2,
+                x,
+                y,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn quadratic_vertex(&self, cx: f32, cy: f32, x: f32, y: f32) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::ShapeQuadraticVertex { cx, cy, x, y },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn curve_vertex(&self, x: f32, y: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::ShapeCurveVertex { x, y })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn begin_contour(&self) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::BeginContour)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn end_contour(&self) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::EndContour)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn image(&self, file: &str) -> PyResult<Image> {
@@ -459,6 +698,90 @@ impl Graphics {
             },
         )
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn draw_cylinder(&self, radius: f32, height: f32, detail: u32) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Cylinder {
+                radius,
+                height,
+                detail,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn draw_cone(&self, radius: f32, height: f32, detail: u32) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Cone {
+                radius,
+                height,
+                detail,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn draw_torus(
+        &self,
+        radius: f32,
+        tube_radius: f32,
+        major_segments: u32,
+        minor_segments: u32,
+    ) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Torus {
+                radius,
+                tube_radius,
+                major_segments,
+                minor_segments,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn draw_plane(&self, width: f32, height: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Plane { width, height })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn draw_capsule(&self, radius: f32, length: f32, detail: u32) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Capsule {
+                radius,
+                length,
+                detail,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn draw_conical_frustum(
+        &self,
+        radius_top: f32,
+        radius_bottom: f32,
+        height: f32,
+        detail: u32,
+    ) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::ConicalFrustum {
+                radius_top,
+                radius_bottom,
+                height,
+                detail,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn draw_tetrahedron(&self, radius: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Tetrahedron { radius })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn roughness(&self, value: f32) -> PyResult<()> {
