@@ -269,7 +269,7 @@ macro_rules! impl_py_vec {
 
             fn __getitem__(&self, idx: isize) -> PyResult<f32> {
                 let idx = if idx < 0 { $n as isize + idx } else { idx };
-                if idx < 0 || idx >= $n {
+                if !(0..$n as isize).contains(&idx) {
                     return Err(PyTypeError::new_err("index out of range"));
                 }
                 Ok(self.0[idx as usize])
@@ -277,7 +277,7 @@ macro_rules! impl_py_vec {
 
             fn __setitem__(&mut self, idx: isize, val: f32) -> PyResult<()> {
                 let idx = if idx < 0 { $n as isize + idx } else { idx };
-                if idx < 0 || idx >= $n {
+                if !(0..$n as isize).contains(&idx) {
                     return Err(PyTypeError::new_err("index out of range"));
                 }
                 self.0[idx as usize] = val;

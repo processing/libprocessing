@@ -1452,7 +1452,7 @@ pub extern "C" fn processing_input_focus(surface_id: u64, focused: bool) {
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_input_flush() {
     error::clear_error();
-    error::check(|| input_flush());
+    error::check(input_flush);
 }
 
 #[unsafe(no_mangle)]
@@ -1482,7 +1482,7 @@ pub extern "C" fn processing_pmouse_y(surface_id: u64) -> f32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_mouse_is_pressed() -> bool {
     error::clear_error();
-    error::check(|| input_mouse_is_pressed()).unwrap_or(false)
+    error::check(input_mouse_is_pressed).unwrap_or(false)
 }
 
 #[unsafe(no_mangle)]
@@ -1502,7 +1502,7 @@ pub extern "C" fn processing_mouse_button() -> i8 {
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_key_is_pressed() -> bool {
     error::clear_error();
-    error::check(|| input_key_is_pressed()).unwrap_or(false)
+    error::check(input_key_is_pressed).unwrap_or(false)
 }
 
 #[unsafe(no_mangle)]
@@ -1530,19 +1530,19 @@ pub extern "C" fn processing_key_code() -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_moved_x() -> f32 {
     error::clear_error();
-    error::check(|| input_moved_x()).unwrap_or(0.0)
+    error::check(input_moved_x).unwrap_or(0.0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_moved_y() -> f32 {
     error::clear_error();
-    error::check(|| input_moved_y()).unwrap_or(0.0)
+    error::check(input_moved_y).unwrap_or(0.0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_mouse_wheel() -> f32 {
     error::clear_error();
-    error::check(|| input_mouse_wheel()).unwrap_or(0.0)
+    error::check(input_mouse_wheel).unwrap_or(0.0)
 }
 
 fn key_code_from_u32(val: u32) -> processing::prelude::error::Result<KeyCode> {
