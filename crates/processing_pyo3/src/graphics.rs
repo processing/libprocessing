@@ -511,20 +511,20 @@ impl Graphics {
     ) -> PyResult<()> {
         let space = crate::color::ColorSpace::from_u8(mode)
             .ok_or_else(|| PyRuntimeError::new_err(format!("unknown color space: {mode}")))?;
-        let parse = |obj: &Bound<'py, PyAny>| crate::color::parse_numeric(&space, obj);
+        let parse = |obj: &Bound<'py, PyAny>, ch: usize| crate::color::parse_numeric(&space, obj, ch);
         let new_mode = match (max1, max2, max3, max_alpha) {
             // color_mode(MODE)
             (None, _, _, _) => ColorMode::with_defaults(space),
             // color_mode(MODE, max)
-            (Some(m), None, _, _) => ColorMode::with_uniform_max(space, parse(m)?),
+            (Some(m), None, _, _) => ColorMode::with_uniform_max(space, parse(m, 0)?),
             // color_mode(MODE, max1, max2, max3)
             (Some(m1), Some(m2), Some(m3), None) => {
                 let defaults = space.default_maxes();
-                ColorMode::new(space, parse(m1)?, parse(m2)?, parse(m3)?, defaults[3])
+                ColorMode::new(space, parse(m1, 0)?, parse(m2, 1)?, parse(m3, 2)?, defaults[3])
             }
             // color_mode(MODE, max1, max2, max3, maxA)
             (Some(m1), Some(m2), Some(m3), Some(ma)) => {
-                ColorMode::new(space, parse(m1)?, parse(m2)?, parse(m3)?, parse(ma)?)
+                ColorMode::new(space, parse(m1, 0)?, parse(m2, 1)?, parse(m3, 2)?, parse(ma, 3)?)
             }
             _ => return Err(PyRuntimeError::new_err("expected 1, 2, 4, or 5 arguments")),
         };

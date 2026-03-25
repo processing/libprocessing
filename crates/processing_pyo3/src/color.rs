@@ -8,12 +8,24 @@ use crate::math::{PyVec4, PyVecIter, hash_f32, PyVec3};
 
 pub use processing::prelude::color::{ColorMode, ColorSpace};
 
-pub(crate) fn parse_numeric(space: &ColorSpace, obj: &Bound<'_, PyAny>) -> PyResult<f32> {
+fn int_maxes(space: &ColorSpace) -> [f32; 4] {
+    match space {
+        ColorSpace::Srgb | ColorSpace::Linear => [255.0, 255.0, 255.0, 255.0],
+        ColorSpace::Hsl | ColorSpace::Hsv | ColorSpace::Hwb => [360.0, 100.0, 100.0, 255.0],
+        ColorSpace::Oklch => [100.0, 100.0, 360.0, 255.0],
+        ColorSpace::Oklab => [100.0, 100.0, 100.0, 255.0],
+        ColorSpace::Lab => [100.0, 100.0, 100.0, 255.0],
+        ColorSpace::Lch => [100.0, 100.0, 360.0, 255.0],
+        ColorSpace::Xyz => [100.0, 100.0, 100.0, 255.0],
+    }
+}
+
+/// Parse a Python int or float into an f32 for a given channel.
+pub(crate) fn parse_numeric(space: &ColorSpace, obj: &Bound<'_, PyAny>, ch: usize) -> PyResult<f32> {
     if let Ok(v) = obj.extract::<i64>() {
-        return Ok(match space {
-            ColorSpace::Srgb | ColorSpace::Linear => v as f32 / 255.0,
-            _ => v as f32,
-        });
+        let native = space.default_maxes();
+        let imax = int_maxes(space);
+        return Ok(v as f32 / imax[ch] * native[ch]);
     }
     if let Ok(v) = obj.extract::<f64>() {
         return Ok(v as f32);
@@ -22,7 +34,7 @@ pub(crate) fn parse_numeric(space: &ColorSpace, obj: &Bound<'_, PyAny>) -> PyRes
 }
 
 fn convert_channel(mode: &ColorMode, obj: &Bound<'_, PyAny>, ch: usize) -> PyResult<f32> {
-    let v = parse_numeric(&mode.space, obj)?;
+    let v = parse_numeric(&mode.space, obj, ch)?;
     Ok(mode.scale(v, ch))
 }
 
