@@ -3,7 +3,7 @@ use std::hash::{Hash, Hasher};
 use bevy::math::{EulerRot, Quat, Vec2, Vec3, Vec4};
 use pyo3::{exceptions::PyTypeError, prelude::*, types::PyTuple};
 
-fn hash_f32(val: f32, state: &mut impl Hasher) {
+pub fn hash_f32(val: f32, state: &mut impl Hasher) {
     if val == 0.0 {
         0.0f32.to_bits().hash(state);
     } else {
@@ -519,8 +519,8 @@ impl PyQuat {
 
 #[pyclass]
 pub struct PyVecIter {
-    values: Vec<f32>,
-    index: usize,
+    pub(crate) values: Vec<f32>,
+    pub(crate) index: usize,
 }
 
 #[pymethods]
