@@ -47,6 +47,7 @@ jobs:
         uses: docker/setup-qemu-action@v3
       - name: Build wheels
         uses: PyO3/maturin-action@v1
+        docker-options: "-e PKG_CONFIG_PATH=/usr/lib/${{matrix.target}}-linux-gnu/pkgconfig:/usr/local/lib/pkgconfig"
         with:
           target: ${{ matrix.target }}
           args: --release --out dist --find-interpreter
