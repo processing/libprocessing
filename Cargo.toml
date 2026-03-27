@@ -56,6 +56,9 @@ web-sys = { version = "0.3", features = ["Window"] }
 processing_glfw = { workspace = true }
 rand = "0.10.0"
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+processing_glfw = { workspace = true, features = ["wayland"] }
+
 [[example]]
 name = "rectangle"
 path = "examples/rectangle.rs"
