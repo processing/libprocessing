@@ -1,6 +1,5 @@
-mod glfw;
+use processing_glfw::GlfwContext;
 
-use glfw::GlfwContext;
 use processing::prelude::*;
 use processing_render::render::command::DrawCommand;
 

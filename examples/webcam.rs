@@ -1,6 +1,5 @@
-mod glfw;
+use processing_glfw::GlfwContext;
 
-use glfw::GlfwContext;
 use processing::prelude::*;
 use processing_render::render::command::DrawCommand;
 use processing_webcam::{webcam_create, webcam_destroy, webcam_image, webcam_is_connected};

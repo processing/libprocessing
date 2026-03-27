@@ -1,7 +1,6 @@
-mod glfw;
+use processing_glfw::GlfwContext;
 
 use bevy::math::{Vec3, Vec4};
-use glfw::GlfwContext;
 use processing::prelude::*;
 use processing_render::geometry::{AttributeFormat, Topology};
 use processing_render::render::command::DrawCommand;

@@ -11,8 +11,9 @@ name = "mewnala"
 crate-type = ["cdylib"]
 
 [features]
-default = ["wayland"]
-wayland = ["processing/wayland", "glfw/wayland"]
+default = ["wayland", "static-link"]
+wayland = ["processing/wayland", "processing_glfw/wayland"]
+static-link = ["processing_glfw/static-link"]
 x11 = ["processing/x11"]
 webcam = ["processing/webcam", "dep:processing_webcam"]
 
@@ -20,6 +21,6 @@ webcam = ["processing/webcam", "dep:processing_webcam"]
 pyo3 = { workspace = true, features = ["experimental-inspect"] }
 processing = { workspace = true }
 processing_webcam = { workspace = true, optional = true }
+processing_glfw = { workspace = true }
 bevy = { workspace = true, features = ["file_watcher"] }
-glfw = { version = "0.60.0", features = ["static-link"] }
 png = "0.18"

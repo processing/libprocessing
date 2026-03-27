@@ -1,7 +1,6 @@
-mod glfw;
+use processing_glfw::GlfwContext;
 
 use bevy::{color::Color, prelude::LinearRgba};
-use glfw::GlfwContext;
 use processing::prelude::*;
 
 fn main() {

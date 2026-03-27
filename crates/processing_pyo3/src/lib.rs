@@ -12,6 +12,7 @@ pub(crate) mod color;
 mod glfw;
 mod gltf;
 mod graphics;
+mod input;
 pub(crate) mod material;
 pub(crate) mod math;
 mod midi;
@@ -130,6 +131,7 @@ mod mewnala {
     #[pymodule_export]
     use super::Topology;
 
+    // Stroke cap/join
     #[pymodule_export]
     const ROUND: u8 = 0;
     #[pymodule_export]
@@ -140,6 +142,182 @@ mod mewnala {
     const MITER: u8 = 1;
     #[pymodule_export]
     const BEVEL: u8 = 2;
+
+    // Mouse buttons
+    #[pymodule_export]
+    const LEFT: u8 = 0;
+    #[pymodule_export]
+    const CENTER: u8 = 1;
+    #[pymodule_export]
+    const RIGHT: u8 = 2;
+
+    // Letters
+    #[pymodule_export]
+    const KEY_A: u32 = 65;
+    #[pymodule_export]
+    const KEY_B: u32 = 66;
+    #[pymodule_export]
+    const KEY_C: u32 = 67;
+    #[pymodule_export]
+    const KEY_D: u32 = 68;
+    #[pymodule_export]
+    const KEY_E: u32 = 69;
+    #[pymodule_export]
+    const KEY_F: u32 = 70;
+    #[pymodule_export]
+    const KEY_G: u32 = 71;
+    #[pymodule_export]
+    const KEY_H: u32 = 72;
+    #[pymodule_export]
+    const KEY_I: u32 = 73;
+    #[pymodule_export]
+    const KEY_J: u32 = 74;
+    #[pymodule_export]
+    const KEY_K: u32 = 75;
+    #[pymodule_export]
+    const KEY_L: u32 = 76;
+    #[pymodule_export]
+    const KEY_M: u32 = 77;
+    #[pymodule_export]
+    const KEY_N: u32 = 78;
+    #[pymodule_export]
+    const KEY_O: u32 = 79;
+    #[pymodule_export]
+    const KEY_P: u32 = 80;
+    #[pymodule_export]
+    const KEY_Q: u32 = 81;
+    #[pymodule_export]
+    const KEY_R: u32 = 82;
+    #[pymodule_export]
+    const KEY_S: u32 = 83;
+    #[pymodule_export]
+    const KEY_T: u32 = 84;
+    #[pymodule_export]
+    const KEY_U: u32 = 85;
+    #[pymodule_export]
+    const KEY_V: u32 = 86;
+    #[pymodule_export]
+    const KEY_W: u32 = 87;
+    #[pymodule_export]
+    const KEY_X: u32 = 88;
+    #[pymodule_export]
+    const KEY_Y: u32 = 89;
+    #[pymodule_export]
+    const KEY_Z: u32 = 90;
+
+    // Digits
+    #[pymodule_export]
+    const KEY_0: u32 = 48;
+    #[pymodule_export]
+    const KEY_1: u32 = 49;
+    #[pymodule_export]
+    const KEY_2: u32 = 50;
+    #[pymodule_export]
+    const KEY_3: u32 = 51;
+    #[pymodule_export]
+    const KEY_4: u32 = 52;
+    #[pymodule_export]
+    const KEY_5: u32 = 53;
+    #[pymodule_export]
+    const KEY_6: u32 = 54;
+    #[pymodule_export]
+    const KEY_7: u32 = 55;
+    #[pymodule_export]
+    const KEY_8: u32 = 56;
+    #[pymodule_export]
+    const KEY_9: u32 = 57;
+
+    // Punctuation/symbols
+    #[pymodule_export]
+    const SPACE: u32 = 32;
+    #[pymodule_export]
+    const QUOTE: u32 = 39;
+    #[pymodule_export]
+    const COMMA: u32 = 44;
+    #[pymodule_export]
+    const MINUS: u32 = 45;
+    #[pymodule_export]
+    const PERIOD: u32 = 46;
+    #[pymodule_export]
+    const SLASH: u32 = 47;
+    #[pymodule_export]
+    const SEMICOLON: u32 = 59;
+    #[pymodule_export]
+    const EQUAL: u32 = 61;
+    #[pymodule_export]
+    const BRACKET_LEFT: u32 = 91;
+    #[pymodule_export]
+    const BACKSLASH: u32 = 92;
+    #[pymodule_export]
+    const BRACKET_RIGHT: u32 = 93;
+    #[pymodule_export]
+    const BACKQUOTE: u32 = 96;
+
+    // Navigation/editing
+    #[pymodule_export]
+    const ESCAPE: u32 = 256;
+    #[pymodule_export]
+    const ENTER: u32 = 257;
+    #[pymodule_export]
+    const TAB: u32 = 258;
+    #[pymodule_export]
+    const BACKSPACE: u32 = 259;
+    #[pymodule_export]
+    const INSERT: u32 = 260;
+    #[pymodule_export]
+    const DELETE: u32 = 261;
+    #[pymodule_export]
+    const UP: u32 = 265;
+    #[pymodule_export]
+    const DOWN: u32 = 264;
+    #[pymodule_export]
+    const LEFT_ARROW: u32 = 263;
+    #[pymodule_export]
+    const RIGHT_ARROW: u32 = 262;
+    #[pymodule_export]
+    const PAGE_UP: u32 = 266;
+    #[pymodule_export]
+    const PAGE_DOWN: u32 = 267;
+    #[pymodule_export]
+    const HOME: u32 = 268;
+    #[pymodule_export]
+    const END: u32 = 269;
+
+    // Modifiers
+    #[pymodule_export]
+    const SHIFT: u32 = 340;
+    #[pymodule_export]
+    const CONTROL: u32 = 341;
+    #[pymodule_export]
+    const ALT: u32 = 342;
+    #[pymodule_export]
+    const SUPER: u32 = 343;
+
+    // Function keys
+    #[pymodule_export]
+    const F1: u32 = 290;
+    #[pymodule_export]
+    const F2: u32 = 291;
+    #[pymodule_export]
+    const F3: u32 = 292;
+    #[pymodule_export]
+    const F4: u32 = 293;
+    #[pymodule_export]
+    const F5: u32 = 294;
+    #[pymodule_export]
+    const F6: u32 = 295;
+    #[pymodule_export]
+    const F7: u32 = 296;
+    #[pymodule_export]
+    const F8: u32 = 297;
+    #[pymodule_export]
+    const F9: u32 = 298;
+    #[pymodule_export]
+    const F10: u32 = 299;
+    #[pymodule_export]
+    const F11: u32 = 300;
+    #[pymodule_export]
+    const F12: u32 = 301;
 
     #[pymodule]
     mod math {
@@ -418,6 +596,12 @@ mod mewnala {
             // call setup
             setup_fn.call0()?;
 
+            {
+                let graphics = get_graphics(module)?
+                    .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+                input::sync_globals(&draw_fn, graphics.surface.entity)?;
+            }
+
             // start draw loop
             loop {
                 {
@@ -451,6 +635,12 @@ mod mewnala {
                         break;
                     }
                     graphics.begin_draw()?;
+                }
+
+                {
+                    let graphics = get_graphics(module)?
+                        .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+                    input::sync_globals(&draw_fn, graphics.surface.entity)?;
                 }
 
                 draw_fn
@@ -705,5 +895,42 @@ mod mewnala {
     #[pyfunction]
     fn midi_play_notes(note: u8, duration: u64) -> PyResult<()> {
         midi::play_notes(note, duration)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn mouse_x(module: &Bound<'_, PyModule>) -> PyResult<f32> {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        input::mouse_x(graphics.surface.entity)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn mouse_y(module: &Bound<'_, PyModule>) -> PyResult<f32> {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        input::mouse_y(graphics.surface.entity)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn pmouse_x(module: &Bound<'_, PyModule>) -> PyResult<f32> {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        input::pmouse_x(graphics.surface.entity)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn pmouse_y(module: &Bound<'_, PyModule>) -> PyResult<f32> {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        input::pmouse_y(graphics.surface.entity)
+    }
+
+    #[pyfunction]
+    fn key_is_down(key_code: u32) -> PyResult<bool> {
+        input::key_is_down(key_code)
     }
 }

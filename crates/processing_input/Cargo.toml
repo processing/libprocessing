@@ -1,0 +1,11 @@
+[package]
+name = "processing_input"
+version = "0.0.1"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dependencies]
+bevy = { workspace = true }
+processing_core = { workspace = true }

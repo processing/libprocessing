@@ -12,11 +12,12 @@ use pyo3::{
 };
 
 use crate::glfw::GlfwContext;
+use crate::input;
 use crate::math::{extract_vec2, extract_vec3, extract_vec4};
 
 #[pyclass(unsendable)]
 pub struct Surface {
-    entity: Entity,
+    pub(crate) entity: Entity,
     glfw_ctx: Option<GlfwContext>,
 }
 
@@ -184,7 +185,7 @@ impl Graphics {
         sketch_file_name: &str,
         log_level: Option<&str>,
     ) -> PyResult<Self> {
-        let glfw_ctx =
+        let mut glfw_ctx =
             GlfwContext::new(width, height).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let mut config = Config::new();
@@ -574,6 +575,66 @@ impl Graphics {
             Ok(light) => Ok(Light { entity: light }),
             Err(e) => Err(PyRuntimeError::new_err(format!("{e}"))),
         }
+    }
+
+    #[getter]
+    fn mouse_x(&self) -> PyResult<f32> {
+        input::mouse_x(self.surface.entity)
+    }
+
+    #[getter]
+    fn mouse_y(&self) -> PyResult<f32> {
+        input::mouse_y(self.surface.entity)
+    }
+
+    #[getter]
+    fn pmouse_x(&self) -> PyResult<f32> {
+        input::pmouse_x(self.surface.entity)
+    }
+
+    #[getter]
+    fn pmouse_y(&self) -> PyResult<f32> {
+        input::pmouse_y(self.surface.entity)
+    }
+
+    #[getter]
+    fn mouse_is_pressed(&self) -> PyResult<bool> {
+        input::mouse_is_pressed()
+    }
+
+    #[getter]
+    fn mouse_button(&self) -> PyResult<Option<String>> {
+        input::mouse_button()
+    }
+
+    #[getter]
+    fn moved_x(&self) -> PyResult<f32> {
+        input::moved_x()
+    }
+
+    #[getter]
+    fn moved_y(&self) -> PyResult<f32> {
+        input::moved_y()
+    }
+
+    #[getter]
+    fn mouse_wheel(&self) -> PyResult<f32> {
+        input::mouse_wheel()
+    }
+
+    #[getter]
+    fn key(&self) -> PyResult<Option<String>> {
+        input::key()
+    }
+
+    #[getter]
+    fn key_code(&self) -> PyResult<Option<u32>> {
+        input::key_code()
+    }
+
+    #[getter]
+    fn key_is_pressed(&self) -> PyResult<bool> {
+        input::key_is_pressed()
     }
 
     pub fn light_spot(

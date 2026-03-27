@@ -1,7 +1,6 @@
-mod glfw;
+use processing_glfw::GlfwContext;
 
 use bevy::math::Vec3;
-use glfw::GlfwContext;
 use processing::prelude::*;
 use processing_render::render::command::DrawCommand;
 

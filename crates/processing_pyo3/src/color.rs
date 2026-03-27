@@ -388,7 +388,8 @@ impl PyColor {
     fn __getitem__(&self, idx: isize) -> PyResult<f32> {
         let c = components(&self.0);
         let idx = if idx < 0 { 4 + idx } else { idx };
-        if idx < 0 || idx >= 4 {
+
+        if !(0..4).contains(&idx) {
             return Err(PyTypeError::new_err("index out of range"));
         }
         Ok(c[idx as usize])
@@ -429,7 +430,7 @@ pub(crate) fn extract_color(args: &Bound<'_, PyTuple>) -> PyResult<Color> {
 
 fn parse_hex(s: &str) -> PyResult<Color> {
     Srgba::hex(s)
-        .map(|srgba| Color::Srgba(srgba))
+        .map(Color::Srgba)
         .map_err(|e| PyTypeError::new_err(format!("invalid hex color: {e}")))
 }
 

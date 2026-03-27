@@ -5329,9 +5329,10 @@ name = "processing"
 version = "0.0.1"
 dependencies = [
  "bevy",
- "glfw",
  "js-sys",
  "processing_core",
+ "processing_glfw",
+ "processing_input",
  "processing_midi",
  "processing_render",
  "processing_webcam",
@@ -5362,6 +5363,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "processing_glfw"
+version = "0.0.1"
+dependencies = [
+ "bevy",
+ "glfw",
+ "processing_core",
+ "processing_input",
+ "processing_render",
+]
+
+[[package]]
+name = "processing_input"
+version = "0.0.1"
+dependencies = [
+ "bevy",
+ "processing_core",
+]
+
+[[package]]
 name = "processing_midi"
 version = "0.0.1"
 dependencies = [
@@ -5375,9 +5395,9 @@ name = "processing_pyo3"
 version = "0.0.1"
 dependencies = [
  "bevy",
- "glfw",
  "png",
  "processing",
+ "processing_glfw",
  "processing_webcam",
  "pyo3",
 ]

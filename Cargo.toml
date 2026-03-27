@@ -33,6 +33,8 @@ processing_core = { path = "crates/processing_core" }
 processing_pyo3 = { path = "crates/processing_pyo3" }
 processing_render = { path = "crates/processing_render" }
 processing_midi = { path = "crates/processing_midi" }
+processing_input = { path = "crates/processing_input" }
+processing_glfw = { path = "crates/processing_glfw" }
 processing_webcam = { path = "crates/processing_webcam" }
 
 [dependencies]
@@ -40,6 +42,7 @@ bevy = { workspace = true }
 processing_core = { workspace = true }
 processing_render = { workspace = true }
 processing_midi = { workspace = true }
+processing_input = { workspace = true }
 processing_webcam = { workspace = true, optional = true }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -50,11 +53,11 @@ js-sys = "0.3"
 web-sys = { version = "0.3", features = ["Window"] }
 
 [dev-dependencies]
-glfw = "0.60.0"
+processing_glfw = { workspace = true }
 rand = "0.10.0"
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
-glfw = { version = "0.60.0", features = ["wayland"] }
+processing_glfw = { workspace = true, features = ["wayland"] }
 
 [[example]]
 name = "rectangle"
@@ -120,6 +123,10 @@ path = "examples/stroke_3d.rs"
 [[example]]
 name = "custom_material"
 path = "examples/custom_material.rs"
+
+[[example]]
+name = "input"
+path = "examples/input.rs"
 
 [profile.wasm-release]
 inherits = "release"

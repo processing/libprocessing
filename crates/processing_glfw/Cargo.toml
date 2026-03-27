@@ -1,0 +1,19 @@
+[package]
+name = "processing_glfw"
+version = "0.0.1"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[features]
+wayland = ["glfw/wayland"]
+x11 = []
+static-link = ["glfw/static-link"]
+
+[dependencies]
+bevy = { workspace = true }
+glfw = "0.60.0"
+processing_core = { workspace = true }
+processing_input = { workspace = true }
+processing_render = { workspace = true }

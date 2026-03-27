@@ -653,7 +653,7 @@ fn create_ndc_background_quad(world_from_clip: Mat4, color: Color, with_uvs: boo
     use bevy::asset::RenderAssetUsages;
     use bevy::mesh::{Indices, PrimitiveTopology};
 
-    let ndc_z = 0.001; // near far plane (bevy uses reverse-z)
+    let ndc_z = 0.0;
     let ndc_corners = [
         Vec4::new(-1.0, -1.0, ndc_z, 1.0), // bl
         Vec4::new(1.0, -1.0, ndc_z, 1.0),  // br
