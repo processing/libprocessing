@@ -18,6 +18,63 @@ use pyo3::{
     types::{PyDict, PyTuple},
 };
 
+use crate::glfw::GlfwContext;
+use crate::math::{extract_vec2, extract_vec3, extract_vec4};
+
+// ---------------------------------------------------------------------------
+// BlendMode
+// ---------------------------------------------------------------------------
+
+#[pyclass(name = "BlendMode")]
+#[derive(Clone)]
+pub struct PyBlendMode {
+    pub(crate) blend_state: Option<bevy::render::render_resource::BlendState>,
+    name: Option<&'static str>,
+}
+
+impl PyBlendMode {
+    pub(crate) fn from_preset(mode: BlendMode) -> Self {
+        Self {
+            blend_state: mode.to_blend_state(),
+            name: Some(mode.name()),
+        }
+    }
+}
+
+#[pymethods]
+impl PyBlendMode {
+    /// Create a custom blend mode by specifying individual blend components.
+    ///
+    /// All arguments are keyword-only. Use the blend factor constants (ZERO, ONE,
+    /// SRC_COLOR, SRC_ALPHA, DST_COLOR, etc.) and blend operation constants
+    /// (OP_ADD, OP_SUBTRACT, OP_REVERSE_SUBTRACT, OP_MIN, OP_MAX).
+    #[new]
+    #[pyo3(signature = (*, color_src, color_dst, color_op, alpha_src, alpha_dst, alpha_op))]
+    fn new(
+        color_src: u8,
+        color_dst: u8,
+        color_op: u8,
+        alpha_src: u8,
+        alpha_dst: u8,
+        alpha_op: u8,
+    ) -> Self {
+        Self {
+            blend_state: Some(custom_blend_state(
+                color_src, color_dst, color_op, alpha_src, alpha_dst, alpha_op,
+            )),
+            name: None,
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        match self.name {
+            Some(name) => format!("BlendMode.{name}"),
+            None => "BlendMode(custom)".to_string(),
+        }
+    }
+}
+
+
 #[pyclass(unsendable)]
 pub struct Surface {
     pub(crate) entity: Entity,
@@ -514,6 +571,11 @@ impl Graphics {
 
     pub fn shear_y(&self, angle: f32) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::ShearY { angle })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn blend_mode(&self, mode: &PyBlendMode) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::BlendMode(mode.blend_state))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 

@@ -466,6 +466,44 @@ pub extern "C" fn processing_shear_y(graphics_id: u64, angle: f32) {
     error::check(|| graphics_record_command(graphics_entity, DrawCommand::ShearY { angle }));
 }
 
+/// Set the blend mode.
+///
+/// Mode values: 0=BLEND, 1=ADD, 2=SUBTRACT, 3=DARKEST, 4=LIGHTEST,
+/// 5=DIFFERENCE, 6=EXCLUSION, 7=MULTIPLY, 8=SCREEN, 9=REPLACE
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_set_blend_mode(graphics_id: u64, mode: u8) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let blend_state = processing::prelude::BlendMode::from(mode).to_blend_state();
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::BlendMode(blend_state)));
+}
+
+/// Set a custom blend mode by specifying individual blend components.
+///
+/// Each factor/operation is a u8 mapping to the WebGPU BlendFactor/BlendOperation enums.
+/// BlendFactor: 0=Zero, 1=One, 2=Src, 3=OneMinusSrc, 4=SrcAlpha, 5=OneMinusSrcAlpha,
+///              6=Dst, 7=OneMinusDst, 8=DstAlpha, 9=OneMinusDstAlpha, 10=SrcAlphaSaturated
+/// BlendOperation: 0=Add, 1=Subtract, 2=ReverseSubtract, 3=Min, 4=Max
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_set_custom_blend_mode(
+    graphics_id: u64,
+    color_src: u8,
+    color_dst: u8,
+    color_op: u8,
+    alpha_src: u8,
+    alpha_dst: u8,
+    alpha_op: u8,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let blend_state = custom_blend_state(
+        color_src, color_dst, color_op, alpha_src, alpha_dst, alpha_op,
+    );
+    error::check(|| {
+        graphics_record_command(graphics_entity, DrawCommand::BlendMode(Some(blend_state)))
+    });
+}
+
 /// Draw a rectangle.
 ///
 /// SAFETY:

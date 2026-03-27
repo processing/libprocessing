@@ -20,7 +20,9 @@ pub(crate) mod shader;
 #[cfg(feature = "webcam")]
 mod webcam;
 
-use graphics::{Geometry, Graphics, Image, Light, Topology, get_graphics, get_graphics_mut};
+use graphics::{
+    Geometry, Graphics, Image, Light, PyBlendMode, Topology, get_graphics, get_graphics_mut,
+};
 use material::Material;
 
 use pyo3::{
@@ -126,6 +128,8 @@ mod mewnala {
     use super::Light;
     #[pymodule_export]
     use super::Material;
+    #[pymodule_export]
+    use super::PyBlendMode;
     #[pymodule_export]
     use super::Shader;
     #[pymodule_export]
@@ -340,6 +344,62 @@ mod mewnala {
     const LCH: u8 = 8;
     #[pymodule_export]
     const XYZ: u8 = 9;
+
+    // Blend factor constants (for BlendMode custom constructor)
+    #[pymodule_export]
+    const ZERO: u8 = 0;
+    #[pymodule_export]
+    const ONE: u8 = 1;
+    #[pymodule_export]
+    const SRC_COLOR: u8 = 2;
+    #[pymodule_export]
+    const ONE_MINUS_SRC_COLOR: u8 = 3;
+    #[pymodule_export]
+    const SRC_ALPHA: u8 = 4;
+    #[pymodule_export]
+    const ONE_MINUS_SRC_ALPHA: u8 = 5;
+    #[pymodule_export]
+    const DST_COLOR: u8 = 6;
+    #[pymodule_export]
+    const ONE_MINUS_DST_COLOR: u8 = 7;
+    #[pymodule_export]
+    const DST_ALPHA: u8 = 8;
+    #[pymodule_export]
+    const ONE_MINUS_DST_ALPHA: u8 = 9;
+    #[pymodule_export]
+    const SRC_ALPHA_SATURATED: u8 = 10;
+
+    // Blend operation constants (for BlendMode custom constructor)
+    #[pymodule_export]
+    const OP_ADD: u8 = 0;
+    #[pymodule_export]
+    const OP_SUBTRACT: u8 = 1;
+    #[pymodule_export]
+    const OP_REVERSE_SUBTRACT: u8 = 2;
+    #[pymodule_export]
+    const OP_MIN: u8 = 3;
+    #[pymodule_export]
+    const OP_MAX: u8 = 4;
+
+    // Blend mode preset constants (added in pymodule_init)
+    #[pymodule_init]
+    fn init(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        use processing::prelude::BlendMode;
+        module.add("BLEND", PyBlendMode::from_preset(BlendMode::Blend))?;
+        module.add("ADD", PyBlendMode::from_preset(BlendMode::Add))?;
+        module.add("SUBTRACT", PyBlendMode::from_preset(BlendMode::Subtract))?;
+        module.add("DARKEST", PyBlendMode::from_preset(BlendMode::Darkest))?;
+        module.add("LIGHTEST", PyBlendMode::from_preset(BlendMode::Lightest))?;
+        module.add(
+            "DIFFERENCE",
+            PyBlendMode::from_preset(BlendMode::Difference),
+        )?;
+        module.add("EXCLUSION", PyBlendMode::from_preset(BlendMode::Exclusion))?;
+        module.add("MULTIPLY", PyBlendMode::from_preset(BlendMode::Multiply))?;
+        module.add("SCREEN", PyBlendMode::from_preset(BlendMode::Screen))?;
+        module.add("REPLACE", PyBlendMode::from_preset(BlendMode::Replace))?;
+        Ok(())
+    }
 
     #[pymodule]
     mod math {
@@ -802,6 +862,12 @@ mod mewnala {
     #[pyo3(pass_module)]
     fn stroke_join(module: &Bound<'_, PyModule>, join: u8) -> PyResult<()> {
         graphics!(module).stroke_join(join)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (mode))]
+    fn blend_mode(module: &Bound<'_, PyModule>, mode: &Bound<'_, PyBlendMode>) -> PyResult<()> {
+        graphics!(module).blend_mode(&*mode.extract::<PyRef<PyBlendMode>>()?)
     }
 
     #[pyfunction]

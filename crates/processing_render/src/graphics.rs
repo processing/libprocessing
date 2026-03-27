@@ -132,6 +132,8 @@ impl ProcessingProjection {
 
 impl CameraProjection for ProcessingProjection {
     fn get_clip_from_view(&self) -> Mat4 {
+        // NOTE: near and far are swapped to invert the depth range from [0,1] to [1,0]
+        // This is for interoperability with Bevy's reverse-Z depth pipeline.
         Mat4::orthographic_rh(
             0.0,
             self.width,
