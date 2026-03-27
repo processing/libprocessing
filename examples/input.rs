@@ -36,6 +36,22 @@ fn sketch() -> error::Result<()> {
             DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.15, 0.15, 0.2)),
         )?;
 
+        if input_mouse_is_pressed()? {
+            graphics_record_command(
+                graphics,
+                DrawCommand::Fill(bevy::color::Color::srgb(0.25, 0.15, 0.2)),
+            )?;
+        } else {
+        }
+
+        if input_mouse_is_pressed()? {
+            graphics_record_command(
+                graphics,
+                DrawCommand::Fill(bevy::color::Color::srgb(0.55, 0.25, 0.2)),
+            )?;
+        } else {
+        }
+
         graphics_record_command(
             graphics,
             DrawCommand::Rect {
