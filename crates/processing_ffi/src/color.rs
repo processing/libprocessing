@@ -1,35 +1,33 @@
 use bevy::color::{LinearRgba, Srgba};
+use processing::prelude::color::{ColorMode, ColorSpace};
 
-/// A sRGB (?) color
+/// A color with 4 float components and its color space.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Color {
-    pub r: f32,
-    pub g: f32,
-    pub b: f32,
+    pub c1: f32,
+    pub c2: f32,
+    pub c3: f32,
     pub a: f32,
+    pub space: u8,
 }
 
-impl From<Color> for bevy::color::Color {
-    fn from(color: Color) -> Self {
-        bevy::color::Color::srgba(color.r, color.g, color.b, color.a)
+impl Color {
+    pub fn resolve(self, mode: &ColorMode) -> bevy::color::Color {
+        let c1 = mode.scale(self.c1, 0);
+        let c2 = mode.scale(self.c2, 1);
+        let c3 = mode.scale(self.c3, 2);
+        let ca = mode.scale(self.a, 3);
+        mode.space.color(c1, c2, c3, ca)
     }
-}
 
-impl From<LinearRgba> for Color {
-    fn from(lin: LinearRgba) -> Self {
-        let srgb: Srgba = lin.into();
-        srgb.into()
-    }
-}
-
-impl From<Srgba> for Color {
-    fn from(srgb: Srgba) -> Self {
+    pub fn from_linear(lin: LinearRgba) -> Self {
         Color {
-            r: srgb.red,
-            g: srgb.green,
-            b: srgb.blue,
-            a: srgb.alpha,
+            c1: lin.red,
+            c2: lin.green,
+            c3: lin.blue,
+            a: lin.alpha,
+            space: ColorSpace::Linear as u8,
         }
     }
 }

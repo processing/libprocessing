@@ -319,6 +319,28 @@ mod mewnala {
     #[pymodule_export]
     const F12: u32 = 301;
 
+    // color space constants for color_mode()
+    #[pymodule_export]
+    const SRGB: u8 = 0;
+    #[pymodule_export]
+    const LINEAR: u8 = 1;
+    #[pymodule_export]
+    const HSL: u8 = 2;
+    #[pymodule_export]
+    const HSV: u8 = 3;
+    #[pymodule_export]
+    const HWB: u8 = 4;
+    #[pymodule_export]
+    const OKLAB: u8 = 5;
+    #[pymodule_export]
+    const OKLCH: u8 = 6;
+    #[pymodule_export]
+    const LAB: u8 = 7;
+    #[pymodule_export]
+    const LCH: u8 = 8;
+    #[pymodule_export]
+    const XYZ: u8 = 9;
+
     #[pymodule]
     mod math {
         use super::*;
@@ -365,12 +387,6 @@ mod mewnala {
 
         #[pymodule_export]
         use crate::color::PyColor;
-
-        #[pyfunction]
-        #[pyo3(signature = (*args))]
-        fn color(args: &Bound<'_, PyTuple>) -> PyResult<PyColor> {
-            PyColor::py_new(args)
-        }
 
         #[pyfunction]
         fn hex(s: &str) -> PyResult<PyColor> {
@@ -704,6 +720,21 @@ mod mewnala {
         graphics!(module).draw_geometry(&*geometry.extract::<PyRef<Geometry>>()?)
     }
 
+    #[pyfunction(name = "color")]
+    #[pyo3(pass_module, signature = (*args))]
+    fn create_color(
+        module: &Bound<'_, PyModule>,
+        args: &Bound<'_, PyTuple>,
+    ) -> PyResult<super::color::PyColor> {
+        match get_graphics(module)? {
+            Some(g) => g.color(args),
+            None => {
+                let mode = super::color::ColorMode::default();
+                super::color::extract_color_with_mode(args, &mode).map(super::color::PyColor::from)
+            }
+        }
+    }
+
     #[pyfunction]
     #[pyo3(pass_module, signature = (*args))]
     fn background(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
@@ -714,6 +745,21 @@ mod mewnala {
         } else {
             graphics.background(args)
         }
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (mode, max1=None, max2=None, max3=None, max_alpha=None))]
+    fn color_mode<'py>(
+        module: &Bound<'py, PyModule>,
+        mode: u8,
+        max1: Option<&Bound<'py, PyAny>>,
+        max2: Option<&Bound<'py, PyAny>>,
+        max3: Option<&Bound<'py, PyAny>>,
+        max_alpha: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<()> {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        graphics.set_color_mode(mode, max1, max2, max3, max_alpha)
     }
 
     #[pyfunction]

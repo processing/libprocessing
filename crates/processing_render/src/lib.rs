@@ -1,5 +1,6 @@
 #![allow(clippy::module_inception)]
 
+pub mod color;
 pub mod geometry;
 pub mod gltf;
 mod graphics;
@@ -368,6 +369,33 @@ pub fn graphics_update_region(
                 (graphics_entity, x, y, width, height, data, px_size),
             )
             .unwrap()
+    })
+}
+
+/// Set the color mode for a graphics entity.
+pub fn graphics_set_color_mode(
+    graphics_entity: Entity,
+    mode: color::ColorMode,
+) -> error::Result<()> {
+    app_mut(|app| {
+        let mut entity = app
+            .world_mut()
+            .get_entity_mut(graphics_entity)
+            .map_err(|_| error::ProcessingError::GraphicsNotFound)?;
+        if let Some(mut cm) = entity.get_mut::<color::ColorMode>() {
+            *cm = mode;
+        }
+        Ok(())
+    })
+}
+
+/// Get the color mode for a graphics entity.
+pub fn graphics_get_color_mode(graphics_entity: Entity) -> error::Result<color::ColorMode> {
+    app_mut(|app| {
+        app.world()
+            .get::<color::ColorMode>(graphics_entity)
+            .copied()
+            .ok_or(error::ProcessingError::GraphicsNotFound)
     })
 }
 

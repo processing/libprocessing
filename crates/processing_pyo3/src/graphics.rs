@@ -1,3 +1,10 @@
+use crate::color::{ColorMode, extract_color_with_mode};
+use crate::color::{ColorMode, extract_color_with_mode};
+use crate::glfw::GlfwContext;
+use crate::glfw::GlfwContext;
+use crate::input;
+use crate::math::{extract_vec2, extract_vec3, extract_vec4};
+use crate::math::{extract_vec2, extract_vec3, extract_vec4};
 use bevy::{
     color::{ColorToPacked, Srgba},
     math::Vec4,
@@ -10,10 +17,6 @@ use pyo3::{
     prelude::*,
     types::{PyDict, PyTuple},
 };
-
-use crate::glfw::GlfwContext;
-use crate::input;
-use crate::math::{extract_vec2, extract_vec3, extract_vec4};
 
 #[pyclass(unsendable)]
 pub struct Surface {
@@ -301,8 +304,22 @@ impl Graphics {
     }
 
     #[pyo3(signature = (*args))]
+    pub fn color(&self, args: &Bound<'_, PyTuple>) -> PyResult<crate::color::PyColor> {
+        extract_color_with_mode(
+            args,
+            &graphics_get_color_mode(self.entity)
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
+        )
+        .map(crate::color::PyColor::from)
+    }
+
+    #[pyo3(signature = (*args))]
     pub fn background(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let color = crate::color::extract_color(args)?;
+        let color = extract_color_with_mode(
+            args,
+            &graphics_get_color_mode(self.entity)
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
+        )?;
         graphics_record_command(self.entity, DrawCommand::BackgroundColor(color))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
@@ -314,7 +331,11 @@ impl Graphics {
 
     #[pyo3(signature = (*args))]
     pub fn fill(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let color = crate::color::extract_color(args)?;
+        let color = extract_color_with_mode(
+            args,
+            &graphics_get_color_mode(self.entity)
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
+        )?;
         graphics_record_command(self.entity, DrawCommand::Fill(color))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
@@ -326,7 +347,11 @@ impl Graphics {
 
     #[pyo3(signature = (*args))]
     pub fn stroke(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let color = crate::color::extract_color(args)?;
+        let color = extract_color_with_mode(
+            args,
+            &graphics_get_color_mode(self.entity)
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
+        )?;
         graphics_record_command(self.entity, DrawCommand::StrokeColor(color))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
@@ -451,7 +476,11 @@ impl Graphics {
 
     #[pyo3(signature = (*args))]
     pub fn emissive(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let color = crate::color::extract_color(args)?;
+        let color = extract_color_with_mode(
+            args,
+            &graphics_get_color_mode(self.entity)
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
+        )?;
         graphics_record_command(self.entity, DrawCommand::Emissive(color))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
@@ -490,6 +519,49 @@ impl Graphics {
 
     pub fn set_material(&self, material: &crate::material::Material) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::Material(material.entity))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    #[pyo3(name = "color_mode", signature = (mode, max1=None, max2=None, max3=None, max_alpha=None))]
+    pub fn set_color_mode<'py>(
+        &self,
+        mode: u8,
+        max1: Option<&Bound<'py, PyAny>>,
+        max2: Option<&Bound<'py, PyAny>>,
+        max3: Option<&Bound<'py, PyAny>>,
+        max_alpha: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<()> {
+        let space = crate::color::ColorSpace::from_u8(mode)
+            .ok_or_else(|| PyRuntimeError::new_err(format!("unknown color space: {mode}")))?;
+        let parse =
+            |obj: &Bound<'py, PyAny>, ch: usize| crate::color::parse_numeric(&space, obj, ch);
+        let new_mode = match (max1, max2, max3, max_alpha) {
+            // color_mode(MODE)
+            (None, _, _, _) => ColorMode::with_defaults(space),
+            // color_mode(MODE, max)
+            (Some(m), None, _, _) => ColorMode::with_uniform_max(space, parse(m, 0)?),
+            // color_mode(MODE, max1, max2, max3)
+            (Some(m1), Some(m2), Some(m3), None) => {
+                let defaults = space.default_maxes();
+                ColorMode::new(
+                    space,
+                    parse(m1, 0)?,
+                    parse(m2, 1)?,
+                    parse(m3, 2)?,
+                    defaults[3],
+                )
+            }
+            // color_mode(MODE, max1, max2, max3, maxA)
+            (Some(m1), Some(m2), Some(m3), Some(ma)) => ColorMode::new(
+                space,
+                parse(m1, 0)?,
+                parse(m2, 1)?,
+                parse(m3, 2)?,
+                parse(ma, 3)?,
+            ),
+            _ => return Err(PyRuntimeError::new_err("expected 1, 2, 4, or 5 arguments")),
+        };
+        graphics_set_color_mode(self.entity, new_mode)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 

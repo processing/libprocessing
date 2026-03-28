@@ -4,7 +4,91 @@ use bevy::color::{
 };
 use pyo3::{exceptions::PyTypeError, prelude::*, types::PyTuple};
 
-use crate::math::{PyVec4, PyVecIter, hash_f32};
+use crate::math::{PyVec3, PyVec4, PyVecIter, hash_f32};
+
+pub use processing::prelude::color::{ColorMode, ColorSpace};
+
+fn int_maxes(space: &ColorSpace) -> [f32; 4] {
+    match space {
+        ColorSpace::Srgb | ColorSpace::Linear => [255.0, 255.0, 255.0, 255.0],
+        ColorSpace::Hsl | ColorSpace::Hsv | ColorSpace::Hwb => [360.0, 100.0, 100.0, 255.0],
+        ColorSpace::Oklch => [100.0, 100.0, 360.0, 255.0],
+        ColorSpace::Oklab => [100.0, 100.0, 100.0, 255.0],
+        ColorSpace::Lab => [100.0, 100.0, 100.0, 255.0],
+        ColorSpace::Lch => [100.0, 100.0, 360.0, 255.0],
+        ColorSpace::Xyz => [100.0, 100.0, 100.0, 255.0],
+    }
+}
+
+/// Parse a Python int or float into an f32 for a given channel.
+pub(crate) fn parse_numeric(
+    space: &ColorSpace,
+    obj: &Bound<'_, PyAny>,
+    ch: usize,
+) -> PyResult<f32> {
+    if let Ok(v) = obj.extract::<i64>() {
+        let native = space.default_maxes();
+        let imax = int_maxes(space);
+        return Ok(v as f32 / imax[ch] * native[ch]);
+    }
+    if let Ok(v) = obj.extract::<f64>() {
+        return Ok(v as f32);
+    }
+    Err(PyTypeError::new_err("expected int or float"))
+}
+
+fn convert_channel(mode: &ColorMode, obj: &Bound<'_, PyAny>, ch: usize) -> PyResult<f32> {
+    let v = parse_numeric(&mode.space, obj, ch)?;
+    Ok(mode.scale(v, ch))
+}
+
+// Accepts a varags of color-like arguments and extracts a Color, applying the provided ColorMode.
+pub(crate) fn extract_color_with_mode(
+    args: &Bound<'_, PyTuple>,
+    mode: &ColorMode,
+) -> PyResult<Color> {
+    let space = mode.space;
+    let native = space.default_maxes();
+    match args.len() {
+        0 => Err(PyTypeError::new_err("expected at least 1 argument")),
+        1 => {
+            let first = args.get_item(0)?;
+            if let Ok(c) = first.extract::<PyRef<PyColor>>() {
+                return Ok(c.0);
+            }
+            if let Ok(s) = first.extract::<String>() {
+                return parse_hex(&s);
+            }
+            if let Ok(v) = first.extract::<PyRef<PyVec4>>() {
+                return Ok(space.color(v.0.x, v.0.y, v.0.z, v.0.w));
+            }
+            if let Ok(v) = first.extract::<PyRef<PyVec3>>() {
+                return Ok(space.color(v.0.x, v.0.y, v.0.z, native[3]));
+            }
+            let v = convert_channel(mode, &first, 0)?;
+            Ok(space.gray(v, native[3]))
+        }
+        2 => {
+            let v = convert_channel(mode, &args.get_item(0)?, 0)?;
+            let a = convert_channel(mode, &args.get_item(1)?, 3)?;
+            Ok(space.gray(v, a))
+        }
+        3 => {
+            let c1 = convert_channel(mode, &args.get_item(0)?, 0)?;
+            let c2 = convert_channel(mode, &args.get_item(1)?, 1)?;
+            let c3 = convert_channel(mode, &args.get_item(2)?, 2)?;
+            Ok(space.color(c1, c2, c3, native[3]))
+        }
+        4 => {
+            let c1 = convert_channel(mode, &args.get_item(0)?, 0)?;
+            let c2 = convert_channel(mode, &args.get_item(1)?, 1)?;
+            let c3 = convert_channel(mode, &args.get_item(2)?, 2)?;
+            let ca = convert_channel(mode, &args.get_item(3)?, 3)?;
+            Ok(space.color(c1, c2, c3, ca))
+        }
+        _ => Err(PyTypeError::new_err("expected 1-4 arguments")),
+    }
+}
 
 #[pyclass(name = "Color", from_py_object)]
 #[derive(Clone, Debug)]
@@ -26,20 +110,6 @@ impl From<Srgba> for PyColor {
     fn from(c: Srgba) -> Self {
         Self(Color::Srgba(c))
     }
-}
-
-fn extract_component(obj: &Bound<'_, PyAny>) -> PyResult<f32> {
-    if let Ok(v) = obj.extract::<i64>() {
-        return Ok(v as f32 / 255.0);
-    }
-    if let Ok(v) = obj.extract::<f64>() {
-        return Ok(v as f32);
-    }
-    Err(PyTypeError::new_err("expected int or float"))
-}
-
-fn to_srgba(color: &Color) -> Srgba {
-    color.to_srgba()
 }
 
 fn components(color: &Color) -> [f32; 4] {
@@ -80,42 +150,7 @@ impl PyColor {
     #[new]
     #[pyo3(signature = (*args))]
     pub fn py_new(args: &Bound<'_, PyTuple>) -> PyResult<Self> {
-        match args.len() {
-            0 => Err(PyTypeError::new_err("Color requires at least 1 argument")),
-            1 => {
-                let first = args.get_item(0)?;
-                if let Ok(c) = first.extract::<PyRef<PyColor>>() {
-                    return Ok(Self(c.0));
-                }
-                if let Ok(s) = first.extract::<String>() {
-                    return Ok(Self(parse_hex(&s)?));
-                }
-                if let Ok(v) = first.extract::<PyRef<PyVec4>>() {
-                    return Ok(Self(Color::srgba(v.0.x, v.0.y, v.0.z, v.0.w)));
-                }
-                let v = extract_component(&first)?;
-                Ok(Self(Color::srgba(v, v, v, 1.0)))
-            }
-            2 => {
-                let v = extract_component(&args.get_item(0)?)?;
-                let a = extract_component(&args.get_item(1)?)?;
-                Ok(Self(Color::srgba(v, v, v, a)))
-            }
-            3 => {
-                let r = extract_component(&args.get_item(0)?)?;
-                let g = extract_component(&args.get_item(1)?)?;
-                let b = extract_component(&args.get_item(2)?)?;
-                Ok(Self(Color::srgba(r, g, b, 1.0)))
-            }
-            4 => {
-                let r = extract_component(&args.get_item(0)?)?;
-                let g = extract_component(&args.get_item(1)?)?;
-                let b = extract_component(&args.get_item(2)?)?;
-                let a = extract_component(&args.get_item(3)?)?;
-                Ok(Self(Color::srgba(r, g, b, a)))
-            }
-            _ => Err(PyTypeError::new_err("Color takes 1-4 arguments")),
-        }
+        extract_color_with_mode(args, &ColorMode::default()).map(Self)
     }
 
     #[staticmethod]
@@ -225,33 +260,33 @@ impl PyColor {
 
     #[getter]
     fn r(&self) -> f32 {
-        to_srgba(&self.0).red
+        self.0.to_srgba().red
     }
     #[setter]
     fn set_r(&mut self, val: f32) {
-        let mut s = to_srgba(&self.0);
+        let mut s = self.0.to_srgba();
         s.red = val;
         self.0 = Color::Srgba(s);
     }
 
     #[getter]
     fn g(&self) -> f32 {
-        to_srgba(&self.0).green
+        self.0.to_srgba().green
     }
     #[setter]
     fn set_g(&mut self, val: f32) {
-        let mut s = to_srgba(&self.0);
+        let mut s = self.0.to_srgba();
         s.green = val;
         self.0 = Color::Srgba(s);
     }
 
     #[getter]
     fn b(&self) -> f32 {
-        to_srgba(&self.0).blue
+        self.0.to_srgba().blue
     }
     #[setter]
     fn set_b(&mut self, val: f32) {
-        let mut s = to_srgba(&self.0);
+        let mut s = self.0.to_srgba();
         s.blue = val;
         self.0 = Color::Srgba(s);
     }
@@ -266,7 +301,7 @@ impl PyColor {
     }
 
     fn to_hex(&self) -> String {
-        to_srgba(&self.0).to_hex()
+        self.0.to_srgba().to_hex()
     }
 
     fn with_alpha(&self, a: f32) -> Self {
@@ -367,12 +402,12 @@ impl PyColor {
 
     fn __eq__(&self, other: &Self) -> bool {
         // Compare in sRGBA so colors in different spaces can be equal
-        to_srgba(&self.0) == to_srgba(&other.0)
+        self.0.to_srgba() == other.0.to_srgba()
     }
 
     fn __hash__(&self) -> u64 {
         // Hash in sRGBA so equal colors hash the same regardless of space
-        let s = to_srgba(&self.0);
+        let s = self.0.to_srgba();
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         hash_f32(s.red, &mut hasher);
         hash_f32(s.green, &mut hasher);
@@ -424,10 +459,6 @@ impl ColorLike {
     }
 }
 
-pub(crate) fn extract_color(args: &Bound<'_, PyTuple>) -> PyResult<Color> {
-    PyColor::py_new(args).map(|c| c.0)
-}
-
 fn parse_hex(s: &str) -> PyResult<Color> {
     Srgba::hex(s)
         .map(Color::Srgba)
@@ -441,7 +472,7 @@ mod tests {
     #[test]
     fn test_color_from_srgba() {
         let c = PyColor(Color::srgba(1.0, 0.0, 0.5, 1.0));
-        let s = to_srgba(&c.0);
+        let s = c.0.to_srgba();
         assert!((s.red - 1.0).abs() < 1e-6);
         assert!((s.green - 0.0).abs() < 1e-6);
         assert!((s.blue - 0.5).abs() < 1e-6);
@@ -451,7 +482,7 @@ mod tests {
     #[test]
     fn test_hex_roundtrip() {
         let c = parse_hex("#FF00FF").unwrap();
-        let s = to_srgba(&c);
+        let s = c.to_srgba();
         assert!((s.red - 1.0).abs() < 0.01);
         assert!((s.green - 0.0).abs() < 0.01);
         assert!((s.blue - 1.0).abs() < 0.01);
@@ -461,7 +492,7 @@ mod tests {
     #[test]
     fn test_hex_with_alpha() {
         let c = parse_hex("#FF000080").unwrap();
-        let s = to_srgba(&c);
+        let s = c.to_srgba();
         assert!((s.red - 1.0).abs() < 0.01);
         assert!((s.alpha - 128.0 / 255.0).abs() < 0.01);
     }
@@ -471,7 +502,7 @@ mod tests {
         let a = PyColor(Color::srgba(0.0, 0.0, 0.0, 1.0));
         let b = PyColor(Color::srgba(1.0, 1.0, 1.0, 1.0));
         let mid = a.mix(&b, 0.5);
-        let s = to_srgba(&mid.0);
+        let s = mid.0.to_srgba();
         assert!((s.red - 0.5).abs() < 0.05);
         assert!((s.green - 0.5).abs() < 0.05);
         assert!((s.blue - 0.5).abs() < 0.05);
@@ -482,8 +513,8 @@ mod tests {
         let c = PyColor(Color::srgba(0.5, 0.5, 0.5, 1.0));
         let lighter = c.lighter(0.1);
         let darker = c.darker(0.1);
-        let sl = to_srgba(&lighter.0);
-        let sd = to_srgba(&darker.0);
+        let sl = lighter.0.to_srgba();
+        let sd = darker.0.to_srgba();
         assert!(sl.red > sd.red || sl.green > sd.green || sl.blue > sd.blue);
     }
 
@@ -514,7 +545,7 @@ mod tests {
     #[test]
     fn test_hsla_roundtrip() {
         let c = PyColor::hsla(0.0, 1.0, 0.5, 1.0);
-        let s = to_srgba(&c.0);
+        let s = c.0.to_srgba();
         assert!((s.red - 1.0).abs() < 0.01);
         assert!(s.green < 0.01);
         assert!(s.blue < 0.01);

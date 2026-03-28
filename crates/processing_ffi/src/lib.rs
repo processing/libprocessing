@@ -173,7 +173,9 @@ pub extern "C" fn processing_background_color(graphics_id: u64, color: Color) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
     error::check(|| {
-        graphics_record_command(graphics_entity, DrawCommand::BackgroundColor(color.into()))
+        let mode = graphics_get_color_mode(graphics_entity)?;
+        let color = color.resolve(&mode);
+        graphics_record_command(graphics_entity, DrawCommand::BackgroundColor(color))
     });
 }
 
@@ -244,17 +246,46 @@ pub extern "C" fn processing_exit(exit_code: u8) {
     error::check(|| exit(exit_code));
 }
 
+/// Set the color mode for a graphics context.
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_color_mode(
+    graphics_id: u64,
+    space: u8,
+    max1: f32,
+    max2: f32,
+    max3: f32,
+    max_alpha: f32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        let space = processing::prelude::color::ColorSpace::from_u8(space).ok_or_else(|| {
+            processing::prelude::error::ProcessingError::InvalidArgument(format!(
+                "unknown color space: {space}"
+            ))
+        })?;
+        let mode = processing::prelude::color::ColorMode::new(space, max1, max2, max3, max_alpha);
+        graphics_set_color_mode(graphics_entity, mode)
+    });
+}
+
 /// Set the fill color.
 ///
 /// SAFETY:
 /// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_set_fill(graphics_id: u64, r: f32, g: f32, b: f32, a: f32) {
+pub extern "C" fn processing_set_fill(graphics_id: u64, color: Color) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    let color = bevy::color::Color::srgba(r, g, b, a);
-    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Fill(color)));
+    error::check(|| {
+        let mode = graphics_get_color_mode(graphics_entity)?;
+        graphics_record_command(graphics_entity, DrawCommand::Fill(color.resolve(&mode)))
+    });
 }
 
 /// Set the stroke color.
@@ -263,11 +294,16 @@ pub extern "C" fn processing_set_fill(graphics_id: u64, r: f32, g: f32, b: f32, 
 /// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_set_stroke_color(graphics_id: u64, r: f32, g: f32, b: f32, a: f32) {
+pub extern "C" fn processing_set_stroke_color(graphics_id: u64, color: Color) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    let color = bevy::color::Color::srgba(r, g, b, a);
-    error::check(|| graphics_record_command(graphics_entity, DrawCommand::StrokeColor(color)));
+    error::check(|| {
+        let mode = graphics_get_color_mode(graphics_entity)?;
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::StrokeColor(color.resolve(&mode)),
+        )
+    });
 }
 
 /// Set the stroke weight.
@@ -565,7 +601,7 @@ pub unsafe extern "C" fn processing_image_readback(
         unsafe {
             let buffer_slice = std::slice::from_raw_parts_mut(buffer, buffer_len);
             for (i, color) in colors.iter().enumerate() {
-                buffer_slice[i] = Color::from(*color);
+                buffer_slice[i] = Color::from_linear(*color);
             }
         }
 
@@ -1154,9 +1190,12 @@ pub extern "C" fn processing_light_create_directional(
 ) -> u64 {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    error::check(|| light_create_directional(graphics_entity, color.into(), illuminance))
-        .map(|e| e.to_bits())
-        .unwrap_or(0)
+    error::check(|| {
+        let mode = graphics_get_color_mode(graphics_entity)?;
+        light_create_directional(graphics_entity, color.resolve(&mode), illuminance)
+    })
+    .map(|e| e.to_bits())
+    .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
@@ -1169,9 +1208,18 @@ pub extern "C" fn processing_light_create_point(
 ) -> u64 {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    error::check(|| light_create_point(graphics_entity, color.into(), intensity, range, radius))
-        .map(|e| e.to_bits())
-        .unwrap_or(0)
+    error::check(|| {
+        let mode = graphics_get_color_mode(graphics_entity)?;
+        light_create_point(
+            graphics_entity,
+            color.resolve(&mode),
+            intensity,
+            range,
+            radius,
+        )
+    })
+    .map(|e| e.to_bits())
+    .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
@@ -1187,9 +1235,10 @@ pub extern "C" fn processing_light_create_spot(
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
     error::check(|| {
+        let mode = graphics_get_color_mode(graphics_entity)?;
         light_create_spot(
             graphics_entity,
-            color.into(),
+            color.resolve(&mode),
             intensity,
             range,
             radius,
