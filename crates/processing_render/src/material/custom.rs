@@ -1,4 +1,4 @@
-use std::any::TypeId;
+use std::any::{Any, TypeId};
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -11,7 +11,7 @@ wesl::wesl_pkg!(lygia);
 
 use bevy::{
     asset::{AsAssetId, AssetEventSystems},
-    core_pipeline::core_3d::{Opaque3d, Transparent3d},
+    core_pipeline::core_3d::Opaque3d,
     ecs::system::{
         SystemParamItem,
         lifetimeless::{SRes, SResMut},
@@ -50,8 +50,6 @@ use bevy_naga_reflect::dynamic_shader::DynamicShader;
 
 use bevy::shader::Shader as ShaderAsset;
 
-use std::any::Any;
-
 use crate::material::MaterialValue;
 use crate::render::material::UntypedMaterial;
 use processing_core::config::{Config, ConfigKey};
@@ -86,7 +84,7 @@ pub struct CustomMaterial {
     pub shader_handle: Handle<ShaderAsset>,
     pub has_vertex: bool,
     pub has_fragment: bool,
-    pub blend_state: Option<bevy::render::render_resource::BlendState>,
+    pub blend_state: Option<BlendState>,
 }
 
 #[derive(Component)]

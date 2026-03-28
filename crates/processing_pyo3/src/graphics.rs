@@ -21,10 +21,6 @@ use pyo3::{
 use crate::glfw::GlfwContext;
 use crate::math::{extract_vec2, extract_vec3, extract_vec4};
 
-// ---------------------------------------------------------------------------
-// BlendMode
-// ---------------------------------------------------------------------------
-
 #[pyclass(name = "BlendMode")]
 #[derive(Clone)]
 pub struct PyBlendMode {

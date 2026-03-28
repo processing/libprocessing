@@ -358,12 +358,16 @@ pub fn flush_draw_commands(
 
                     let material_key = material_key_with_fill(&state);
                     let material_handle = match &material_key {
-                        MaterialKey::Custom { entity: mat_entity, .. } => {
-                            let Some(handle) = p_material_handles.get(*mat_entity).ok() else {
+                        MaterialKey::Custom { entity: mat_entity, blend_state } => {
+                            let Some(untyped) = p_material_handles.get(*mat_entity).ok() else {
                                 warn!("Could not find material for entity {:?}", mat_entity);
                                 continue;
                             };
-                            handle.0.clone()
+                            clone_custom_material_with_blend(
+                                &mut res.custom_materials,
+                                &untyped.0,
+                                *blend_state,
+                            )
                         }
                         _ => material_key.to_material(&mut res.materials),
                     };
@@ -478,24 +482,11 @@ fn spawn_mesh(
                 warn!("Custom material entity {:?} not found", entity);
                 return;
             };
-            match *blend_state {
-                // No blend override — use the original handle
-                None => untyped.0.clone(),
-                // Blend override — clone the custom material with the blend state
-                Some(bs) => {
-                    if let Ok(handle) = untyped.0.clone().try_typed::<CustomMaterial>() {
-                        if let Some(original) = res.custom_materials.get(&handle) {
-                            let mut variant = original.clone();
-                            variant.blend_state = Some(bs);
-                            res.custom_materials.add(variant).untyped()
-                        } else {
-                            untyped.0.clone()
-                        }
-                    } else {
-                        untyped.0.clone()
-                    }
-                }
-            }
+            clone_custom_material_with_blend(
+                &mut res.custom_materials,
+                &untyped.0,
+                *blend_state,
+            )
         }
         _ => key.to_material(&mut res.materials),
     };
@@ -512,8 +503,6 @@ fn spawn_mesh(
 fn needs_batch(batch: &BatchState, state: &RenderState, material_key: &MaterialKey) -> bool {
     let material_changed = batch.material_key.as_ref() != Some(material_key);
     let transform_changed = batch.transform != state.transform.current();
-    // When a custom blend mode is active, each shape needs its own draw call
-    // so that shapes composite against each other in draw order.
     let requires_separate_draws = state.blend_state.is_some();
     material_changed || transform_changed || requires_separate_draws
 }
@@ -529,6 +518,27 @@ fn start_batch(
     batch.material_key = Some(material_key);
     batch.transform = state.transform.current();
     batch.current_mesh = Some(empty_mesh());
+}
+
+fn clone_custom_material_with_blend(
+    custom_materials: &mut Assets<CustomMaterial>,
+    original: &UntypedHandle,
+    blend_state: Option<BlendState>,
+) -> UntypedHandle {
+    match blend_state {
+        None => original.clone(),
+        Some(bs) => {
+            let Ok(handle) = original.clone().try_typed::<CustomMaterial>() else {
+                return original.clone();
+            };
+            let Some(original_mat) = custom_materials.get(&handle) else {
+                return original.clone();
+            };
+            let mut variant = original_mat.clone();
+            variant.blend_state = Some(bs);
+            custom_materials.add(variant).untyped()
+        }
+    }
 }
 
 fn material_key_with_color(
@@ -641,13 +651,17 @@ fn add_shape3d(
     let mesh_handle = res.meshes.add(mesh);
     let fill_color = state.fill_color.unwrap_or(Color::WHITE);
     let material_handle = match &state.material_key {
-        MaterialKey::Custom { entity, .. } => match material_handles.get(*entity) {
-            Ok(handle) => handle.0.clone(),
-            Err(_) => {
+        MaterialKey::Custom { entity, .. } => {
+            let Some(untyped) = material_handles.get(*entity).ok() else {
                 warn!("Custom material entity {:?} not found", entity);
                 return;
-            }
-        },
+            };
+            clone_custom_material_with_blend(
+                &mut res.custom_materials,
+                &untyped.0,
+                state.blend_state,
+            )
+        }
         // TODO: in 2d, we use vertex colors. `to_material` becomes complicated if we also encode
         // a base color in the material, so for simplicity we just create a new material here
         // that is unlit and uses the fill color as the base color

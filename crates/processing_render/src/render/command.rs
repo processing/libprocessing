@@ -75,7 +75,6 @@ impl From<u8> for BlendMode {
     }
 }
 
-/// Convert a u8 to a WebGPU BlendFactor.
 pub fn blend_factor_from_u8(v: u8) -> BlendFactor {
     match v {
         0 => BlendFactor::Zero,
@@ -93,7 +92,6 @@ pub fn blend_factor_from_u8(v: u8) -> BlendFactor {
     }
 }
 
-/// Convert a u8 to a WebGPU BlendOperation.
 pub fn blend_op_from_u8(v: u8) -> BlendOperation {
     match v {
         0 => BlendOperation::Add,
@@ -105,7 +103,6 @@ pub fn blend_op_from_u8(v: u8) -> BlendOperation {
     }
 }
 
-/// Build a BlendState from individual component parameters.
 pub fn custom_blend_state(
     color_src: u8,
     color_dst: u8,
@@ -150,8 +147,7 @@ impl BlendMode {
         }
     }
 
-    /// Convert to a WebGPU BlendState, matching Processing's OpenGL blend configurations.
-    /// Returns None for the default Blend mode (standard alpha blending handled by AlphaMode).
+    /// Returns None for the default Blend mode, letting AlphaMode handle blending.
     pub fn to_blend_state(self) -> Option<BlendState> {
         use BlendFactor::*;
         use BlendOperation::*;
