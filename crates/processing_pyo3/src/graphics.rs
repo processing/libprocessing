@@ -1,5 +1,9 @@
 use crate::color::{ColorMode, extract_color_with_mode};
+use crate::color::{ColorMode, extract_color_with_mode};
 use crate::glfw::GlfwContext;
+use crate::glfw::GlfwContext;
+use crate::input;
+use crate::math::{extract_vec2, extract_vec3, extract_vec4};
 use crate::math::{extract_vec2, extract_vec3, extract_vec4};
 use bevy::{
     color::{ColorToPacked, Srgba},
@@ -13,10 +17,6 @@ use pyo3::{
     prelude::*,
     types::{PyDict, PyTuple},
 };
-use crate::color::{extract_color_with_mode, ColorMode};
-use crate::glfw::GlfwContext;
-use crate::input;
-use crate::math::{extract_vec2, extract_vec3, extract_vec4};
 
 #[pyclass(unsendable)]
 pub struct Surface {
