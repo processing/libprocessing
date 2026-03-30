@@ -1,4 +1,4 @@
-use bevy::color::{LinearRgba, Srgba};
+use bevy::color::LinearRgba;
 use processing::prelude::color::{ColorMode, ColorSpace};
 
 /// A color with 4 float components and its color space.

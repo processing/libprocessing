@@ -15,7 +15,7 @@ use pyo3::{
     types::{PyDict, PyTuple},
 };
 
-#[pyclass(name = "BlendMode")]
+#[pyclass(name = "BlendMode", from_py_object)]
 #[derive(Clone)]
 pub struct PyBlendMode {
     pub(crate) blend_state: Option<bevy::render::render_resource::BlendState>,
