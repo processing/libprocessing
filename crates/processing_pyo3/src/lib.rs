@@ -345,43 +345,6 @@ mod mewnala {
     #[pymodule_export]
     const XYZ: u8 = 9;
 
-    // Blend factor constants (for BlendMode custom constructor)
-    #[pymodule_export]
-    const ZERO: u8 = 0;
-    #[pymodule_export]
-    const ONE: u8 = 1;
-    #[pymodule_export]
-    const SRC_COLOR: u8 = 2;
-    #[pymodule_export]
-    const ONE_MINUS_SRC_COLOR: u8 = 3;
-    #[pymodule_export]
-    const SRC_ALPHA: u8 = 4;
-    #[pymodule_export]
-    const ONE_MINUS_SRC_ALPHA: u8 = 5;
-    #[pymodule_export]
-    const DST_COLOR: u8 = 6;
-    #[pymodule_export]
-    const ONE_MINUS_DST_COLOR: u8 = 7;
-    #[pymodule_export]
-    const DST_ALPHA: u8 = 8;
-    #[pymodule_export]
-    const ONE_MINUS_DST_ALPHA: u8 = 9;
-    #[pymodule_export]
-    const SRC_ALPHA_SATURATED: u8 = 10;
-
-    // Blend operation constants (for BlendMode custom constructor)
-    #[pymodule_export]
-    const OP_ADD: u8 = 0;
-    #[pymodule_export]
-    const OP_SUBTRACT: u8 = 1;
-    #[pymodule_export]
-    const OP_REVERSE_SUBTRACT: u8 = 2;
-    #[pymodule_export]
-    const OP_MIN: u8 = 3;
-    #[pymodule_export]
-    const OP_MAX: u8 = 4;
-
-    // Blend mode preset constants (added in pymodule_init)
     #[pymodule_init]
     fn init(module: &Bound<'_, PyModule>) -> PyResult<()> {
         use processing::prelude::BlendMode;
@@ -1044,5 +1007,10 @@ mod mewnala {
     #[pyfunction]
     fn key_is_down(key_code: u32) -> PyResult<bool> {
         input::key_is_down(key_code)
+    }
+
+    #[pyfunction]
+    fn key_just_pressed(key_code: u32) -> PyResult<bool> {
+        input::key_just_pressed(key_code)
     }
 }

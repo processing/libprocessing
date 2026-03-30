@@ -1,6 +1,5 @@
-mod glfw;
+use processing_glfw::GlfwContext;
 
-use glfw::{GlfwContext, Key};
 use processing::prelude::*;
 
 const MODES: &[BlendMode] = &[
@@ -38,16 +37,12 @@ fn sketch() -> error::Result<()> {
     let mut index: usize = 0;
 
     while glfw_ctx.poll_events() {
-        match glfw_ctx.last_key {
-            Some(Key::Right | Key::Space) => {
-                index = (index + 1) % MODES.len();
-                eprintln!("{}", MODES[index].name());
-            }
-            Some(Key::Left) => {
-                index = (index + MODES.len() - 1) % MODES.len();
-                eprintln!("{}", MODES[index].name());
-            }
-            _ => {}
+        if input_key_just_pressed(KeyCode::ArrowRight)? || input_key_just_pressed(KeyCode::Space)? {
+            index = (index + 1) % MODES.len();
+            eprintln!("{}", MODES[index].name());
+        } else if input_key_just_pressed(KeyCode::ArrowLeft)? {
+            index = (index + MODES.len() - 1) % MODES.len();
+            eprintln!("{}", MODES[index].name());
         }
 
         graphics_begin_draw(graphics)?;
@@ -62,7 +57,6 @@ fn sketch() -> error::Result<()> {
             DrawCommand::BlendMode(MODES[index].to_blend_state()),
         )?;
 
-        // Red
         graphics_record_command(
             graphics,
             DrawCommand::Fill(bevy::color::Color::srgba(0.9, 0.2, 0.2, 0.75)),
@@ -78,7 +72,6 @@ fn sketch() -> error::Result<()> {
             },
         )?;
 
-        // Green
         graphics_record_command(
             graphics,
             DrawCommand::Fill(bevy::color::Color::srgba(0.2, 0.8, 0.2, 0.75)),
@@ -94,7 +87,6 @@ fn sketch() -> error::Result<()> {
             },
         )?;
 
-        // Blue
         graphics_record_command(
             graphics,
             DrawCommand::Fill(bevy::color::Color::srgba(0.2, 0.3, 0.9, 0.75)),

@@ -11,7 +11,7 @@ use bevy::pbr::{
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, BlendState};
 use bevy::shader::ShaderRef;
-use processing_core::error::ProcessingError;
+use processing_core::error::{self, ProcessingError};
 
 pub struct ProcessingMaterialPlugin;
 
@@ -70,7 +70,7 @@ pub fn set_property(
     material_handles: Query<&UntypedMaterial>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
     mut custom_materials: ResMut<Assets<custom::CustomMaterial>>,
-) -> processing_core::error::Result<()> {
+) -> error::Result<()> {
     let untyped = material_handles
         .get(entity)
         .map_err(|_| ProcessingError::MaterialNotFound)?;
@@ -100,7 +100,7 @@ pub fn destroy(
     material_handles: Query<&UntypedMaterial>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
     mut custom_materials: ResMut<Assets<custom::CustomMaterial>>,
-) -> processing_core::error::Result<()> {
+) -> error::Result<()> {
     let untyped = material_handles
         .get(entity)
         .map_err(|_| ProcessingError::MaterialNotFound)?;

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::render::render_resource::{BlendComponent, BlendFactor, BlendOperation, BlendState};
+use processing_core::error::{self, ProcessingError};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[repr(u8)]
@@ -57,49 +58,57 @@ pub enum BlendMode {
     Replace = 9,
 }
 
-impl From<u8> for BlendMode {
-    fn from(v: u8) -> Self {
+impl TryFrom<u8> for BlendMode {
+    type Error = ProcessingError;
+
+    fn try_from(v: u8) -> std::result::Result<Self, Self::Error> {
         match v {
-            0 => Self::Blend,
-            1 => Self::Add,
-            2 => Self::Subtract,
-            3 => Self::Darkest,
-            4 => Self::Lightest,
-            5 => Self::Difference,
-            6 => Self::Exclusion,
-            7 => Self::Multiply,
-            8 => Self::Screen,
-            9 => Self::Replace,
-            _ => Self::default(),
+            0 => Ok(Self::Blend),
+            1 => Ok(Self::Add),
+            2 => Ok(Self::Subtract),
+            3 => Ok(Self::Darkest),
+            4 => Ok(Self::Lightest),
+            5 => Ok(Self::Difference),
+            6 => Ok(Self::Exclusion),
+            7 => Ok(Self::Multiply),
+            8 => Ok(Self::Screen),
+            9 => Ok(Self::Replace),
+            _ => Err(ProcessingError::InvalidArgument(format!(
+                "unknown blend mode: {v}"
+            ))),
         }
     }
 }
 
-pub fn blend_factor_from_u8(v: u8) -> BlendFactor {
+fn blend_factor_from_u8(v: u8) -> std::result::Result<BlendFactor, ProcessingError> {
     match v {
-        0 => BlendFactor::Zero,
-        1 => BlendFactor::One,
-        2 => BlendFactor::Src,
-        3 => BlendFactor::OneMinusSrc,
-        4 => BlendFactor::SrcAlpha,
-        5 => BlendFactor::OneMinusSrcAlpha,
-        6 => BlendFactor::Dst,
-        7 => BlendFactor::OneMinusDst,
-        8 => BlendFactor::DstAlpha,
-        9 => BlendFactor::OneMinusDstAlpha,
-        10 => BlendFactor::SrcAlphaSaturated,
-        _ => BlendFactor::One,
+        0 => Ok(BlendFactor::Zero),
+        1 => Ok(BlendFactor::One),
+        2 => Ok(BlendFactor::Src),
+        3 => Ok(BlendFactor::OneMinusSrc),
+        4 => Ok(BlendFactor::SrcAlpha),
+        5 => Ok(BlendFactor::OneMinusSrcAlpha),
+        6 => Ok(BlendFactor::Dst),
+        7 => Ok(BlendFactor::OneMinusDst),
+        8 => Ok(BlendFactor::DstAlpha),
+        9 => Ok(BlendFactor::OneMinusDstAlpha),
+        10 => Ok(BlendFactor::SrcAlphaSaturated),
+        _ => Err(ProcessingError::InvalidArgument(format!(
+            "unknown blend factor: {v}"
+        ))),
     }
 }
 
-pub fn blend_op_from_u8(v: u8) -> BlendOperation {
+fn blend_op_from_u8(v: u8) -> std::result::Result<BlendOperation, ProcessingError> {
     match v {
-        0 => BlendOperation::Add,
-        1 => BlendOperation::Subtract,
-        2 => BlendOperation::ReverseSubtract,
-        3 => BlendOperation::Min,
-        4 => BlendOperation::Max,
-        _ => BlendOperation::Add,
+        0 => Ok(BlendOperation::Add),
+        1 => Ok(BlendOperation::Subtract),
+        2 => Ok(BlendOperation::ReverseSubtract),
+        3 => Ok(BlendOperation::Min),
+        4 => Ok(BlendOperation::Max),
+        _ => Err(ProcessingError::InvalidArgument(format!(
+            "unknown blend operation: {v}"
+        ))),
     }
 }
 
@@ -110,19 +119,19 @@ pub fn custom_blend_state(
     alpha_src: u8,
     alpha_dst: u8,
     alpha_op: u8,
-) -> BlendState {
-    BlendState {
+) -> error::Result<BlendState> {
+    Ok(BlendState {
         color: BlendComponent {
-            src_factor: blend_factor_from_u8(color_src),
-            dst_factor: blend_factor_from_u8(color_dst),
-            operation: blend_op_from_u8(color_op),
+            src_factor: blend_factor_from_u8(color_src)?,
+            dst_factor: blend_factor_from_u8(color_dst)?,
+            operation: blend_op_from_u8(color_op)?,
         },
         alpha: BlendComponent {
-            src_factor: blend_factor_from_u8(alpha_src),
-            dst_factor: blend_factor_from_u8(alpha_dst),
-            operation: blend_op_from_u8(alpha_op),
+            src_factor: blend_factor_from_u8(alpha_src)?,
+            dst_factor: blend_factor_from_u8(alpha_dst)?,
+            operation: blend_op_from_u8(alpha_op)?,
         },
-    }
+    })
 }
 
 const ALPHA_ADDITIVE: BlendComponent = BlendComponent {
@@ -147,7 +156,6 @@ impl BlendMode {
         }
     }
 
-    /// Returns None for the default Blend mode, letting AlphaMode handle blending.
     pub fn to_blend_state(self) -> Option<BlendState> {
         use BlendFactor::*;
         use BlendOperation::*;
@@ -168,7 +176,6 @@ impl BlendMode {
                 color: color(SrcAlpha, One, ReverseSubtract),
                 alpha: ALPHA_ADDITIVE,
             }),
-            // Blend factors are ignored by Min/Max operations
             Self::Darkest => Some(BlendState {
                 color: color(One, One, Min),
                 alpha: ALPHA_ADDITIVE,
@@ -177,8 +184,13 @@ impl BlendMode {
                 color: color(One, One, Max),
                 alpha: ALPHA_ADDITIVE,
             }),
-            // |src - dst| — not representable with fixed-function blending;
-            // reverse subtract is the same approximation Processing's OpenGL renderer uses.
+            // TODO: this is an approximation as we can't do abs difference in fixed function
+            // blending. this should probs be a fullscreen post-process effect instead. if we
+            // choose to add shader based blending, we should also consider adding more
+            // blend modes
+            //
+            // alternatively, we could express these shader based blend modes via a generic
+            // composite filter, which would more accurately reflect what is actually happening
             Self::Difference => Some(BlendState {
                 color: color(One, One, ReverseSubtract),
                 alpha: BlendComponent {
@@ -187,7 +199,6 @@ impl BlendMode {
                     operation: Max,
                 },
             }),
-            // src + dst - 2*src*dst = (1-dst)*src + (1-src)*dst
             Self::Exclusion => Some(BlendState {
                 color: color(OneMinusDst, OneMinusSrc, Add),
                 alpha: BlendComponent {
@@ -196,12 +207,10 @@ impl BlendMode {
                     operation: Add,
                 },
             }),
-            // src * dst (alpha-aware: falls back to dst when src is transparent)
             Self::Multiply => Some(BlendState {
                 color: color(Dst, OneMinusSrcAlpha, Add),
                 alpha: ALPHA_ADDITIVE,
             }),
-            // src + dst - src*dst = (1-dst)*src + dst
             Self::Screen => Some(BlendState {
                 color: color(OneMinusDst, One, Add),
                 alpha: ALPHA_ADDITIVE,

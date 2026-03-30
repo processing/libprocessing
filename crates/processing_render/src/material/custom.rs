@@ -60,7 +60,7 @@ struct CustomMaterialKey {
     blend_state: Option<BlendState>,
 }
 
-fn custom_blend_specialize(
+fn specialize(
     key: &dyn Any,
     descriptor: &mut RenderPipelineDescriptor,
     _layout: &MeshVertexBufferLayoutRef,
@@ -432,7 +432,7 @@ impl ErasedRenderAsset for CustomMaterial {
             base_specialize: Some(base_specialize),
             material_layout: Some(bind_group_layout),
             material_key: ErasedMaterialKey::new(CustomMaterialKey { blend_state }),
-            user_specialize: Some(custom_blend_specialize),
+            user_specialize: Some(specialize),
             alpha_mode: if blend_state.is_some() {
                 AlphaMode::Blend
             } else {

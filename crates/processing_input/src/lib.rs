@@ -241,6 +241,15 @@ pub fn input_key_is_pressed() -> error::Result<bool> {
     })
 }
 
+pub fn input_key_just_pressed(key_code: KeyCode) -> error::Result<bool> {
+    app_mut(|app| {
+        Ok(app
+            .world()
+            .resource::<ButtonInput<KeyCode>>()
+            .just_pressed(key_code))
+    })
+}
+
 pub fn input_key_is_down(key_code: KeyCode) -> error::Result<bool> {
     app_mut(|app| {
         Ok(app

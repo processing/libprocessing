@@ -300,7 +300,7 @@ pub fn flush_draw_commands(
                     let material_key = MaterialKey::Color {
                         transparent: color.alpha() < 1.0,
                         background_image: None,
-                        blend_state: None,
+                        blend_state: Some(BlendState::REPLACE),
                     };
                     let material_handle = material_key.to_material(&mut res.materials);
 
@@ -328,7 +328,7 @@ pub fn flush_draw_commands(
                     let material_key = MaterialKey::Color {
                         transparent: false,
                         background_image: Some(p_image.handle.clone()),
-                        blend_state: None,
+                        blend_state: Some(BlendState::REPLACE),
                     };
                     let material_handle = material_key.to_material(&mut res.materials);
 
@@ -358,7 +358,10 @@ pub fn flush_draw_commands(
 
                     let material_key = material_key_with_fill(&state);
                     let material_handle = match &material_key {
-                        MaterialKey::Custom { entity: mat_entity, blend_state } => {
+                        MaterialKey::Custom {
+                            entity: mat_entity,
+                            blend_state,
+                        } => {
                             let Some(untyped) = p_material_handles.get(*mat_entity).ok() else {
                                 warn!("Could not find material for entity {:?}", mat_entity);
                                 continue;
@@ -477,16 +480,15 @@ fn spawn_mesh(
     };
 
     let material_handle = match key {
-        MaterialKey::Custom { entity, blend_state } => {
+        MaterialKey::Custom {
+            entity,
+            blend_state,
+        } => {
             let Some(untyped) = material_handles.get(*entity).ok() else {
                 warn!("Custom material entity {:?} not found", entity);
                 return;
             };
-            clone_custom_material_with_blend(
-                &mut res.custom_materials,
-                &untyped.0,
-                *blend_state,
-            )
+            clone_custom_material_with_blend(&mut res.custom_materials, &untyped.0, *blend_state)
         }
         _ => key.to_material(&mut res.materials),
     };

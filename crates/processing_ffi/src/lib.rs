@@ -466,24 +466,16 @@ pub extern "C" fn processing_shear_y(graphics_id: u64, angle: f32) {
     error::check(|| graphics_record_command(graphics_entity, DrawCommand::ShearY { angle }));
 }
 
-/// Set the blend mode.
-///
-/// Mode values: 0=BLEND, 1=ADD, 2=SUBTRACT, 3=DARKEST, 4=LIGHTEST,
-/// 5=DIFFERENCE, 6=EXCLUSION, 7=MULTIPLY, 8=SCREEN, 9=REPLACE
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_set_blend_mode(graphics_id: u64, mode: u8) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    let blend_state = processing::prelude::BlendMode::from(mode).to_blend_state();
-    error::check(|| graphics_record_command(graphics_entity, DrawCommand::BlendMode(blend_state)));
+    error::check(|| {
+        let blend_state = processing::prelude::BlendMode::try_from(mode)?.to_blend_state();
+        graphics_record_command(graphics_entity, DrawCommand::BlendMode(blend_state))
+    });
 }
 
-/// Set a custom blend mode by specifying individual blend components.
-///
-/// Each factor/operation is a u8 mapping to the WebGPU BlendFactor/BlendOperation enums.
-/// BlendFactor: 0=Zero, 1=One, 2=Src, 3=OneMinusSrc, 4=SrcAlpha, 5=OneMinusSrcAlpha,
-///              6=Dst, 7=OneMinusDst, 8=DstAlpha, 9=OneMinusDstAlpha, 10=SrcAlphaSaturated
-/// BlendOperation: 0=Add, 1=Subtract, 2=ReverseSubtract, 3=Min, 4=Max
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_set_custom_blend_mode(
     graphics_id: u64,
@@ -496,10 +488,10 @@ pub extern "C" fn processing_set_custom_blend_mode(
 ) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    let blend_state = custom_blend_state(
-        color_src, color_dst, color_op, alpha_src, alpha_dst, alpha_op,
-    );
     error::check(|| {
+        let blend_state = custom_blend_state(
+            color_src, color_dst, color_op, alpha_src, alpha_dst, alpha_op,
+        )?;
         graphics_record_command(graphics_entity, DrawCommand::BlendMode(Some(blend_state)))
     });
 }
@@ -804,6 +796,35 @@ pub const PROCESSING_STROKE_CAP_PROJECT: u8 = 2;
 pub const PROCESSING_STROKE_JOIN_ROUND: u8 = 0;
 pub const PROCESSING_STROKE_JOIN_MITER: u8 = 1;
 pub const PROCESSING_STROKE_JOIN_BEVEL: u8 = 2;
+
+pub const PROCESSING_BLEND_MODE_BLEND: u8 = 0;
+pub const PROCESSING_BLEND_MODE_ADD: u8 = 1;
+pub const PROCESSING_BLEND_MODE_SUBTRACT: u8 = 2;
+pub const PROCESSING_BLEND_MODE_DARKEST: u8 = 3;
+pub const PROCESSING_BLEND_MODE_LIGHTEST: u8 = 4;
+pub const PROCESSING_BLEND_MODE_DIFFERENCE: u8 = 5;
+pub const PROCESSING_BLEND_MODE_EXCLUSION: u8 = 6;
+pub const PROCESSING_BLEND_MODE_MULTIPLY: u8 = 7;
+pub const PROCESSING_BLEND_MODE_SCREEN: u8 = 8;
+pub const PROCESSING_BLEND_MODE_REPLACE: u8 = 9;
+
+pub const PROCESSING_BLEND_FACTOR_ZERO: u8 = 0;
+pub const PROCESSING_BLEND_FACTOR_ONE: u8 = 1;
+pub const PROCESSING_BLEND_FACTOR_SRC: u8 = 2;
+pub const PROCESSING_BLEND_FACTOR_ONE_MINUS_SRC: u8 = 3;
+pub const PROCESSING_BLEND_FACTOR_SRC_ALPHA: u8 = 4;
+pub const PROCESSING_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA: u8 = 5;
+pub const PROCESSING_BLEND_FACTOR_DST: u8 = 6;
+pub const PROCESSING_BLEND_FACTOR_ONE_MINUS_DST: u8 = 7;
+pub const PROCESSING_BLEND_FACTOR_DST_ALPHA: u8 = 8;
+pub const PROCESSING_BLEND_FACTOR_ONE_MINUS_DST_ALPHA: u8 = 9;
+pub const PROCESSING_BLEND_FACTOR_SRC_ALPHA_SATURATED: u8 = 10;
+
+pub const PROCESSING_BLEND_OP_ADD: u8 = 0;
+pub const PROCESSING_BLEND_OP_SUBTRACT: u8 = 1;
+pub const PROCESSING_BLEND_OP_REVERSE_SUBTRACT: u8 = 2;
+pub const PROCESSING_BLEND_OP_MIN: u8 = 3;
+pub const PROCESSING_BLEND_OP_MAX: u8 = 4;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_geometry_layout_create() -> u64 {
@@ -1598,6 +1619,16 @@ pub extern "C" fn processing_key_is_down(key_code: u32) -> bool {
     error::check(|| {
         let kc = key_code_from_u32(key_code)?;
         input_key_is_down(kc)
+    })
+    .unwrap_or(false)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_key_just_pressed(key_code: u32) -> bool {
+    error::clear_error();
+    error::check(|| {
+        let kc = key_code_from_u32(key_code)?;
+        input_key_just_pressed(kc)
     })
     .unwrap_or(false)
 }
