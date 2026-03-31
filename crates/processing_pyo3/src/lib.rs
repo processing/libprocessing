@@ -147,6 +147,44 @@ mod mewnala {
     #[pymodule_export]
     const BEVEL: u8 = 2;
 
+    // Shape kinds
+    #[pymodule_export]
+    const POLYGON: u8 = 0;
+    #[pymodule_export]
+    const POINTS: u8 = 1;
+    #[pymodule_export]
+    const LINES: u8 = 2;
+    #[pymodule_export]
+    const TRIANGLES: u8 = 3;
+    #[pymodule_export]
+    const TRIANGLE_FAN: u8 = 4;
+    #[pymodule_export]
+    const TRIANGLE_STRIP: u8 = 5;
+    #[pymodule_export]
+    const QUADS: u8 = 6;
+    #[pymodule_export]
+    const QUAD_STRIP: u8 = 7;
+
+    // Shape modes
+    #[pymodule_export]
+    const CORNER: u8 = 0;
+    #[pymodule_export]
+    const CORNERS: u8 = 1;
+    // CENTER = 1
+    #[pymodule_export]
+    const RADIUS: u8 = 3;
+
+    // Arc modes
+    #[pymodule_export]
+    const OPEN: u8 = 0;
+    #[pymodule_export]
+    const CHORD: u8 = 1;
+    #[pymodule_export]
+    const PIE: u8 = 2;
+
+    #[pymodule_export]
+    const CLOSE: bool = true;
+
     // Mouse buttons
     #[pymodule_export]
     const LEFT: u8 = 0;
@@ -726,6 +764,12 @@ mod mewnala {
     }
 
     #[pyfunction]
+    #[pyo3(pass_module, signature = (*args))]
+    fn translate(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        graphics!(module).translate(args)
+    }
+
+    #[pyfunction]
     #[pyo3(pass_module)]
     fn rotate(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
         graphics!(module).rotate(angle)
@@ -938,6 +982,280 @@ mod mewnala {
     #[pyo3(pass_module)]
     fn unlit(module: &Bound<'_, PyModule>) -> PyResult<()> {
         graphics!(module).unlit()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn ellipse(module: &Bound<'_, PyModule>, cx: f32, cy: f32, w: f32, h: f32) -> PyResult<()> {
+        graphics!(module).ellipse(cx, cy, w, h)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn circle(module: &Bound<'_, PyModule>, cx: f32, cy: f32, d: f32) -> PyResult<()> {
+        graphics!(module).circle(cx, cy, d)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn line(module: &Bound<'_, PyModule>, x1: f32, y1: f32, x2: f32, y2: f32) -> PyResult<()> {
+        graphics!(module).line(x1, y1, x2, y2)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn triangle(
+        module: &Bound<'_, PyModule>,
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        x3: f32,
+        y3: f32,
+    ) -> PyResult<()> {
+        graphics!(module).triangle(x1, y1, x2, y2, x3, y3)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn quad(
+        module: &Bound<'_, PyModule>,
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        x3: f32,
+        y3: f32,
+        x4: f32,
+        y4: f32,
+    ) -> PyResult<()> {
+        graphics!(module).quad(x1, y1, x2, y2, x3, y3, x4, y4)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn point(module: &Bound<'_, PyModule>, x: f32, y: f32) -> PyResult<()> {
+        graphics!(module).point(x, y)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (x, y, s))]
+    fn square(module: &Bound<'_, PyModule>, x: f32, y: f32, s: f32) -> PyResult<()> {
+        graphics!(module).square(x, y, s)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (cx, cy, w, h, start, stop, mode=0))]
+    fn arc(
+        module: &Bound<'_, PyModule>,
+        cx: f32,
+        cy: f32,
+        w: f32,
+        h: f32,
+        start: f32,
+        stop: f32,
+        mode: u8,
+    ) -> PyResult<()> {
+        graphics!(module).arc(cx, cy, w, h, start, stop, mode)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn bezier(
+        module: &Bound<'_, PyModule>,
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        x3: f32,
+        y3: f32,
+        x4: f32,
+        y4: f32,
+    ) -> PyResult<()> {
+        graphics!(module).bezier(x1, y1, x2, y2, x3, y3, x4, y4)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn curve(
+        module: &Bound<'_, PyModule>,
+        x1: f32,
+        y1: f32,
+        x2: f32,
+        y2: f32,
+        x3: f32,
+        y3: f32,
+        x4: f32,
+        y4: f32,
+    ) -> PyResult<()> {
+        graphics!(module).curve(x1, y1, x2, y2, x3, y3, x4, y4)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (kind=0))]
+    fn begin_shape(module: &Bound<'_, PyModule>, kind: u8) -> PyResult<()> {
+        graphics!(module).begin_shape(kind)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (close=false))]
+    fn end_shape(module: &Bound<'_, PyModule>, close: bool) -> PyResult<()> {
+        graphics!(module).end_shape(close)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn vertex(module: &Bound<'_, PyModule>, x: f32, y: f32) -> PyResult<()> {
+        graphics!(module).vertex(x, y)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn bezier_vertex(
+        module: &Bound<'_, PyModule>,
+        cx1: f32,
+        cy1: f32,
+        cx2: f32,
+        cy2: f32,
+        x: f32,
+        y: f32,
+    ) -> PyResult<()> {
+        graphics!(module).bezier_vertex(cx1, cy1, cx2, cy2, x, y)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn quadratic_vertex(
+        module: &Bound<'_, PyModule>,
+        cx: f32,
+        cy: f32,
+        x: f32,
+        y: f32,
+    ) -> PyResult<()> {
+        graphics!(module).quadratic_vertex(cx, cy, x, y)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn curve_vertex(module: &Bound<'_, PyModule>, x: f32, y: f32) -> PyResult<()> {
+        graphics!(module).curve_vertex(x, y)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn begin_contour(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).begin_contour()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn end_contour(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).end_contour()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn reset_matrix(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).reset_matrix()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (*args))]
+    fn scale(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        graphics!(module).scale(args)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn shear_x(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
+        graphics!(module).shear_x(angle)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn shear_y(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
+        graphics!(module).shear_y(angle)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn rect_mode(module: &Bound<'_, PyModule>, mode: u8) -> PyResult<()> {
+        graphics!(module).rect_mode(mode)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn ellipse_mode(module: &Bound<'_, PyModule>, mode: u8) -> PyResult<()> {
+        graphics!(module).ellipse_mode(mode)
+    }
+
+    #[pyfunction(name = "cylinder")]
+    #[pyo3(pass_module, signature = (radius, height, detail=24))]
+    fn draw_cylinder(
+        module: &Bound<'_, PyModule>,
+        radius: f32,
+        height: f32,
+        detail: u32,
+    ) -> PyResult<()> {
+        graphics!(module).draw_cylinder(radius, height, detail)
+    }
+
+    #[pyfunction(name = "cone")]
+    #[pyo3(pass_module, signature = (radius, height, detail=24))]
+    fn draw_cone(
+        module: &Bound<'_, PyModule>,
+        radius: f32,
+        height: f32,
+        detail: u32,
+    ) -> PyResult<()> {
+        graphics!(module).draw_cone(radius, height, detail)
+    }
+
+    #[pyfunction(name = "torus")]
+    #[pyo3(pass_module, signature = (radius, tube_radius, major_segments=24, minor_segments=16))]
+    fn draw_torus(
+        module: &Bound<'_, PyModule>,
+        radius: f32,
+        tube_radius: f32,
+        major_segments: u32,
+        minor_segments: u32,
+    ) -> PyResult<()> {
+        graphics!(module).draw_torus(radius, tube_radius, major_segments, minor_segments)
+    }
+
+    #[pyfunction(name = "plane")]
+    #[pyo3(pass_module)]
+    fn draw_plane(module: &Bound<'_, PyModule>, width: f32, height: f32) -> PyResult<()> {
+        graphics!(module).draw_plane(width, height)
+    }
+
+    #[pyfunction(name = "capsule")]
+    #[pyo3(pass_module, signature = (radius, length, detail=24))]
+    fn draw_capsule(
+        module: &Bound<'_, PyModule>,
+        radius: f32,
+        length: f32,
+        detail: u32,
+    ) -> PyResult<()> {
+        graphics!(module).draw_capsule(radius, length, detail)
+    }
+
+    #[pyfunction(name = "conical_frustum")]
+    #[pyo3(pass_module, signature = (radius_top, radius_bottom, height, detail=24))]
+    fn draw_conical_frustum(
+        module: &Bound<'_, PyModule>,
+        radius_top: f32,
+        radius_bottom: f32,
+        height: f32,
+        detail: u32,
+    ) -> PyResult<()> {
+        graphics!(module).draw_conical_frustum(radius_top, radius_bottom, height, detail)
+    }
+
+    #[pyfunction(name = "tetrahedron")]
+    #[pyo3(pass_module)]
+    fn draw_tetrahedron(module: &Bound<'_, PyModule>, radius: f32) -> PyResult<()> {
+        graphics!(module).draw_tetrahedron(radius)
     }
 
     #[cfg(feature = "webcam")]

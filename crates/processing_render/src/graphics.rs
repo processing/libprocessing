@@ -147,9 +147,10 @@ impl CameraProjection for ProcessingProjection {
         self.get_clip_from_view()
     }
 
-    fn update(&mut self, width: f32, height: f32) {
-        self.width = width;
-        self.height = height;
+    fn update(&mut self, _width: f32, _height: f32) {
+        // this gets called with the render target's physical dimensions (i.e. accounting for
+        // scale factor), but our projection is in logical pixel units
+        // TODO: handle resizes?
     }
 
     fn far(&self) -> f32 {
@@ -234,7 +235,6 @@ pub fn create(
         // we need to be able to write to the texture
         CameraMainTextureUsages::default().with(TextureUsages::COPY_DST),
         Projection::custom(ProcessingProjection::new(width as f32, height as f32)),
-        Msaa::Off,
         Transform::from_xyz(0.0, 0.0, BATCH_INDEX_STEP),
         render_layer,
         CommandBuffer::new(),

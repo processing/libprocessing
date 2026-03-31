@@ -126,6 +126,22 @@ pub fn js_stroke_join(surface_id: u64, join: u8) -> Result<(), JsValue> {
     ))
 }
 
+#[wasm_bindgen(js_name = "rectMode")]
+pub fn js_rect_mode(surface_id: u64, mode: u8) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::RectMode(processing_render::render::command::ShapeMode::from(mode)),
+    ))
+}
+
+#[wasm_bindgen(js_name = "ellipseMode")]
+pub fn js_ellipse_mode(surface_id: u64, mode: u8) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::EllipseMode(processing_render::render::command::ShapeMode::from(mode)),
+    ))
+}
+
 #[wasm_bindgen(js_name = "noFill")]
 pub fn js_no_fill(surface_id: u64) -> Result<(), JsValue> {
     check(graphics_record_command(
@@ -163,6 +179,358 @@ pub fn js_rect(
             h,
             radii: [tl, tr, br, bl],
         },
+    ))
+}
+
+#[wasm_bindgen(js_name = "ellipse")]
+pub fn js_ellipse(surface_id: u64, cx: f32, cy: f32, w: f32, h: f32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Ellipse { cx, cy, w, h },
+    ))
+}
+
+#[wasm_bindgen(js_name = "circle")]
+pub fn js_circle(surface_id: u64, cx: f32, cy: f32, d: f32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Ellipse { cx, cy, w: d, h: d },
+    ))
+}
+
+#[wasm_bindgen(js_name = "line")]
+pub fn js_line(surface_id: u64, x1: f32, y1: f32, x2: f32, y2: f32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Line { x1, y1, x2, y2 },
+    ))
+}
+
+#[wasm_bindgen(js_name = "triangle")]
+pub fn js_triangle(
+    surface_id: u64,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    x3: f32,
+    y3: f32,
+) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Triangle {
+            x1,
+            y1,
+            x2,
+            y2,
+            x3,
+            y3,
+        },
+    ))
+}
+
+#[wasm_bindgen(js_name = "quad")]
+pub fn js_quad(
+    surface_id: u64,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    x3: f32,
+    y3: f32,
+    x4: f32,
+    y4: f32,
+) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Quad {
+            x1,
+            y1,
+            x2,
+            y2,
+            x3,
+            y3,
+            x4,
+            y4,
+        },
+    ))
+}
+
+#[wasm_bindgen(js_name = "point")]
+pub fn js_point(surface_id: u64, x: f32, y: f32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Point { x, y },
+    ))
+}
+
+#[wasm_bindgen(js_name = "square")]
+pub fn js_square(surface_id: u64, x: f32, y: f32, s: f32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Rect {
+            x,
+            y,
+            w: s,
+            h: s,
+            radii: [0.0; 4],
+        },
+    ))
+}
+
+#[wasm_bindgen(js_name = "arc")]
+pub fn js_arc(
+    surface_id: u64,
+    cx: f32,
+    cy: f32,
+    w: f32,
+    h: f32,
+    start: f32,
+    stop: f32,
+    mode: u8,
+) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Arc {
+            cx,
+            cy,
+            w,
+            h,
+            start,
+            stop,
+            mode: processing_render::render::command::ArcMode::from(mode),
+        },
+    ))
+}
+
+#[wasm_bindgen(js_name = "bezier")]
+pub fn js_bezier(
+    surface_id: u64,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    x3: f32,
+    y3: f32,
+    x4: f32,
+    y4: f32,
+) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Bezier {
+            x1,
+            y1,
+            x2,
+            y2,
+            x3,
+            y3,
+            x4,
+            y4,
+        },
+    ))
+}
+
+#[wasm_bindgen(js_name = "curve")]
+pub fn js_curve(
+    surface_id: u64,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    x3: f32,
+    y3: f32,
+    x4: f32,
+    y4: f32,
+) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Curve {
+            x1,
+            y1,
+            x2,
+            y2,
+            x3,
+            y3,
+            x4,
+            y4,
+        },
+    ))
+}
+
+#[wasm_bindgen(js_name = "cylinder")]
+pub fn js_cylinder(surface_id: u64, radius: f32, height: f32, detail: u32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Cylinder {
+            radius,
+            height,
+            detail,
+        },
+    ))
+}
+
+#[wasm_bindgen(js_name = "cone")]
+pub fn js_cone(surface_id: u64, radius: f32, height: f32, detail: u32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Cone {
+            radius,
+            height,
+            detail,
+        },
+    ))
+}
+
+#[wasm_bindgen(js_name = "torus")]
+pub fn js_torus(
+    surface_id: u64,
+    radius: f32,
+    tube_radius: f32,
+    major_segments: u32,
+    minor_segments: u32,
+) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Torus {
+            radius,
+            tube_radius,
+            major_segments,
+            minor_segments,
+        },
+    ))
+}
+
+#[wasm_bindgen(js_name = "plane")]
+pub fn js_plane(surface_id: u64, width: f32, height: f32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Plane { width, height },
+    ))
+}
+
+#[wasm_bindgen(js_name = "capsule")]
+pub fn js_capsule(surface_id: u64, radius: f32, length: f32, detail: u32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Capsule {
+            radius,
+            length,
+            detail,
+        },
+    ))
+}
+
+#[wasm_bindgen(js_name = "conicalFrustum")]
+pub fn js_conical_frustum(
+    surface_id: u64,
+    radius_top: f32,
+    radius_bottom: f32,
+    height: f32,
+    detail: u32,
+) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::ConicalFrustum {
+            radius_top,
+            radius_bottom,
+            height,
+            detail,
+        },
+    ))
+}
+
+#[wasm_bindgen(js_name = "tetrahedron")]
+pub fn js_tetrahedron(surface_id: u64, radius: f32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::Tetrahedron { radius },
+    ))
+}
+
+#[wasm_bindgen(js_name = "beginShape")]
+pub fn js_begin_shape(surface_id: u64, kind: u8) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::BeginShape {
+            kind: processing_render::render::command::ShapeKind::from(kind),
+        },
+    ))
+}
+
+#[wasm_bindgen(js_name = "endShape")]
+pub fn js_end_shape(surface_id: u64, close: bool) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::EndShape { close },
+    ))
+}
+
+#[wasm_bindgen(js_name = "vertex")]
+pub fn js_vertex(surface_id: u64, x: f32, y: f32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::ShapeVertex { x, y },
+    ))
+}
+
+#[wasm_bindgen(js_name = "bezierVertex")]
+pub fn js_bezier_vertex(
+    surface_id: u64,
+    cx1: f32,
+    cy1: f32,
+    cx2: f32,
+    cy2: f32,
+    x: f32,
+    y: f32,
+) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::ShapeBezierVertex {
+            cx1,
+            cy1,
+            cx2,
+            cy2,
+            x,
+            y,
+        },
+    ))
+}
+
+#[wasm_bindgen(js_name = "quadraticVertex")]
+pub fn js_quadratic_vertex(
+    surface_id: u64,
+    cx: f32,
+    cy: f32,
+    x: f32,
+    y: f32,
+) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::ShapeQuadraticVertex { cx, cy, x, y },
+    ))
+}
+
+#[wasm_bindgen(js_name = "curveVertex")]
+pub fn js_curve_vertex(surface_id: u64, x: f32, y: f32) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::ShapeCurveVertex { x, y },
+    ))
+}
+
+#[wasm_bindgen(js_name = "beginContour")]
+pub fn js_begin_contour(surface_id: u64) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::BeginContour,
+    ))
+}
+
+#[wasm_bindgen(js_name = "endContour")]
+pub fn js_end_contour(surface_id: u64) -> Result<(), JsValue> {
+    check(graphics_record_command(
+        Entity::from_bits(surface_id),
+        DrawCommand::EndContour,
     ))
 }
 

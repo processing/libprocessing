@@ -344,6 +344,32 @@ pub extern "C" fn processing_set_stroke_join(graphics_id: u64, join: u8) {
     });
 }
 
+/// Set the rect mode.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_rect_mode(graphics_id: u64, mode: u8) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::RectMode(processing::prelude::ShapeMode::from(mode)),
+        )
+    });
+}
+
+/// Set the ellipse mode.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_ellipse_mode(graphics_id: u64, mode: u8) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::EllipseMode(processing::prelude::ShapeMode::from(mode)),
+        )
+    });
+}
+
 /// Disable fill for subsequent shapes.
 ///
 /// SAFETY:
@@ -527,6 +553,428 @@ pub extern "C" fn processing_rect(
             },
         )
     });
+}
+
+/// Draw an ellipse.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_ellipse(graphics_id: u64, cx: f32, cy: f32, w: f32, h: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(graphics_entity, DrawCommand::Ellipse { cx, cy, w, h })
+    });
+}
+
+/// Draw a circle.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_circle(graphics_id: u64, cx: f32, cy: f32, d: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(graphics_entity, DrawCommand::Ellipse { cx, cy, w: d, h: d })
+    });
+}
+
+/// Draw a line.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_line(graphics_id: u64, x1: f32, y1: f32, x2: f32, y2: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Line { x1, y1, x2, y2 }));
+}
+
+/// Draw a triangle.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_triangle(
+    graphics_id: u64,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    x3: f32,
+    y3: f32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Triangle {
+                x1,
+                y1,
+                x2,
+                y2,
+                x3,
+                y3,
+            },
+        )
+    });
+}
+
+/// Draw a quadrilateral.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_quad(
+    graphics_id: u64,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    x3: f32,
+    y3: f32,
+    x4: f32,
+    y4: f32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Quad {
+                x1,
+                y1,
+                x2,
+                y2,
+                x3,
+                y3,
+                x4,
+                y4,
+            },
+        )
+    });
+}
+
+/// Draw a point.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_point(graphics_id: u64, x: f32, y: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Point { x, y }));
+}
+
+/// Draw a square.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_square(graphics_id: u64, x: f32, y: f32, s: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Rect {
+                x,
+                y,
+                w: s,
+                h: s,
+                radii: [0.0; 4],
+            },
+        )
+    });
+}
+
+/// Draw an arc.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_arc(
+    graphics_id: u64,
+    cx: f32,
+    cy: f32,
+    w: f32,
+    h: f32,
+    start: f32,
+    stop: f32,
+    mode: u8,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Arc {
+                cx,
+                cy,
+                w,
+                h,
+                start,
+                stop,
+                mode: processing::prelude::ArcMode::from(mode),
+            },
+        )
+    });
+}
+
+/// Draw a cubic bezier curve.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_bezier(
+    graphics_id: u64,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    x3: f32,
+    y3: f32,
+    x4: f32,
+    y4: f32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Bezier {
+                x1,
+                y1,
+                x2,
+                y2,
+                x3,
+                y3,
+                x4,
+                y4,
+            },
+        )
+    });
+}
+
+/// Draw a Catmull-Rom curve.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_curve(
+    graphics_id: u64,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+    x3: f32,
+    y3: f32,
+    x4: f32,
+    y4: f32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Curve {
+                x1,
+                y1,
+                x2,
+                y2,
+                x3,
+                y3,
+                x4,
+                y4,
+            },
+        )
+    });
+}
+
+/// Draw a cylinder.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_cylinder(graphics_id: u64, radius: f32, height: f32, detail: u32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Cylinder {
+                radius,
+                height,
+                detail,
+            },
+        )
+    });
+}
+
+/// Draw a cone.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_cone(graphics_id: u64, radius: f32, height: f32, detail: u32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Cone {
+                radius,
+                height,
+                detail,
+            },
+        )
+    });
+}
+
+/// Draw a torus.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_torus(
+    graphics_id: u64,
+    radius: f32,
+    tube_radius: f32,
+    major_segments: u32,
+    minor_segments: u32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Torus {
+                radius,
+                tube_radius,
+                major_segments,
+                minor_segments,
+            },
+        )
+    });
+}
+
+/// Draw a plane.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_plane(graphics_id: u64, width: f32, height: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Plane { width, height }));
+}
+
+/// Draw a capsule.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_capsule(graphics_id: u64, radius: f32, length: f32, detail: u32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Capsule {
+                radius,
+                length,
+                detail,
+            },
+        )
+    });
+}
+
+/// Draw a conical frustum.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_conical_frustum(
+    graphics_id: u64,
+    radius_top: f32,
+    radius_bottom: f32,
+    height: f32,
+    detail: u32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::ConicalFrustum {
+                radius_top,
+                radius_bottom,
+                height,
+                detail,
+            },
+        )
+    });
+}
+
+/// Draw a tetrahedron.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_tetrahedron(graphics_id: u64, radius: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Tetrahedron { radius }));
+}
+
+/// Begin recording vertices for a custom shape.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_begin_shape(graphics_id: u64, kind: u8) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::BeginShape {
+                kind: processing::prelude::ShapeKind::from(kind),
+            },
+        )
+    });
+}
+
+/// End recording vertices and draw the shape.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_end_shape(graphics_id: u64, close: bool) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::EndShape { close }));
+}
+
+/// Add a vertex to the current shape.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_vertex(graphics_id: u64, x: f32, y: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::ShapeVertex { x, y }));
+}
+
+/// Add a cubic bezier vertex to the current shape.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_bezier_vertex(
+    graphics_id: u64,
+    cx1: f32,
+    cy1: f32,
+    cx2: f32,
+    cy2: f32,
+    x: f32,
+    y: f32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::ShapeBezierVertex {
+                cx1,
+                cy1,
+                cx2,
+                cy2,
+                x,
+                y,
+            },
+        )
+    });
+}
+
+/// Add a quadratic bezier vertex to the current shape.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_quadratic_vertex(graphics_id: u64, cx: f32, cy: f32, x: f32, y: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::ShapeQuadraticVertex { cx, cy, x, y },
+        )
+    });
+}
+
+/// Add a Catmull-Rom curve vertex to the current shape.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_curve_vertex(graphics_id: u64, x: f32, y: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(graphics_entity, DrawCommand::ShapeCurveVertex { x, y })
+    });
+}
+
+/// Begin a contour within the current shape.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_begin_contour(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::BeginContour));
+}
+
+/// End the current contour.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_end_contour(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::EndContour));
 }
 
 /// Create an image from raw pixel data.

@@ -11,9 +11,14 @@ use bevy::{
     prelude::*,
     render::render_resource::BlendState,
 };
-use command::{CommandBuffer, DrawCommand};
+use command::{CommandBuffer, DrawCommand, ShapeMode};
 use material::{MaterialKey, ProcessingExtendedMaterial};
-use primitive::{StrokeConfig, TessellationMode, box_mesh, empty_mesh, sphere_mesh};
+use primitive::{
+    ShapeBuilder, StrokeConfig, TessellationMode, VertexType, arc_fill, arc_stroke, bezier,
+    box_mesh, build_direct_fill, build_direct_stroke, build_polygon_fill, build_polygon_stroke,
+    capsule_mesh, cone_mesh, conical_frustum_mesh, curve, cylinder_mesh, ellipse, empty_mesh, line,
+    plane_mesh, quad, sphere_mesh, tetrahedron_mesh, torus_mesh, triangle,
+};
 use transform::TransformStack;
 
 use crate::{
@@ -75,6 +80,9 @@ pub struct RenderState {
     pub material_key: MaterialKey,
     pub blend_state: Option<BlendState>,
     pub transform: TransformStack,
+    pub rect_mode: ShapeMode,
+    pub ellipse_mode: ShapeMode,
+    pub shape_builder: Option<ShapeBuilder>,
 }
 
 impl RenderState {
@@ -91,6 +99,9 @@ impl RenderState {
             },
             blend_state: None,
             transform: TransformStack::new(),
+            rect_mode: ShapeMode::Corner,
+            ellipse_mode: ShapeMode::Center,
+            shape_builder: None,
         }
     }
 
@@ -106,6 +117,9 @@ impl RenderState {
         };
         self.blend_state = None;
         self.transform = TransformStack::new();
+        self.rect_mode = ShapeMode::Corner;
+        self.ellipse_mode = ShapeMode::Center;
+        self.shape_builder = None;
     }
 
     pub fn fill_is_transparent(&self) -> bool {
@@ -249,7 +263,14 @@ pub fn flush_draw_commands(
                         blend_state: None,
                     };
                 }
+                DrawCommand::RectMode(mode) => {
+                    state.rect_mode = mode;
+                }
+                DrawCommand::EllipseMode(mode) => {
+                    state.ellipse_mode = mode;
+                }
                 DrawCommand::Rect { x, y, w, h, radii } => {
+                    let (x, y, w, h) = apply_shape_mode(state.rect_mode, x, y, w, h);
                     let stroke_config = state.stroke_config;
                     add_fill(
                         &mut res,
@@ -290,6 +311,477 @@ pub fn flush_draw_commands(
                         },
                         &p_material_handles,
                     );
+                }
+                DrawCommand::Ellipse { cx, cy, w, h } => {
+                    // apply_shape_mode converts to top-left corner form, then we
+                    // compute center from that
+                    let (x, y, w, h) = apply_shape_mode(state.ellipse_mode, cx, cy, w, h);
+                    let cx = x + w / 2.0;
+                    let cy = y + h / 2.0;
+                    let stroke_config = state.stroke_config;
+                    add_fill(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        |mesh, color| {
+                            ellipse(
+                                mesh,
+                                cx,
+                                cy,
+                                w,
+                                h,
+                                color,
+                                TessellationMode::Fill,
+                                &stroke_config,
+                            )
+                        },
+                        &p_material_handles,
+                    );
+
+                    add_stroke(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        |mesh, color, weight| {
+                            ellipse(
+                                mesh,
+                                cx,
+                                cy,
+                                w,
+                                h,
+                                color,
+                                TessellationMode::Stroke(weight),
+                                &stroke_config,
+                            )
+                        },
+                        &p_material_handles,
+                    );
+                }
+                DrawCommand::Line { x1, y1, x2, y2 } => {
+                    let stroke_config = state.stroke_config;
+                    add_stroke(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        |mesh, color, weight| {
+                            line(mesh, x1, y1, x2, y2, color, weight, &stroke_config)
+                        },
+                        &p_material_handles,
+                    );
+                }
+                DrawCommand::Triangle {
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    x3,
+                    y3,
+                } => {
+                    let stroke_config = state.stroke_config;
+                    add_fill(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        |mesh, color| {
+                            triangle(
+                                mesh,
+                                x1,
+                                y1,
+                                x2,
+                                y2,
+                                x3,
+                                y3,
+                                color,
+                                TessellationMode::Fill,
+                                &stroke_config,
+                            )
+                        },
+                        &p_material_handles,
+                    );
+
+                    add_stroke(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        |mesh, color, weight| {
+                            triangle(
+                                mesh,
+                                x1,
+                                y1,
+                                x2,
+                                y2,
+                                x3,
+                                y3,
+                                color,
+                                TessellationMode::Stroke(weight),
+                                &stroke_config,
+                            )
+                        },
+                        &p_material_handles,
+                    );
+                }
+                DrawCommand::Quad {
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    x3,
+                    y3,
+                    x4,
+                    y4,
+                } => {
+                    let stroke_config = state.stroke_config;
+                    add_fill(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        |mesh, color| {
+                            quad(
+                                mesh,
+                                x1,
+                                y1,
+                                x2,
+                                y2,
+                                x3,
+                                y3,
+                                x4,
+                                y4,
+                                color,
+                                TessellationMode::Fill,
+                                &stroke_config,
+                            )
+                        },
+                        &p_material_handles,
+                    );
+
+                    add_stroke(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        |mesh, color, weight| {
+                            quad(
+                                mesh,
+                                x1,
+                                y1,
+                                x2,
+                                y2,
+                                x3,
+                                y3,
+                                x4,
+                                y4,
+                                color,
+                                TessellationMode::Stroke(weight),
+                                &stroke_config,
+                            )
+                        },
+                        &p_material_handles,
+                    );
+                }
+                DrawCommand::Point { x, y } => {
+                    // Point is rendered as a filled circle using stroke color and weight
+                    if let Some(color) = state.stroke_color {
+                        let d = state.stroke_weight;
+                        let material_key =
+                            material_key_with_color(&state.material_key, color, state.blend_state);
+
+                        if needs_batch(&batch, &state, &material_key) {
+                            start_batch(
+                                &mut res,
+                                &mut batch,
+                                &state,
+                                material_key,
+                                &p_material_handles,
+                            );
+                        }
+
+                        if let Some(ref mut mesh) = batch.current_mesh {
+                            let stroke_config = state.stroke_config;
+                            ellipse(
+                                mesh,
+                                x,
+                                y,
+                                d,
+                                d,
+                                color,
+                                TessellationMode::Fill,
+                                &stroke_config,
+                            );
+                        }
+                    }
+                }
+                DrawCommand::Arc {
+                    cx,
+                    cy,
+                    w,
+                    h,
+                    start,
+                    stop,
+                    mode,
+                } => {
+                    let (x, y, w, h) = apply_shape_mode(state.ellipse_mode, cx, cy, w, h);
+                    let cx = x + w / 2.0;
+                    let cy = y + h / 2.0;
+                    let stroke_config = state.stroke_config;
+                    add_fill(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        |mesh, color| {
+                            arc_fill(mesh, cx, cy, w, h, start, stop, mode, color, &stroke_config)
+                        },
+                        &p_material_handles,
+                    );
+
+                    add_stroke(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        |mesh, color, weight| {
+                            arc_stroke(
+                                mesh,
+                                cx,
+                                cy,
+                                w,
+                                h,
+                                start,
+                                stop,
+                                mode,
+                                color,
+                                weight,
+                                &stroke_config,
+                            )
+                        },
+                        &p_material_handles,
+                    );
+                }
+                DrawCommand::Bezier {
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    x3,
+                    y3,
+                    x4,
+                    y4,
+                } => {
+                    let stroke_config = state.stroke_config;
+                    add_stroke(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        |mesh, color, weight| {
+                            bezier(
+                                mesh,
+                                x1,
+                                y1,
+                                x2,
+                                y2,
+                                x3,
+                                y3,
+                                x4,
+                                y4,
+                                color,
+                                weight,
+                                &stroke_config,
+                            )
+                        },
+                        &p_material_handles,
+                    );
+                }
+                DrawCommand::Curve {
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    x3,
+                    y3,
+                    x4,
+                    y4,
+                } => {
+                    let stroke_config = state.stroke_config;
+                    add_stroke(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        |mesh, color, weight| {
+                            curve(
+                                mesh,
+                                x1,
+                                y1,
+                                x2,
+                                y2,
+                                x3,
+                                y3,
+                                x4,
+                                y4,
+                                color,
+                                weight,
+                                &stroke_config,
+                            )
+                        },
+                        &p_material_handles,
+                    );
+                }
+                DrawCommand::BeginShape { kind } => {
+                    state.shape_builder = Some(ShapeBuilder::new(kind));
+                }
+                DrawCommand::ShapeVertex { x, y } => {
+                    if let Some(ref mut sb) = state.shape_builder {
+                        sb.push_vertex(VertexType::Normal(x, y));
+                    }
+                }
+                DrawCommand::ShapeBezierVertex {
+                    cx1,
+                    cy1,
+                    cx2,
+                    cy2,
+                    x,
+                    y,
+                } => {
+                    if let Some(ref mut sb) = state.shape_builder {
+                        sb.push_vertex(VertexType::CubicBezier {
+                            cx1,
+                            cy1,
+                            cx2,
+                            cy2,
+                            x,
+                            y,
+                        });
+                    }
+                }
+                DrawCommand::ShapeQuadraticVertex { cx, cy, x, y } => {
+                    if let Some(ref mut sb) = state.shape_builder {
+                        sb.push_vertex(VertexType::QuadraticBezier { cx, cy, x, y });
+                    }
+                }
+                DrawCommand::ShapeCurveVertex { x, y } => {
+                    if let Some(ref mut sb) = state.shape_builder {
+                        sb.push_vertex(VertexType::CurveVertex(x, y));
+                    }
+                }
+                DrawCommand::BeginContour => {
+                    if let Some(ref mut sb) = state.shape_builder {
+                        sb.begin_contour();
+                    }
+                }
+                DrawCommand::EndContour => {
+                    if let Some(ref mut sb) = state.shape_builder {
+                        sb.end_contour();
+                    }
+                }
+                DrawCommand::EndShape { close } => {
+                    if let Some(sb) = state.shape_builder.take() {
+                        let stroke_config = state.stroke_config;
+                        use crate::render::command::ShapeKind;
+
+                        match sb.kind {
+                            ShapeKind::Polygon => {
+                                add_fill(
+                                    &mut res,
+                                    &mut batch,
+                                    &state,
+                                    |mesh, color| {
+                                        build_polygon_fill(mesh, &sb, close, color, &stroke_config)
+                                    },
+                                    &p_material_handles,
+                                );
+                                add_stroke(
+                                    &mut res,
+                                    &mut batch,
+                                    &state,
+                                    |mesh, color, weight| {
+                                        build_polygon_stroke(
+                                            mesh,
+                                            &sb,
+                                            close,
+                                            color,
+                                            weight,
+                                            &stroke_config,
+                                        )
+                                    },
+                                    &p_material_handles,
+                                );
+                            }
+                            ShapeKind::Points => {
+                                // Each vertex rendered as a filled circle
+                                if let Some(color) = state.stroke_color {
+                                    let d = state.stroke_weight;
+                                    let material_key = material_key_with_color(
+                                        &state.material_key,
+                                        color,
+                                        state.blend_state,
+                                    );
+                                    if needs_batch(&batch, &state, &material_key) {
+                                        start_batch(
+                                            &mut res,
+                                            &mut batch,
+                                            &state,
+                                            material_key,
+                                            &p_material_handles,
+                                        );
+                                    }
+                                    if let Some(ref mut mesh) = batch.current_mesh {
+                                        for v in &sb.contours[0].vertices {
+                                            if let VertexType::Normal(x, y) = v {
+                                                ellipse(
+                                                    mesh,
+                                                    *x,
+                                                    *y,
+                                                    d,
+                                                    d,
+                                                    color,
+                                                    TessellationMode::Fill,
+                                                    &stroke_config,
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            ShapeKind::Lines => {
+                                add_stroke(
+                                    &mut res,
+                                    &mut batch,
+                                    &state,
+                                    |mesh, color, weight| {
+                                        build_direct_stroke(
+                                            mesh,
+                                            &sb,
+                                            color,
+                                            weight,
+                                            &stroke_config,
+                                        )
+                                    },
+                                    &p_material_handles,
+                                );
+                            }
+                            _ => {
+                                // Triangles, TriangleFan, TriangleStrip, Quads, QuadStrip
+                                add_fill(
+                                    &mut res,
+                                    &mut batch,
+                                    &state,
+                                    |mesh, color| build_direct_fill(mesh, &sb, color),
+                                    &p_material_handles,
+                                );
+                                add_stroke(
+                                    &mut res,
+                                    &mut batch,
+                                    &state,
+                                    |mesh, color, weight| {
+                                        build_direct_stroke(
+                                            mesh,
+                                            &sb,
+                                            color,
+                                            weight,
+                                            &stroke_config,
+                                        )
+                                    },
+                                    &p_material_handles,
+                                );
+                            }
+                        }
+                    }
                 }
                 DrawCommand::BackgroundColor(color) => {
                     flush_batch(&mut res, &mut batch, &p_material_handles);
@@ -434,6 +926,91 @@ pub fn flush_draw_commands(
                         &p_material_handles,
                     );
                 }
+                DrawCommand::Cylinder {
+                    radius,
+                    height,
+                    detail,
+                } => {
+                    add_shape3d(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        cylinder_mesh(radius, height, detail),
+                        &p_material_handles,
+                    );
+                }
+                DrawCommand::Cone {
+                    radius,
+                    height,
+                    detail,
+                } => {
+                    add_shape3d(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        cone_mesh(radius, height, detail),
+                        &p_material_handles,
+                    );
+                }
+                DrawCommand::Torus {
+                    radius,
+                    tube_radius,
+                    major_segments,
+                    minor_segments,
+                } => {
+                    add_shape3d(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        torus_mesh(radius, tube_radius, major_segments, minor_segments),
+                        &p_material_handles,
+                    );
+                }
+                DrawCommand::Plane { width, height } => {
+                    add_shape3d(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        plane_mesh(width, height),
+                        &p_material_handles,
+                    );
+                }
+                DrawCommand::Capsule {
+                    radius,
+                    length,
+                    detail,
+                } => {
+                    add_shape3d(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        capsule_mesh(radius, length, detail),
+                        &p_material_handles,
+                    );
+                }
+                DrawCommand::ConicalFrustum {
+                    radius_top,
+                    radius_bottom,
+                    height,
+                    detail,
+                } => {
+                    add_shape3d(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        conical_frustum_mesh(radius_top, radius_bottom, height, detail),
+                        &p_material_handles,
+                    );
+                }
+                DrawCommand::Tetrahedron { radius } => {
+                    add_shape3d(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        tetrahedron_mesh(radius),
+                        &p_material_handles,
+                    );
+                }
             }
         }
 
@@ -520,6 +1097,15 @@ fn start_batch(
     batch.material_key = Some(material_key);
     batch.transform = state.transform.current();
     batch.current_mesh = Some(empty_mesh());
+}
+
+fn apply_shape_mode(mode: ShapeMode, a: f32, b: f32, c: f32, d: f32) -> (f32, f32, f32, f32) {
+    match mode {
+        ShapeMode::Corner => (a, b, c, d),
+        ShapeMode::Corners => (a, b, c - a, d - b),
+        ShapeMode::Center => (a - c / 2.0, b - d / 2.0, c, d),
+        ShapeMode::Radius => (a - c, b - d, c * 2.0, d * 2.0),
+    }
 }
 
 fn clone_custom_material_with_blend(

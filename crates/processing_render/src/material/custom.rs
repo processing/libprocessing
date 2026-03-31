@@ -66,13 +66,12 @@ fn specialize(
     _layout: &MeshVertexBufferLayoutRef,
     _pipeline_key: ErasedMaterialPipelineKey,
 ) -> std::result::Result<(), SpecializedMeshPipelineError> {
-    if let Some(key) = key.downcast_ref::<CustomMaterialKey>() {
-        if let Some(blend_state) = key.blend_state {
-            if let Some(fragment_state) = &mut descriptor.fragment {
-                for target in fragment_state.targets.iter_mut().flatten() {
-                    target.blend = Some(blend_state);
-                }
-            }
+    if let Some(key) = key.downcast_ref::<CustomMaterialKey>()
+        && let Some(blend_state) = key.blend_state
+        && let Some(fragment_state) = &mut descriptor.fragment
+    {
+        for target in fragment_state.targets.iter_mut().flatten() {
+            target.blend = Some(blend_state);
         }
     }
     Ok(())
