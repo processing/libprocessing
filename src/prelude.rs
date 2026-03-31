@@ -8,7 +8,10 @@ pub use processing_midi::{
     midi_connect, midi_disconnect, midi_list_ports, midi_play_notes, midi_refresh_ports,
 };
 pub use processing_render::{
-    render::command::{ArcMode, DrawCommand, ShapeKind, ShapeMode, StrokeCapMode, StrokeJoinMode},
+    render::command::{
+        ArcMode, BlendMode, DrawCommand, ShapeKind, ShapeMode, StrokeCapMode, StrokeJoinMode,
+        custom_blend_state,
+    },
     *,
 };
 

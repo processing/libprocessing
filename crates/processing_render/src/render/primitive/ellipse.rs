@@ -5,7 +5,7 @@ use crate::render::primitive::{StrokeConfig, TessellationMode, tessellate_path};
 
 // magic number for cubic bezier approximation of a quarter circle.
 // kappa = 4 * (sqrt(2) - 1) / 3
-const KAPPA: f32 = 0.5522847498;
+const KAPPA: f32 = 0.552_284_8;
 
 fn ellipse_path(cx: f32, cy: f32, w: f32, h: f32) -> Path {
     let rx = w / 2.0;

@@ -492,6 +492,36 @@ pub extern "C" fn processing_shear_y(graphics_id: u64, angle: f32) {
     error::check(|| graphics_record_command(graphics_entity, DrawCommand::ShearY { angle }));
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_set_blend_mode(graphics_id: u64, mode: u8) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        let blend_state = processing::prelude::BlendMode::try_from(mode)?.to_blend_state();
+        graphics_record_command(graphics_entity, DrawCommand::BlendMode(blend_state))
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_set_custom_blend_mode(
+    graphics_id: u64,
+    color_src: u8,
+    color_dst: u8,
+    color_op: u8,
+    alpha_src: u8,
+    alpha_dst: u8,
+    alpha_op: u8,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        let blend_state = custom_blend_state(
+            color_src, color_dst, color_op, alpha_src, alpha_dst, alpha_op,
+        )?;
+        graphics_record_command(graphics_entity, DrawCommand::BlendMode(Some(blend_state)))
+    });
+}
+
 /// Draw a rectangle.
 ///
 /// SAFETY:
@@ -1214,6 +1244,35 @@ pub const PROCESSING_STROKE_CAP_PROJECT: u8 = 2;
 pub const PROCESSING_STROKE_JOIN_ROUND: u8 = 0;
 pub const PROCESSING_STROKE_JOIN_MITER: u8 = 1;
 pub const PROCESSING_STROKE_JOIN_BEVEL: u8 = 2;
+
+pub const PROCESSING_BLEND_MODE_BLEND: u8 = 0;
+pub const PROCESSING_BLEND_MODE_ADD: u8 = 1;
+pub const PROCESSING_BLEND_MODE_SUBTRACT: u8 = 2;
+pub const PROCESSING_BLEND_MODE_DARKEST: u8 = 3;
+pub const PROCESSING_BLEND_MODE_LIGHTEST: u8 = 4;
+pub const PROCESSING_BLEND_MODE_DIFFERENCE: u8 = 5;
+pub const PROCESSING_BLEND_MODE_EXCLUSION: u8 = 6;
+pub const PROCESSING_BLEND_MODE_MULTIPLY: u8 = 7;
+pub const PROCESSING_BLEND_MODE_SCREEN: u8 = 8;
+pub const PROCESSING_BLEND_MODE_REPLACE: u8 = 9;
+
+pub const PROCESSING_BLEND_FACTOR_ZERO: u8 = 0;
+pub const PROCESSING_BLEND_FACTOR_ONE: u8 = 1;
+pub const PROCESSING_BLEND_FACTOR_SRC: u8 = 2;
+pub const PROCESSING_BLEND_FACTOR_ONE_MINUS_SRC: u8 = 3;
+pub const PROCESSING_BLEND_FACTOR_SRC_ALPHA: u8 = 4;
+pub const PROCESSING_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA: u8 = 5;
+pub const PROCESSING_BLEND_FACTOR_DST: u8 = 6;
+pub const PROCESSING_BLEND_FACTOR_ONE_MINUS_DST: u8 = 7;
+pub const PROCESSING_BLEND_FACTOR_DST_ALPHA: u8 = 8;
+pub const PROCESSING_BLEND_FACTOR_ONE_MINUS_DST_ALPHA: u8 = 9;
+pub const PROCESSING_BLEND_FACTOR_SRC_ALPHA_SATURATED: u8 = 10;
+
+pub const PROCESSING_BLEND_OP_ADD: u8 = 0;
+pub const PROCESSING_BLEND_OP_SUBTRACT: u8 = 1;
+pub const PROCESSING_BLEND_OP_REVERSE_SUBTRACT: u8 = 2;
+pub const PROCESSING_BLEND_OP_MIN: u8 = 3;
+pub const PROCESSING_BLEND_OP_MAX: u8 = 4;
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_geometry_layout_create() -> u64 {
@@ -2008,6 +2067,16 @@ pub extern "C" fn processing_key_is_down(key_code: u32) -> bool {
     error::check(|| {
         let kc = key_code_from_u32(key_code)?;
         input_key_is_down(kc)
+    })
+    .unwrap_or(false)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_key_just_pressed(key_code: u32) -> bool {
+    error::clear_error();
+    error::check(|| {
+        let kc = key_code_from_u32(key_code)?;
+        input_key_just_pressed(kc)
     })
     .unwrap_or(false)
 }

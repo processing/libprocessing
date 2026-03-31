@@ -1,4 +1,6 @@
 use bevy::prelude::*;
+use bevy::render::render_resource::{BlendComponent, BlendFactor, BlendOperation, BlendState};
+use processing_core::error::{self, ProcessingError};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[repr(u8)]
@@ -108,6 +110,184 @@ impl From<u8> for ShapeKind {
             6 => Self::Quads,
             7 => Self::QuadStrip,
             _ => Self::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum BlendMode {
+    #[default]
+    Blend = 0,
+    Add = 1,
+    Subtract = 2,
+    Darkest = 3,
+    Lightest = 4,
+    Difference = 5,
+    Exclusion = 6,
+    Multiply = 7,
+    Screen = 8,
+    Replace = 9,
+}
+
+impl TryFrom<u8> for BlendMode {
+    type Error = ProcessingError;
+
+    fn try_from(v: u8) -> std::result::Result<Self, Self::Error> {
+        match v {
+            0 => Ok(Self::Blend),
+            1 => Ok(Self::Add),
+            2 => Ok(Self::Subtract),
+            3 => Ok(Self::Darkest),
+            4 => Ok(Self::Lightest),
+            5 => Ok(Self::Difference),
+            6 => Ok(Self::Exclusion),
+            7 => Ok(Self::Multiply),
+            8 => Ok(Self::Screen),
+            9 => Ok(Self::Replace),
+            _ => Err(ProcessingError::InvalidArgument(format!(
+                "unknown blend mode: {v}"
+            ))),
+        }
+    }
+}
+
+fn blend_factor_from_u8(v: u8) -> std::result::Result<BlendFactor, ProcessingError> {
+    match v {
+        0 => Ok(BlendFactor::Zero),
+        1 => Ok(BlendFactor::One),
+        2 => Ok(BlendFactor::Src),
+        3 => Ok(BlendFactor::OneMinusSrc),
+        4 => Ok(BlendFactor::SrcAlpha),
+        5 => Ok(BlendFactor::OneMinusSrcAlpha),
+        6 => Ok(BlendFactor::Dst),
+        7 => Ok(BlendFactor::OneMinusDst),
+        8 => Ok(BlendFactor::DstAlpha),
+        9 => Ok(BlendFactor::OneMinusDstAlpha),
+        10 => Ok(BlendFactor::SrcAlphaSaturated),
+        _ => Err(ProcessingError::InvalidArgument(format!(
+            "unknown blend factor: {v}"
+        ))),
+    }
+}
+
+fn blend_op_from_u8(v: u8) -> std::result::Result<BlendOperation, ProcessingError> {
+    match v {
+        0 => Ok(BlendOperation::Add),
+        1 => Ok(BlendOperation::Subtract),
+        2 => Ok(BlendOperation::ReverseSubtract),
+        3 => Ok(BlendOperation::Min),
+        4 => Ok(BlendOperation::Max),
+        _ => Err(ProcessingError::InvalidArgument(format!(
+            "unknown blend operation: {v}"
+        ))),
+    }
+}
+
+pub fn custom_blend_state(
+    color_src: u8,
+    color_dst: u8,
+    color_op: u8,
+    alpha_src: u8,
+    alpha_dst: u8,
+    alpha_op: u8,
+) -> error::Result<BlendState> {
+    Ok(BlendState {
+        color: BlendComponent {
+            src_factor: blend_factor_from_u8(color_src)?,
+            dst_factor: blend_factor_from_u8(color_dst)?,
+            operation: blend_op_from_u8(color_op)?,
+        },
+        alpha: BlendComponent {
+            src_factor: blend_factor_from_u8(alpha_src)?,
+            dst_factor: blend_factor_from_u8(alpha_dst)?,
+            operation: blend_op_from_u8(alpha_op)?,
+        },
+    })
+}
+
+const ALPHA_ADDITIVE: BlendComponent = BlendComponent {
+    src_factor: BlendFactor::One,
+    dst_factor: BlendFactor::One,
+    operation: BlendOperation::Add,
+};
+
+impl BlendMode {
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Blend => "BLEND",
+            Self::Add => "ADD",
+            Self::Subtract => "SUBTRACT",
+            Self::Darkest => "DARKEST",
+            Self::Lightest => "LIGHTEST",
+            Self::Difference => "DIFFERENCE",
+            Self::Exclusion => "EXCLUSION",
+            Self::Multiply => "MULTIPLY",
+            Self::Screen => "SCREEN",
+            Self::Replace => "REPLACE",
+        }
+    }
+
+    pub fn to_blend_state(self) -> Option<BlendState> {
+        use BlendFactor::*;
+        use BlendOperation::*;
+
+        let color = |src_factor, dst_factor, operation| BlendComponent {
+            src_factor,
+            dst_factor,
+            operation,
+        };
+
+        match self {
+            Self::Blend => None,
+            Self::Add => Some(BlendState {
+                color: color(SrcAlpha, One, Add),
+                alpha: ALPHA_ADDITIVE,
+            }),
+            Self::Subtract => Some(BlendState {
+                color: color(SrcAlpha, One, ReverseSubtract),
+                alpha: ALPHA_ADDITIVE,
+            }),
+            Self::Darkest => Some(BlendState {
+                color: color(One, One, Min),
+                alpha: ALPHA_ADDITIVE,
+            }),
+            Self::Lightest => Some(BlendState {
+                color: color(One, One, Max),
+                alpha: ALPHA_ADDITIVE,
+            }),
+            // TODO: this is an approximation as we can't do abs difference in fixed function
+            // blending. this should probs be a fullscreen post-process effect instead. if we
+            // choose to add shader based blending, we should also consider adding more
+            // blend modes
+            //
+            // alternatively, we could express these shader based blend modes via a generic
+            // composite filter, which would more accurately reflect what is actually happening
+            Self::Difference => Some(BlendState {
+                color: color(One, One, ReverseSubtract),
+                alpha: BlendComponent {
+                    src_factor: One,
+                    dst_factor: One,
+                    operation: Max,
+                },
+            }),
+            Self::Exclusion => Some(BlendState {
+                color: color(OneMinusDst, OneMinusSrc, Add),
+                alpha: BlendComponent {
+                    src_factor: One,
+                    dst_factor: OneMinusSrcAlpha,
+                    operation: Add,
+                },
+            }),
+            Self::Multiply => Some(BlendState {
+                color: color(Dst, OneMinusSrcAlpha, Add),
+                alpha: ALPHA_ADDITIVE,
+            }),
+            Self::Screen => Some(BlendState {
+                color: color(OneMinusDst, One, Add),
+                alpha: ALPHA_ADDITIVE,
+            }),
+            Self::Replace => Some(BlendState::REPLACE),
         }
     }
 }
@@ -244,6 +424,7 @@ pub enum DrawCommand {
         angle: f32,
     },
     Geometry(Entity),
+    BlendMode(Option<BlendState>),
     Material(Entity),
     Box {
         width: f32,

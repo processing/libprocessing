@@ -144,6 +144,10 @@ path = "examples/curves.rs"
 name = "shapes"
 path = "examples/shapes.rs"
 
+[[example]]
+name = "blend_modes"
+path = "examples/blend_modes.rs"
+
 [profile.wasm-release]
 inherits = "release"
 opt-level = "z"

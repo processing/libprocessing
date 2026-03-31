@@ -22,7 +22,7 @@ fn arc_path(
     let circumference =
         std::f32::consts::PI * (3.0 * (rx + ry) - ((3.0 * rx + ry) * (rx + 3.0 * ry)).sqrt());
     let arc_length = circumference * (angle_range.abs() / (2.0 * std::f32::consts::PI));
-    let num_segments = (arc_length / 2.0).max(16.0).min(256.0) as u32;
+    let num_segments = (arc_length / 2.0).clamp(16.0, 256.0) as u32;
 
     let mut builder = Path::builder();
 

@@ -34,7 +34,7 @@ pub struct ProcessingRenderPlugin;
 
 impl Plugin for ProcessingRenderPlugin {
     fn build(&self, app: &mut App) {
-        use render::material::{add_custom_materials, add_standard_materials};
+        use render::material::{add_custom_materials, add_processing_materials};
         use render::{activate_cameras, clear_transient_meshes, flush_draw_commands};
 
         let config = app.world().resource::<Config>().clone();
@@ -66,7 +66,7 @@ impl Plugin for ProcessingRenderPlugin {
             surface::SurfacePlugin,
             geometry::GeometryPlugin,
             light::LightPlugin,
-            material::MaterialPlugin,
+            material::ProcessingMaterialPlugin,
             bevy::pbr::wireframe::WireframePlugin::default(),
             material::custom::CustomMaterialPlugin,
         ));
@@ -76,7 +76,7 @@ impl Plugin for ProcessingRenderPlugin {
                 Update,
                 (
                     flush_draw_commands,
-                    add_standard_materials,
+                    add_processing_materials,
                     add_custom_materials,
                 )
                     .chain()

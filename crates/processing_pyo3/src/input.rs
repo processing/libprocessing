@@ -62,6 +62,12 @@ pub fn key_is_down(key_code: u32) -> PyResult<bool> {
     processing::prelude::input_key_is_down(kc).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }
 
+pub fn key_just_pressed(key_code: u32) -> PyResult<bool> {
+    let kc = u32_to_key_code(key_code)?;
+    processing::prelude::input_key_just_pressed(kc)
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+}
+
 pub fn key() -> PyResult<Option<String>> {
     processing::prelude::input_key()
         .map(|opt| opt.map(String::from))

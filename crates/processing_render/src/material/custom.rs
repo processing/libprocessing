@@ -1,4 +1,4 @@
-use std::any::TypeId;
+use std::any::{Any, TypeId};
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -16,12 +16,18 @@ use bevy::{
         SystemParamItem,
         lifetimeless::{SRes, SResMut},
     },
-    material::{MaterialProperties, key::ErasedMeshPipelineKey},
+    material::{
+        MaterialProperties,
+        descriptor::RenderPipelineDescriptor,
+        key::{ErasedMaterialKey, ErasedMaterialPipelineKey, ErasedMeshPipelineKey},
+        specialize::SpecializedMeshPipelineError,
+    },
+    mesh::MeshVertexBufferLayoutRef,
     pbr::{
         DrawMaterial, EntitiesNeedingSpecialization, MainPassOpaqueDrawFunction,
-        MaterialBindGroupAllocator, MaterialBindGroupAllocators, MaterialFragmentShader,
-        MaterialVertexShader, MeshPipelineKey, PreparedMaterial, RenderMaterialBindings,
-        RenderMaterialInstance, RenderMaterialInstances, base_specialize,
+        MainPassTransparentDrawFunction, MaterialBindGroupAllocator, MaterialBindGroupAllocators,
+        MaterialFragmentShader, MaterialVertexShader, MeshPipelineKey, PreparedMaterial,
+        RenderMaterialBindings, RenderMaterialInstance, RenderMaterialInstances, base_specialize,
     },
     prelude::*,
     reflect::{PartialReflect, ReflectMut, ReflectRef, structs::Struct},
@@ -31,7 +37,9 @@ use bevy::{
         erased_render_asset::{ErasedRenderAsset, ErasedRenderAssetPlugin, PrepareAssetError},
         render_asset::RenderAssets,
         render_phase::DrawFunctions,
-        render_resource::{BindGroupLayoutDescriptor, BindingResources, UnpreparedBindGroup},
+        render_resource::{
+            BindGroupLayoutDescriptor, BindingResources, BlendState, UnpreparedBindGroup,
+        },
         renderer::RenderDevice,
         sync_world::MainEntity,
         texture::GpuImage,
@@ -47,12 +55,36 @@ use crate::render::material::UntypedMaterial;
 use processing_core::config::{Config, ConfigKey};
 use processing_core::error::{ProcessingError, Result};
 
+#[derive(Clone, Hash, PartialEq)]
+struct CustomMaterialKey {
+    blend_state: Option<BlendState>,
+}
+
+fn specialize(
+    key: &dyn Any,
+    descriptor: &mut RenderPipelineDescriptor,
+    _layout: &MeshVertexBufferLayoutRef,
+    _pipeline_key: ErasedMaterialPipelineKey,
+) -> std::result::Result<(), SpecializedMeshPipelineError> {
+    if let Some(key) = key.downcast_ref::<CustomMaterialKey>() {
+        if let Some(blend_state) = key.blend_state {
+            if let Some(fragment_state) = &mut descriptor.fragment {
+                for target in fragment_state.targets.iter_mut().flatten() {
+                    target.blend = Some(blend_state);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 #[derive(Asset, TypePath, Clone)]
 pub struct CustomMaterial {
     pub shader: DynamicShader,
     pub shader_handle: Handle<ShaderAsset>,
     pub has_vertex: bool,
     pub has_fragment: bool,
+    pub blend_state: Option<BlendState>,
 }
 
 #[derive(Component)]
@@ -227,6 +259,7 @@ pub fn create_custom(
         shader_handle: program.shader_handle.clone(),
         has_vertex,
         has_fragment,
+        blend_state: None,
     };
     let handle = custom_materials.add(material);
     Ok(commands.spawn(UntypedMaterial(handle.untyped())).id())
@@ -393,13 +426,22 @@ impl ErasedRenderAsset for CustomMaterial {
 
         let draw_function = opaque_draw_functions.read().id::<DrawMaterial>();
 
+        let blend_state = source_asset.blend_state;
         let mut properties = MaterialProperties {
             mesh_pipeline_key_bits: ErasedMeshPipelineKey::new(MeshPipelineKey::empty()),
             base_specialize: Some(base_specialize),
             material_layout: Some(bind_group_layout),
+            material_key: ErasedMaterialKey::new(CustomMaterialKey { blend_state }),
+            user_specialize: Some(specialize),
+            alpha_mode: if blend_state.is_some() {
+                AlphaMode::Blend
+            } else {
+                AlphaMode::Opaque
+            },
             ..Default::default()
         };
         properties.add_draw_function(MainPassOpaqueDrawFunction, draw_function);
+        properties.add_draw_function(MainPassTransparentDrawFunction, draw_function);
         if source_asset.has_vertex {
             properties.add_shader(MaterialVertexShader, source_asset.shader_handle.clone());
         }
