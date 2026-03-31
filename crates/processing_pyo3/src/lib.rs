@@ -741,6 +741,12 @@ mod mewnala {
     }
 
     #[pyfunction]
+    #[pyo3(pass_module, signature = (*args))]
+    fn translate(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        graphics!(module).translate(args)
+    }
+
+    #[pyfunction]
     #[pyo3(pass_module)]
     fn rotate(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
         graphics!(module).rotate(angle)
