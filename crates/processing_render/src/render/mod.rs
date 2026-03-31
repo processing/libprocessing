@@ -481,7 +481,8 @@ pub fn flush_draw_commands(
                     // Point is rendered as a filled circle using stroke color and weight
                     if let Some(color) = state.stroke_color {
                         let d = state.stroke_weight;
-                        let material_key = material_key_with_color(&state.material_key, color, state.blend_state);
+                        let material_key =
+                            material_key_with_color(&state.material_key, color, state.blend_state);
 
                         if needs_batch(&batch, &state, &material_key) {
                             start_batch(
@@ -705,8 +706,11 @@ pub fn flush_draw_commands(
                                 // Each vertex rendered as a filled circle
                                 if let Some(color) = state.stroke_color {
                                     let d = state.stroke_weight;
-                                    let material_key =
-                                        material_key_with_color(&state.material_key, color, state.blend_state);
+                                    let material_key = material_key_with_color(
+                                        &state.material_key,
+                                        color,
+                                        state.blend_state,
+                                    );
                                     if needs_batch(&batch, &state, &material_key) {
                                         start_batch(
                                             &mut res,
