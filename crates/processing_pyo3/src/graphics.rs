@@ -1,9 +1,6 @@
 use crate::color::{ColorMode, extract_color_with_mode};
-use crate::color::{ColorMode, extract_color_with_mode};
-use crate::glfw::GlfwContext;
 use crate::glfw::GlfwContext;
 use crate::input;
-use crate::math::{extract_vec2, extract_vec3, extract_vec4};
 use crate::math::{extract_vec2, extract_vec3, extract_vec4};
 use bevy::{
     color::{ColorToPacked, Srgba},
@@ -152,6 +149,12 @@ impl Geometry {
         geometry_vertex(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    #[pyo3(signature = (*args))]
+    pub fn uv(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let v = extract_vec2(args)?;
+        geometry_uv(self.entity, v.x, v.y).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     pub fn index(&self, i: u32) -> PyResult<()> {
         geometry_index(self.entity, i).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
@@ -160,6 +163,10 @@ impl Geometry {
     pub fn set_vertex(&self, i: u32, args: &Bound<'_, PyTuple>) -> PyResult<()> {
         let v = extract_vec3(args)?;
         geometry_set_vertex(self.entity, i, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn vertex_count(&self) -> PyResult<u32> {
+        geometry_vertex_count(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 }
 
