@@ -128,6 +128,10 @@ path = "examples/custom_material.rs"
 name = "input"
 path = "examples/input.rs"
 
+[[example]]
+name = "blend_modes"
+path = "examples/blend_modes.rs"
+
 [profile.wasm-release]
 inherits = "release"
 opt-level = "z"

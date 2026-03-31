@@ -20,7 +20,9 @@ pub(crate) mod shader;
 #[cfg(feature = "webcam")]
 mod webcam;
 
-use graphics::{Geometry, Graphics, Image, Light, Topology, get_graphics, get_graphics_mut};
+use graphics::{
+    Geometry, Graphics, Image, Light, PyBlendMode, Topology, get_graphics, get_graphics_mut,
+};
 use material::Material;
 
 use pyo3::{
@@ -126,6 +128,8 @@ mod mewnala {
     use super::Light;
     #[pymodule_export]
     use super::Material;
+    #[pymodule_export]
+    use super::PyBlendMode;
     #[pymodule_export]
     use super::Shader;
     #[pymodule_export]
@@ -340,6 +344,25 @@ mod mewnala {
     const LCH: u8 = 8;
     #[pymodule_export]
     const XYZ: u8 = 9;
+
+    #[pymodule_init]
+    fn init(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        use processing::prelude::BlendMode;
+        module.add("BLEND", PyBlendMode::from_preset(BlendMode::Blend))?;
+        module.add("ADD", PyBlendMode::from_preset(BlendMode::Add))?;
+        module.add("SUBTRACT", PyBlendMode::from_preset(BlendMode::Subtract))?;
+        module.add("DARKEST", PyBlendMode::from_preset(BlendMode::Darkest))?;
+        module.add("LIGHTEST", PyBlendMode::from_preset(BlendMode::Lightest))?;
+        module.add(
+            "DIFFERENCE",
+            PyBlendMode::from_preset(BlendMode::Difference),
+        )?;
+        module.add("EXCLUSION", PyBlendMode::from_preset(BlendMode::Exclusion))?;
+        module.add("MULTIPLY", PyBlendMode::from_preset(BlendMode::Multiply))?;
+        module.add("SCREEN", PyBlendMode::from_preset(BlendMode::Screen))?;
+        module.add("REPLACE", PyBlendMode::from_preset(BlendMode::Replace))?;
+        Ok(())
+    }
 
     #[pymodule]
     mod math {
@@ -805,6 +828,12 @@ mod mewnala {
     }
 
     #[pyfunction]
+    #[pyo3(pass_module, signature = (mode))]
+    fn blend_mode(module: &Bound<'_, PyModule>, mode: &Bound<'_, PyBlendMode>) -> PyResult<()> {
+        graphics!(module).blend_mode(&*mode.extract::<PyRef<PyBlendMode>>()?)
+    }
+
+    #[pyfunction]
     #[pyo3(pass_module, signature = (x, y, w, h, tl=0.0, tr=0.0, br=0.0, bl=0.0))]
     fn rect(
         module: &Bound<'_, PyModule>,
@@ -978,5 +1007,10 @@ mod mewnala {
     #[pyfunction]
     fn key_is_down(key_code: u32) -> PyResult<bool> {
         input::key_is_down(key_code)
+    }
+
+    #[pyfunction]
+    fn key_just_pressed(key_code: u32) -> PyResult<bool> {
+        input::key_just_pressed(key_code)
     }
 }

@@ -15,6 +15,86 @@ use pyo3::{
     types::{PyDict, PyTuple},
 };
 
+#[pyclass(name = "BlendMode", from_py_object)]
+#[derive(Clone)]
+pub struct PyBlendMode {
+    pub(crate) blend_state: Option<bevy::render::render_resource::BlendState>,
+    name: Option<&'static str>,
+}
+
+impl PyBlendMode {
+    pub(crate) fn from_preset(mode: BlendMode) -> Self {
+        Self {
+            blend_state: mode.to_blend_state(),
+            name: Some(mode.name()),
+        }
+    }
+}
+
+#[pymethods]
+impl PyBlendMode {
+    #[new]
+    #[pyo3(signature = (*, color_src, color_dst, color_op, alpha_src, alpha_dst, alpha_op))]
+    fn new(
+        color_src: u8,
+        color_dst: u8,
+        color_op: u8,
+        alpha_src: u8,
+        alpha_dst: u8,
+        alpha_op: u8,
+    ) -> PyResult<Self> {
+        let blend_state = custom_blend_state(
+            color_src, color_dst, color_op, alpha_src, alpha_dst, alpha_op,
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Self {
+            blend_state: Some(blend_state),
+            name: None,
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        match self.name {
+            Some(name) => format!("BlendMode.{name}"),
+            None => "BlendMode(custom)".to_string(),
+        }
+    }
+
+    #[classattr]
+    const ZERO: u8 = 0;
+    #[classattr]
+    const ONE: u8 = 1;
+    #[classattr]
+    const SRC_COLOR: u8 = 2;
+    #[classattr]
+    const ONE_MINUS_SRC_COLOR: u8 = 3;
+    #[classattr]
+    const SRC_ALPHA: u8 = 4;
+    #[classattr]
+    const ONE_MINUS_SRC_ALPHA: u8 = 5;
+    #[classattr]
+    const DST_COLOR: u8 = 6;
+    #[classattr]
+    const ONE_MINUS_DST_COLOR: u8 = 7;
+    #[classattr]
+    const DST_ALPHA: u8 = 8;
+    #[classattr]
+    const ONE_MINUS_DST_ALPHA: u8 = 9;
+    #[classattr]
+    const SRC_ALPHA_SATURATED: u8 = 10;
+
+    #[classattr]
+    const OP_ADD: u8 = 0;
+    #[classattr]
+    const OP_SUBTRACT: u8 = 1;
+    #[classattr]
+    const OP_REVERSE_SUBTRACT: u8 = 2;
+    #[classattr]
+    const OP_MIN: u8 = 3;
+    #[classattr]
+    const OP_MAX: u8 = 4;
+}
+
 #[pyclass(unsendable)]
 pub struct Surface {
     pub(crate) entity: Entity,
@@ -521,6 +601,11 @@ impl Graphics {
 
     pub fn shear_y(&self, angle: f32) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::ShearY { angle })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn blend_mode(&self, mode: &PyBlendMode) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::BlendMode(mode.blend_state))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 

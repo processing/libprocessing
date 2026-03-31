@@ -9,9 +9,10 @@ use bevy::{
     ecs::system::SystemParam,
     math::{Affine3A, Mat4, Vec4},
     prelude::*,
+    render::render_resource::BlendState,
 };
 use command::{CommandBuffer, DrawCommand};
-use material::MaterialKey;
+use material::{MaterialKey, ProcessingExtendedMaterial};
 use primitive::{StrokeConfig, TessellationMode, box_mesh, empty_mesh, sphere_mesh};
 use transform::TransformStack;
 
@@ -20,6 +21,8 @@ use crate::{
     geometry::Geometry,
     gltf::GltfNodeTransform,
     image::Image,
+    material::ProcessingMaterial,
+    material::custom::CustomMaterial,
     render::{material::UntypedMaterial, primitive::rect},
 };
 
@@ -37,7 +40,8 @@ pub struct TransientMeshes(Vec<Entity>);
 pub struct RenderResources<'w, 's> {
     commands: Commands<'w, 's>,
     meshes: ResMut<'w, Assets<Mesh>>,
-    materials: ResMut<'w, Assets<StandardMaterial>>,
+    materials: ResMut<'w, Assets<ProcessingExtendedMaterial>>,
+    custom_materials: ResMut<'w, Assets<CustomMaterial>>,
 }
 
 struct BatchState {
@@ -69,6 +73,7 @@ pub struct RenderState {
     pub stroke_weight: f32,
     pub stroke_config: StrokeConfig,
     pub material_key: MaterialKey,
+    pub blend_state: Option<BlendState>,
     pub transform: TransformStack,
 }
 
@@ -82,7 +87,9 @@ impl RenderState {
             material_key: MaterialKey::Color {
                 transparent: false,
                 background_image: None,
+                blend_state: None,
             },
+            blend_state: None,
             transform: TransformStack::new(),
         }
     }
@@ -95,7 +102,9 @@ impl RenderState {
         self.material_key = MaterialKey::Color {
             transparent: false,
             background_image: None,
+            blend_state: None,
         };
+        self.blend_state = None;
         self.transform = TransformStack::new();
     }
 
@@ -175,12 +184,14 @@ pub fn flush_draw_commands(
                             roughness: (r * 255.0) as u8,
                             metallic,
                             emissive,
+                            blend_state: None,
                         },
                         _ => MaterialKey::Pbr {
                             albedo: [255, 255, 255, 255],
                             roughness: (r * 255.0) as u8,
                             metallic: 0,
                             emissive: [0, 0, 0, 0],
+                            blend_state: None,
                         },
                     };
                 }
@@ -196,12 +207,14 @@ pub fn flush_draw_commands(
                             roughness,
                             metallic: (m * 255.0) as u8,
                             emissive,
+                            blend_state: None,
                         },
                         _ => MaterialKey::Pbr {
                             albedo: [255, 255, 255, 255],
                             roughness: 128,
                             metallic: (m * 255.0) as u8,
                             emissive: [0, 0, 0, 0],
+                            blend_state: None,
                         },
                     };
                 }
@@ -218,12 +231,14 @@ pub fn flush_draw_commands(
                             roughness,
                             metallic,
                             emissive: [r, g, b, a],
+                            blend_state: None,
                         },
                         _ => MaterialKey::Pbr {
                             albedo: [255, 255, 255, 255],
                             roughness: 128,
                             metallic: 0,
                             emissive: [r, g, b, a],
+                            blend_state: None,
                         },
                     };
                 }
@@ -231,6 +246,7 @@ pub fn flush_draw_commands(
                     state.material_key = MaterialKey::Color {
                         transparent: state.fill_is_transparent(),
                         background_image: None,
+                        blend_state: None,
                     };
                 }
                 DrawCommand::Rect { x, y, w, h, radii } => {
@@ -284,6 +300,7 @@ pub fn flush_draw_commands(
                     let material_key = MaterialKey::Color {
                         transparent: color.alpha() < 1.0,
                         background_image: None,
+                        blend_state: Some(BlendState::REPLACE),
                     };
                     let material_handle = material_key.to_material(&mut res.materials);
 
@@ -311,6 +328,7 @@ pub fn flush_draw_commands(
                     let material_key = MaterialKey::Color {
                         transparent: false,
                         background_image: Some(p_image.handle.clone()),
+                        blend_state: Some(BlendState::REPLACE),
                     };
                     let material_handle = material_key.to_material(&mut res.materials);
 
@@ -340,12 +358,19 @@ pub fn flush_draw_commands(
 
                     let material_key = material_key_with_fill(&state);
                     let material_handle = match &material_key {
-                        MaterialKey::Custom(mat_entity) => {
-                            let Some(handle) = p_material_handles.get(*mat_entity).ok() else {
+                        MaterialKey::Custom {
+                            entity: mat_entity,
+                            blend_state,
+                        } => {
+                            let Some(untyped) = p_material_handles.get(*mat_entity).ok() else {
                                 warn!("Could not find material for entity {:?}", mat_entity);
                                 continue;
                             };
-                            handle.0.clone()
+                            clone_custom_material_with_blend(
+                                &mut res.custom_materials,
+                                &untyped.0,
+                                *blend_state,
+                            )
                         }
                         _ => material_key.to_material(&mut res.materials),
                     };
@@ -374,8 +399,14 @@ pub fn flush_draw_commands(
 
                     batch.draw_index += 1;
                 }
+                DrawCommand::BlendMode(blend_state) => {
+                    state.blend_state = blend_state;
+                }
                 DrawCommand::Material(entity) => {
-                    state.material_key = MaterialKey::Custom(entity);
+                    state.material_key = MaterialKey::Custom {
+                        entity,
+                        blend_state: None,
+                    };
                 }
                 DrawCommand::Box {
                     width,
@@ -449,13 +480,16 @@ fn spawn_mesh(
     };
 
     let material_handle = match key {
-        MaterialKey::Custom(entity) => match material_handles.get(*entity) {
-            Ok(handle) => handle.0.clone(),
-            Err(_) => {
+        MaterialKey::Custom {
+            entity,
+            blend_state,
+        } => {
+            let Some(untyped) = material_handles.get(*entity).ok() else {
                 warn!("Custom material entity {:?} not found", entity);
                 return;
-            }
-        },
+            };
+            clone_custom_material_with_blend(&mut res.custom_materials, &untyped.0, *blend_state)
+        }
         _ => key.to_material(&mut res.materials),
     };
 
@@ -471,7 +505,8 @@ fn spawn_mesh(
 fn needs_batch(batch: &BatchState, state: &RenderState, material_key: &MaterialKey) -> bool {
     let material_changed = batch.material_key.as_ref() != Some(material_key);
     let transform_changed = batch.transform != state.transform.current();
-    material_changed || transform_changed
+    let requires_separate_draws = state.blend_state.is_some();
+    material_changed || transform_changed || requires_separate_draws
 }
 
 fn start_batch(
@@ -487,13 +522,39 @@ fn start_batch(
     batch.current_mesh = Some(empty_mesh());
 }
 
-fn material_key_with_color(key: &MaterialKey, color: Color) -> MaterialKey {
+fn clone_custom_material_with_blend(
+    custom_materials: &mut Assets<CustomMaterial>,
+    original: &UntypedHandle,
+    blend_state: Option<BlendState>,
+) -> UntypedHandle {
+    match blend_state {
+        None => original.clone(),
+        Some(bs) => {
+            let Ok(handle) = original.clone().try_typed::<CustomMaterial>() else {
+                return original.clone();
+            };
+            let Some(original_mat) = custom_materials.get(&handle) else {
+                return original.clone();
+            };
+            let mut variant = original_mat.clone();
+            variant.blend_state = Some(bs);
+            custom_materials.add(variant).untyped()
+        }
+    }
+}
+
+fn material_key_with_color(
+    key: &MaterialKey,
+    color: Color,
+    blend_state: Option<BlendState>,
+) -> MaterialKey {
     match key {
         MaterialKey::Color {
             background_image, ..
         } => MaterialKey::Color {
             transparent: color.alpha() < 1.0,
             background_image: background_image.clone(),
+            blend_state,
         },
         MaterialKey::Pbr {
             roughness,
@@ -507,15 +568,19 @@ fn material_key_with_color(key: &MaterialKey, color: Color) -> MaterialKey {
                 roughness: *roughness,
                 metallic: *metallic,
                 emissive: *emissive,
+                blend_state,
             }
         }
-        MaterialKey::Custom(e) => MaterialKey::Custom(*e),
+        MaterialKey::Custom { entity, .. } => MaterialKey::Custom {
+            entity: *entity,
+            blend_state,
+        },
     }
 }
 
 fn material_key_with_fill(state: &RenderState) -> MaterialKey {
     let color = state.fill_color.unwrap_or(Color::WHITE);
-    material_key_with_color(&state.material_key, color)
+    material_key_with_color(&state.material_key, color, state.blend_state)
 }
 
 fn add_fill(
@@ -528,7 +593,7 @@ fn add_fill(
     let Some(color) = state.fill_color else {
         return;
     };
-    let material_key = material_key_with_color(&state.material_key, color);
+    let material_key = material_key_with_color(&state.material_key, color, state.blend_state);
 
     if needs_batch(batch, state, &material_key) {
         start_batch(res, batch, state, material_key, material_handles);
@@ -550,7 +615,7 @@ fn add_stroke(
         return;
     };
     let stroke_weight = state.stroke_weight;
-    let material_key = material_key_with_color(&state.material_key, color);
+    let material_key = material_key_with_color(&state.material_key, color, state.blend_state);
 
     if needs_batch(batch, state, &material_key) {
         start_batch(res, batch, state, material_key, material_handles);
@@ -588,29 +653,39 @@ fn add_shape3d(
     let mesh_handle = res.meshes.add(mesh);
     let fill_color = state.fill_color.unwrap_or(Color::WHITE);
     let material_handle = match &state.material_key {
-        MaterialKey::Custom(entity) => match material_handles.get(*entity) {
-            Ok(handle) => handle.0.clone(),
-            Err(_) => {
+        MaterialKey::Custom { entity, .. } => {
+            let Some(untyped) = material_handles.get(*entity).ok() else {
                 warn!("Custom material entity {:?} not found", entity);
                 return;
-            }
-        },
+            };
+            clone_custom_material_with_blend(
+                &mut res.custom_materials,
+                &untyped.0,
+                state.blend_state,
+            )
+        }
         // TODO: in 2d, we use vertex colors. `to_material` becomes complicated if we also encode
         // a base color in the material, so for simplicity we just create a new material here
         // that is unlit and uses the fill color as the base color
         MaterialKey::Color { transparent, .. } => {
-            let mat = StandardMaterial {
+            let base = StandardMaterial {
                 base_color: fill_color,
                 unlit: true,
                 cull_mode: None,
-                alpha_mode: if *transparent {
+                alpha_mode: if state.blend_state.is_some() || *transparent {
                     AlphaMode::Blend
                 } else {
                     AlphaMode::Opaque
                 },
                 ..default()
             };
-            res.materials.add(mat).untyped()
+            let extended = ProcessingExtendedMaterial {
+                base,
+                extension: ProcessingMaterial {
+                    blend_state: state.blend_state,
+                },
+            };
+            res.materials.add(extended).untyped()
         }
         _ => {
             let key = material_key_with_fill(state);

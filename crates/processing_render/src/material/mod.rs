@@ -1,15 +1,26 @@
 pub mod custom;
 pub mod pbr;
 
-use bevy::prelude::*;
-
 use crate::render::material::UntypedMaterial;
-use processing_core::error::{ProcessingError, Result};
+use bevy::material::descriptor::RenderPipelineDescriptor;
+use bevy::material::specialize::SpecializedMeshPipelineError;
+use bevy::mesh::MeshVertexBufferLayoutRef;
+use bevy::pbr::{
+    ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline,
+};
+use bevy::prelude::*;
+use bevy::render::render_resource::{AsBindGroup, BlendState};
+use bevy::shader::ShaderRef;
+use processing_core::error::{self, ProcessingError};
 
-pub struct MaterialPlugin;
+pub struct ProcessingMaterialPlugin;
 
-impl Plugin for MaterialPlugin {
+impl Plugin for ProcessingMaterialPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(bevy::pbr::MaterialPlugin::<
+            ExtendedMaterial<StandardMaterial, ProcessingMaterial>,
+        >::default());
+
         let world = app.world_mut();
         let handle = world
             .resource_mut::<Assets<StandardMaterial>>()
@@ -59,7 +70,7 @@ pub fn set_property(
     material_handles: Query<&UntypedMaterial>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
     mut custom_materials: ResMut<Assets<custom::CustomMaterial>>,
-) -> Result<()> {
+) -> error::Result<()> {
     let untyped = material_handles
         .get(entity)
         .map_err(|_| ProcessingError::MaterialNotFound)?;
@@ -89,7 +100,7 @@ pub fn destroy(
     material_handles: Query<&UntypedMaterial>,
     mut standard_materials: ResMut<Assets<StandardMaterial>>,
     mut custom_materials: ResMut<Assets<custom::CustomMaterial>>,
-) -> Result<()> {
+) -> error::Result<()> {
     let untyped = material_handles
         .get(entity)
         .map_err(|_| ProcessingError::MaterialNotFound)?;
@@ -101,4 +112,53 @@ pub fn destroy(
     }
     commands.entity(entity).despawn();
     Ok(())
+}
+
+#[derive(Asset, AsBindGroup, Reflect, Debug, Clone, Default)]
+#[bind_group_data(ProcessingMaterialKey)]
+pub struct ProcessingMaterial {
+    pub blend_state: Option<BlendState>,
+}
+
+#[repr(C)]
+#[derive(Eq, PartialEq, Hash, Copy, Clone)]
+pub struct ProcessingMaterialKey {
+    blend_state: Option<BlendState>,
+}
+
+impl From<&ProcessingMaterial> for ProcessingMaterialKey {
+    fn from(mat: &ProcessingMaterial) -> Self {
+        ProcessingMaterialKey {
+            blend_state: mat.blend_state,
+        }
+    }
+}
+
+impl MaterialExtension for ProcessingMaterial {
+    fn vertex_shader() -> ShaderRef {
+        <StandardMaterial as Material>::vertex_shader()
+    }
+
+    fn fragment_shader() -> ShaderRef {
+        <StandardMaterial as Material>::fragment_shader()
+    }
+
+    fn specialize(
+        _pipeline: &MaterialExtensionPipeline,
+        descriptor: &mut RenderPipelineDescriptor,
+        _layout: &MeshVertexBufferLayoutRef,
+        key: MaterialExtensionKey<Self>,
+    ) -> std::result::Result<(), SpecializedMeshPipelineError> {
+        if let Some(blend_state) = key.bind_group_data.blend_state {
+            // this should never be null but we have to check it anyway
+            if let Some(fragment_state) = &mut descriptor.fragment {
+                fragment_state.targets.iter_mut().for_each(|target| {
+                    if let Some(target) = target {
+                        target.blend = Some(blend_state);
+                    }
+                });
+            }
+        }
+        Ok(())
+    }
 }
