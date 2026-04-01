@@ -740,6 +740,12 @@ mod mewnala {
     }
 
     #[pyfunction]
+    #[pyo3(pass_module)]
+    fn mode_2d(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).mode_2d()
+    }
+
+    #[pyfunction]
     #[pyo3(pass_module, signature = (*args))]
     fn camera_position(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
         graphics!(module).camera_position(args)
