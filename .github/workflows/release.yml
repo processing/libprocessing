@@ -30,7 +30,7 @@ jobs:
     needs: generate-stubs
     strategy:
       matrix:
-        target: [x86_64]
+        target: [x86_64, aarch64]
     steps:
       - uses: actions/checkout@v4
         with:
