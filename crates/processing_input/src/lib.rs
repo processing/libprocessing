@@ -176,7 +176,8 @@ pub fn input_cursor_visible(surface: Entity) -> error::Result<bool> {
 
 /// Flushes the input state by running the relevant schedules. This is required to ensure that
 /// Bevy's bookkeeping of input state is up to date after manually sending input events.
-/// It should be called at the end of each frame
+/// It should be called after sending any input events and before querying input state
+/// to ensure that the state reflects the events that were sent.
 pub fn input_flush() -> error::Result<()> {
     app_mut(|app| {
         let world = app.world_mut();
