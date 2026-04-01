@@ -714,6 +714,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_camera_controller"
+version = "0.19.0-dev"
+source = "git+https://github.com/bevyengine/bevy?branch=main#26ee545b87cdfa36aeb4ca83738240063e691a07"
+dependencies = [
+ "bevy_app",
+ "bevy_camera",
+ "bevy_ecs",
+ "bevy_input",
+ "bevy_log",
+ "bevy_math",
+ "bevy_time",
+ "bevy_transform",
+ "bevy_window",
+]
+
+[[package]]
 name = "bevy_color"
 version = "0.19.0-dev"
 source = "git+https://github.com/bevyengine/bevy?branch=main#26ee545b87cdfa36aeb4ca83738240063e691a07"
@@ -1067,6 +1083,7 @@ dependencies = [
  "bevy_asset",
  "bevy_audio",
  "bevy_camera",
+ "bevy_camera_controller",
  "bevy_color",
  "bevy_core_pipeline",
  "bevy_derive",

@@ -1,5 +1,6 @@
 #![allow(clippy::module_inception)]
 
+pub mod camera;
 pub mod color;
 pub mod geometry;
 pub mod gltf;
@@ -69,6 +70,9 @@ impl Plugin for ProcessingRenderPlugin {
             material::ProcessingMaterialPlugin,
             bevy::pbr::wireframe::WireframePlugin::default(),
             material::custom::CustomMaterialPlugin,
+            camera::OrbitCameraPlugin,
+            bevy::camera_controller::free_camera::FreeCameraPlugin,
+            bevy::camera_controller::pan_camera::PanCameraPlugin,
         ));
 
         app.add_systems(First, (clear_transient_meshes, activate_cameras))
@@ -422,6 +426,86 @@ pub fn graphics_mode_2d(graphics_entity: Entity) -> error::Result<()> {
         flush(app, graphics_entity)?;
         app.world_mut()
             .run_system_cached_with(graphics::mode_2d, graphics_entity)
+            .unwrap()
+    })
+}
+
+pub fn graphics_orbit_camera(graphics_entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(camera::enable_orbit_camera, graphics_entity)
+            .unwrap()
+    })
+}
+
+pub fn graphics_free_camera(graphics_entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(camera::enable_free_camera, graphics_entity)
+            .unwrap()
+    })
+}
+
+pub fn graphics_pan_camera(graphics_entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(camera::enable_pan_camera, graphics_entity)
+            .unwrap()
+    })
+}
+
+pub fn graphics_disable_camera_controller(graphics_entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(camera::disable_camera_controller, graphics_entity)
+            .unwrap()
+    })
+}
+
+pub fn camera_set_distance(entity: Entity, distance: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(camera::set_distance, (entity, distance))
+            .unwrap()
+    })
+}
+
+pub fn camera_set_center(entity: Entity, center: Vec3) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(camera::set_center, (entity, center))
+            .unwrap()
+    })
+}
+
+pub fn camera_set_min_distance(entity: Entity, min: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(camera::set_min_distance, (entity, min))
+            .unwrap()
+    })
+}
+
+pub fn camera_set_max_distance(entity: Entity, max: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(camera::set_max_distance, (entity, max))
+            .unwrap()
+    })
+}
+
+pub fn camera_set_speed(entity: Entity, speed: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(camera::set_speed, (entity, speed))
+            .unwrap()
+    })
+}
+
+pub fn camera_reset(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(camera::reset_camera, entity)
             .unwrap()
     })
 }

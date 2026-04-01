@@ -63,9 +63,7 @@ pub fn create_pbr(
             cull_mode: None,
             ..default()
         },
-        extension: ProcessingMaterial {
-            blend_state: None,
-        },
+        extension: ProcessingMaterial { blend_state: None },
     });
     commands.spawn(UntypedMaterial(handle.untyped())).id()
 }

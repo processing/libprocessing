@@ -1038,6 +1038,52 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    pub fn orbit_camera(&self) -> PyResult<()> {
+        graphics_orbit_camera(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn free_camera(&self) -> PyResult<()> {
+        graphics_free_camera(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn pan_camera(&self) -> PyResult<()> {
+        graphics_pan_camera(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn disable_camera(&self) -> PyResult<()> {
+        graphics_disable_camera_controller(self.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn camera_distance(&self, distance: f32) -> PyResult<()> {
+        camera_set_distance(self.entity, distance)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    #[pyo3(signature = (*args))]
+    pub fn camera_center(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let v = extract_vec3(args)?;
+        camera_set_center(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn camera_min_distance(&self, min: f32) -> PyResult<()> {
+        camera_set_min_distance(self.entity, min)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn camera_max_distance(&self, max: f32) -> PyResult<()> {
+        camera_set_max_distance(self.entity, max)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn camera_speed(&self, speed: f32) -> PyResult<()> {
+        camera_set_speed(self.entity, speed).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn camera_reset(&self) -> PyResult<()> {
+        camera_reset(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     pub fn light_directional(
         &self,
         color: crate::color::ColorLike,

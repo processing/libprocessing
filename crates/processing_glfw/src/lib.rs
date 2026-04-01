@@ -4,8 +4,9 @@ use bevy::prelude::Entity;
 use glfw::{Action, Glfw, GlfwReceiver, PWindow, WindowEvent, WindowMode};
 use processing_core::error::Result;
 use processing_input::{
-    input_flush, input_set_char, input_set_cursor_enter, input_set_cursor_leave, input_set_focus,
-    input_set_key, input_set_mouse_button, input_set_mouse_move, input_set_scroll,
+    input_cursor_grab_mode, input_cursor_visible, input_flush, input_set_char,
+    input_set_cursor_enter, input_set_cursor_leave, input_set_focus, input_set_key,
+    input_set_mouse_button, input_set_mouse_move, input_set_scroll,
 };
 
 pub struct GlfwContext {
@@ -173,9 +174,29 @@ impl GlfwContext {
             return false;
         }
 
-        input_flush().unwrap();
+        let Ok(_) = input_flush() else {
+            return false;
+        };
+        self.sync_cursor(surface);
 
         true
+    }
+
+    fn sync_cursor(&mut self, surface: Entity) {
+        use bevy::window::CursorGrabMode;
+
+        let grab = input_cursor_grab_mode(surface).unwrap_or(CursorGrabMode::None);
+        let visible = input_cursor_visible(surface).unwrap_or(true);
+
+        let mode = match grab {
+            CursorGrabMode::Locked | CursorGrabMode::Confined => glfw::CursorMode::Disabled,
+            CursorGrabMode::None if !visible => glfw::CursorMode::Hidden,
+            CursorGrabMode::None => glfw::CursorMode::Normal,
+        };
+
+        if self.window.get_cursor_mode() != mode {
+            self.window.set_cursor_mode(mode);
+        }
     }
 }
 

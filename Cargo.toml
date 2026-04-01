@@ -22,7 +22,7 @@ type_complexity = "allow"
 too_many_arguments = "allow"
 
 [workspace.dependencies]
-bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", features = ["file_watcher", "shader_format_wesl"] }
+bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", features = ["file_watcher", "shader_format_wesl", "free_camera", "pan_camera"] }
 bevy_naga_reflect = { git = "https://github.com/tychedelia/bevy_naga_reflect" }
 naga = { version = "28", features = ["wgsl-in"] }
 wesl = { version = "0.3", default-features = false }
@@ -147,6 +147,10 @@ path = "examples/shapes.rs"
 [[example]]
 name = "blend_modes"
 path = "examples/blend_modes.rs"
+
+[[example]]
+name = "camera_controllers"
+path = "examples/camera_controllers.rs"
 
 [profile.wasm-release]
 inherits = "release"

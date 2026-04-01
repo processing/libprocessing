@@ -152,9 +152,37 @@ pub fn input_set_focus(surface: Entity, focused: bool) -> error::Result<()> {
     })
 }
 
+pub fn input_cursor_grab_mode(surface: Entity) -> error::Result<bevy::window::CursorGrabMode> {
+    app_mut(|app| {
+        let cursor = app
+            .world()
+            .get::<bevy::window::CursorOptions>(surface)
+            .map(|c| c.grab_mode)
+            .unwrap_or(bevy::window::CursorGrabMode::None);
+        Ok(cursor)
+    })
+}
+
+pub fn input_cursor_visible(surface: Entity) -> error::Result<bool> {
+    app_mut(|app| {
+        let visible = app
+            .world()
+            .get::<bevy::window::CursorOptions>(surface)
+            .map(|c| c.visible)
+            .unwrap_or(true);
+        Ok(visible)
+    })
+}
+
+/// Flushes the input state by running the relevant schedules. This is required to ensure that
+/// Bevy's bookkeeping of input state is up to date after manually sending input events.
+/// It should be called at the end of each frame
 pub fn input_flush() -> error::Result<()> {
     app_mut(|app| {
-        app.world_mut().run_schedule(PreUpdate);
+        let world = app.world_mut();
+        world.run_schedule(First);
+        world.run_schedule(PreUpdate);
+        world.run_schedule(RunFixedMainLoop);
         Ok(())
     })
 }
