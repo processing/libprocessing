@@ -112,7 +112,6 @@ impl ColorMode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy::color::ColorToComponents;
 
     #[test]
     fn test_srgb_color() {
