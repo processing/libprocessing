@@ -1,7 +1,5 @@
 //! Supplies the following camera controllers:
-//! - Orbit camera: left mouse button to orbit, middle mouse button to pan, right mouse button or
-//! scroll wheel to zoom. Inspired by [PeasyCam](https://github.com/jdf/peasycam) by Jonathan
-//! Feinberg.
+//! - Orbit camera: left mouse button to orbit, middle mouse button to pan, right mouse button or scroll wheel to zoom. Inspired by [PeasyCam](https://github.com/jdf/peasycam) by Jonathan Feinberg.
 //! - Free camera: WASD to move, mouse to look around.
 //! - Pan camera: middle mouse button to pan, scroll wheel to zoom.
 use std::f32::consts::FRAC_PI_2;
