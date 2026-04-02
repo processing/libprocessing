@@ -30,7 +30,8 @@ jobs:
     needs: generate-stubs
     strategy:
       matrix:
-        target: [x86_64, aarch64]
+        # TODO: add aarch64 when we are ready to address long build times
+        target: [x86_64] 
     steps:
       - uses: actions/checkout@v4
         with:
@@ -78,8 +79,8 @@ jobs:
         include:
           - runner: macos-14
             target: aarch64
-          - runner: macos-13
-            target: x86_64
+          # TODO: lets add this build when we have a moment
+          # - runner: macos-15-intel
     steps:
       - uses: actions/checkout@v4
         with:
