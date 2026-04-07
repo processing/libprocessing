@@ -403,8 +403,13 @@ impl ErasedRenderAsset for CustomMaterial {
         let bind_group_layout =
             BindGroupLayoutDescriptor::new("custom_material_bind_group", &layout_entries);
 
-        let bindings =
-            reflection.create_bindings(3, &source_asset.shader, render_device, gpu_images, gpu_buffers);
+        let bindings = reflection.create_bindings(
+            3,
+            &source_asset.shader,
+            render_device,
+            gpu_images,
+            gpu_buffers,
+        );
 
         let unprepared = UnpreparedBindGroup {
             bindings: BindingResources(bindings),
