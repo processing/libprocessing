@@ -41,7 +41,10 @@ fn main() {
 
     eprintln!("Introspecting: {}", cdylib_path.display());
 
-    let module = introspect_cdylib(&cdylib_path, "mewnala").expect("Failed to introspect cdylib");
+    let mut module =
+        introspect_cdylib(&cdylib_path, "mewnala").expect("Failed to introspect cdylib");
+
+    module.incomplete = false;
 
     let stubs = module_stub_files(&module);
 

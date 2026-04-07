@@ -1,0 +1,65 @@
+site_name: mewnala
+site_description: Mewnala, I choose you!
+site_url: https://processing.github.io/libprocessing/
+repo_url: https://github.com/processing/libprocessing
+repo_name: processing/libprocessing
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: pink
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: pink
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - content.code.copy
+    - navigation.sections
+    - navigation.expand
+    - search.highlight
+
+plugins:
+  - search
+  - gen-files:
+      scripts:
+        - docs/gen_ref_pages.py
+  - mkdocstrings:
+      handlers:
+        python:
+          paths:
+            - crates/processing_pyo3
+          options:
+            allow_inspection: false
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: false
+            members_order: alphabetical
+            docstring_style: google
+            show_if_no_docstring: true
+            filters:
+              - "!^_"
+
+nav:
+  - Home: index.md
+  - API Reference:
+      - Overview: reference/index.md
+      - Math: reference/math.md
+      - Color: reference/color.md
+  - Design:
+      - Principles: principles.md
+      - Internal API: api.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - admonition
+  - pymdownx.details

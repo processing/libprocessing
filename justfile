@@ -20,6 +20,12 @@ py-jupyter file: py-build
 py-ipython: py-build
     cd crates/processing_pyo3; ipython
 
+docs-serve: py-stubs
+    uv run --project crates/processing_pyo3 --group docs mkdocs serve
+
+docs-build: py-stubs
+    uv run --project crates/processing_pyo3 --group docs mkdocs build
+
 wasm-build:
     wasm-pack build crates/processing_wasm --target web --out-dir ../../target/wasm
 
