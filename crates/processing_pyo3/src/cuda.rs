@@ -2,7 +2,7 @@ use processing::prelude::image::pixel_size;
 use processing_cuda::{cuda_buffer, cuda_write_back, typestr_for_format};
 use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyDict};
 
-/// Implements `__cuda_array_interface__ for zero-copy interop
+/// Implements `__cuda_array_interface__` for zero-copy interop
 /// with PyTorch, CuPy, and other CUDA-aware Python libraries.
 #[pyclass(unsendable)]
 pub struct CudaImage {

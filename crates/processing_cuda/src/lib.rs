@@ -46,7 +46,12 @@ fn resolve_texture(app: &mut App, entity: Entity) -> Result<(Texture, TextureFor
     if app.world().get::<Image>(entity).is_some() {
         let texture = gpu_image(app, entity)?.texture.clone();
         let p_image = app.world().get::<Image>(entity).unwrap();
-        return Ok((texture, p_image.texture_format, p_image.size.width, p_image.size.height));
+        return Ok((
+            texture,
+            p_image.texture_format,
+            p_image.size.width,
+            p_image.size.height,
+        ));
     }
     if let Ok(vt) = view_target(app, entity) {
         let texture = vt.main_texture().clone();
