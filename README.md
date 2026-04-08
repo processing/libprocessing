@@ -10,24 +10,31 @@ Inside of our `processing_pyo3` crate we have created a python package that you 
 Again, we are still very nascent, but let us know what kinds of snags you may run into while getting this set up.
 Try running the examples in the [processing_pyo3 examples directory](crates/processing_pyo3/examples).
 
+We are big fans of [uv](https://github.com/astral-sh/uv) and this is the easiest way to get started using `mewnala`
+
+#### Setting up uv on linux or macOS
 ```bash
-# have python3 installed on your system
-
-# create a sketch folder and go inside
-mkdir my-sketch-folder && cd my-sketch-folder
-
-# create a virtual env
-python -m venv .venv
-
-# activate virtual env
-source .venv/bin/activate
-
-pip install mewnala
-
-python my_sketch.py
+curl -LsSf https://astral.sh/uv/install.sh | sh
 ```
 
-### Rust
+#### For Windows users:
+```bash
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+#### Install a mewnala
+```bash
+# Initialize a project with uv
+uv init mewnala-sketchbook && cd mewnala-sketchbook
+
+# add the package
+uv add mewnala
+
+# run a sketch
+uv run sketch.py
+```
+
+### Rust (libprocessing)
 
 You'll need to install the Rust toolchain to work on this project. Most users will want to install Rust via [`rustup`](https://rustup.rs/), which helps manage Rust toolchain versions.
 
