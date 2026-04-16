@@ -32,7 +32,7 @@ of characteristics that are desirable for a project like Processing:
 
 There are several layers required to make this work. Starting from the outermost layer of the onion:
 
-1. `bindgen`, a rust project for generating C headers from Rust code. This is what Java and other languages bind to.
+1. `cbindgen`, a rust project for generating C headers from Rust code. This is what Java and other languages bind to.
 2. Our Rust FFI library, which wraps libprocessing. FFI rust code mostly means declaring the public interface for
    `bindgen` using `extern "C"` functions and mapping types compatible with the C ABI to call our libprocessing API.
 3. libprocessing is our Rust library that exposes the primary Processing API.
