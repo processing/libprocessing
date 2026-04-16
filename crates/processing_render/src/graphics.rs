@@ -224,9 +224,9 @@ pub fn create(
         Camera {
             // always load the previous frame (provides sketch like behavior)
             clear_color: ClearColorConfig::None,
-            // TODO: toggle this conditionally based on whether we need to write back MSAA
-            // when doing manual pixel updates
-            msaa_writeback: MsaaWriteback::Off,
+            // force MSAA writeback every frame so manual writes to `main_texture` (e.g. via
+            // `graphics_update_region`) survive the next resolve
+            msaa_writeback: MsaaWriteback::Always,
             ..default()
         },
         target,
@@ -581,6 +581,7 @@ pub fn update_region_write(
     )>,
     graphics_query: Query<&Graphics>,
     graphics_targets: Res<GraphicsTargets>,
+    render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
 ) -> Result<()> {
     let graphics = graphics_query
@@ -599,12 +600,12 @@ pub fn update_region_write(
         .get(&entity)
         .ok_or(ProcessingError::GraphicsNotFound)?;
 
-    let texture = view_target.main_texture();
+    let main = view_target.main_texture();
     let bytes_per_row = width * px_size;
 
     render_queue.write_texture(
         TexelCopyTextureInfo {
-            texture,
+            texture: main,
             mip_level: 0,
             origin: Origin3d { x, y, z: 0 },
             aspect: Default::default(),
@@ -621,6 +622,25 @@ pub fn update_region_write(
             depth_or_array_layers: 1,
         },
     );
+
+    // when MSAA is enabled, the main pass renders into a sampled texture and resolves into one of
+    // the two ping-pong main textures. bevy's main_texture atomic is reset to 0 at the start of
+    // every frame, so next frame's MSAA writeback sources from whichever side the atomic points
+    // at after reset, not necessarily the side we just wrote to. copy the current main (including
+    // our pixel write, since queued writes are applied before this submit) into the other side so
+    // the writeback propagates the updated content regardless of which direction the ping-pong
+    // lands in.
+    //
+    // TODO: in theory bevy could just re-use the atomic to track which side is the latest main
+    // texture and avoid this copy, unclear if that would cause other problems, but should be
+    // considered for upstream if this ever matters for performance
+    if view_target.sampled_main_texture().is_some() {
+        let other = view_target.main_texture_other();
+        let mut encoder =
+            render_device.create_command_encoder(&CommandEncoderDescriptor::default());
+        encoder.copy_texture_to_texture(main.as_image_copy(), other.as_image_copy(), graphics.size);
+        render_queue.submit(std::iter::once(encoder.finish()));
+    }
 
     Ok(())
 }
