@@ -31,6 +31,7 @@ use crate::{
     render::{
         BATCH_INDEX_STEP, RenderState,
         command::{CommandBuffer, DrawCommand},
+        filter::{self, FilterOp},
     },
     surface::Surface,
 };
@@ -492,6 +493,24 @@ pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
     graphics_mut!(app, entity).insert(Flush);
     app.update();
     graphics_mut!(app, entity).remove::<Flush>();
+    Ok(())
+}
+
+pub fn apply_filter(app: &mut App, entity: Entity, op: FilterOp) -> Result<()> {
+    {
+        let mut e = graphics_mut!(app, entity);
+        e.insert(Flush);
+        filter::attach(&mut e, op);
+    }
+    app.update();
+    {
+        let mut e = graphics_mut!(app, entity);
+        e.remove::<Flush>();
+        filter::detach(&mut e);
+    }
+    app.world_mut()
+        .run_system_cached(update_view_targets)
+        .expect("Failed to run update_view_targets");
     Ok(())
 }
 

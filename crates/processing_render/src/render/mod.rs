@@ -1,4 +1,5 @@
 pub mod command;
+pub mod filter;
 pub mod material;
 pub mod mesh_builder;
 pub mod primitive;

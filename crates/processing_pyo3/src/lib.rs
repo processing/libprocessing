@@ -13,6 +13,7 @@ pub(crate) mod compute;
 mod constants;
 #[cfg(feature = "cuda")]
 pub(crate) mod cuda;
+pub(crate) mod filter;
 mod glfw;
 mod gltf;
 mod graphics;

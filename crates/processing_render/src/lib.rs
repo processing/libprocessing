@@ -67,6 +67,7 @@ impl Plugin for ProcessingRenderPlugin {
             material::custom::CustomMaterialPlugin,
             compute::ComputePlugin,
             particles::ParticlesPlugin,
+            render::filter::FilterPlugin,
             camera::OrbitCameraPlugin,
             bevy::camera_controller::free_camera::FreeCameraPlugin,
             bevy::camera_controller::pan_camera::PanCameraPlugin,
@@ -478,6 +479,13 @@ pub fn graphics_present(graphics_entity: Entity) -> error::Result<()> {
 /// End the current draw pass for the graphics surface.
 pub fn graphics_end_draw(graphics_entity: Entity) -> error::Result<()> {
     app_mut(|app| graphics::end_draw(app, graphics_entity))
+}
+
+pub fn graphics_apply_filter(
+    graphics_entity: Entity,
+    op: render::filter::FilterOp,
+) -> error::Result<()> {
+    app_mut(|app| graphics::apply_filter(app, graphics_entity, op))
 }
 
 /// Destroy the graphics surface and free its resources.

@@ -27,6 +27,14 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     );
     add!(m, CORNER, CORNERS, CENTER, RADIUS);
     add!(m, OPEN, CHORD, PIE, CLOSE);
+
+    // Filters. Values are the single source of truth in `crate::filter`.
+    m.add("INVERT", crate::filter::INVERT_U8)?;
+    m.add("GRAY", crate::filter::GRAY_U8)?;
+    m.add("THRESHOLD", crate::filter::THRESHOLD_U8)?;
+    m.add("POSTERIZE", crate::filter::POSTERIZE_U8)?;
+    m.add("OPAQUE", crate::filter::OPAQUE_U8)?;
+
     add!(m, LEFT, RIGHT);
     add!(m, NEAREST, CLAMP, REPEAT, MIRROR);
     add!(m, SRGB, LINEAR, HSL, HSV, HWB, OKLAB, OKLCH, LAB, LCH, XYZ);
