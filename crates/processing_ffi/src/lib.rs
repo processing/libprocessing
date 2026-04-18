@@ -3,7 +3,7 @@ use bevy::{
     prelude::Entity,
     render::render_resource::{Extent3d, TextureFormat},
 };
-use processing::prelude::{error::ProcessingError, *};
+use processing::prelude::{error::ProcessingError, shader_value::ShaderValue, *};
 
 use crate::color::Color;
 
@@ -2905,39 +2905,163 @@ pub extern "C" fn processing_compute_create(shader_id: u64) -> u64 {
 }
 
 /// # Safety
-/// - `name` must be non-null
+/// - `name` must be non-null.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn processing_compute_set_float(
-    compute_id: u64,
+pub unsafe extern "C" fn processing_shader_set_float(
+    entity: u64,
     name: *const std::ffi::c_char,
     value: f32,
 ) {
     error::clear_error();
     error::check(|| {
         let name = unsafe { cstr_to_str(name) }?;
-        compute_set(
-            Entity::from_bits(compute_id),
+        shader_set(Entity::from_bits(entity), name, ShaderValue::Float(value))
+    });
+}
+
+/// # Safety
+/// - `name` must be non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_shader_set_int(
+    entity: u64,
+    name: *const std::ffi::c_char,
+    value: i32,
+) {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        shader_set(Entity::from_bits(entity), name, ShaderValue::Int(value))
+    });
+}
+
+/// # Safety
+/// - `name` must be non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_shader_set_uint(
+    entity: u64,
+    name: *const std::ffi::c_char,
+    value: u32,
+) {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        shader_set(Entity::from_bits(entity), name, ShaderValue::UInt(value))
+    });
+}
+
+/// # Safety
+/// - `name` must be non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_shader_set_vec2(
+    entity: u64,
+    name: *const std::ffi::c_char,
+    x: f32,
+    y: f32,
+) {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        shader_set(Entity::from_bits(entity), name, ShaderValue::Float2([x, y]))
+    });
+}
+
+/// # Safety
+/// - `name` must be non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_shader_set_vec3(
+    entity: u64,
+    name: *const std::ffi::c_char,
+    x: f32,
+    y: f32,
+    z: f32,
+) {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        shader_set(
+            Entity::from_bits(entity),
             name,
-            shader_value::ShaderValue::Float(value),
+            ShaderValue::Float3([x, y, z]),
         )
     });
 }
 
 /// # Safety
-/// - `name` must be non-null
+/// - `name` must be non-null.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn processing_compute_set_buffer(
-    compute_id: u64,
+pub unsafe extern "C" fn processing_shader_set_vec4(
+    entity: u64,
+    name: *const std::ffi::c_char,
+    x: f32,
+    y: f32,
+    z: f32,
+    w: f32,
+) {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        shader_set(
+            Entity::from_bits(entity),
+            name,
+            ShaderValue::Float4([x, y, z, w]),
+        )
+    });
+}
+
+/// # Safety
+/// - `name` must be non-null.
+/// - `value` must point to at least 16 f32 elements (column-major).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_shader_set_mat4(
+    entity: u64,
+    name: *const std::ffi::c_char,
+    value: *const f32,
+) {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        // SAFETY: caller guarantees 16 valid f32 elements
+        let m: [f32; 16] = unsafe { std::slice::from_raw_parts(value, 16) }
+            .try_into()
+            .unwrap();
+        shader_set(Entity::from_bits(entity), name, ShaderValue::Mat4(m))
+    });
+}
+
+/// # Safety
+/// - `name` must be non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_shader_set_texture(
+    entity: u64,
+    name: *const std::ffi::c_char,
+    image_id: u64,
+) {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        shader_set(
+            Entity::from_bits(entity),
+            name,
+            ShaderValue::Texture(Entity::from_bits(image_id)),
+        )
+    });
+}
+
+/// # Safety
+/// - `name` must be non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_shader_set_buffer(
+    entity: u64,
     name: *const std::ffi::c_char,
     buf_id: u64,
 ) {
     error::clear_error();
     error::check(|| {
         let name = unsafe { cstr_to_str(name) }?;
-        compute_set(
-            Entity::from_bits(compute_id),
+        shader_set(
+            Entity::from_bits(entity),
             name,
-            shader_value::ShaderValue::Buffer(Entity::from_bits(buf_id)),
+            ShaderValue::Buffer(Entity::from_bits(buf_id)),
         )
     });
 }
@@ -2952,6 +3076,96 @@ pub extern "C" fn processing_compute_dispatch(compute_id: u64, x: u32, y: u32, z
 pub extern "C" fn processing_compute_destroy(compute_id: u64) {
     error::clear_error();
     error::check(|| compute_destroy(Entity::from_bits(compute_id)));
+}
+
+/// Create a filter from a shader entity.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_filter_create(shader_id: u64) -> u64 {
+    error::clear_error();
+    error::check(|| filter_create(Entity::from_bits(shader_id)))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_filter_invert() -> u64 {
+    error::clear_error();
+    error::check(filter_invert)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_filter_gray() -> u64 {
+    error::clear_error();
+    error::check(filter_gray).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_filter_threshold() -> u64 {
+    error::clear_error();
+    error::check(filter_threshold)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_filter_posterize() -> u64 {
+    error::clear_error();
+    error::check(filter_posterize)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_filter_blur() -> u64 {
+    error::clear_error();
+    error::check(filter_blur).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_filter_opaque() -> u64 {
+    error::clear_error();
+    error::check(filter_opaque)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_filter_erode() -> u64 {
+    error::clear_error();
+    error::check(filter_erode).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_filter_dilate() -> u64 {
+    error::clear_error();
+    error::check(filter_dilate)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+/// Set the number of fullscreen passes a filter runs.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_filter_set_passes(filter_id: u64, passes: u32) {
+    error::clear_error();
+    error::check(|| filter_set_passes(Entity::from_bits(filter_id), passes));
+}
+
+/// Apply a filter to a graphics canvas.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_graphics_apply_filter(graphics_id: u64, filter_id: u64) {
+    error::clear_error();
+    error::check(|| {
+        graphics_apply_filter(Entity::from_bits(graphics_id), Entity::from_bits(filter_id))
+    });
+}
+
+/// Destroy a filter entity.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_filter_destroy(filter_id: u64) {
+    error::clear_error();
+    error::check(|| filter_destroy(Entity::from_bits(filter_id)));
 }
 
 // Mouse buttons

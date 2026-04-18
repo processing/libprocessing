@@ -48,6 +48,8 @@ pub enum ProcessingError {
     CudaError(String),
     #[error("Compute shader not found")]
     ComputeNotFound,
+    #[error("Filter not found")]
+    FilterNotFound,
     #[error("Buffer not found")]
     BufferNotFound,
     #[error("Buffer map error: {0}")]

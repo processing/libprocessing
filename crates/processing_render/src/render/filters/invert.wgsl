@@ -1,15 +1,7 @@
-#import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
-
-@group(0) @binding(0) var screen_texture: texture_2d<f32>;
-@group(0) @binding(1) var texture_sampler: sampler;
-
-struct Settings {
-    _padding: vec4<f32>,
-}
-@group(0) @binding(2) var<uniform> settings: Settings;
+import processing::filter::{sample, FullscreenVertexOutput};
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    let c = textureSample(screen_texture, texture_sampler, in.uv);
+    let c = sample(in.uv);
     return vec4<f32>(1.0 - c.r, 1.0 - c.g, 1.0 - c.b, c.a);
 }

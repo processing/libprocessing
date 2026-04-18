@@ -12,6 +12,7 @@ pub mod material;
 pub mod monitor;
 pub mod particles;
 pub mod render;
+pub mod shader_property;
 pub mod shader_value;
 pub mod sketch;
 pub mod surface;
@@ -481,11 +482,86 @@ pub fn graphics_end_draw(graphics_entity: Entity) -> error::Result<()> {
     app_mut(|app| graphics::end_draw(app, graphics_entity))
 }
 
-pub fn graphics_apply_filter(
-    graphics_entity: Entity,
-    op: render::filter::FilterOp,
+/// Apply a filter to a graphics canvas.
+pub fn graphics_apply_filter(graphics_entity: Entity, filter_entity: Entity) -> error::Result<()> {
+    app_mut(|app| graphics::apply_filter(app, graphics_entity, filter_entity))
+}
+
+pub fn filter_create(shader_entity: Entity) -> error::Result<Entity> {
+    app_mut(|app| render::filter::create(app, shader_entity))
+}
+
+pub fn filter_set(
+    entity: Entity,
+    name: impl Into<String>,
+    value: shader_value::ShaderValue,
 ) -> error::Result<()> {
-    app_mut(|app| graphics::apply_filter(app, graphics_entity, op))
+    shader_set(entity, name, value)
+}
+
+pub fn filter_destroy(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(render::filter::destroy, entity)
+            .unwrap()
+    })
+}
+
+fn builtin_filter(source: &'static str, passes: u32) -> error::Result<Entity> {
+    app_mut(|app| {
+        if let Some(&filter) = app
+            .world()
+            .resource::<render::filter::FilterRegistry>()
+            .builtins
+            .get(source)
+        {
+            return Ok(filter);
+        }
+        let shader = app
+            .world_mut()
+            .run_system_cached_with(material::custom::create_shader, source.to_string())
+            .unwrap()?;
+        let filter = render::filter::create(app, shader)?;
+        if passes != 1 {
+            app.world_mut()
+                .run_system_cached_with(render::filter::set_passes, (filter, passes))
+                .unwrap()?;
+        }
+        app.world_mut()
+            .resource_mut::<render::filter::FilterRegistry>()
+            .builtins
+            .insert(source, filter);
+        Ok(filter)
+    })
+}
+
+macro_rules! builtin_filter {
+    ($name:ident, $src:ident) => {
+        #[doc = concat!("The built-in `", stringify!($src), "` filter.")]
+        pub fn $name() -> error::Result<Entity> {
+            builtin_filter(render::filter::builtin::$src, 1)
+        }
+    };
+}
+
+builtin_filter!(filter_invert, INVERT);
+builtin_filter!(filter_gray, GRAY);
+builtin_filter!(filter_threshold, THRESHOLD);
+builtin_filter!(filter_posterize, POSTERIZE);
+builtin_filter!(filter_opaque, OPAQUE);
+builtin_filter!(filter_erode, ERODE);
+builtin_filter!(filter_dilate, DILATE);
+
+pub fn filter_set_passes(entity: Entity, passes: u32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(render::filter::set_passes, (entity, passes))
+            .unwrap()
+    })
+}
+
+pub fn filter_blur() -> error::Result<Entity> {
+    builtin_filter(render::filter::builtin::BLUR, 2)
 }
 
 /// Destroy the graphics surface and free its resources.
@@ -2115,16 +2191,35 @@ pub fn compute_create(shader_entity: Entity) -> error::Result<Entity> {
     app_mut(|app| compute::create_compute(app, shader_entity))
 }
 
+pub fn shader_set(
+    entity: Entity,
+    name: impl Into<String>,
+    value: shader_value::ShaderValue,
+) -> error::Result<()> {
+    let name = name.into();
+    app_mut(|app| {
+        let handled = app
+            .world_mut()
+            .run_system_cached_with(
+                shader_property::set_property,
+                (entity, name.clone(), value.clone()),
+            )
+            .unwrap()?;
+        if handled {
+            return Ok(());
+        }
+        app.world_mut()
+            .run_system_cached_with(material::set_property, (entity, name, value))
+            .unwrap()
+    })
+}
+
 pub fn compute_set(
     entity: Entity,
     name: impl Into<String>,
     value: shader_value::ShaderValue,
 ) -> error::Result<()> {
-    app_mut(|app| {
-        app.world_mut()
-            .run_system_cached_with(compute::set_compute_property, (entity, name.into(), value))
-            .unwrap()
-    })
+    shader_set(entity, name, value)
 }
 
 pub fn compute_dispatch(entity: Entity, x: u32, y: u32, z: u32) -> error::Result<()> {

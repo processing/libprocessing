@@ -136,7 +136,7 @@ impl wesl::Resolver for ProcessingResolver<'_> {
     }
 }
 
-fn compile_shader(source: &str) -> Result<(String, naga::Module)> {
+pub(crate) fn compile_shader(source: &str) -> Result<(String, naga::Module)> {
     let mut pkg_resolver = PkgResolver::new();
     pkg_resolver.add_package(&processing::PACKAGE);
     pkg_resolver.add_package(&lygia::PACKAGE);

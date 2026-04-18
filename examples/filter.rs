@@ -1,8 +1,4 @@
-//! Cycles through all implemented filters (2s each) applied to a color palette.
-//!
-//! Bottom-right blue rect is drawn AFTER the filter, so it should always stay
-//! pure blue — that's the Processing 4 immediate-mode semantic: `filter()` bakes
-//! into the current canvas; subsequent draws land on top unfiltered.
+//! Cycles through all implemented filters.
 use std::time::Instant;
 
 use bevy::color::Color;
@@ -10,6 +6,7 @@ use processing_glfw::GlfwContext;
 
 use processing::prelude::*;
 use processing_render::render::command::DrawCommand;
+use processing_render::shader_value::ShaderValue;
 
 fn main() {
     match sketch() {
@@ -34,12 +31,16 @@ fn sketch() -> error::Result<()> {
         (40.0, 200.0, Color::srgb(0.2, 0.4, 1.0)),
         (200.0, 200.0, Color::srgb(0.95, 0.85, 0.2)),
     ];
+    let threshold = filter_threshold()?;
+    filter_set(threshold, "cutoff", ShaderValue::Float(0.5))?;
+    let posterize = filter_posterize()?;
+    filter_set(posterize, "levels", ShaderValue::UInt(4))?;
     let filters = [
-        FilterKind::Invert,
-        FilterKind::Gray,
-        FilterKind::Threshold { cutoff: 0.5 },
-        FilterKind::Posterize { levels: 4 },
-        FilterKind::Opaque,
+        filter_invert()?,
+        filter_gray()?,
+        threshold,
+        posterize,
+        filter_opaque()?,
     ];
 
     let start = Instant::now();
@@ -67,9 +68,8 @@ fn sketch() -> error::Result<()> {
         }
 
         let idx = (start.elapsed().as_secs() / 2) as usize % filters.len();
-        graphics_apply_filter(graphics, FilterOp::new(filters[idx]))?;
+        graphics_apply_filter(graphics, filters[idx])?;
 
-        // Drawn AFTER the filter: should always render pure blue regardless of cycle.
         graphics_record_command(graphics, DrawCommand::Fill(Color::srgb(0.0, 0.0, 1.0)))?;
         graphics_record_command(
             graphics,

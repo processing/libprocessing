@@ -14,7 +14,7 @@ pub use processing_render::{
         ArcMode, BlendMode, DrawCommand, ShapeKind, ShapeMode, StrokeCapMode, StrokeJoinMode,
         TextAlignH, TextAlignV, TextStyle, TextWrapMode, custom_blend_state,
     },
-    render::filter::{FilterKind, FilterOp},
+    render::filter::Filter,
     *,
 };
 

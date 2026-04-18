@@ -1,44 +1,99 @@
+use bevy::prelude::Entity;
 use processing::prelude::*;
 use pyo3::{
-    exceptions::{PyTypeError, PyValueError},
+    exceptions::{PyRuntimeError, PyTypeError, PyValueError},
     prelude::*,
     types::{PyDict, PyTuple},
 };
+use shader_value::ShaderValue;
 
-// Must match the `#[pymodule_export] const` values in lib.rs.
+use crate::material::py_to_shader_value;
+use crate::shader::Shader;
+
 pub const INVERT_U8: u8 = 0;
 pub const GRAY_U8: u8 = 1;
 pub const THRESHOLD_U8: u8 = 2;
 pub const POSTERIZE_U8: u8 = 3;
+pub const BLUR_U8: u8 = 4;
 pub const OPAQUE_U8: u8 = 5;
+pub const ERODE_U8: u8 = 6;
+pub const DILATE_U8: u8 = 7;
 
-pub fn parse_filter_op(
+fn resolve_user_filter(
+    shader_entity: Entity,
+    args: &Bound<'_, PyTuple>,
+    kwargs: Option<&Bound<'_, PyDict>>,
+) -> PyResult<Entity> {
+    if !args.is_empty() {
+        return Err(PyValueError::new_err(
+            "filter(shader): parameters must be passed as keyword arguments",
+        ));
+    }
+    let entity =
+        filter_create(shader_entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    if let Some(kwargs) = kwargs {
+        for (key, value) in kwargs.iter() {
+            let name: String = key.extract()?;
+            if name == "passes" {
+                let passes: u32 = value.extract()?;
+                filter_set_passes(entity, passes)
+                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+                continue;
+            }
+            let sv = py_to_shader_value(&value)?;
+            filter_set(entity, &name, sv).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        }
+    }
+    Ok(entity)
+}
+
+fn create_builtin(kind: u8) -> PyResult<Entity> {
+    let result = match kind {
+        INVERT_U8 => filter_invert(),
+        GRAY_U8 => filter_gray(),
+        THRESHOLD_U8 => filter_threshold(),
+        POSTERIZE_U8 => filter_posterize(),
+        BLUR_U8 => filter_blur(),
+        OPAQUE_U8 => filter_opaque(),
+        ERODE_U8 => filter_erode(),
+        DILATE_U8 => filter_dilate(),
+        n => {
+            return Err(PyValueError::new_err(format!(
+                "filter(): unknown or unimplemented filter constant {n}"
+            )));
+        }
+    };
+    result.map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+}
+
+pub fn resolve_filter(
     kind: &Bound<'_, PyAny>,
     args: &Bound<'_, PyTuple>,
     kwargs: Option<&Bound<'_, PyDict>>,
-) -> PyResult<FilterOp> {
+) -> PyResult<Entity> {
+    if let Ok(shader) = kind.extract::<PyRef<Shader>>() {
+        return resolve_user_filter(shader.entity, args, kwargs);
+    }
+
     let Ok(kind_u8) = kind.extract::<u8>() else {
         return Err(PyTypeError::new_err(
-            "filter(): first argument must be a filter constant (INVERT, GRAY, ...)",
+            "filter(): first argument must be a filter constant (INVERT, GRAY, ...) or a Shader",
         ));
     };
+    let entity = create_builtin(kind_u8)?;
+    let set = |name: &str, value: ShaderValue| {
+        filter_set(entity, name, value).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    };
 
-    let kind = match kind_u8 {
-        INVERT_U8 => {
-            reject_params(args, kwargs, "INVERT")?;
-            FilterKind::Invert
-        }
-        GRAY_U8 => {
-            reject_params(args, kwargs, "GRAY")?;
-            FilterKind::Gray
-        }
-        OPAQUE_U8 => {
-            reject_params(args, kwargs, "OPAQUE")?;
-            FilterKind::Opaque
-        }
+    match kind_u8 {
+        INVERT_U8 => reject_params(args, kwargs, "INVERT")?,
+        GRAY_U8 => reject_params(args, kwargs, "GRAY")?,
+        OPAQUE_U8 => reject_params(args, kwargs, "OPAQUE")?,
+        ERODE_U8 => reject_params(args, kwargs, "ERODE")?,
+        DILATE_U8 => reject_params(args, kwargs, "DILATE")?,
         THRESHOLD_U8 => {
             let cutoff = parse_scalar(args, kwargs, "THRESHOLD", "cutoff", Some(0.5))?;
-            FilterKind::Threshold { cutoff }
+            set("cutoff", ShaderValue::Float(cutoff))?;
         }
         POSTERIZE_U8 => {
             let levels_f = parse_scalar(args, kwargs, "POSTERIZE", "levels", None)?;
@@ -47,18 +102,16 @@ pub fn parse_filter_op(
                     "filter(POSTERIZE, levels): levels must be an integer in 2..=255",
                 ));
             }
-            FilterKind::Posterize {
-                levels: levels_f as u32,
-            }
+            set("levels", ShaderValue::UInt(levels_f as u32))?;
         }
-        n => {
-            return Err(PyValueError::new_err(format!(
-                "filter(): unknown or unimplemented filter constant {n}"
-            )));
+        BLUR_U8 => {
+            let radius = parse_scalar(args, kwargs, "BLUR", "radius", Some(1.0))?;
+            set("radius", ShaderValue::Float(radius))?;
         }
-    };
+        _ => {}
+    }
 
-    Ok(FilterOp::new(kind))
+    Ok(entity)
 }
 
 fn reject_params(

@@ -645,8 +645,9 @@ impl Graphics {
         args: &Bound<'_, PyTuple>,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
-        let op = crate::filter::parse_filter_op(&kind, args, kwargs)?;
-        graphics_apply_filter(self.entity, op).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        let filter = crate::filter::resolve_filter(&kind, args, kwargs)?;
+        graphics_apply_filter(self.entity, filter)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     #[pyo3(signature = (*args))]
