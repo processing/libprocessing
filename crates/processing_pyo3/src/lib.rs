@@ -18,7 +18,10 @@ mod input;
 pub(crate) mod material;
 pub(crate) mod math;
 mod midi;
+mod monitor;
 pub(crate) mod shader;
+mod surface;
+mod time;
 #[cfg(feature = "webcam")]
 mod webcam;
 
@@ -28,6 +31,7 @@ use graphics::{
 use material::Material;
 
 use pyo3::{
+    BoundObject,
     exceptions::PyRuntimeError,
     prelude::*,
     types::{PyDict, PyTuple},
@@ -37,7 +41,103 @@ use std::ffi::{CStr, CString};
 
 use bevy::log::warn;
 use gltf::Gltf;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::env;
+
+thread_local! {
+    static LAST_GLOBALS: RefCell<HashMap<&'static str, Py<PyAny>>> = RefCell::new(HashMap::new());
+}
+
+
+/// Writes a new value to globals, iff the new value does not match a previous tracked value.
+pub(crate) fn set_tracked<'py, V>(
+    globals: &Bound<'py, PyAny>,
+    name: &'static str,
+    new_value: V,
+) -> PyResult<()>
+where
+    V: IntoPyObject<'py>,
+    PyErr: From<V::Error>,
+{
+    let py = globals.py();
+    let owned: Py<PyAny> = new_value.into_pyobject(py)?.into_any().unbind();
+
+    let user_shadowed = LAST_GLOBALS.with(|cache| -> PyResult<bool> {
+        let cache = cache.borrow();
+        let Some(last) = cache.get(name) else {
+            return Ok(false);
+        };
+        match globals.get_item(name) {
+            Ok(current) => Ok(!current.eq(last.bind(py))?),
+            // key isn't in globals, either because the dict is fresh (livecode reload etc)
+            // or the user deleted it so we can safely repopulate
+            Err(_) => Ok(false),
+        }
+    })?;
+
+    if !user_shadowed {
+        globals.set_item(name, owned.clone_ref(py))?;
+        LAST_GLOBALS.with(|cache| {
+            cache.borrow_mut().insert(name, owned);
+        });
+    }
+
+    Ok(())
+}
+
+pub(crate) fn reset_tracked_globals() {
+    LAST_GLOBALS.with(|cache| cache.borrow_mut().clear());
+}
+
+fn sync_globals(module: &Bound<'_, PyModule>, globals: &Bound<'_, PyAny>) -> PyResult<()> {
+    let graphics =
+        get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+    input::sync_globals(globals, graphics.surface.entity)?;
+    surface::sync_globals(globals, &graphics.surface, graphics.width, graphics.height)?;
+    time::sync_globals(globals)?;
+    Ok(())
+}
+
+fn try_call(locals: &Bound<'_, PyAny>, name: &str) -> PyResult<()> {
+    if let Ok(cb) = locals.get_item(name)
+        && cb.is_callable()
+    {
+        cb.call0()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    }
+    Ok(())
+}
+
+fn dispatch_event_callbacks(locals: &Bound<'_, PyAny>) -> PyResult<()> {
+    use processing::prelude::*;
+    let err =
+        |e: processing::prelude::error::ProcessingError| PyRuntimeError::new_err(format!("{e}"));
+
+    if input_mouse_any_just_pressed().map_err(err)? {
+        try_call(locals, "mouse_pressed")?;
+    }
+    if input_mouse_any_just_released().map_err(err)? {
+        try_call(locals, "mouse_released")?;
+    }
+    if input_mouse_moved().map_err(err)? {
+        if input_mouse_is_pressed().map_err(err)? {
+            try_call(locals, "mouse_dragged")?;
+        } else {
+            try_call(locals, "mouse_moved")?;
+        }
+    }
+    if input_mouse_scrolled().map_err(err)? {
+        try_call(locals, "mouse_wheel")?;
+    }
+    if input_key_any_just_pressed().map_err(err)? {
+        try_call(locals, "key_pressed")?;
+    }
+    if input_key_any_just_released().map_err(err)? {
+        try_call(locals, "key_released")?;
+    }
+    Ok(())
+}
 
 /// Get a shared ref to the Graphics context, or return Ok(()) if not yet initialized.
 macro_rules! graphics {
@@ -139,6 +239,10 @@ mod mewnala {
     #[cfg(feature = "cuda")]
     #[pymodule_export]
     use super::cuda::CudaImage;
+    #[pymodule_export]
+    use super::monitor::Monitor;
+    #[pymodule_export]
+    use super::surface::Surface;
 
     // Stroke cap/join
     #[pymodule_export]
@@ -597,6 +701,17 @@ mod mewnala {
 
     #[pyfunction]
     #[pyo3(pass_module)]
+    fn _tick(module: &Bound<'_, PyModule>, ns: &Bound<'_, PyAny>) -> PyResult<()> {
+        if get_graphics(module)?.is_none() {
+            return Ok(());
+        }
+        sync_globals(module, ns)?;
+        dispatch_event_callbacks(ns)?;
+        Ok(())
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
     fn redraw(module: &Bound<'_, PyModule>) -> PyResult<()> {
         graphics!(module).present()
     }
@@ -703,12 +818,10 @@ mod mewnala {
             // call setup
             setup_fn.call0()?;
 
-            let mut frame_count: u64 = 0;
-            {
-                let graphics = get_graphics(module)?
-                    .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-                input::sync_globals(&draw_fn, graphics.surface.entity)?;
-            }
+            let mut globals = draw_fn.getattr("__globals__")?;
+            sync_globals(module, &globals)?;
+
+            // start draw loop
             loop {
                 {
                     let mut graphics = get_graphics_mut(module)?
@@ -730,6 +843,10 @@ mod mewnala {
                         }
 
                         draw_fn = locals.get_item("draw").unwrap().unwrap();
+                        globals = draw_fn.getattr("__globals__")?;
+                        reset_tracked_globals();
+
+                        dbg!(locals);
                     }
 
                     if !graphics.surface.poll_events() {
@@ -738,14 +855,8 @@ mod mewnala {
                     graphics.begin_draw()?;
                 }
 
-                {
-                    let graphics = get_graphics(module)?
-                        .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-                    input::sync_globals(&draw_fn, graphics.surface.entity)?;
-                    let globals = draw_fn.getattr("__globals__")?;
-                    globals.set_item("frame_count", frame_count)?;
-                    frame_count += 1;
-                }
+                sync_globals(module, &globals)?;
+                dispatch_event_callbacks(&locals)?;
 
                 draw_fn
                     .call0()
@@ -1445,5 +1556,30 @@ mod mewnala {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
         graphics.surface.display_density()
+    }
+
+    #[pyfunction]
+    fn frame_count() -> PyResult<u32> {
+        time::frame_count()
+    }
+
+    #[pyfunction]
+    fn delta_time() -> PyResult<f32> {
+        time::delta_time()
+    }
+
+    #[pyfunction]
+    fn elapsed_time() -> PyResult<f32> {
+        time::elapsed_time()
+    }
+
+    #[pyfunction]
+    fn monitors() -> PyResult<Vec<monitor::Monitor>> {
+        monitor::list()
+    }
+
+    #[pyfunction]
+    fn primary_monitor() -> PyResult<Option<monitor::Monitor>> {
+        monitor::primary()
     }
 }

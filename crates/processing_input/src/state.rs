@@ -26,6 +26,8 @@ impl CursorPosition {
 pub struct LastKey {
     pub code: Option<KeyCode>,
     pub character: Option<char>,
+    pub just_pressed: bool,
+    pub just_released: bool,
 }
 
 #[derive(Resource, Default)]
@@ -51,13 +53,21 @@ pub fn track_cursor_position(
 }
 
 pub fn track_last_key(mut reader: MessageReader<KeyboardInput>, mut last: ResMut<LastKey>) {
-    if let Some(event) = reader
-        .read()
-        .filter(|e| e.state == ButtonState::Pressed)
-        .last()
-    {
-        last.code = Some(event.key_code);
-        last.character = event.text.as_ref().and_then(|t| t.chars().next());
+    // our cbs fire on key auto repeats but bevy just_pressed only fires on the initial press
+    // we track edge state off of the raw input stream
+    last.just_pressed = false;
+    last.just_released = false;
+    for event in reader.read() {
+        match event.state {
+            ButtonState::Pressed => {
+                last.code = Some(event.key_code);
+                last.character = event.text.as_ref().and_then(|t| t.chars().next());
+                last.just_pressed = true;
+            }
+            ButtonState::Released => {
+                last.just_released = true;
+            }
+        }
     }
 }
 

@@ -80,20 +80,20 @@ pub fn key_code() -> PyResult<Option<u32>> {
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }
 
-pub fn sync_globals(func: &Bound<'_, PyAny>, surface: Entity) -> PyResult<()> {
-    let globals = func.getattr("__globals__")?;
-    globals.set_item("mouse_x", mouse_x(surface)?)?;
-    globals.set_item("mouse_y", mouse_y(surface)?)?;
-    globals.set_item("pmouse_x", pmouse_x(surface)?)?;
-    globals.set_item("pmouse_y", pmouse_y(surface)?)?;
-    globals.set_item("mouse_is_pressed", mouse_is_pressed()?)?;
-    globals.set_item("mouse_button", mouse_button()?)?;
-    globals.set_item("moved_x", moved_x()?)?;
-    globals.set_item("moved_y", moved_y()?)?;
-    globals.set_item("mouse_wheel", mouse_wheel()?)?;
-    globals.set_item("key", key()?)?;
-    globals.set_item("key_code", key_code()?)?;
-    globals.set_item("key_is_pressed", key_is_pressed()?)?;
+pub fn sync_globals(globals: &Bound<'_, PyAny>, surface: Entity) -> PyResult<()> {
+    use crate::set_tracked;
+    set_tracked(globals, "mouse_x", mouse_x(surface)?)?;
+    set_tracked(globals, "mouse_y", mouse_y(surface)?)?;
+    set_tracked(globals, "pmouse_x", pmouse_x(surface)?)?;
+    set_tracked(globals, "pmouse_y", pmouse_y(surface)?)?;
+    set_tracked(globals, "mouse_is_pressed", mouse_is_pressed()?)?;
+    set_tracked(globals, "mouse_button", mouse_button()?)?;
+    set_tracked(globals, "moved_x", moved_x()?)?;
+    set_tracked(globals, "moved_y", moved_y()?)?;
+    set_tracked(globals, "mouse_wheel", mouse_wheel()?)?;
+    set_tracked(globals, "key", key()?)?;
+    set_tracked(globals, "key_code", key_code()?)?;
+    set_tracked(globals, "key_is_pressed", key_is_pressed()?)?;
     Ok(())
 }
 

@@ -295,3 +295,47 @@ pub fn input_key() -> error::Result<Option<char>> {
 pub fn input_key_code() -> error::Result<Option<KeyCode>> {
     app_mut(|app| Ok(app.world().resource::<LastKey>().code))
 }
+
+pub fn input_mouse_any_just_pressed() -> error::Result<bool> {
+    app_mut(|app| {
+        Ok(app
+            .world()
+            .resource::<ButtonInput<MouseButton>>()
+            .get_just_pressed()
+            .next()
+            .is_some())
+    })
+}
+
+pub fn input_mouse_any_just_released() -> error::Result<bool> {
+    app_mut(|app| {
+        Ok(app
+            .world()
+            .resource::<ButtonInput<MouseButton>>()
+            .get_just_released()
+            .next()
+            .is_some())
+    })
+}
+
+pub fn input_key_any_just_pressed() -> error::Result<bool> {
+    app_mut(|app| Ok(app.world().resource::<LastKey>().just_pressed))
+}
+
+pub fn input_key_any_just_released() -> error::Result<bool> {
+    app_mut(|app| Ok(app.world().resource::<LastKey>().just_released))
+}
+
+pub fn input_mouse_moved() -> error::Result<bool> {
+    app_mut(|app| {
+        let d = app.world().resource::<AccumulatedMouseMotion>().delta;
+        Ok(d.x != 0.0 || d.y != 0.0)
+    })
+}
+
+pub fn input_mouse_scrolled() -> error::Result<bool> {
+    app_mut(|app| {
+        let d = app.world().resource::<AccumulatedMouseScroll>().delta;
+        Ok(d.x != 0.0 || d.y != 0.0)
+    })
+}

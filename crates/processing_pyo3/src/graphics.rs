@@ -132,40 +132,7 @@ impl PyBlendMode {
     const OP_MAX: u8 = 4;
 }
 
-#[pyclass(unsendable)]
-pub struct Surface {
-    pub(crate) entity: Entity,
-    glfw_ctx: Option<GlfwContext>,
-}
-
-#[pymethods]
-impl Surface {
-    pub fn poll_events(&mut self) -> bool {
-        match &mut self.glfw_ctx {
-            Some(ctx) => ctx.poll_events(),
-            None => true, // no-op, offscreen surfaces never close
-        }
-    }
-
-    #[getter]
-    pub fn display_density(&self) -> PyResult<f32> {
-        match &self.glfw_ctx {
-            Some(ctx) => Ok(ctx.content_scale()),
-            None => Ok(1.0),
-        }
-    }
-
-    pub fn set_pixel_density(&self, density: f32) -> PyResult<()> {
-        surface_set_pixel_density(self.entity, density)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
-    }
-}
-
-impl Drop for Surface {
-    fn drop(&mut self) {
-        let _ = surface_destroy(self.entity);
-    }
-}
+pub use crate::surface::Surface;
 
 #[pyclass]
 #[derive(Debug)]
@@ -318,6 +285,10 @@ impl Geometry {
 pub struct Graphics {
     pub(crate) entity: Entity,
     pub surface: Surface,
+    #[pyo3(get)]
+    pub width: u32,
+    #[pyo3(get)]
+    pub height: u32,
 }
 
 impl Drop for Graphics {
@@ -364,6 +335,8 @@ impl Graphics {
         Ok(Self {
             entity: graphics,
             surface,
+            width,
+            height,
         })
     }
 
@@ -399,7 +372,29 @@ impl Graphics {
         Ok(Self {
             entity: graphics,
             surface,
+            width,
+            height,
         })
+    }
+
+    #[getter]
+    pub fn focused(&self) -> PyResult<bool> {
+        self.surface.focused()
+    }
+
+    #[getter]
+    pub fn pixel_density(&self) -> PyResult<f32> {
+        self.surface.pixel_density()
+    }
+
+    #[getter]
+    pub fn pixel_width(&self) -> PyResult<u32> {
+        self.surface.pixel_width()
+    }
+
+    #[getter]
+    pub fn pixel_height(&self) -> PyResult<u32> {
+        self.surface.pixel_height()
     }
 
     pub fn readback_png(&self) -> PyResult<Vec<u8>> {

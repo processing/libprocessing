@@ -8,9 +8,11 @@ pub mod graphics;
 pub mod image;
 pub mod light;
 pub mod material;
+pub mod monitor;
 pub mod render;
 pub mod sketch;
 pub(crate) mod surface;
+pub mod time;
 pub mod transform;
 
 use std::path::PathBuf;
@@ -1304,6 +1306,117 @@ pub fn material_destroy(entity: Entity) -> error::Result<()> {
         app.world_mut()
             .run_system_cached_with(material::destroy, entity)
             .unwrap()
+    })
+}
+
+pub fn surface_focused(entity: Entity) -> error::Result<bool> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(surface::focused, entity)
+            .unwrap())
+    })
+}
+
+pub fn surface_scale_factor(entity: Entity) -> error::Result<f32> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(surface::scale_factor, entity)
+            .unwrap())
+    })
+}
+
+pub fn surface_physical_width(entity: Entity) -> error::Result<u32> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(surface::physical_width, entity)
+            .unwrap())
+    })
+}
+
+pub fn surface_physical_height(entity: Entity) -> error::Result<u32> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(surface::physical_height, entity)
+            .unwrap())
+    })
+}
+
+pub fn monitor_list() -> error::Result<Vec<Entity>> {
+    app_mut(|app| Ok(app.world_mut().run_system_cached(monitor::list).unwrap()))
+}
+
+pub fn monitor_primary() -> error::Result<Option<Entity>> {
+    app_mut(|app| Ok(app.world_mut().run_system_cached(monitor::primary).unwrap()))
+}
+
+pub fn monitor_width(entity: Entity) -> error::Result<u32> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(monitor::width, entity)
+            .unwrap())
+    })
+}
+
+pub fn monitor_height(entity: Entity) -> error::Result<u32> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(monitor::height, entity)
+            .unwrap())
+    })
+}
+
+pub fn monitor_scale_factor(entity: Entity) -> error::Result<f64> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(monitor::scale_factor, entity)
+            .unwrap())
+    })
+}
+
+pub fn monitor_refresh_rate_millihertz(entity: Entity) -> error::Result<Option<u32>> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(monitor::refresh_rate_millihertz, entity)
+            .unwrap())
+    })
+}
+
+pub fn monitor_name(entity: Entity) -> error::Result<Option<String>> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(monitor::name, entity)
+            .unwrap())
+    })
+}
+
+pub fn frame_count() -> error::Result<u32> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached(time::frame_count)
+            .unwrap())
+    })
+}
+
+pub fn delta_time() -> error::Result<f32> {
+    app_mut(|app| Ok(app.world_mut().run_system_cached(time::delta_secs).unwrap()))
+}
+
+pub fn elapsed_time() -> error::Result<f32> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached(time::elapsed_secs)
+            .unwrap())
     })
 }
 
