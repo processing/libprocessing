@@ -41,12 +41,36 @@ use std::ffi::{CStr, CString};
 
 use bevy::log::warn;
 use gltf::Gltf;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::env;
 
+#[derive(Clone, Copy)]
+struct LoopState {
+    looping: bool,
+    redraw_requested: bool,
+}
+
+impl Default for LoopState {
+    fn default() -> Self {
+        Self {
+            looping: true,
+            redraw_requested: true,
+        }
+    }
+}
+
 thread_local! {
     static LAST_GLOBALS: RefCell<HashMap<&'static str, Py<PyAny>>> = RefCell::new(HashMap::new());
+    static LOOP_STATE: Cell<LoopState> = Cell::new(LoopState::default());
+}
+
+fn update_loop_state(f: impl FnOnce(&mut LoopState)) {
+    LOOP_STATE.with(|s| {
+        let mut state = s.get();
+        f(&mut state);
+        s.set(state);
+    });
 }
 
 /// Writes a new value to globals, iff the new value does not match a previous tracked value.
@@ -710,9 +734,26 @@ mod mewnala {
     }
 
     #[pyfunction]
-    #[pyo3(pass_module)]
-    fn redraw(module: &Bound<'_, PyModule>) -> PyResult<()> {
-        graphics!(module).present()
+    fn redraw() -> PyResult<()> {
+        update_loop_state(|s| {
+            if !s.looping {
+                s.redraw_requested = true;
+            }
+        });
+        Ok(())
+    }
+
+    #[pyfunction]
+    #[pyo3(name = "loop")]
+    fn loop_() -> PyResult<()> {
+        update_loop_state(|s| s.looping = true);
+        Ok(())
+    }
+
+    #[pyfunction]
+    fn no_loop() -> PyResult<()> {
+        update_loop_state(|s| s.looping = false);
+        Ok(())
     }
 
     #[pyfunction]
@@ -856,14 +897,28 @@ mod mewnala {
                     if !graphics.surface.poll_events() {
                         break;
                     }
-                    graphics.begin_draw()?;
                 }
+
+                dispatch_event_callbacks(&locals)?;
+
+                let should_draw = LOOP_STATE.with(|s| {
+                    let state = s.get();
+                    state.looping || state.redraw_requested
+                });
+
+                if !should_draw {
+                    std::thread::sleep(std::time::Duration::from_millis(16));
+                    continue;
+                }
+
+                get_graphics_mut(module)?
+                    .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?
+                    .begin_draw()?;
 
                 processing::prelude::advance_frame_count()
                     .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
                 sync_globals(module, &globals)?;
-                dispatch_event_callbacks(&locals)?;
 
                 draw_fn
                     .call0()
@@ -872,6 +927,8 @@ mod mewnala {
                 get_graphics(module)?
                     .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?
                     .end_draw()?;
+
+                update_loop_state(|s| s.redraw_requested = false);
             }
 
             Ok(())
