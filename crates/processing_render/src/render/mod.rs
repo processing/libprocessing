@@ -122,6 +122,11 @@ impl RenderState {
         self.shape_builder = None;
     }
 
+    pub fn begin_frame(&mut self) {
+        self.transform = TransformStack::new();
+        self.shape_builder = None;
+    }
+
     pub fn fill_is_transparent(&self) -> bool {
         self.fill_color.map(|c| c.alpha() < 1.0).unwrap_or(false)
     }

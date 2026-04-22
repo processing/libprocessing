@@ -396,7 +396,7 @@ pub fn begin_draw(In(entity): In<Entity>, mut state_query: Query<&mut RenderStat
     let mut state = state_query
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
-    state.reset();
+    state.begin_frame();
     Ok(())
 }
 
