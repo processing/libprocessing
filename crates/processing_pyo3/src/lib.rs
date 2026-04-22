@@ -859,6 +859,9 @@ mod mewnala {
                     graphics.begin_draw()?;
                 }
 
+                processing::prelude::advance_frame_count()
+                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+
                 sync_globals(module, &globals)?;
                 dispatch_event_callbacks(&locals)?;
 

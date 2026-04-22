@@ -43,6 +43,8 @@ impl Plugin for ProcessingRenderPlugin {
 
         let config = app.world().resource::<Config>().clone();
 
+        app.init_resource::<time::ProcessingFrame>();
+
         let has_sketch_file = config
             .get(ConfigKey::SketchFileName)
             .is_some_and(|f| !f.is_empty());
@@ -1390,6 +1392,15 @@ pub fn frame_count() -> error::Result<u32> {
             .world_mut()
             .run_system_cached(time::frame_count)
             .unwrap())
+    })
+}
+
+pub fn advance_frame_count() -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached(time::advance_frame_count)
+            .unwrap();
+        Ok(())
     })
 }
 

@@ -201,9 +201,7 @@ pub fn create(
         Camera {
             // always load the previous frame (provides sketch like behavior)
             clear_color: ClearColorConfig::None,
-            // TODO: toggle this conditionally based on whether we need to write back MSAA
-            // when doing manual pixel updates
-            msaa_writeback: MsaaWriteback::Off,
+            msaa_writeback: MsaaWriteback::Auto,
             ..default()
         },
         target,
