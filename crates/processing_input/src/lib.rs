@@ -6,6 +6,7 @@ use bevy::input::mouse::{
     AccumulatedMouseMotion, AccumulatedMouseScroll, MouseButton, MouseButtonInput, MouseMotion,
     MouseScrollUnit, MouseWheel,
 };
+use bevy::input::touch::TouchPhase;
 use bevy::prelude::*;
 use bevy::window::CursorMoved;
 
@@ -88,6 +89,8 @@ pub fn input_set_scroll(surface: Entity, x: f32, y: f32) -> error::Result<()> {
             x,
             y,
             window: surface,
+            // todo: support touchscreen
+            phase: TouchPhase::Moved,
         });
         Ok(())
     })

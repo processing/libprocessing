@@ -1,9 +1,15 @@
-use bevy::diagnostic::FrameCount;
 use bevy::prelude::*;
 use bevy::time::Time;
 
-pub fn frame_count(count: Option<Res<FrameCount>>) -> u32 {
-    count.map(|c| c.0).unwrap_or(0)
+#[derive(Resource, Default, Debug, Clone, Copy)]
+pub struct ProcessingFrame(pub u32);
+
+pub fn frame_count(frame: Option<Res<ProcessingFrame>>) -> u32 {
+    frame.map(|f| f.0).unwrap_or(0)
+}
+
+pub fn advance_frame_count(mut frame: ResMut<ProcessingFrame>) {
+    frame.0 = frame.0.wrapping_add(1);
 }
 
 pub fn delta_secs(time: Option<Res<Time>>) -> f32 {
