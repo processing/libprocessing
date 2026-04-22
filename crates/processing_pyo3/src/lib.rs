@@ -887,7 +887,7 @@ mod mewnala {
                 frame.getattr("f_globals")?
             };
             sync_globals(module, &globals)?;
-            
+
             // no draw is defined. flush any top level code and then idle
             if draw_fn.is_none() {
                 {
