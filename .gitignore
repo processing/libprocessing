@@ -1,4 +1,6 @@
 /target/
+/site/
 crates/processing_ffi/include/
+crates/processing_pyo3/mewnala/*.pyi
 .DS_Store
 .ipynb_checkpoints/

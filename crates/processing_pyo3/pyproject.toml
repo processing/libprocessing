@@ -35,6 +35,11 @@ Issues = "https://github.com/processing/libprocessing/issues"
 
 [dependency-groups]
 dev = ["maturin>=1.10,<2.0"]
+docs = [
+    "mkdocs-material>=9.6",
+    "mkdocstrings[python]>=0.29",
+    "mkdocs-gen-files>=0.5",
+]
 
 [tool.maturin]
 manifest-path = "Cargo.toml"
