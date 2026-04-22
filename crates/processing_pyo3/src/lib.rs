@@ -162,14 +162,100 @@ fn dispatch_event_callbacks(locals: &Bound<'_, PyAny>) -> PyResult<()> {
     Ok(())
 }
 
-/// Get a shared ref to the Graphics context, or return Ok(()) if not yet initialized.
-macro_rules! graphics {
-    ($module:expr) => {
-        match get_graphics($module)? {
-            Some(g) => g,
-            None => return Ok(()),
+fn create_graphics_context(
+    module: &Bound<'_, PyModule>,
+    width: u32,
+    height: u32,
+) -> PyResult<()> {
+    let py = module.py();
+    let env = detect_environment(py)?;
+
+    let interactive = env != "script";
+    let log_level = if interactive { Some("error") } else { None };
+
+    let has_existing = module
+        .getattr("_graphics")
+        .ok()
+        .map(|a| !a.is_none())
+        .unwrap_or(false);
+    if has_existing {
+        module.setattr("_graphics", py.None())?;
+    }
+
+    match env.as_str() {
+        "jupyter" => {
+            let asset_path = get_asset_root()?;
+            let graphics =
+                Graphics::new_offscreen(width, height, asset_path.as_str(), log_level)?;
+            module.setattr("_graphics", graphics)?;
+
+            if !has_existing {
+                let code = CString::new(JUPYTER_POST_EXECUTE_CODE)?;
+                py.run(code.as_c_str(), None, None).map_err(|e| {
+                    PyRuntimeError::new_err(format!("Failed to register Jupyter hooks: {e}"))
+                })?;
+            }
         }
-    };
+        "ipython" => {
+            let asset_path = get_asset_root()?;
+            let (sketch_root, sketch_file) = get_sketch_info()?;
+            let graphics = Graphics::new(
+                width,
+                height,
+                asset_path.as_str(),
+                sketch_root.as_str(),
+                sketch_file.as_str(),
+                log_level,
+            )?;
+            module.setattr("_graphics", graphics)?;
+
+            if !has_existing {
+                let hook_code = CString::new(REGISTER_INPUTHOOK_CODE)?;
+                py.run(hook_code.as_c_str(), None, None).map_err(|e| {
+                    PyRuntimeError::new_err(format!("Failed to register inputhook: {e}"))
+                })?;
+
+                let post_code = CString::new(IPYTHON_POST_EXECUTE_CODE)?;
+                py.run(post_code.as_c_str(), None, None).map_err(|e| {
+                    PyRuntimeError::new_err(format!(
+                        "Failed to register post-execute hook: {e}"
+                    ))
+                })?;
+            }
+        }
+        _ => {
+            let asset_path = get_asset_root()?;
+            let (sketch_root, sketch_file) = get_sketch_info()?;
+            let graphics = Graphics::new(
+                width,
+                height,
+                asset_path.as_str(),
+                sketch_root.as_str(),
+                sketch_file.as_str(),
+                log_level,
+            )?;
+            module.setattr("_graphics", graphics)?;
+        }
+    }
+
+    Ok(())
+}
+
+const DEFAULT_WIDTH: u32 = 100;
+const DEFAULT_HEIGHT: u32 = 100;
+
+fn ensure_graphics(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    if get_graphics(module)?.is_some() {
+        return Ok(());
+    }
+    create_graphics_context(module, DEFAULT_WIDTH, DEFAULT_HEIGHT)
+}
+
+macro_rules! graphics {
+    ($module:expr) => {{
+        ensure_graphics($module)?;
+        get_graphics($module)?.expect("ensure_graphics guarantees Some")
+    }};
 }
 
 fn get_asset_root() -> PyResult<String> {
@@ -518,6 +604,10 @@ mod mewnala {
     #[pymodule_init]
     fn init(module: &Bound<'_, PyModule>) -> PyResult<()> {
         use processing::prelude::BlendMode;
+
+        module.add("width", super::DEFAULT_WIDTH)?;
+        module.add("height", super::DEFAULT_HEIGHT)?;
+
         module.add("BLEND", PyBlendMode::from_preset(BlendMode::Blend))?;
         module.add("ADD", PyBlendMode::from_preset(BlendMode::Add))?;
         module.add("SUBTRACT", PyBlendMode::from_preset(BlendMode::Subtract))?;
@@ -759,81 +849,9 @@ mod mewnala {
     #[pyfunction]
     #[pyo3(pass_module)]
     fn size(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<()> {
+        create_graphics_context(module, width, height)?;
+
         let py = module.py();
-        let env = detect_environment(py)?;
-
-        let interactive = env != "script";
-        let log_level = if interactive { Some("error") } else { None };
-
-        // Check if we already have a graphics context (i.e. size() was called before).
-        // Drop the old one first so the window and GPU resources are released.
-        let has_existing = module
-            .getattr("_graphics")
-            .ok()
-            .map(|a| !a.is_none())
-            .unwrap_or(false);
-        if has_existing {
-            module.setattr("_graphics", py.None())?;
-        }
-
-        match env.as_str() {
-            "jupyter" => {
-                let asset_path = get_asset_root()?;
-                let graphics =
-                    Graphics::new_offscreen(width, height, asset_path.as_str(), log_level)?;
-                module.setattr("_graphics", graphics)?;
-
-                if !has_existing {
-                    let code = CString::new(JUPYTER_POST_EXECUTE_CODE)?;
-                    py.run(code.as_c_str(), None, None).map_err(|e| {
-                        PyRuntimeError::new_err(format!("Failed to register Jupyter hooks: {e}"))
-                    })?;
-                }
-            }
-            "ipython" => {
-                let asset_path = get_asset_root()?;
-                let (sketch_root, sketch_file) = get_sketch_info()?;
-                let graphics = Graphics::new(
-                    width,
-                    height,
-                    asset_path.as_str(),
-                    sketch_root.as_str(),
-                    sketch_file.as_str(),
-                    log_level,
-                )?;
-                module.setattr("_graphics", graphics)?;
-
-                if !has_existing {
-                    let hook_code = CString::new(REGISTER_INPUTHOOK_CODE)?;
-                    py.run(hook_code.as_c_str(), None, None).map_err(|e| {
-                        PyRuntimeError::new_err(format!("Failed to register inputhook: {e}"))
-                    })?;
-
-                    let post_code = CString::new(IPYTHON_POST_EXECUTE_CODE)?;
-                    py.run(post_code.as_c_str(), None, None).map_err(|e| {
-                        PyRuntimeError::new_err(format!(
-                            "Failed to register post-execute hook: {e}"
-                        ))
-                    })?;
-                }
-            }
-
-            // this is the default "script" mode where we assume the user will call run() to start the draw loop
-            _ => {
-                let asset_path = get_asset_root()?;
-                let (sketch_root, sketch_file) = get_sketch_info()?;
-                let graphics = Graphics::new(
-                    width,
-                    height,
-                    asset_path.as_str(),
-                    sketch_root.as_str(),
-                    sketch_file.as_str(),
-                    log_level,
-                )?;
-                module.setattr("_graphics", graphics)?;
-            }
-        }
-
         let sys = PyModule::import(py, "sys")?;
         let frame = sys.getattr("_getframe")?.call1((0,))?;
         let caller_globals = frame.getattr("f_globals")?;
@@ -857,14 +875,47 @@ mod mewnala {
             let builtins = PyModule::import(py, "builtins")?;
             let locals = builtins.getattr("locals")?.call0()?;
 
-            let setup_fn = locals.get_item("setup")?;
-            let mut draw_fn = locals.get_item("draw")?;
+            let setup_fn = locals.get_item("setup").ok();
+            let mut draw_fn = locals.get_item("draw").ok();
 
-            // call setup
-            setup_fn.call0()?;
+            if let Some(ref setup) = setup_fn {
+                setup.call0()?;
+            }
 
-            let mut globals = draw_fn.getattr("__globals__")?;
+            ensure_graphics(module)?;
+
+            let mut globals = if let Some(ref draw) = draw_fn {
+                draw.getattr("__globals__")?
+            } else if let Some(ref setup) = setup_fn {
+                setup.getattr("__globals__")?
+            } else {
+                let sys = PyModule::import(py, "sys")?;
+                let frame = sys.getattr("_getframe")?.call1((0,))?;
+                frame.getattr("f_globals")?
+            };
             sync_globals(module, &globals)?;
+
+            // if there's no draw fn, we enter an idle loop
+            if draw_fn.is_none() {
+                get_graphics(module)?
+                    .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?
+                    .end_draw()?;
+
+                loop {
+                    {
+                        let mut graphics = get_graphics_mut(module)?
+                            .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+                        if !graphics.surface.poll_events() {
+                            break;
+                        }
+                    }
+                    dispatch_event_callbacks(&locals)?;
+                    std::thread::sleep(std::time::Duration::from_millis(16));
+                }
+
+                return Ok(());
+            }
+            let draw_fn_ref = draw_fn.as_mut().expect("checked above");
 
             // start draw loop
             loop {
@@ -887,8 +938,8 @@ mod mewnala {
                             }
                         }
 
-                        draw_fn = locals.get_item("draw").unwrap().unwrap();
-                        globals = draw_fn.getattr("__globals__")?;
+                        *draw_fn_ref = locals.get_item("draw").unwrap().unwrap();
+                        globals = draw_fn_ref.getattr("__globals__")?;
                         reset_tracked_globals();
 
                         dbg!(locals);
@@ -920,7 +971,7 @@ mod mewnala {
 
                 sync_globals(module, &globals)?;
 
-                draw_fn
+                draw_fn_ref
                     .call0()
                     .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
