@@ -162,11 +162,7 @@ fn dispatch_event_callbacks(locals: &Bound<'_, PyAny>) -> PyResult<()> {
     Ok(())
 }
 
-fn create_graphics_context(
-    module: &Bound<'_, PyModule>,
-    width: u32,
-    height: u32,
-) -> PyResult<()> {
+fn create_graphics_context(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<()> {
     let py = module.py();
     let env = detect_environment(py)?;
 
@@ -185,8 +181,7 @@ fn create_graphics_context(
     match env.as_str() {
         "jupyter" => {
             let asset_path = get_asset_root()?;
-            let graphics =
-                Graphics::new_offscreen(width, height, asset_path.as_str(), log_level)?;
+            let graphics = Graphics::new_offscreen(width, height, asset_path.as_str(), log_level)?;
             module.setattr("_graphics", graphics)?;
 
             if !has_existing {
@@ -217,9 +212,7 @@ fn create_graphics_context(
 
                 let post_code = CString::new(IPYTHON_POST_EXECUTE_CODE)?;
                 py.run(post_code.as_c_str(), None, None).map_err(|e| {
-                    PyRuntimeError::new_err(format!(
-                        "Failed to register post-execute hook: {e}"
-                    ))
+                    PyRuntimeError::new_err(format!("Failed to register post-execute hook: {e}"))
                 })?;
             }
         }
@@ -894,9 +887,15 @@ mod mewnala {
                 frame.getattr("f_globals")?
             };
             sync_globals(module, &globals)?;
-
-            // if there's no draw fn, we enter an idle loop
+            
+            // no draw is defined. flush any top level code and then idle
             if draw_fn.is_none() {
+                {
+                    let mut graphics = get_graphics_mut(module)?
+                        .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+                    graphics.surface.poll_events();
+                }
+
                 get_graphics(module)?
                     .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?
                     .end_draw()?;
@@ -917,7 +916,6 @@ mod mewnala {
             }
             let draw_fn_ref = draw_fn.as_mut().expect("checked above");
 
-            // start draw loop
             loop {
                 {
                     let mut graphics = get_graphics_mut(module)?

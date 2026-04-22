@@ -445,6 +445,16 @@ pub fn begin_draw(In(entity): In<Entity>, mut state_query: Query<&mut RenderStat
 }
 
 pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
+    // f there's nothing to render, skip the whole render pass. this avoids some issues on
+    // macos with msaa resolve where nothing is rendered
+    let is_empty = graphics_mut!(app, entity)
+        .get::<CommandBuffer>()
+        .map(|c| c.commands.is_empty())
+        .unwrap_or(true);
+    if is_empty {
+        return Ok(());
+    }
+
     graphics_mut!(app, entity).insert(Flush);
     app.update();
     graphics_mut!(app, entity).remove::<Flush>();
