@@ -1432,4 +1432,18 @@ mod mewnala {
     fn key_just_pressed(key_code: u32) -> PyResult<bool> {
         input::key_just_pressed(key_code)
     }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn pixel_density(module: &Bound<'_, PyModule>, density: f32) -> PyResult<()> {
+        graphics!(module).surface.set_pixel_density(density)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn display_density(module: &Bound<'_, PyModule>) -> PyResult<f32> {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        graphics.surface.display_density()
+    }
 }

@@ -36,7 +36,7 @@ impl<'a> MeshBuilder<'a> {
         if let Some(VertexAttributeValues::Float32x4(colors)) =
             self.mesh.attribute_mut(Mesh::ATTRIBUTE_COLOR)
         {
-            colors.push(self.color.to_srgba().to_f32_array());
+            colors.push(self.color.to_linear().to_f32_array());
         }
 
         if let Some(VertexAttributeValues::Float32x3(normals)) =

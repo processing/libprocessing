@@ -94,10 +94,13 @@ fn spawn_surface(
     let window_wrapper = WindowWrapper::new(glfw_window);
     let handle_wrapper = RawHandleWrapper::new(&window_wrapper)?;
 
+    let physical_width = (width as f32 * scale_factor) as u32;
+    let physical_height = (height as f32 * scale_factor) as u32;
+
     Ok(commands
         .spawn((
             Window {
-                resolution: WindowResolution::new(width, height)
+                resolution: WindowResolution::new(physical_width, physical_height)
                     .with_scale_factor_override(scale_factor),
                 ..default()
             },
@@ -362,8 +365,28 @@ pub fn resize(
     mut windows: Query<&mut Window>,
 ) -> Result<()> {
     if let Ok(mut window) = windows.get_mut(window_entity) {
-        window.resolution.set_physical_resolution(width, height);
+        let scale = window.resolution.scale_factor();
+        let physical_w = (width as f32 * scale) as u32;
+        let physical_h = (height as f32 * scale) as u32;
+        window.resolution.set_physical_resolution(physical_w, physical_h);
+        Ok(())
+    } else {
+        Err(error::ProcessingError::SurfaceNotFound)
+    }
+}
 
+pub fn set_pixel_density(
+    In((window_entity, density)): In<(Entity, f32)>,
+    mut windows: Query<&mut Window>,
+) -> Result<()> {
+    if let Ok(mut window) = windows.get_mut(window_entity) {
+        let logical_w = window.resolution.width();
+        let logical_h = window.resolution.height();
+        window.resolution.set_scale_factor_override(Some(density));
+        window.resolution.set_physical_resolution(
+            (logical_w * density) as u32,
+            (logical_h * density) as u32,
+        );
         Ok(())
     } else {
         Err(error::ProcessingError::SurfaceNotFound)

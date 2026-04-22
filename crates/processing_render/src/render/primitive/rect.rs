@@ -87,7 +87,7 @@ fn simple_rect(mesh: &mut Mesh, x: f32, y: f32, w: f32, h: f32, color: Color) {
     if let Some(VertexAttributeValues::Float32x4(colors)) =
         mesh.attribute_mut(Mesh::ATTRIBUTE_COLOR)
     {
-        let color_array = color.to_srgba().to_f32_array();
+        let color_array = color.to_linear().to_f32_array();
         for _ in 0..4 {
             colors.push(color_array);
         }
