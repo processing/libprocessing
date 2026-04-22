@@ -1,3 +1,5 @@
+#![cfg(feature = "cuda")]
+
 use bevy::prelude::*;
 use bevy::render::RenderApp;
 use bevy::render::render_resource::{Texture, TextureFormat};

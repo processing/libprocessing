@@ -16,7 +16,7 @@ wayland = ["processing/wayland", "processing_glfw/wayland"]
 static-link = ["processing_glfw/static-link"]
 x11 = ["processing/x11"]
 webcam = ["processing/webcam", "dep:processing_webcam"]
-cuda = ["dep:processing_cuda", "processing/cuda"]
+cuda = ["dep:processing_cuda", "processing_cuda/cuda", "processing/cuda"]
 
 [dependencies]
 pyo3 = { workspace = true, features = ["experimental-inspect", "multiple-pymethods"] }

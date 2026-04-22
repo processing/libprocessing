@@ -12,7 +12,7 @@ default = ["wayland"]
 wayland = ["processing_render/wayland"]
 x11 = ["processing_render/x11"]
 webcam = ["dep:processing_webcam"]
-cuda = ["dep:processing_cuda"]
+cuda = ["dep:processing_cuda", "processing_cuda/cuda"]
 
 [workspace]
 resolver = "3"
