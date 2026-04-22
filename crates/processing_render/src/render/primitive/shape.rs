@@ -497,7 +497,7 @@ fn push_triangle(
         positions.push([x3, y3, 0.0]);
     }
 
-    let color_array = color.to_srgba().to_f32_array();
+    let color_array = color.to_linear().to_f32_array();
     if let Some(VertexAttributeValues::Float32x4(colors)) =
         mesh.attribute_mut(Mesh::ATTRIBUTE_COLOR)
     {
@@ -556,7 +556,7 @@ fn push_quad(
         positions.push([x4, y4, 0.0]);
     }
 
-    let color_array = color.to_srgba().to_f32_array();
+    let color_array = color.to_linear().to_f32_array();
     if let Some(VertexAttributeValues::Float32x4(colors)) =
         mesh.attribute_mut(Mesh::ATTRIBUTE_COLOR)
     {

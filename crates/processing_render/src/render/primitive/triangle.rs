@@ -64,7 +64,7 @@ fn simple_triangle(
     if let Some(VertexAttributeValues::Float32x4(colors)) =
         mesh.attribute_mut(Mesh::ATTRIBUTE_COLOR)
     {
-        let color_array = color.to_srgba().to_f32_array();
+        let color_array = color.to_linear().to_f32_array();
         for _ in 0..3 {
             colors.push(color_array);
         }
