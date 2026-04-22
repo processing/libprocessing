@@ -249,6 +249,14 @@ pub fn surface_resize(graphics_entity: Entity, width: u32, height: u32) -> error
     })
 }
 
+pub fn surface_set_pixel_density(entity: Entity, density: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::set_pixel_density, (entity, density))
+            .unwrap()
+    })
+}
+
 /// Create a new graphics surface for rendering.
 pub fn graphics_create(
     surface_entity: Entity,

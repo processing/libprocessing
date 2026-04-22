@@ -177,6 +177,11 @@ impl GlfwContext {
         true
     }
 
+    pub fn content_scale(&self) -> f32 {
+        let (s, _) = self.window.get_content_scale();
+        s
+    }
+
     fn sync_cursor(&mut self, surface: Entity) {
         use bevy::window::CursorGrabMode;
 

@@ -40,7 +40,8 @@ pub struct GraphicsPlugin;
 
 impl Plugin for GraphicsPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<RenderLayersManager>();
+        app.init_resource::<RenderLayersManager>()
+            .add_systems(PostUpdate, sync_to_surface);
     }
 }
 
@@ -149,14 +150,26 @@ pub fn create(
     mut commands: Commands,
     mut layer_manager: ResMut<RenderLayersManager>,
     p_images: Query<&Image, With<Surface>>,
+    windows: Query<&Window, With<Surface>>,
     render_device: Res<RenderDevice>,
 ) -> Result<Entity> {
     // find the surface entity, if it is an image, we will render to that image
     // otherwise we will render to the window
-    let target = match p_images.get(surface_entity) {
-        Ok(p_image) => RenderTarget::Image(ImageRenderTarget::from(p_image.handle.clone())),
+    let (target, physical_width, physical_height) = match p_images.get(surface_entity) {
+        Ok(p_image) => (
+            RenderTarget::Image(ImageRenderTarget::from(p_image.handle.clone())),
+            p_image.size.width,
+            p_image.size.height,
+        ),
         Err(QueryEntityError::QueryDoesNotMatch(..)) => {
-            RenderTarget::Window(WindowRef::Entity(surface_entity))
+            let window = windows
+                .get(surface_entity)
+                .map_err(|_| ProcessingError::SurfaceNotFound)?;
+            (
+                RenderTarget::Window(WindowRef::Entity(surface_entity)),
+                window.resolution.physical_width(),
+                window.resolution.physical_height(),
+            )
         }
         Err(_) => return Err(ProcessingError::SurfaceNotFound),
     };
@@ -165,14 +178,14 @@ pub fn create(
     let render_layer = layer_manager.allocate();
 
     let size = Extent3d {
-        width,
-        height,
+        width: physical_width,
+        height: physical_height,
         depth_or_array_layers: 1,
     };
     let readback_buffer = create_readback_buffer(
         &render_device,
-        width,
-        height,
+        physical_width,
+        physical_height,
         texture_format,
         "Graphics Readback Buffer",
     )
@@ -238,6 +251,39 @@ pub fn resize(
         panic!(
             "Expected custom projection for Processing graphics entity, this should not happen. If you are seeing this message, please report a bug."
         );
+    }
+}
+
+pub fn sync_to_surface(
+    mut graphics_query: Query<(&mut Graphics, &RenderTarget)>,
+    windows: Query<&Window, (With<Surface>, Changed<Window>)>,
+    render_device: Res<RenderDevice>,
+) {
+    for (mut graphics, target) in graphics_query.iter_mut() {
+        let RenderTarget::Window(WindowRef::Entity(surface_entity)) = *target else {
+            continue;
+        };
+        let Ok(window) = windows.get(surface_entity) else {
+            continue;
+        };
+        let physical_w = window.resolution.physical_width();
+        let physical_h = window.resolution.physical_height();
+        if graphics.size.width == physical_w && graphics.size.height == physical_h {
+            continue;
+        }
+        graphics.size = Extent3d {
+            width: physical_w,
+            height: physical_h,
+            depth_or_array_layers: 1,
+        };
+        graphics.readback_buffer = create_readback_buffer(
+            &render_device,
+            physical_w,
+            physical_h,
+            graphics.texture_format,
+            "Graphics Readback Buffer",
+        )
+        .expect("Failed to reallocate readback buffer");
     }
 }
 

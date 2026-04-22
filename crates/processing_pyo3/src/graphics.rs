@@ -146,6 +146,19 @@ impl Surface {
             None => true, // no-op, offscreen surfaces never close
         }
     }
+
+    #[getter]
+    pub fn display_density(&self) -> PyResult<f32> {
+        match &self.glfw_ctx {
+            Some(ctx) => Ok(ctx.content_scale()),
+            None => Ok(1.0),
+        }
+    }
+
+    pub fn set_pixel_density(&self, density: f32) -> PyResult<()> {
+        surface_set_pixel_density(self.entity, density)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
 }
 
 impl Drop for Surface {
