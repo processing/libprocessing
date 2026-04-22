@@ -793,6 +793,11 @@ mod mewnala {
             }
         }
 
+        let sys = PyModule::import(py, "sys")?;
+        let frame = sys.getattr("_getframe")?.call1((0,))?;
+        let caller_globals = frame.getattr("f_globals")?;
+        sync_globals(module, &caller_globals)?;
+
         Ok(())
     }
 
