@@ -83,6 +83,11 @@ just wasm-serve
 
 ## Contributing
 
-We want your help building this library! You can see a list of outstanding tasks in our [issues](https://github.com/processing/libprocessing). However, while we're still in the early phases, consider checking in with us first in the `#devs-chat` channel on [Discord](https://discord.gg/h99u95nU7q) to coordinate our efforts.
+We want your help building this library! 
+
+One place we could really use some help is with porting Processing examples to using mewnala, and then reporting where you get stuck or where things could be easier. Check out the effort here: https://github.com/processing/processing-examples-mewnala. 
+
+
+You can see a list of outstanding tasks in our [issues](https://github.com/processing/libprocessing). However, while we're still in the early phases, consider checking in with us first in the `#devs-chat` channel on [Discord](https://discord.gg/h99u95nU7q) to coordinate our efforts.
 
 You can read our project design principles [here](./docs/principles.md).
