@@ -252,8 +252,8 @@ pub fn build_direct_fill(mesh: &mut Mesh, builder: &ShapeBuilder, color: Color) 
                 );
             }
         }
-        ShapeKind::TriangleFan => {
-            if vertices.len() >= 3 {
+        ShapeKind::TriangleFan
+            if vertices.len() >= 3 => {
                 let hub = vertices[0];
                 for i in 1..vertices.len() - 1 {
                     push_triangle(
@@ -268,7 +268,6 @@ pub fn build_direct_fill(mesh: &mut Mesh, builder: &ShapeBuilder, color: Color) 
                     );
                 }
             }
-        }
         ShapeKind::TriangleStrip => {
             for i in 0..vertices.len().saturating_sub(2) {
                 if i % 2 == 0 {
@@ -372,8 +371,8 @@ pub fn build_direct_stroke(
                 );
             }
         }
-        ShapeKind::TriangleFan => {
-            if vertices.len() >= 3 {
+        ShapeKind::TriangleFan
+            if vertices.len() >= 3 => {
                 let hub = vertices[0];
                 for i in 1..vertices.len() - 1 {
                     stroke_polygon(
@@ -386,7 +385,6 @@ pub fn build_direct_stroke(
                     );
                 }
             }
-        }
         ShapeKind::TriangleStrip => {
             for i in 0..vertices.len().saturating_sub(2) {
                 if i % 2 == 0 {
