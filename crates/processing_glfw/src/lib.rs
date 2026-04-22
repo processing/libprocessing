@@ -14,7 +14,6 @@ pub struct GlfwContext {
     window: PWindow,
     events: GlfwReceiver<(f64, WindowEvent)>,
     surface: Option<Entity>,
-    scale_factor: f32,
 }
 
 impl GlfwContext {
@@ -31,14 +30,11 @@ impl GlfwContext {
         window.set_all_polling(true);
         window.show();
 
-        let (scale_factor, _) = window.get_content_scale();
-
         Ok(Self {
             glfw,
             window,
             events,
             surface: None,
-            scale_factor,
         })
     }
 
@@ -127,8 +123,7 @@ impl GlfwContext {
                     return false;
                 }
                 WindowEvent::CursorPos(x, y) => {
-                    let s = self.scale_factor;
-                    input_set_mouse_move(surface, x as f32 / s, y as f32 / s).unwrap();
+                    input_set_mouse_move(surface, x as f32, y as f32).unwrap();
                 }
                 WindowEvent::MouseButton(button, action, _mods) => {
                     if let Some(btn) = glfw_button_to_bevy(button) {
