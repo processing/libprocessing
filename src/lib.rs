@@ -3,6 +3,7 @@ pub mod prelude;
 use std::num::NonZero;
 
 use bevy::app::{App, AppExit};
+use bevy::asset::{AssetApp, io::AssetSourceBuilder};
 use bevy::prelude::*;
 use bevy::render::RenderPlugin;
 
@@ -13,6 +14,23 @@ fn create_app(config: Config) -> App {
     let mut app = App::new();
 
     app.insert_resource(config.clone());
+
+    if let Some(asset_path) = config.get(ConfigKey::AssetRootPath) {
+        app.register_asset_source(
+            "assets_directory",
+            AssetSourceBuilder::platform_default(asset_path, None),
+        );
+    }
+    if config
+        .get(ConfigKey::SketchFileName)
+        .is_some_and(|f| !f.is_empty())
+        && let Some(sketch_path) = config.get(ConfigKey::SketchRootPath)
+    {
+        app.register_asset_source(
+            "sketch_directory",
+            AssetSourceBuilder::platform_default(sketch_path, None),
+        );
+    }
 
     #[cfg(not(target_arch = "wasm32"))]
     let plugins = DefaultPlugins
