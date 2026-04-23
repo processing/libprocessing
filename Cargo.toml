@@ -23,7 +23,7 @@ type_complexity = "allow"
 too_many_arguments = "allow"
 
 [workspace.dependencies]
-bevy = { git = "https://github.com/bevyengine/bevy", branch = "main", features = ["file_watcher", "shader_format_wesl", "free_camera", "pan_camera"] }
+bevy = { git = "https://github.com/processing/bevy", branch = "main", features = ["file_watcher", "shader_format_wesl", "free_camera", "pan_camera"] }
 bevy_naga_reflect = { git = "https://github.com/tychedelia/bevy_naga_reflect" }
 bevy_cuda = { git = "https://github.com/tychedelia/bevy_cuda" }
 naga = { version = "29", features = ["wgsl-in"] }
@@ -62,6 +62,13 @@ rand = "0.10.0"
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 processing_glfw = { workspace = true, features = ["wayland"] }
+
+[[example]]
+name = "test"
+path = "examples/test.rs"
+
+[patch."https://github.com/bevyengine/bevy"]
+bevy = { git = "https://github.com/processing/bevy", branch = "main" }
 
 [[example]]
 name = "rectangle"
