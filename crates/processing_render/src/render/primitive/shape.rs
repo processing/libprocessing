@@ -252,22 +252,21 @@ pub fn build_direct_fill(mesh: &mut Mesh, builder: &ShapeBuilder, color: Color) 
                 );
             }
         }
-        ShapeKind::TriangleFan
-            if vertices.len() >= 3 => {
-                let hub = vertices[0];
-                for i in 1..vertices.len() - 1 {
-                    push_triangle(
-                        mesh,
-                        color,
-                        hub.0,
-                        hub.1,
-                        vertices[i].0,
-                        vertices[i].1,
-                        vertices[i + 1].0,
-                        vertices[i + 1].1,
-                    );
-                }
+        ShapeKind::TriangleFan if vertices.len() >= 3 => {
+            let hub = vertices[0];
+            for i in 1..vertices.len() - 1 {
+                push_triangle(
+                    mesh,
+                    color,
+                    hub.0,
+                    hub.1,
+                    vertices[i].0,
+                    vertices[i].1,
+                    vertices[i + 1].0,
+                    vertices[i + 1].1,
+                );
             }
+        }
         ShapeKind::TriangleStrip => {
             for i in 0..vertices.len().saturating_sub(2) {
                 if i % 2 == 0 {
@@ -371,20 +370,19 @@ pub fn build_direct_stroke(
                 );
             }
         }
-        ShapeKind::TriangleFan
-            if vertices.len() >= 3 => {
-                let hub = vertices[0];
-                for i in 1..vertices.len() - 1 {
-                    stroke_polygon(
-                        mesh,
-                        &[hub, vertices[i], vertices[i + 1]],
-                        true,
-                        color,
-                        weight,
-                        stroke_config,
-                    );
-                }
+        ShapeKind::TriangleFan if vertices.len() >= 3 => {
+            let hub = vertices[0];
+            for i in 1..vertices.len() - 1 {
+                stroke_polygon(
+                    mesh,
+                    &[hub, vertices[i], vertices[i + 1]],
+                    true,
+                    color,
+                    weight,
+                    stroke_config,
+                );
             }
+        }
         ShapeKind::TriangleStrip => {
             for i in 0..vertices.len().saturating_sub(2) {
                 if i % 2 == 0 {
