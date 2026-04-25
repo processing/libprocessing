@@ -5,13 +5,21 @@ from .mewnala import *
 # the internal structure of the native module
 import sys as _sys
 from . import mewnala as _native
+
 for _name in ("math",):
     _sub = getattr(_native, _name, None)
     if _sub is not None:
         _sys.modules[f"{__name__}.{_name}"] = _sub
 
+_color = getattr(_native, "color", None)
+if _color is not None:
+    _sys.modules[f"{__name__}.color"] = _color
+
+from . import math  # noqa: E402  (Python submodule, extends native math)
+from .math import *  # noqa: E402,F401,F403
+
 # global var handling. for wildcard import of our module, we copy into globals, otherwise
-# we dispatch to get attr and call the underlying getter method 
+# we dispatch to get attr and call the underlying getter method
 
 _DYNAMIC_GRAPHICS_ATTRS = (
     "width",
@@ -105,7 +113,6 @@ def __getattr__(name):
 
 def __dir__():
     return sorted(set(list(globals().keys()) + list(_DYNAMIC)))
-
 
 __all__ = sorted(
     {n for n in dir(_native) if not n.startswith("_")} | set(_DYNAMIC)
