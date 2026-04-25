@@ -15,7 +15,8 @@ use bevy::{
     render::{
         RenderApp,
         render_resource::{
-            CommandEncoderDescriptor, Extent3d, MapMode, Origin3d, PollType, TexelCopyBufferInfo,
+            CommandEncoderDescriptor, Extent3d, LoadOp, MapMode, Operations, Origin3d, PollType,
+            RenderPassColorAttachment, RenderPassDescriptor, StoreOp, TexelCopyBufferInfo,
             TexelCopyBufferLayout, TexelCopyTextureInfo, Texture, TextureFormat, TextureUsages,
         },
         renderer::{RenderDevice, RenderQueue},
@@ -35,6 +36,8 @@ use crate::{
     surface::Surface,
 };
 use processing_core::error::{ProcessingError, Result};
+
+pub const DEFAULT_CLEAR_COLOR: Color = Color::srgba_u8(208, 208, 208, 255);
 
 pub struct GraphicsPlugin;
 
@@ -481,6 +484,61 @@ pub fn present(app: &mut App, entity: Entity) -> Result<()> {
 /// End the current draw
 pub fn end_draw(app: &mut App, entity: Entity) -> Result<()> {
     present(app, entity)
+}
+
+
+/// Do some work on the GPU to ensure that the render target texture is initialized and can be read 
+/// from/written to.
+/// 
+/// This is necessary on some platforms (notably macOS) to avoid issues with the first few frames of 
+/// rendering being corrupted or not appearing at all.
+/// 
+// TODO: why is metal particularly affected by this? can we remove this?
+pub fn warmup(app: &mut App, entity: Entity) -> Result<()> {
+    let main_texture = {
+        let render_world = app.sub_app_mut(RenderApp).world_mut();
+        let mut query = render_world.query::<(&MainEntity, &ViewTarget)>();
+        let mut found = None;
+        for (main_entity, vt) in query.iter(render_world) {
+            if **main_entity == entity {
+                found = Some(vt.main_texture().clone());
+                break;
+            }
+        }
+        found.ok_or(ProcessingError::GraphicsNotFound)?
+    };
+
+    let render_app = app.sub_app(RenderApp);
+    let render_device = render_app.world().resource::<RenderDevice>();
+    let render_queue = render_app.world().resource::<RenderQueue>();
+
+    let view = main_texture.create_view(&bevy::render::render_resource::TextureViewDescriptor {
+        label: Some("processing_warmup_view"),
+        ..Default::default()
+    });
+    let mut encoder = render_device.create_command_encoder(&CommandEncoderDescriptor {
+        label: Some("processing_warmup_encoder"),
+    });
+    {
+        let _pass = encoder.begin_render_pass(&RenderPassDescriptor {
+            label: Some("processing_warmup_clear"),
+            color_attachments: &[Some(RenderPassColorAttachment {
+                view: &view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: Operations {
+                    load: LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    store: StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: None,
+        });
+    }
+    render_queue.submit([encoder.finish()]);
+    Ok(())
 }
 
 pub fn record_command(
