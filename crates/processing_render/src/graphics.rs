@@ -486,13 +486,12 @@ pub fn end_draw(app: &mut App, entity: Entity) -> Result<()> {
     present(app, entity)
 }
 
-
-/// Do some work on the GPU to ensure that the render target texture is initialized and can be read 
+/// Do some work on the GPU to ensure that the render target texture is initialized and can be read
 /// from/written to.
-/// 
-/// This is necessary on some platforms (notably macOS) to avoid issues with the first few frames of 
+///
+/// This is necessary on some platforms (notably macOS) to avoid issues with the first few frames of
 /// rendering being corrupted or not appearing at all.
-/// 
+///
 // TODO: why is metal particularly affected by this? can we remove this?
 pub fn warmup(app: &mut App, entity: Entity) -> Result<()> {
     let main_texture = {
