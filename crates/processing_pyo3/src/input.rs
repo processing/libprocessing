@@ -5,22 +5,28 @@ use pyo3::{
     prelude::*,
 };
 
-pub fn mouse_x(surface: Entity) -> PyResult<f32> {
-    processing::prelude::input_mouse_x(surface).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+pub fn mouse_x(surface: Entity, width: u32) -> PyResult<f32> {
+    let raw = processing::prelude::input_mouse_x(surface)
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    Ok(raw.clamp(0.0, width as f32))
 }
 
-pub fn mouse_y(surface: Entity) -> PyResult<f32> {
-    processing::prelude::input_mouse_y(surface).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+pub fn mouse_y(surface: Entity, height: u32) -> PyResult<f32> {
+    let raw = processing::prelude::input_mouse_y(surface)
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    Ok(raw.clamp(0.0, height as f32))
 }
 
-pub fn pmouse_x(surface: Entity) -> PyResult<f32> {
-    processing::prelude::input_pmouse_x(surface)
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+pub fn pmouse_x(surface: Entity, width: u32) -> PyResult<f32> {
+    let raw = processing::prelude::input_pmouse_x(surface)
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    Ok(raw.clamp(0.0, width as f32))
 }
 
-pub fn pmouse_y(surface: Entity) -> PyResult<f32> {
-    processing::prelude::input_pmouse_y(surface)
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+pub fn pmouse_y(surface: Entity, height: u32) -> PyResult<f32> {
+    let raw = processing::prelude::input_pmouse_y(surface)
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    Ok(raw.clamp(0.0, height as f32))
 }
 
 pub fn mouse_is_pressed() -> PyResult<bool> {
@@ -80,12 +86,17 @@ pub fn key_code() -> PyResult<Option<u32>> {
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }
 
-pub fn sync_globals(globals: &Bound<'_, PyAny>, surface: Entity) -> PyResult<()> {
+pub fn sync_globals(
+    globals: &Bound<'_, PyAny>,
+    surface: Entity,
+    canvas_width: u32,
+    canvas_height: u32,
+) -> PyResult<()> {
     use crate::set_tracked;
-    set_tracked(globals, "mouse_x", mouse_x(surface)?)?;
-    set_tracked(globals, "mouse_y", mouse_y(surface)?)?;
-    set_tracked(globals, "pmouse_x", pmouse_x(surface)?)?;
-    set_tracked(globals, "pmouse_y", pmouse_y(surface)?)?;
+    set_tracked(globals, "mouse_x", mouse_x(surface, canvas_width)?)?;
+    set_tracked(globals, "mouse_y", mouse_y(surface, canvas_height)?)?;
+    set_tracked(globals, "pmouse_x", pmouse_x(surface, canvas_width)?)?;
+    set_tracked(globals, "pmouse_y", pmouse_y(surface, canvas_height)?)?;
     set_tracked(globals, "mouse_is_pressed", mouse_is_pressed()?)?;
     set_tracked(globals, "mouse_button", mouse_button()?)?;
     set_tracked(globals, "moved_x", moved_x()?)?;
