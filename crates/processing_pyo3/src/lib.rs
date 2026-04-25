@@ -1658,9 +1658,24 @@ mod mewnala {
     }
 
     #[pyfunction]
-    #[pyo3(pass_module)]
-    fn pixel_density(module: &Bound<'_, PyModule>, density: f32) -> PyResult<()> {
-        graphics!(module).surface.set_pixel_density(density)
+    #[pyo3(pass_module, signature = (density=None))]
+    fn pixel_density<'py>(
+        module: &Bound<'py, PyModule>,
+        density: Option<f32>,
+    ) -> PyResult<Py<PyAny>> {
+        let py = module.py();
+        match density {
+            Some(d) => {
+                graphics!(module).surface.set_pixel_density(d)?;
+                Ok(py.None())
+            }
+            None => {
+                let graphics = get_graphics(module)?
+                    .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+                let current = graphics.surface.pixel_density()?;
+                Ok(current.into_pyobject(py)?.into_any().unbind())
+            }
+        }
     }
 
     #[pyfunction]

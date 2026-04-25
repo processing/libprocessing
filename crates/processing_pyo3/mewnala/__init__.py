@@ -19,7 +19,6 @@ _DYNAMIC_GRAPHICS_ATTRS = (
     "focused",
     "pixel_width",
     "pixel_height",
-    "pixel_density",
 )
 _DYNAMIC_FUNCTIONS = (
     "mouse_x",
