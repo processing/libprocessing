@@ -55,7 +55,7 @@ impl Default for LoopState {
     fn default() -> Self {
         Self {
             looping: true,
-            redraw_requested: true,
+            redraw_requested: false,
         }
     }
 }
@@ -915,6 +915,7 @@ mod mewnala {
                 return Ok(());
             }
             let draw_fn_ref = draw_fn.as_mut().expect("checked above");
+            let mut first_frame = true;
 
             loop {
                 {
@@ -939,6 +940,7 @@ mod mewnala {
                         *draw_fn_ref = locals.get_item("draw").unwrap().unwrap();
                         globals = draw_fn_ref.getattr("__globals__")?;
                         reset_tracked_globals();
+                        first_frame = true;
 
                         dbg!(locals);
                     }
@@ -950,15 +952,17 @@ mod mewnala {
 
                 dispatch_event_callbacks(&locals)?;
 
-                let should_draw = LOOP_STATE.with(|s| {
-                    let state = s.get();
-                    state.looping || state.redraw_requested
-                });
+                let should_draw = first_frame
+                    || LOOP_STATE.with(|s| {
+                        let state = s.get();
+                        state.looping || state.redraw_requested
+                    });
 
                 if !should_draw {
                     std::thread::sleep(std::time::Duration::from_millis(16));
                     continue;
                 }
+                first_frame = false;
 
                 get_graphics_mut(module)?
                     .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?
