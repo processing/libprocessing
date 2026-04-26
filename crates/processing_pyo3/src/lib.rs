@@ -116,7 +116,12 @@ pub(crate) fn reset_tracked_globals() {
 fn sync_globals(module: &Bound<'_, PyModule>, globals: &Bound<'_, PyAny>) -> PyResult<()> {
     let graphics =
         get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-    input::sync_globals(globals, graphics.surface.entity)?;
+    input::sync_globals(
+        globals,
+        graphics.surface.entity,
+        graphics.width,
+        graphics.height,
+    )?;
     surface::sync_globals(globals, &graphics.surface, graphics.width, graphics.height)?;
     time::sync_globals(globals)?;
     Ok(())
@@ -1620,7 +1625,7 @@ mod mewnala {
     fn mouse_x(module: &Bound<'_, PyModule>) -> PyResult<f32> {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        input::mouse_x(graphics.surface.entity)
+        input::mouse_x(graphics.surface.entity, graphics.width)
     }
 
     #[pyfunction]
@@ -1628,7 +1633,7 @@ mod mewnala {
     fn mouse_y(module: &Bound<'_, PyModule>) -> PyResult<f32> {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        input::mouse_y(graphics.surface.entity)
+        input::mouse_y(graphics.surface.entity, graphics.height)
     }
 
     #[pyfunction]
@@ -1636,7 +1641,7 @@ mod mewnala {
     fn pmouse_x(module: &Bound<'_, PyModule>) -> PyResult<f32> {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        input::pmouse_x(graphics.surface.entity)
+        input::pmouse_x(graphics.surface.entity, graphics.width)
     }
 
     #[pyfunction]
@@ -1644,7 +1649,7 @@ mod mewnala {
     fn pmouse_y(module: &Bound<'_, PyModule>) -> PyResult<f32> {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        input::pmouse_y(graphics.surface.entity)
+        input::pmouse_y(graphics.surface.entity, graphics.height)
     }
 
     #[pyfunction]

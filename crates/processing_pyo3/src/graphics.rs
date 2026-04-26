@@ -1181,22 +1181,22 @@ impl Graphics {
 
     #[getter]
     fn mouse_x(&self) -> PyResult<f32> {
-        input::mouse_x(self.surface.entity)
+        input::mouse_x(self.surface.entity, self.width)
     }
 
     #[getter]
     fn mouse_y(&self) -> PyResult<f32> {
-        input::mouse_y(self.surface.entity)
+        input::mouse_y(self.surface.entity, self.height)
     }
 
     #[getter]
     fn pmouse_x(&self) -> PyResult<f32> {
-        input::pmouse_x(self.surface.entity)
+        input::pmouse_x(self.surface.entity, self.width)
     }
 
     #[getter]
     fn pmouse_y(&self) -> PyResult<f32> {
-        input::pmouse_y(self.surface.entity)
+        input::pmouse_y(self.surface.entity, self.height)
     }
 
     #[getter]
