@@ -11,7 +11,7 @@ pub mod material;
 pub mod monitor;
 pub mod render;
 pub mod sketch;
-pub(crate) mod surface;
+pub mod surface;
 pub mod time;
 pub mod transform;
 
@@ -243,6 +243,138 @@ pub fn surface_set_pixel_density(entity: Entity, density: f32) -> error::Result<
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(surface::set_pixel_density, (entity, density))
+            .unwrap()
+    })
+}
+
+pub fn surface_set_title(entity: Entity, title: String) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::set_title, (entity, title))
+            .unwrap()
+    })
+}
+
+pub fn surface_position(entity: Entity) -> error::Result<bevy::math::IVec2> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(surface::position, entity)
+            .unwrap())
+    })
+}
+
+pub fn surface_set_position(entity: Entity, x: i32, y: i32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::set_position, (entity, x, y))
+            .unwrap()
+    })
+}
+
+pub fn surface_set_visible(entity: Entity, visible: bool) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::set_visible, (entity, visible))
+            .unwrap()
+    })
+}
+
+pub fn surface_set_resizable(entity: Entity, resizable: bool) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::set_resizable, (entity, resizable))
+            .unwrap()
+    })
+}
+
+pub fn surface_set_decorated(entity: Entity, decorated: bool) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::set_decorated, (entity, decorated))
+            .unwrap()
+    })
+}
+
+pub fn surface_set_window_level(
+    entity: Entity,
+    level: bevy::window::WindowLevel,
+) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::set_window_level, (entity, level))
+            .unwrap()
+    })
+}
+
+pub fn surface_set_window_mode(
+    entity: Entity,
+    mode: bevy::window::WindowMode,
+) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::set_window_mode, (entity, mode))
+            .unwrap()
+    })
+}
+
+pub fn surface_set_opacity(entity: Entity, opacity: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::set_opacity, (entity, opacity))
+            .unwrap()
+    })
+}
+
+pub fn surface_iconify(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::iconify, entity)
+            .unwrap()
+    })
+}
+
+pub fn surface_restore(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::restore, entity)
+            .unwrap()
+    })
+}
+
+pub fn surface_maximize(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::maximize, entity)
+            .unwrap()
+    })
+}
+
+pub fn surface_focus(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::focus, entity)
+            .unwrap()
+    })
+}
+
+pub fn surface_position_on_monitor(
+    surface: Entity,
+    monitor: Entity,
+    x: i32,
+    y: i32,
+) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::position_on_monitor, (surface, monitor, x, y))
+            .unwrap()
+    })
+}
+
+pub fn surface_center_on_monitor(surface: Entity, monitor: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::center_on_monitor, (surface, monitor))
             .unwrap()
     })
 }
@@ -1382,6 +1514,24 @@ pub fn monitor_name(entity: Entity) -> error::Result<Option<String>> {
         Ok(app
             .world_mut()
             .run_system_cached_with(monitor::name, entity)
+            .unwrap())
+    })
+}
+
+pub fn monitor_position(entity: Entity) -> error::Result<bevy::math::IVec2> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(surface::monitor_position, entity)
+            .unwrap())
+    })
+}
+
+pub fn monitor_workarea(entity: Entity) -> error::Result<bevy::math::IRect> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(surface::monitor_workarea, entity)
             .unwrap())
     })
 }

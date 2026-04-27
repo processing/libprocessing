@@ -1,19 +1,60 @@
 use bevy::input::keyboard::{KeyCode, NativeKeyCode};
 use bevy::input::mouse::MouseButton;
+use bevy::math::{IRect, IVec2};
 use bevy::prelude::Entity;
+use bevy::window::{
+    Monitor as BevyMonitor, MonitorSelection, PrimaryMonitor, VideoMode as BevyVideoMode,
+    Window as BevyWindow, WindowLevel as BevyWindowLevel, WindowMode as BevyWindowMode,
+    WindowPosition,
+};
 use glfw::{Action, Glfw, GlfwReceiver, PWindow, WindowEvent, WindowMode};
+use processing_core::app_mut;
 use processing_core::error::Result;
 use processing_input::{
     input_cursor_grab_mode, input_cursor_visible, input_flush, input_set_char,
     input_set_cursor_enter, input_set_cursor_leave, input_set_focus, input_set_key,
     input_set_mouse_button, input_set_mouse_move, input_set_scroll,
 };
+use processing_render::surface::{MonitorWorkarea, WindowControls};
 
 pub struct GlfwContext {
     glfw: Glfw,
     window: PWindow,
     events: GlfwReceiver<(f64, WindowEvent)>,
     surface: Option<Entity>,
+    last_applied: AppliedWindow,
+    windowed_geometry: Option<(i32, i32, u32, u32)>,
+}
+
+/// What we last pushed to the OS window, diffed against [`BevyWindow`] each tick so we
+/// only call into GLFW when something actually changed.
+#[derive(Clone, Debug)]
+struct AppliedWindow {
+    title: String,
+    position: IVec2,
+    size: bevy::math::UVec2,
+    visible: bool,
+    resizable: bool,
+    decorations: bool,
+    window_level: BevyWindowLevel,
+    fullscreen_on: Option<Entity>,
+    opacity: f32,
+}
+
+impl Default for AppliedWindow {
+    fn default() -> Self {
+        Self {
+            title: String::new(),
+            position: IVec2::ZERO,
+            size: bevy::math::UVec2::ZERO,
+            visible: true,
+            resizable: true,
+            decorations: true,
+            window_level: BevyWindowLevel::Normal,
+            fullscreen_on: None,
+            opacity: 1.0,
+        }
+    }
 }
 
 impl GlfwContext {
@@ -35,7 +76,105 @@ impl GlfwContext {
             window,
             events,
             surface: None,
+            last_applied: AppliedWindow::default(),
+            windowed_geometry: None,
         })
+    }
+
+    fn sync_monitors(&mut self) {
+        let primary_name = self
+            .glfw
+            .with_primary_monitor(|_, monitor| monitor.and_then(|m| m.get_name()));
+
+        self.glfw.with_connected_monitors(|_, monitors| {
+            let _ = app_mut(|app| {
+                let world = app.world_mut();
+                let mut existing: std::collections::HashMap<String, Entity> = world
+                    .iter_entities()
+                    .filter_map(|e| {
+                        let name = e.get::<BevyMonitor>()?.name.clone()?;
+                        Some((name, e.id()))
+                    })
+                    .collect();
+
+                for monitor in monitors {
+                    let name = monitor.get_name();
+                    let video_mode = monitor.get_video_mode();
+                    let (width, height) = video_mode
+                        .as_ref()
+                        .map(|v| (v.width, v.height))
+                        .unwrap_or((0, 0));
+                    let refresh_millihz = video_mode.as_ref().map(|v| v.refresh_rate * 1000);
+                    let (x, y) = monitor.get_pos();
+                    let (wx, wy, ww, wh) = monitor.get_workarea();
+                    let (scale, _) = monitor.get_content_scale();
+                    let position = IVec2::new(x, y);
+                    let workarea =
+                        IRect::from_corners(IVec2::new(wx, wy), IVec2::new(wx + ww, wy + wh));
+                    let video_modes: Vec<BevyVideoMode> = monitor
+                        .get_video_modes()
+                        .into_iter()
+                        .map(|v| BevyVideoMode {
+                            physical_size: bevy::math::UVec2::new(v.width, v.height),
+                            bit_depth: (v.red_bits + v.green_bits + v.blue_bits) as u16,
+                            refresh_rate_millihertz: v.refresh_rate * 1000,
+                        })
+                        .collect();
+
+                    let entity = match name.as_ref().and_then(|n| existing.remove(n)) {
+                        Some(entity) => {
+                            if let Some(mut bevy_monitor) = world.get_mut::<BevyMonitor>(entity) {
+                                bevy_monitor.physical_width = width;
+                                bevy_monitor.physical_height = height;
+                                bevy_monitor.physical_position = position;
+                                bevy_monitor.refresh_rate_millihertz = refresh_millihz;
+                                bevy_monitor.scale_factor = scale as f64;
+                                bevy_monitor.video_modes = video_modes;
+                            }
+                            match world.get_mut::<MonitorWorkarea>(entity) {
+                                Some(mut current) => current.0 = workarea,
+                                None => {
+                                    world.entity_mut(entity).insert(MonitorWorkarea(workarea));
+                                }
+                            }
+                            entity
+                        }
+                        None => world
+                            .spawn((
+                                BevyMonitor {
+                                    name: name.clone(),
+                                    physical_height: height,
+                                    physical_width: width,
+                                    physical_position: position,
+                                    refresh_rate_millihertz: refresh_millihz,
+                                    scale_factor: scale as f64,
+                                    video_modes,
+                                },
+                                MonitorWorkarea(workarea),
+                            ))
+                            .id(),
+                    };
+
+                    let is_primary = name.is_some() && name == primary_name;
+                    let was_primary = world.get::<PrimaryMonitor>(entity).is_some();
+                    match (is_primary, was_primary) {
+                        (true, false) => {
+                            world.entity_mut(entity).insert(PrimaryMonitor);
+                        }
+                        (false, true) => {
+                            world.entity_mut(entity).remove::<PrimaryMonitor>();
+                        }
+                        _ => {}
+                    }
+                }
+
+                for (_, entity) in existing {
+                    world.entity_mut(entity).despawn();
+                }
+
+                Ok(())
+            });
+        });
     }
 
     #[cfg(target_os = "macos")]
@@ -173,8 +312,140 @@ impl GlfwContext {
             return false;
         };
         self.sync_cursor(surface);
+        self.sync_monitors();
+        self.sync_window(surface);
 
         true
+    }
+
+    fn sync_window(&mut self, surface: Entity) {
+        let Some(desired) = read_desired_window(surface) else {
+            return;
+        };
+
+        self.apply_window(&desired);
+
+        if desired.iconify {
+            self.window.iconify();
+        }
+        if desired.restore {
+            self.window.restore();
+        }
+        if desired.maximize {
+            self.window.maximize();
+        }
+        if desired.focus {
+            self.window.focus();
+        }
+
+        let (cx, cy) = self.window.get_pos();
+        let (inset_l, inset_t, _, _) = self.window.get_frame_size();
+        let frame_pos = IVec2::new(cx - inset_l, cy - inset_t);
+        let _ = app_mut(|app| {
+            let world = app.world_mut();
+            if let Some(mut window) = world.get_mut::<BevyWindow>(surface) {
+                window.position = WindowPosition::At(frame_pos);
+            }
+            if let Some(mut controls) = world.get_mut::<WindowControls>(surface) {
+                controls.pending_iconify = false;
+                controls.pending_restore = false;
+                controls.pending_maximize = false;
+                controls.pending_focus = false;
+            }
+            Ok(())
+        });
+        self.last_applied.position = frame_pos;
+    }
+
+    fn apply_window(&mut self, desired: &DesiredWindow) {
+        let last = &mut self.last_applied;
+
+        if desired.title != last.title {
+            self.window.set_title(&desired.title);
+            last.title.clone_from(&desired.title);
+        }
+        if let Some(pos) = desired.position
+            && pos != last.position
+        {
+            let (inset_l, inset_t, _, _) = self.window.get_frame_size();
+            self.window.set_pos(pos.x + inset_l, pos.y + inset_t);
+            last.position = pos;
+        }
+        if desired.size != last.size && desired.size.x > 0 && desired.size.y > 0 {
+            self.window
+                .set_size(desired.size.x as i32, desired.size.y as i32);
+            last.size = desired.size;
+        }
+        if desired.visible != last.visible {
+            if desired.visible {
+                self.window.show();
+            } else {
+                self.window.hide();
+            }
+            last.visible = desired.visible;
+        }
+        if desired.resizable != last.resizable {
+            self.window.set_resizable(desired.resizable);
+            last.resizable = desired.resizable;
+        }
+        if desired.decorations != last.decorations {
+            self.window.set_decorated(desired.decorations);
+            last.decorations = desired.decorations;
+        }
+        if desired.window_level != last.window_level {
+            self.window
+                .set_floating(matches!(desired.window_level, BevyWindowLevel::AlwaysOnTop));
+            last.window_level = desired.window_level;
+        }
+        if let Some(opacity) = desired.opacity
+            && (opacity - last.opacity).abs() > f32::EPSILON
+        {
+            self.window.set_opacity(opacity);
+            last.opacity = opacity;
+        }
+        if desired.fullscreen_on != last.fullscreen_on {
+            self.apply_fullscreen(desired.fullscreen_on);
+        }
+    }
+
+    fn apply_fullscreen(&mut self, target: Option<Entity>) {
+        match target {
+            Some(monitor_entity) => {
+                if self.last_applied.fullscreen_on.is_none() {
+                    let (x, y) = self.window.get_pos();
+                    let (w, h) = self.window.get_size();
+                    self.windowed_geometry = Some((x, y, w as u32, h as u32));
+                }
+                let target_name = monitor_name(monitor_entity);
+                let window = &mut self.window;
+                let applied = self.glfw.with_connected_monitors(|_, monitors| {
+                    let Some(monitor) = monitors
+                        .iter()
+                        .find(|m| m.get_name() == target_name)
+                        .map(|m| &**m)
+                    else {
+                        return false;
+                    };
+                    let (w, h, refresh) = monitor
+                        .get_video_mode()
+                        .map(|v| (v.width, v.height, Some(v.refresh_rate)))
+                        .unwrap_or((1920, 1080, None));
+                    window.set_monitor(WindowMode::FullScreen(monitor), 0, 0, w, h, refresh);
+                    true
+                });
+                self.last_applied.fullscreen_on = applied.then_some(monitor_entity);
+            }
+            None => {
+                let (x, y, w, h) = self.windowed_geometry.take().unwrap_or_else(|| {
+                    let (x, y) = self.window.get_pos();
+                    let (w, h) = self.window.get_size();
+                    (x, y, w as u32, h as u32)
+                });
+                self.window
+                    .set_monitor(WindowMode::Windowed, x, y, w, h, None);
+                self.last_applied.fullscreen_on = None;
+            }
+        }
     }
 
     pub fn content_scale(&self) -> f32 {
@@ -198,6 +469,95 @@ impl GlfwContext {
             self.window.set_cursor_mode(mode);
         }
     }
+}
+
+#[derive(Clone, Debug)]
+struct DesiredWindow {
+    title: String,
+    position: Option<IVec2>,
+    size: bevy::math::UVec2,
+    visible: bool,
+    resizable: bool,
+    decorations: bool,
+    window_level: BevyWindowLevel,
+    fullscreen_on: Option<Entity>,
+    opacity: Option<f32>,
+    iconify: bool,
+    restore: bool,
+    maximize: bool,
+    focus: bool,
+}
+
+fn read_desired_window(surface: Entity) -> Option<DesiredWindow> {
+    app_mut(|app| {
+        let world = app.world();
+        let Some(window) = world.get::<BevyWindow>(surface) else {
+            return Ok(None);
+        };
+        let controls = world
+            .get::<WindowControls>(surface)
+            .cloned()
+            .unwrap_or_default();
+        let fullscreen_on = match window.mode {
+            BevyWindowMode::Windowed => None,
+            BevyWindowMode::BorderlessFullscreen(sel) | BevyWindowMode::Fullscreen(sel, _) => {
+                resolve_monitor(world, sel)
+            }
+        };
+        Ok(Some(DesiredWindow {
+            title: window.title.clone(),
+            position: match window.position {
+                WindowPosition::At(p) => Some(p),
+                _ => None,
+            },
+            size: bevy::math::UVec2::new(
+                window.resolution.physical_width(),
+                window.resolution.physical_height(),
+            ),
+            visible: window.visible,
+            resizable: window.resizable,
+            decorations: window.decorations,
+            window_level: window.window_level,
+            fullscreen_on,
+            opacity: controls.opacity,
+            iconify: controls.pending_iconify,
+            restore: controls.pending_restore,
+            maximize: controls.pending_maximize,
+            focus: controls.pending_focus,
+        }))
+    })
+    .ok()
+    .flatten()
+}
+
+fn resolve_monitor(world: &bevy::ecs::world::World, sel: MonitorSelection) -> Option<Entity> {
+    match sel {
+        MonitorSelection::Entity(e) => world.get::<BevyMonitor>(e).map(|_| e),
+        MonitorSelection::Primary | MonitorSelection::Current => world
+            .iter_entities()
+            .find(|e| e.contains::<PrimaryMonitor>() && e.contains::<BevyMonitor>())
+            .map(|e| e.id()),
+        MonitorSelection::Index(idx) => {
+            let mut entities: Vec<Entity> = world
+                .iter_entities()
+                .filter(|e| e.contains::<BevyMonitor>())
+                .map(|e| e.id())
+                .collect();
+            entities.sort();
+            entities.get(idx).copied()
+        }
+    }
+}
+
+fn monitor_name(entity: Entity) -> Option<String> {
+    app_mut(|app| {
+        Ok(app
+            .world()
+            .get::<BevyMonitor>(entity)
+            .and_then(|m| m.name.clone()))
+    })
+    .ok()
+    .flatten()
 }
 
 fn glfw_button_to_bevy(button: glfw::MouseButton) -> Option<MouseButton> {
