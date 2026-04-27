@@ -1912,11 +1912,6 @@ pub extern "C" fn processing_buffer_size(buf_id: u64) -> u64 {
 
 /// Read buffer contents into a caller-provided buffer.
 ///
-/// Returns the buffer's byte length. If the returned size is `<= out_len`, the
-/// data has been written to `out`; otherwise `out` is left untouched and the
-/// caller should reallocate and retry. Returns 0 if the buffer does not exist
-/// or the GPU readback failed (in which case the error is set).
-///
 /// # Safety
 /// - `out` must be valid for writes of `out_len` bytes (may be null if
 ///   `out_len == 0`, in which case this acts as a size query).

@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use bevy::asset::RenderAssetUsages;
 use bevy::reflect::PartialReflect;
@@ -30,6 +30,10 @@ pub struct Buffer {
     pub handle: Handle<ShaderBuffer>,
     pub readback_buffer: WgpuBuffer,
     pub size: u64,
+    /// True when `ShaderBuffer.data` reflects current GPU contents. Cleared
+    /// when a pipeline that may write to the buffer runs; the next read or
+    /// write must readback first.
+    pub synced: bool,
 }
 
 fn readback_buffer(device: &RenderDevice, size: u64) -> WgpuBuffer {
@@ -47,8 +51,8 @@ pub fn create_buffer(
     mut buffers: ResMut<Assets<ShaderBuffer>>,
     render_device: Res<RenderDevice>,
 ) -> Entity {
-    let handle = buffers.add(ShaderBuffer::with_size(
-        size as usize,
+    let handle = buffers.add(ShaderBuffer::new(
+        &vec![0u8; size as usize],
         RenderAssetUsages::all(),
     ));
     commands
@@ -56,6 +60,7 @@ pub fn create_buffer(
             handle,
             readback_buffer: readback_buffer(&render_device, size),
             size,
+            synced: true,
         })
         .id()
 }
@@ -73,30 +78,37 @@ pub fn create_buffer_with_data(
             handle,
             readback_buffer: readback_buffer(&render_device, size),
             size,
+            synced: true,
         })
         .id()
 }
 
-pub fn write_buffer_gpu(
+/// Mutate the CPU-side data of a `ShaderBuffer` in place. Fires
+/// `AssetEvent::Modified` so Bevy's render-asset extract uploads the new
+/// contents to the GPU at the next sync point.
+pub fn write_buffer_cpu(
     In((handle, offset, data)): In<(Handle<ShaderBuffer>, u64, Vec<u8>)>,
-    gpu_buffers: Res<RenderAssets<GpuShaderBuffer>>,
-    render_queue: Res<RenderQueue>,
+    mut buffers: ResMut<Assets<ShaderBuffer>>,
 ) -> Result<()> {
-    let gpu_buffer = &gpu_buffers
-        .get(&handle)
-        .ok_or(ProcessingError::BufferNotFound)?
-        .buffer;
-    render_queue.write_buffer(gpu_buffer, offset, &data);
+    let mut asset = buffers
+        .get_mut(&handle)
+        .ok_or(ProcessingError::BufferNotFound)?;
+    let dst = asset
+        .data
+        .as_mut()
+        .ok_or(ProcessingError::BufferNotFound)?;
+    let start = offset as usize;
+    let end = start + data.len();
+    dst[start..end].copy_from_slice(&data);
     Ok(())
 }
 
+/// Copy the GPU buffer back to CPU and return its full contents. Runs in the
+/// render world; the caller is responsible for writing the bytes back into
+/// `ShaderBuffer.data` via `Assets::get_mut_untracked` (avoiding spurious
+/// `AssetEvent::Modified`s, since this is a readback, not a stage-for-upload).
 pub fn read_buffer_gpu(
-    In((handle, readback_buffer, src_offset, len)): In<(
-        Handle<ShaderBuffer>,
-        WgpuBuffer,
-        u64,
-        u64,
-    )>,
+    In((handle, readback_buffer, size)): In<(Handle<ShaderBuffer>, WgpuBuffer, u64)>,
     gpu_buffers: Res<RenderAssets<GpuShaderBuffer>>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
@@ -107,10 +119,10 @@ pub fn read_buffer_gpu(
         .buffer;
 
     let mut encoder = render_device.create_command_encoder(&CommandEncoderDescriptor::default());
-    encoder.copy_buffer_to_buffer(gpu_buffer, src_offset, &readback_buffer, 0, len);
+    encoder.copy_buffer_to_buffer(gpu_buffer, 0, &readback_buffer, 0, size);
     render_queue.submit(std::iter::once(encoder.finish()));
 
-    let buffer_slice = readback_buffer.slice(0..len);
+    let buffer_slice = readback_buffer.slice(0..size);
     let (s, r) = crossbeam_channel::bounded(1);
     buffer_slice.map_async(MapMode::Read, move |result| {
         let _ = s.send(result);
@@ -122,10 +134,9 @@ pub fn read_buffer_gpu(
         .map_err(|e| ProcessingError::BufferMapError(format!("map channel closed: {e}")))?
         .map_err(|e| ProcessingError::BufferMapError(format!("map failed: {e}")))?;
 
-    let data = buffer_slice.get_mapped_range().to_vec();
+    let bytes = buffer_slice.get_mapped_range().to_vec();
     readback_buffer.unmap();
-
-    Ok(data)
+    Ok(bytes)
 }
 
 pub fn destroy_buffer(In(entity): In<Entity>, mut commands: Commands) -> Result<()> {
@@ -139,6 +150,11 @@ pub struct Compute {
     pub entry_point: String,
     pub pipeline_id: CachedComputePipelineId,
     pub bind_group_layout_descriptors: Vec<(u32, BindGroupLayoutDescriptor)>,
+    /// Buffer entities bound to this compute on a `read_write` storage param.
+    /// Their CPU view of GPU data is invalidated after each dispatch so the
+    /// next read/write does a readback. Read-only bindings don't need this
+    /// since the dispatch can't mutate them.
+    pub rw_buffers: HashMap<String, Entity>,
 }
 
 fn queue_pipeline(
@@ -240,6 +256,7 @@ pub fn create_compute(app: &mut App, shader_entity: Entity) -> Result<Entity> {
                     entry_point,
                     pipeline_id,
                     bind_group_layout_descriptors,
+                    rw_buffers: HashMap::new(),
                 })
                 .id());
         }
@@ -267,11 +284,16 @@ pub fn set_compute_property(
         .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.clone()))?;
 
     match (&value, category) {
-        (ShaderValue::Buffer(buf_entity), ParameterCategory::Storage { .. }) => {
+        (ShaderValue::Buffer(buf_entity), ParameterCategory::Storage { read_only }) => {
             let buffer = p_buffers
                 .get(*buf_entity)
                 .map_err(|_| ProcessingError::BufferNotFound)?;
             compute.shader.insert(&name, buffer.handle.clone());
+            if read_only {
+                compute.rw_buffers.remove(&name);
+            } else {
+                compute.rw_buffers.insert(name.clone(), *buf_entity);
+            }
             Ok(())
         }
         (ShaderValue::Texture(img_entity), ParameterCategory::Texture)

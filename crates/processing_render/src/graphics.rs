@@ -453,6 +453,36 @@ pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
     Ok(())
 }
 
+/// Flush all graphics with pending commands and run a frame so any other
+/// pending GPU state (asset writes, etc.) is extracted and uploaded. Used as
+/// a sync boundary before operations like compute dispatch that may bind
+/// graphics targets or recently-mutated assets.
+pub fn flush_all(app: &mut App) {
+    let mut to_flush = Vec::new();
+    let world = app.world_mut();
+    let mut q = world.query::<(Entity, &CommandBuffer, &Graphics)>();
+    for (e, cb, _) in q.iter(world) {
+        if !cb.commands.is_empty() {
+            to_flush.push(e);
+        }
+    }
+
+    for e in &to_flush {
+        if let Ok(mut em) = world.get_entity_mut(*e) {
+            em.insert(Flush);
+        }
+    }
+
+    app.update();
+
+    let world = app.world_mut();
+    for e in &to_flush {
+        if let Ok(mut em) = world.get_entity_mut(*e) {
+            em.remove::<Flush>();
+        }
+    }
+}
+
 pub fn present(app: &mut App, entity: Entity) -> Result<()> {
     graphics_mut!(app, entity)
         .get_mut::<Camera>()

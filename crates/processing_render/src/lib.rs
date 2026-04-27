@@ -1676,6 +1676,49 @@ pub fn buffer_write_element(entity: Entity, offset: u64, data: Vec<u8>) -> error
     buffer_write_range(entity, offset, data, false)
 }
 
+/// Ensure `ShaderBuffer.data` reflects current GPU contents by reading the
+/// buffer back into the asset if it was invalidated by a prior dispatch.
+/// Subsequent reads/writes can then operate on the in-asset bytes directly.
+fn ensure_buffer_synced(app: &mut App, entity: Entity) -> error::Result<()> {
+    let (handle, readback_buffer, size, synced) = {
+        let buf = app
+            .world()
+            .get::<compute::Buffer>(entity)
+            .ok_or(error::ProcessingError::BufferNotFound)?;
+        (
+            buf.handle.clone(),
+            buf.readback_buffer.clone(),
+            buf.size,
+            buf.synced,
+        )
+    };
+    if synced {
+        return Ok(());
+    }
+    let bytes = app
+        .sub_app_mut(bevy::render::RenderApp)
+        .world_mut()
+        .run_system_cached_with(
+            compute::read_buffer_gpu,
+            (handle.clone(), readback_buffer, size),
+        )
+        .unwrap()?;
+
+    let world = app.world_mut();
+    let mut buffers = world.resource_mut::<Assets<bevy::render::storage::ShaderBuffer>>();
+    let asset = buffers
+        .get_mut_untracked(handle.id())
+        .ok_or(error::ProcessingError::BufferNotFound)?;
+    asset.data = Some(bytes);
+    drop(buffers);
+
+    let mut buf = world
+        .get_mut::<compute::Buffer>(entity)
+        .ok_or(error::ProcessingError::BufferNotFound)?;
+    buf.synced = true;
+    Ok(())
+}
+
 fn buffer_write_range(
     entity: Entity,
     offset: u64,
@@ -1706,9 +1749,9 @@ fn buffer_write_range(
                 data.len()
             )));
         }
-        app.sub_app_mut(bevy::render::RenderApp)
-            .world_mut()
-            .run_system_cached_with(compute::write_buffer_gpu, (handle, offset, data))
+        ensure_buffer_synced(app, entity)?;
+        app.world_mut()
+            .run_system_cached_with(compute::write_buffer_cpu, (handle, offset, data))
             .unwrap()
     })
 }
@@ -1724,13 +1767,11 @@ pub fn buffer_read(entity: Entity) -> error::Result<Vec<u8>> {
 
 fn buffer_read_range(entity: Entity, offset: u64, len: u64) -> error::Result<Vec<u8>> {
     app_mut(|app| {
-        let (handle, readback_buffer, size) = {
-            let buf = app
-                .world()
-                .get::<compute::Buffer>(entity)
-                .ok_or(error::ProcessingError::BufferNotFound)?;
-            (buf.handle.clone(), buf.readback_buffer.clone(), buf.size)
-        };
+        let size = app
+            .world()
+            .get::<compute::Buffer>(entity)
+            .ok_or(error::ProcessingError::BufferNotFound)?
+            .size;
         let end = offset.checked_add(len).ok_or_else(|| {
             error::ProcessingError::InvalidArgument("offset + len overflow".to_string())
         })?;
@@ -1739,13 +1780,21 @@ fn buffer_read_range(entity: Entity, offset: u64, len: u64) -> error::Result<Vec
                 "buffer read out of bounds: offset {offset} + len {len} > size {size}"
             )));
         }
-        app.sub_app_mut(bevy::render::RenderApp)
-            .world_mut()
-            .run_system_cached_with(
-                compute::read_buffer_gpu,
-                (handle, readback_buffer, offset, len),
-            )
-            .unwrap()
+        ensure_buffer_synced(app, entity)?;
+        let handle = app
+            .world()
+            .get::<compute::Buffer>(entity)
+            .ok_or(error::ProcessingError::BufferNotFound)?
+            .handle
+            .clone();
+        let buffers = app
+            .world()
+            .resource::<Assets<bevy::render::storage::ShaderBuffer>>();
+        let data = buffers
+            .get(&handle)
+            .and_then(|a| a.data.as_ref())
+            .ok_or(error::ProcessingError::BufferNotFound)?;
+        Ok(data[offset as usize..(offset + len) as usize].to_vec())
     })
 }
 
@@ -1775,22 +1824,41 @@ pub fn compute_set(
 
 pub fn compute_dispatch(entity: Entity, x: u32, y: u32, z: u32) -> error::Result<()> {
     app_mut(|app| {
-        let c = app
-            .world()
-            .get::<compute::Compute>(entity)
-            .ok_or(error::ProcessingError::ComputeNotFound)?;
-        let args = (
-            c.pipeline_id,
-            c.bind_group_layout_descriptors.clone(),
-            c.shader.clone(),
-            x,
-            y,
-            z,
-        );
+        // Flush any pending graphics work and let Bevy's render-asset extract
+        // upload any CPU-side buffer mutations to the GPU before the dispatch
+        // runs. This is the sync boundary for compute inputs.
+        crate::graphics::flush_all(app);
+
+        let (args, rw_entities) = {
+            let c = app
+                .world()
+                .get::<compute::Compute>(entity)
+                .ok_or(error::ProcessingError::ComputeNotFound)?;
+            let args = (
+                c.pipeline_id,
+                c.bind_group_layout_descriptors.clone(),
+                c.shader.clone(),
+                x,
+                y,
+                z,
+            );
+            let rw_entities: Vec<Entity> = c.rw_buffers.values().copied().collect();
+            (args, rw_entities)
+        };
         app.sub_app_mut(bevy::render::RenderApp)
             .world_mut()
             .run_system_cached_with(compute::dispatch, args)
-            .unwrap()
+            .unwrap()?;
+
+        // Invalidate the CPU view of any buffer the dispatch could have
+        // written. The next read or write on those buffers will readback first.
+        let world = app.world_mut();
+        for e in rw_entities {
+            if let Some(mut buf) = world.get_mut::<compute::Buffer>(e) {
+                buf.synced = false;
+            }
+        }
+        Ok(())
     })
 }
 
