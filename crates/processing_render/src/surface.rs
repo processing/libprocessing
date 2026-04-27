@@ -572,7 +572,10 @@ pub fn monitor_workarea(
         Ok((monitor, None)) => IRect::from_corners(
             monitor.physical_position,
             monitor.physical_position
-                + IVec2::new(monitor.physical_width as i32, monitor.physical_height as i32),
+                + IVec2::new(
+                    monitor.physical_width as i32,
+                    monitor.physical_height as i32,
+                ),
         ),
         Err(_) => IRect::from_corners(IVec2::ZERO, IVec2::ZERO),
     }
@@ -608,7 +611,10 @@ pub fn center_on_monitor(
         Ok((monitor, None)) => IRect::from_corners(
             monitor.physical_position,
             monitor.physical_position
-                + IVec2::new(monitor.physical_width as i32, monitor.physical_height as i32),
+                + IVec2::new(
+                    monitor.physical_width as i32,
+                    monitor.physical_height as i32,
+                ),
         ),
         Err(_) => return Ok(()),
     };

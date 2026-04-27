@@ -62,13 +62,13 @@ impl Surface {
 
     #[getter]
     pub fn position(&self) -> PyResult<(i32, i32)> {
-        let p = surface_position(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let p =
+            surface_position(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok((p.x, p.y))
     }
 
     pub fn set_position(&self, x: i32, y: i32) -> PyResult<()> {
-        surface_set_position(self.entity, x, y)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        surface_set_position(self.entity, x, y).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn set_visible(&self, visible: bool) -> PyResult<()> {
