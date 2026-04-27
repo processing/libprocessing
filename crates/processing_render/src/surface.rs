@@ -26,8 +26,8 @@ use bevy::{
     prelude::{Commands, Component, Entity, In, Query, ResMut, Window, With, default},
     render::render_resource::{Extent3d, TextureFormat},
     window::{
-        Monitor, RawHandleWrapper, WindowLevel, WindowMode, WindowPosition, WindowResolution,
-        WindowWrapper,
+        CompositeAlphaMode, Monitor, RawHandleWrapper, WindowLevel, WindowMode, WindowPosition,
+        WindowResolution, WindowWrapper,
     },
 };
 use raw_window_handle::{
@@ -122,6 +122,8 @@ fn spawn_surface(
             Window {
                 resolution: WindowResolution::new(physical_width, physical_height)
                     .with_scale_factor_override(scale_factor),
+                transparent: true,
+                composite_alpha_mode: CompositeAlphaMode::PostMultiplied,
                 ..default()
             },
             handle_wrapper,

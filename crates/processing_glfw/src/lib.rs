@@ -63,6 +63,7 @@ impl GlfwContext {
 
         glfw.window_hint(glfw::WindowHint::ClientApi(glfw::ClientApiHint::NoApi));
         glfw.window_hint(glfw::WindowHint::Visible(false));
+        glfw.window_hint(glfw::WindowHint::TransparentFramebuffer(true));
 
         let (mut window, events) = glfw
             .create_window(width, height, "Processing", WindowMode::Windowed)
