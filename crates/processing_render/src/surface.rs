@@ -382,7 +382,7 @@ pub fn destroy(
     }
 }
 
-/// Update window size when resized. No-op on offscreen surfaces (no `Window` component).
+/// Update window size when resized.
 pub fn resize(
     In((window_entity, width, height)): In<(Entity, u32, u32)>,
     mut windows: Query<&mut Window>,
@@ -439,9 +439,6 @@ pub fn physical_height(In(entity): In<Entity>, query: Query<&Window>) -> u32 {
         .map(|w| w.resolution.physical_height())
         .unwrap_or(0)
 }
-
-// Windowed-surface ops are no-ops for entities without a [`Window`] component, matching
-// PSurfaceNone's behaviour in Processing 4.
 
 pub fn set_title(
     In((entity, title)): In<(Entity, String)>,
@@ -574,7 +571,10 @@ pub fn monitor_workarea(
         Ok((monitor, None)) => IRect::from_corners(
             monitor.physical_position,
             monitor.physical_position
-                + IVec2::new(monitor.physical_width as i32, monitor.physical_height as i32),
+                + IVec2::new(
+                    monitor.physical_width as i32,
+                    monitor.physical_height as i32,
+                ),
         ),
         Err(_) => IRect::from_corners(IVec2::ZERO, IVec2::ZERO),
     }
@@ -610,7 +610,10 @@ pub fn center_on_monitor(
         Ok((monitor, None)) => IRect::from_corners(
             monitor.physical_position,
             monitor.physical_position
-                + IVec2::new(monitor.physical_width as i32, monitor.physical_height as i32),
+                + IVec2::new(
+                    monitor.physical_width as i32,
+                    monitor.physical_height as i32,
+                ),
         ),
         Err(_) => return Ok(()),
     };

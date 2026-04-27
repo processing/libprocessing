@@ -37,15 +37,15 @@ impl Monitor {
 
     #[getter]
     pub fn position(&self) -> PyResult<(i32, i32)> {
-        let p = monitor_position(self.entity)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let p =
+            monitor_position(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok((p.x, p.y))
     }
 
     #[getter]
     pub fn workarea(&self) -> PyResult<(i32, i32, i32, i32)> {
-        let r = monitor_workarea(self.entity)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let r =
+            monitor_workarea(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok((r.min.x, r.min.y, r.width(), r.height()))
     }
 }
