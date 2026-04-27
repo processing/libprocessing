@@ -846,6 +846,144 @@ mod mewnala {
 
     #[pyfunction]
     #[pyo3(pass_module)]
+    fn window_title(module: &Bound<'_, PyModule>, title: &str) -> PyResult<()> {
+        let Some(graphics) = get_graphics(module)? else {
+            return Ok(());
+        };
+        graphics.surface.set_title(title)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn window_move(module: &Bound<'_, PyModule>, x: i32, y: i32) -> PyResult<()> {
+        let Some(graphics) = get_graphics(module)? else {
+            return Ok(());
+        };
+        graphics.surface.set_position(x, y)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn window_resize(module: &Bound<'_, PyModule>, w: u32, h: u32) -> PyResult<()> {
+        let Some(graphics) = get_graphics(module)? else {
+            return Ok(());
+        };
+        ::processing::prelude::surface_resize(graphics.surface.entity, w, h)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn window_resizable(module: &Bound<'_, PyModule>, resizable: bool) -> PyResult<()> {
+        let Some(graphics) = get_graphics(module)? else {
+            return Ok(());
+        };
+        graphics.surface.set_resizable(resizable)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (monitor=None))]
+    fn full_screen(
+        module: &Bound<'_, PyModule>,
+        monitor: Option<&crate::monitor::Monitor>,
+    ) -> PyResult<()> {
+        let Some(graphics) = get_graphics(module)? else {
+            return Ok(());
+        };
+        graphics.surface.set_fullscreen(monitor)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn window_visible(module: &Bound<'_, PyModule>, visible: bool) -> PyResult<()> {
+        let Some(graphics) = get_graphics(module)? else {
+            return Ok(());
+        };
+        graphics.surface.set_visible(visible)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn window_decorated(module: &Bound<'_, PyModule>, decorated: bool) -> PyResult<()> {
+        let Some(graphics) = get_graphics(module)? else {
+            return Ok(());
+        };
+        graphics.surface.set_decorated(decorated)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn window_always_on_top(module: &Bound<'_, PyModule>, on_top: bool) -> PyResult<()> {
+        let Some(graphics) = get_graphics(module)? else {
+            return Ok(());
+        };
+        graphics.surface.set_always_on_top(on_top)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn window_opacity(module: &Bound<'_, PyModule>, opacity: f32) -> PyResult<()> {
+        let Some(graphics) = get_graphics(module)? else {
+            return Ok(());
+        };
+        graphics.surface.set_opacity(opacity)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn window_iconify(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        let Some(graphics) = get_graphics(module)? else {
+            return Ok(());
+        };
+        graphics.surface.iconify()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn window_restore(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        let Some(graphics) = get_graphics(module)? else {
+            return Ok(());
+        };
+        graphics.surface.restore()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn window_maximize(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        let Some(graphics) = get_graphics(module)? else {
+            return Ok(());
+        };
+        graphics.surface.maximize()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn window_center_on(
+        module: &Bound<'_, PyModule>,
+        monitor: &crate::monitor::Monitor,
+    ) -> PyResult<()> {
+        let Some(graphics) = get_graphics(module)? else {
+            return Ok(());
+        };
+        graphics.surface.center_on(monitor)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn window_position_on(
+        module: &Bound<'_, PyModule>,
+        monitor: &crate::monitor::Monitor,
+        x: i32,
+        y: i32,
+    ) -> PyResult<()> {
+        let Some(graphics) = get_graphics(module)? else {
+            return Ok(());
+        };
+        graphics.surface.position_on(monitor, x, y)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
     fn size(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<()> {
         create_graphics_context(module, width, height)?;
 

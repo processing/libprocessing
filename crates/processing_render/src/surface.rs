@@ -22,9 +22,13 @@ use bevy::{
     app::{App, Plugin},
     asset::Assets,
     ecs::query::QueryEntityError,
+    math::{IRect, IVec2},
     prelude::{Commands, Component, Entity, In, Query, ResMut, Window, With, default},
     render::render_resource::{Extent3d, TextureFormat},
-    window::{RawHandleWrapper, WindowResolution, WindowWrapper},
+    window::{
+        Monitor, RawHandleWrapper, WindowLevel, WindowMode, WindowPosition, WindowResolution,
+        WindowWrapper,
+    },
 };
 use raw_window_handle::{
     DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle, RawDisplayHandle,
@@ -39,6 +43,22 @@ use crate::image::Image;
 
 #[derive(Component, Debug, Clone)]
 pub struct Surface;
+
+/// Window properties Bevy's [`Window`] doesn't model. Backends drain the pending fields
+/// each tick.
+#[derive(Component, Debug, Default, Clone)]
+pub struct WindowControls {
+    pub opacity: Option<f32>,
+    pub pending_iconify: bool,
+    pub pending_restore: bool,
+    pub pending_maximize: bool,
+    pub pending_focus: bool,
+}
+
+/// Usable region of a monitor (excluding taskbars / menu bars). Populated by the active
+/// windowing backend.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct MonitorWorkarea(pub IRect);
 
 pub struct SurfacePlugin;
 
@@ -106,6 +126,7 @@ fn spawn_surface(
             },
             handle_wrapper,
             Surface,
+            WindowControls::default(),
         ))
         .id())
 }
@@ -359,7 +380,7 @@ pub fn destroy(
     }
 }
 
-/// Update window size when resized.
+/// Update window size when resized. No-op on offscreen surfaces (no `Window` component).
 pub fn resize(
     In((window_entity, width, height)): In<(Entity, u32, u32)>,
     mut windows: Query<&mut Window>,
@@ -371,10 +392,8 @@ pub fn resize(
         window
             .resolution
             .set_physical_resolution(physical_w, physical_h);
-        Ok(())
-    } else {
-        Err(error::ProcessingError::SurfaceNotFound)
     }
+    Ok(())
 }
 
 pub fn set_pixel_density(
@@ -417,4 +436,186 @@ pub fn physical_height(In(entity): In<Entity>, query: Query<&Window>) -> u32 {
         .get(entity)
         .map(|w| w.resolution.physical_height())
         .unwrap_or(0)
+}
+
+// Windowed-surface ops are no-ops for entities without a [`Window`] component, matching
+// PSurfaceNone's behaviour in Processing 4.
+
+pub fn set_title(
+    In((entity, title)): In<(Entity, String)>,
+    mut windows: Query<&mut Window>,
+) -> Result<()> {
+    if let Ok(mut window) = windows.get_mut(entity) {
+        window.title = title;
+    }
+    Ok(())
+}
+
+pub fn position(In(entity): In<Entity>, windows: Query<&Window>) -> IVec2 {
+    match windows.get(entity).map(|w| w.position) {
+        Ok(WindowPosition::At(p)) => p,
+        _ => IVec2::ZERO,
+    }
+}
+
+pub fn set_position(
+    In((entity, x, y)): In<(Entity, i32, i32)>,
+    mut windows: Query<&mut Window>,
+) -> Result<()> {
+    if let Ok(mut window) = windows.get_mut(entity) {
+        window.position = WindowPosition::At(IVec2::new(x, y));
+    }
+    Ok(())
+}
+
+pub fn set_visible(
+    In((entity, visible)): In<(Entity, bool)>,
+    mut windows: Query<&mut Window>,
+) -> Result<()> {
+    if let Ok(mut window) = windows.get_mut(entity) {
+        window.visible = visible;
+    }
+    Ok(())
+}
+
+pub fn set_resizable(
+    In((entity, resizable)): In<(Entity, bool)>,
+    mut windows: Query<&mut Window>,
+) -> Result<()> {
+    if let Ok(mut window) = windows.get_mut(entity) {
+        window.resizable = resizable;
+    }
+    Ok(())
+}
+
+pub fn set_decorated(
+    In((entity, decorated)): In<(Entity, bool)>,
+    mut windows: Query<&mut Window>,
+) -> Result<()> {
+    if let Ok(mut window) = windows.get_mut(entity) {
+        window.decorations = decorated;
+    }
+    Ok(())
+}
+
+pub fn set_window_level(
+    In((entity, level)): In<(Entity, WindowLevel)>,
+    mut windows: Query<&mut Window>,
+) -> Result<()> {
+    if let Ok(mut window) = windows.get_mut(entity) {
+        window.window_level = level;
+    }
+    Ok(())
+}
+
+pub fn set_window_mode(
+    In((entity, mode)): In<(Entity, WindowMode)>,
+    mut windows: Query<&mut Window>,
+) -> Result<()> {
+    if let Ok(mut window) = windows.get_mut(entity) {
+        window.mode = mode;
+    }
+    Ok(())
+}
+
+pub fn set_opacity(
+    In((entity, opacity)): In<(Entity, f32)>,
+    mut controls: Query<&mut WindowControls>,
+) -> Result<()> {
+    if let Ok(mut controls) = controls.get_mut(entity) {
+        controls.opacity = Some(opacity.clamp(0.0, 1.0));
+    }
+    Ok(())
+}
+
+pub fn iconify(In(entity): In<Entity>, mut controls: Query<&mut WindowControls>) -> Result<()> {
+    if let Ok(mut controls) = controls.get_mut(entity) {
+        controls.pending_iconify = true;
+    }
+    Ok(())
+}
+
+pub fn restore(In(entity): In<Entity>, mut controls: Query<&mut WindowControls>) -> Result<()> {
+    if let Ok(mut controls) = controls.get_mut(entity) {
+        controls.pending_restore = true;
+    }
+    Ok(())
+}
+
+pub fn maximize(In(entity): In<Entity>, mut controls: Query<&mut WindowControls>) -> Result<()> {
+    if let Ok(mut controls) = controls.get_mut(entity) {
+        controls.pending_maximize = true;
+    }
+    Ok(())
+}
+
+pub fn focus(In(entity): In<Entity>, mut controls: Query<&mut WindowControls>) -> Result<()> {
+    if let Ok(mut controls) = controls.get_mut(entity) {
+        controls.pending_focus = true;
+    }
+    Ok(())
+}
+
+pub fn monitor_position(In(entity): In<Entity>, monitors: Query<&Monitor>) -> IVec2 {
+    monitors
+        .get(entity)
+        .map(|m| m.physical_position)
+        .unwrap_or(IVec2::ZERO)
+}
+
+pub fn monitor_workarea(
+    In(entity): In<Entity>,
+    monitors: Query<(&Monitor, Option<&MonitorWorkarea>)>,
+) -> IRect {
+    match monitors.get(entity) {
+        Ok((_, Some(workarea))) => workarea.0,
+        Ok((monitor, None)) => IRect::from_corners(
+            monitor.physical_position,
+            monitor.physical_position
+                + IVec2::new(monitor.physical_width as i32, monitor.physical_height as i32),
+        ),
+        Err(_) => IRect::from_corners(IVec2::ZERO, IVec2::ZERO),
+    }
+}
+
+pub fn position_on_monitor(
+    In((surface, monitor, x, y)): In<(Entity, Entity, i32, i32)>,
+    mut windows: Query<&mut Window>,
+    monitors: Query<(&Monitor, Option<&MonitorWorkarea>)>,
+) -> Result<()> {
+    let Ok(mut window) = windows.get_mut(surface) else {
+        return Ok(());
+    };
+    let origin = match monitors.get(monitor) {
+        Ok((_, Some(workarea))) => workarea.0.min,
+        Ok((monitor, None)) => monitor.physical_position,
+        Err(_) => return Ok(()),
+    };
+    window.position = WindowPosition::At(origin + IVec2::new(x, y));
+    Ok(())
+}
+
+pub fn center_on_monitor(
+    In((surface, monitor)): In<(Entity, Entity)>,
+    mut windows: Query<&mut Window>,
+    monitors: Query<(&Monitor, Option<&MonitorWorkarea>)>,
+) -> Result<()> {
+    let Ok(mut window) = windows.get_mut(surface) else {
+        return Ok(());
+    };
+    let area = match monitors.get(monitor) {
+        Ok((_, Some(workarea))) => workarea.0,
+        Ok((monitor, None)) => IRect::from_corners(
+            monitor.physical_position,
+            monitor.physical_position
+                + IVec2::new(monitor.physical_width as i32, monitor.physical_height as i32),
+        ),
+        Err(_) => return Ok(()),
+    };
+    let size = IVec2::new(
+        window.resolution.physical_width() as i32,
+        window.resolution.physical_height() as i32,
+    );
+    window.position = WindowPosition::At(area.min + (area.size() - size) / 2);
+    Ok(())
 }
