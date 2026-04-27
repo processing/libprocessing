@@ -23,7 +23,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: type-stubs
-          path: crates/processing_pyo3/mewnala/__init__.pyi
+          path: crates/processing_pyo3/mewnala/*.pyi
 
   linux:
     runs-on: ubuntu-22.04
