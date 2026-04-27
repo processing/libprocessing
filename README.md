@@ -1,6 +1,11 @@
 # libprocessing
 
+> [!WARNING]
+> This project is very much R&D and highly unstable
+
 libprocessing is an experimental native library with the goal of supporting the implementation of the core Processing API in a variety of languages. The library is written in the [Rust programming language](https://rust-lang.org/) and built on top of the [Bevy game engine](https://bevy.org/). libprocessing uses [WebGPU](https://webgpu.org/) as its rendering backend and is designed to (eventually) support desktop, mobile, and web targets.
+
+You can learn more about this project from this [talk at LibreGraphicsMeeting 2026](https://app.media.ccc.de/v/lgm-2026-110668-expanding-processing-s-future-with-a-rust-rendering-engine)
 
 ## Getting started
 
