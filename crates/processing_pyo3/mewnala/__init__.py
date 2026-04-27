@@ -41,6 +41,8 @@ _DYNAMIC = (
         "key_is_pressed",
         "display_width",
         "display_height",
+        "window_x",
+        "window_y",
     )
 )
 

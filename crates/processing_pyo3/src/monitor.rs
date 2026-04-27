@@ -34,6 +34,20 @@ impl Monitor {
     pub fn name(&self) -> PyResult<Option<String>> {
         monitor_name(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
+
+    #[getter]
+    pub fn position(&self) -> PyResult<(i32, i32)> {
+        let p = monitor_position(self.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok((p.x, p.y))
+    }
+
+    #[getter]
+    pub fn workarea(&self) -> PyResult<(i32, i32, i32, i32)> {
+        let r = monitor_workarea(self.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok((r.min.x, r.min.y, r.width(), r.height()))
+    }
 }
 
 pub fn primary() -> PyResult<Option<Monitor>> {
