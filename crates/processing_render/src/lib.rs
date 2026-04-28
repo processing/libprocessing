@@ -27,7 +27,7 @@ use processing_core::config::*;
 use processing_core::error;
 
 use crate::geometry::{AttributeFormat, AttributeValue};
-use crate::graphics::{DEFAULT_CLEAR_COLOR, flush};
+use crate::graphics::flush;
 use crate::image::gpu_image;
 use crate::render::command::DrawCommand;
 
