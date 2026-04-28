@@ -1237,9 +1237,26 @@ mod mewnala {
     }
 
     #[pyfunction(name = "box")]
-    #[pyo3(pass_module)]
-    fn draw_box(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<()> {
-        graphics!(module).draw_box(x, y, z)
+    #[pyo3(pass_module, signature = (*args))]
+    fn draw_box(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let (w, h, d) = match args.len() {
+            1 => {
+                let s: f32 = args.get_item(0)?.extract()?;
+                (s, s, s)
+            }
+            3 => {
+                let w = args.get_item(0)?.extract()?;
+                let h = args.get_item(1)?.extract()?;
+                let d = args.get_item(2)?.extract()?;
+                (w, h, d)
+            }
+            n => {
+                return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                    "box() takes 1 or 3 arguments ({n} given)"
+                )));
+            }
+        };
+        graphics!(module).draw_box(w, h, d)
     }
 
     #[pyfunction]
@@ -1339,18 +1356,41 @@ mod mewnala {
     }
 
     #[pyfunction]
-    #[pyo3(pass_module, signature = (x, y, w, h, tl=0.0, tr=0.0, br=0.0, bl=0.0))]
-    fn rect(
-        module: &Bound<'_, PyModule>,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-        tl: f32,
-        tr: f32,
-        br: f32,
-        bl: f32,
-    ) -> PyResult<()> {
+    #[pyo3(pass_module, signature = (*args))]
+    fn rect(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let (x, y, w, h, tl, tr, br, bl) = match args.len() {
+            4 => {
+                let x = args.get_item(0)?.extract()?;
+                let y = args.get_item(1)?.extract()?;
+                let w = args.get_item(2)?.extract()?;
+                let h = args.get_item(3)?.extract()?;
+                (x, y, w, h, 0.0, 0.0, 0.0, 0.0)
+            }
+            5 => {
+                let x = args.get_item(0)?.extract()?;
+                let y = args.get_item(1)?.extract()?;
+                let w = args.get_item(2)?.extract()?;
+                let h = args.get_item(3)?.extract()?;
+                let r = args.get_item(4)?.extract()?;
+                (x, y, w, h, r, r, r, r)
+            }
+            8 => {
+                let x = args.get_item(0)?.extract()?;
+                let y = args.get_item(1)?.extract()?;
+                let w = args.get_item(2)?.extract()?;
+                let h = args.get_item(3)?.extract()?;
+                let tl = args.get_item(4)?.extract()?;
+                let tr = args.get_item(5)?.extract()?;
+                let br = args.get_item(6)?.extract()?;
+                let bl = args.get_item(7)?.extract()?;
+                (x, y, w, h, tl, tr, br, bl)
+            }
+            n => {
+                return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                    "rect() takes 4, 5, or 8 arguments ({n} given)"
+                )));
+            }
+        };
         graphics!(module).rect(x, y, w, h, tl, tr, br, bl)
     }
 
