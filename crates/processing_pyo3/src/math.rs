@@ -1,6 +1,6 @@
 use std::hash::{Hash, Hasher};
 
-use bevy::math::{EulerRot, Quat, Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
+use bevy::math::{EulerRot, Quat, Vec2, Vec3, Vec4};
 use pyo3::{
     exceptions::{PyAttributeError, PyTypeError},
     prelude::*,

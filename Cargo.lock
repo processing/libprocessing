@@ -5727,7 +5727,7 @@ dependencies = [
 
 [[package]]
 name = "processing_pyo3"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "bevy",
  "png",
