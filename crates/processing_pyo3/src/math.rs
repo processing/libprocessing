@@ -302,31 +302,26 @@ macro_rules! impl_py_vec {
                 let py = slf.py();
                 let chars: Vec<char> = name.chars().collect();
                 let len = chars.len();
-                if !(2..=4).contains(&len) {
-                    return Err(PyAttributeError::new_err(format!(
+                let attr_err = || {
+                    PyAttributeError::new_err(format!(
                         "'{}' object has no attribute '{}'",
                         $py_name, name
-                    )));
+                    ))
+                };
+                if !(2..=4).contains(&len) {
+                    return Err(attr_err());
                 }
                 let mut vals = [0.0f32; 4];
                 for (i, c) in chars.iter().enumerate() {
-                    let idx = match c {
-                        'x' => 0usize,
+                    let idx: usize = match c {
+                        'x' => 0,
                         'y' => 1,
                         'z' => 2,
                         'w' => 3,
-                        _ => {
-                            return Err(PyAttributeError::new_err(format!(
-                                "'{}' object has no attribute '{}'",
-                                $py_name, name
-                            )));
-                        }
+                        _ => return Err(attr_err()),
                     };
                     if idx >= $n {
-                        return Err(PyAttributeError::new_err(format!(
-                            "'{}' object has no attribute '{}'",
-                            $py_name, name
-                        )));
+                        return Err(attr_err());
                     }
                     vals[i] = slf.0[idx];
                 }
@@ -566,13 +561,6 @@ impl_py_vec!(PyVec3, "Vec3", 3, [(x, set_x, 0), (y, set_y, 1), (z, set_z, 2)], V
     fn truncate(&self) -> PyVec2 {
         PyVec2(self.0.truncate())
     }
-
-    #[getter]
-    fn xy(&self) -> PyVec2 { PyVec2(self.0.xy()) }
-    #[getter]
-    fn xz(&self) -> PyVec2 { PyVec2(self.0.xz()) }
-    #[getter]
-    fn yz(&self) -> PyVec2 { PyVec2(self.0.yz()) }
 });
 
 impl_py_vec!(
@@ -585,11 +573,6 @@ impl_py_vec!(
         fn truncate(&self) -> PyVec3 {
             PyVec3(self.0.truncate())
         }
-
-        #[getter]
-        fn xy(&self) -> PyVec2 { PyVec2(self.0.xy()) }
-        #[getter]
-        fn xyz(&self) -> PyVec3 { PyVec3(self.0.xyz()) }
     }
 );
 
