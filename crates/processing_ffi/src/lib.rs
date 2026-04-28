@@ -1965,7 +1965,8 @@ pub unsafe extern "C" fn processing_compute_set_float(
     });
 }
 
-/// Set a buffer property on a compute shader.
+/// # Safety
+/// `name` must be a valid null-terminated C string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_compute_set_buffer(
     compute_id: u64,

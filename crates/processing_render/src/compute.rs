@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 
 use bevy::asset::RenderAssetUsages;
 use bevy::reflect::PartialReflect;
@@ -98,10 +98,7 @@ pub fn write_buffer_cpu(
     let mut asset = buffers
         .get_mut(&handle)
         .ok_or(ProcessingError::BufferNotFound)?;
-    let dst = asset
-        .data
-        .as_mut()
-        .ok_or(ProcessingError::BufferNotFound)?;
+    let dst = asset.data.as_mut().ok_or(ProcessingError::BufferNotFound)?;
     let start = offset as usize;
     let end = start + data.len();
     dst[start..end].copy_from_slice(&data);
@@ -144,7 +141,7 @@ pub fn read_buffer_gpu(
 
 pub fn invalidate_rw_buffers(mut buffers: Query<&mut Buffer>) {
     for mut buf in &mut buffers {
-        if buf.bound_rw {
+        if buf.bound_rw && buf.synced {
             buf.synced = false;
         }
     }
@@ -161,7 +158,6 @@ pub struct Compute {
     pub entry_point: String,
     pub pipeline_id: CachedComputePipelineId,
     pub bind_group_layout_descriptors: Vec<(u32, BindGroupLayoutDescriptor)>,
-    pub rw_buffers: HashMap<String, Entity>,
 }
 
 fn queue_pipeline(
@@ -225,8 +221,7 @@ pub fn create_compute(app: &mut App, shader_entity: Entity) -> Result<Entity> {
         .collect();
 
     let max_group = groups.iter().last().copied().map_or(0, |g| g + 1);
-    let mut layout_descriptors =
-        vec![BindGroupLayoutDescriptor::default(); max_group as usize];
+    let mut layout_descriptors = vec![BindGroupLayoutDescriptor::default(); max_group as usize];
     for (group, desc) in &bind_group_layout_descriptors {
         layout_descriptors[*group as usize] = desc.clone();
     }
@@ -263,7 +258,6 @@ pub fn create_compute(app: &mut App, shader_entity: Entity) -> Result<Entity> {
                     entry_point,
                     pipeline_id,
                     bind_group_layout_descriptors,
-                    rw_buffers: HashMap::new(),
                 })
                 .id());
         }
@@ -296,10 +290,7 @@ pub fn set_compute_property(
                 .get_mut(*buf_entity)
                 .map_err(|_| ProcessingError::BufferNotFound)?;
             compute.shader.insert(&name, buffer.handle.clone());
-            if read_only {
-                compute.rw_buffers.remove(&name);
-            } else {
-                compute.rw_buffers.insert(name.clone(), *buf_entity);
+            if !read_only {
                 buffer.bound_rw = true;
             }
             Ok(())

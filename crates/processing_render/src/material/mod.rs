@@ -95,20 +95,16 @@ pub fn set_property(
                 .map(|p| p.category())
                 .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.clone()))?;
 
-            match category {
-                ParameterCategory::Storage { read_only } => {
-                    mat.shader.insert(&name, buffer.handle.clone());
-                    if !read_only {
-                        buffer.bound_rw = true;
-                    }
-                    return Ok(());
-                }
-                cat => {
-                    return Err(ProcessingError::InvalidArgument(format!(
-                        "property `{name}` expects {cat:?}, got Buffer"
-                    )));
-                }
+            let ParameterCategory::Storage { read_only } = category else {
+                return Err(ProcessingError::InvalidArgument(format!(
+                    "property `{name}` expects {category:?}, got Buffer"
+                )));
+            };
+            mat.shader.insert(&name, buffer.handle.clone());
+            if !read_only {
+                buffer.bound_rw = true;
             }
+            return Ok(());
         }
 
         return custom::set_property(&mut mat, &name, &value);

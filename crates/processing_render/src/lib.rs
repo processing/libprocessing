@@ -1703,12 +1703,13 @@ fn ensure_buffer_synced(app: &mut App, entity: Entity) -> error::Result<()> {
         .unwrap()?;
 
     let world = app.world_mut();
-    let mut buffers = world.resource_mut::<Assets<bevy::render::storage::ShaderBuffer>>();
-    let asset = buffers
-        .get_mut_untracked(handle.id())
-        .ok_or(error::ProcessingError::BufferNotFound)?;
-    asset.data = Some(bytes);
-    drop(buffers);
+    {
+        let mut buffers = world.resource_mut::<Assets<bevy::render::storage::ShaderBuffer>>();
+        let asset = buffers
+            .get_mut_untracked(handle.id())
+            .ok_or(error::ProcessingError::BufferNotFound)?;
+        asset.data = Some(bytes);
+    }
 
     let mut buf = world
         .get_mut::<compute::Buffer>(entity)
