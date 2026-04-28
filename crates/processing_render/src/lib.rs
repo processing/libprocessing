@@ -1677,9 +1677,6 @@ pub fn buffer_write_element(entity: Entity, offset: u64, data: Vec<u8>) -> error
     buffer_write_range(entity, offset, data, false)
 }
 
-/// Ensure `ShaderBuffer.data` reflects current GPU contents by reading the
-/// buffer back into the asset if it was invalidated by a prior dispatch.
-/// Subsequent reads/writes can then operate on the in-asset bytes directly.
 fn ensure_buffer_synced(app: &mut App, entity: Entity) -> error::Result<()> {
     let (handle, readback_buffer, size, synced) = {
         let buf = app
@@ -1825,41 +1822,26 @@ pub fn compute_set(
 
 pub fn compute_dispatch(entity: Entity, x: u32, y: u32, z: u32) -> error::Result<()> {
     app_mut(|app| {
-        // Flush any pending graphics work and let Bevy's render-asset extract
-        // upload any CPU-side buffer mutations to the GPU before the dispatch
-        // runs. This is the sync boundary for compute inputs.
-        crate::graphics::flush_all(app);
+        app.update();
 
-        let (args, rw_entities) = {
+        let args = {
             let c = app
                 .world()
                 .get::<compute::Compute>(entity)
                 .ok_or(error::ProcessingError::ComputeNotFound)?;
-            let args = (
+            (
                 c.pipeline_id,
                 c.bind_group_layout_descriptors.clone(),
                 c.shader.clone(),
                 x,
                 y,
                 z,
-            );
-            let rw_entities: Vec<Entity> = c.rw_buffers.values().copied().collect();
-            (args, rw_entities)
+            )
         };
         app.sub_app_mut(bevy::render::RenderApp)
             .world_mut()
             .run_system_cached_with(compute::dispatch, args)
-            .unwrap()?;
-
-        // Invalidate the CPU view of any buffer the dispatch could have
-        // written. The next read or write on those buffers will readback first.
-        let world = app.world_mut();
-        for e in rw_entities {
-            if let Some(mut buf) = world.get_mut::<compute::Buffer>(e) {
-                buf.synced = false;
-            }
-        }
-        Ok(())
+            .unwrap()
     })
 }
 

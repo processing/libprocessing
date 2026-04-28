@@ -38,13 +38,7 @@ pub struct Buffer {
     pub handle: Handle<ShaderBuffer>,
     pub readback_buffer: WgpuBuffer,
     pub size: u64,
-    /// True when `ShaderBuffer.data` reflects current GPU contents. Cleared
-    /// when a pipeline that may write to the buffer runs; the next read or
-    /// write must readback first.
     pub synced: bool,
-    /// Set permanently once the buffer is bound to any pipeline as read_write
-    /// storage. When true, any frame tick could have mutated GPU contents via
-    /// a render pass, so `synced` must be cleared after each `app.update()`.
     pub bound_rw: bool,
 }
 
@@ -97,9 +91,6 @@ pub fn create_buffer_with_data(
         .id()
 }
 
-/// Mutate the CPU-side data of a `ShaderBuffer` in place. Fires
-/// `AssetEvent::Modified` so Bevy's render-asset extract uploads the new
-/// contents to the GPU at the next sync point.
 pub fn write_buffer_cpu(
     In((handle, offset, data)): In<(Handle<ShaderBuffer>, u64, Vec<u8>)>,
     mut buffers: ResMut<Assets<ShaderBuffer>>,
@@ -117,10 +108,8 @@ pub fn write_buffer_cpu(
     Ok(())
 }
 
-/// Copy the GPU buffer back to CPU and return its full contents. Runs in the
-/// render world; the caller is responsible for writing the bytes back into
-/// `ShaderBuffer.data` via `Assets::get_mut_untracked` (avoiding spurious
-/// `AssetEvent::Modified`s, since this is a readback, not a stage-for-upload).
+/// Caller must write bytes back via `get_mut_untracked` to avoid triggering
+/// a re-upload.
 pub fn read_buffer_gpu(
     In((handle, readback_buffer, size)): In<(Handle<ShaderBuffer>, WgpuBuffer, u64)>,
     gpu_buffers: Res<RenderAssets<GpuShaderBuffer>>,
@@ -172,10 +161,6 @@ pub struct Compute {
     pub entry_point: String,
     pub pipeline_id: CachedComputePipelineId,
     pub bind_group_layout_descriptors: Vec<(u32, BindGroupLayoutDescriptor)>,
-    /// Buffer entities bound to this compute on a `read_write` storage param.
-    /// Their CPU view of GPU data is invalidated after each dispatch so the
-    /// next read/write does a readback. Read-only bindings don't need this
-    /// since the dispatch can't mutate them.
     pub rw_buffers: HashMap<String, Entity>,
 }
 
