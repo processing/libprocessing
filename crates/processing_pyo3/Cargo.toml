@@ -26,3 +26,5 @@ processing_glfw = { workspace = true }
 bevy = { workspace = true, features = ["file_watcher"] }
 png = "0.18"
 processing_cuda = { workspace = true, optional = true }
+rand = { workspace = true }
+rand_distr = { workspace = true }

@@ -5736,6 +5736,8 @@ dependencies = [
  "processing_glfw",
  "processing_webcam",
  "pyo3",
+ "rand 0.10.1",
+ "rand_distr",
 ]
 
 [[package]]
