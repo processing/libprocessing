@@ -27,7 +27,7 @@ use processing_core::config::*;
 use processing_core::error;
 
 use crate::geometry::{AttributeFormat, AttributeValue};
-use crate::graphics::flush;
+use crate::graphics::{DEFAULT_CLEAR_COLOR, flush};
 use crate::image::gpu_image;
 use crate::render::command::DrawCommand;
 
@@ -386,13 +386,17 @@ pub fn graphics_create(
     height: u32,
     texture_format: TextureFormat,
 ) -> error::Result<Entity> {
-    app_mut(|app| {
-        app.world_mut()
+    app_mut(|app| -> error::Result<Entity> {
+        let entity = app
+            .world_mut()
             .run_system_cached_with(
                 graphics::create,
                 (width, height, surface_entity, texture_format),
             )
-            .unwrap()
+            .unwrap()?;
+
+        graphics::warmup(app, entity)?;
+        Ok(entity)
     })
 }
 
