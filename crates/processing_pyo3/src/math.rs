@@ -1,7 +1,11 @@
 use std::hash::{Hash, Hasher};
 
-use bevy::math::{EulerRot, Quat, Vec2, Vec3, Vec4};
-use pyo3::{exceptions::PyTypeError, prelude::*, types::PyTuple};
+use bevy::math::{EulerRot, Quat, Vec2, Vec3, Vec3Swizzles, Vec4, Vec4Swizzles};
+use pyo3::{
+    exceptions::{PyAttributeError, PyTypeError},
+    prelude::*,
+    types::PyTuple,
+};
 
 pub fn hash_f32(val: f32, state: &mut impl Hasher) {
     if val == 0.0 {
@@ -291,6 +295,55 @@ macro_rules! impl_py_vec {
                 }
             }
 
+            fn __getattr__<'py>(
+                slf: PyRef<'py, Self>,
+                name: &str,
+            ) -> PyResult<Bound<'py, PyAny>> {
+                let py = slf.py();
+                let chars: Vec<char> = name.chars().collect();
+                let len = chars.len();
+                if !(2..=4).contains(&len) {
+                    return Err(PyAttributeError::new_err(format!(
+                        "'{}' object has no attribute '{}'",
+                        $py_name, name
+                    )));
+                }
+                let mut vals = [0.0f32; 4];
+                for (i, c) in chars.iter().enumerate() {
+                    let idx = match c {
+                        'x' => 0usize,
+                        'y' => 1,
+                        'z' => 2,
+                        'w' => 3,
+                        _ => {
+                            return Err(PyAttributeError::new_err(format!(
+                                "'{}' object has no attribute '{}'",
+                                $py_name, name
+                            )));
+                        }
+                    };
+                    if idx >= $n {
+                        return Err(PyAttributeError::new_err(format!(
+                            "'{}' object has no attribute '{}'",
+                            $py_name, name
+                        )));
+                    }
+                    vals[i] = slf.0[idx];
+                }
+                Ok(match len {
+                    2 => PyVec2(Vec2::new(vals[0], vals[1]))
+                        .into_pyobject(py)?
+                        .into_any(),
+                    3 => PyVec3(Vec3::new(vals[0], vals[1], vals[2]))
+                        .into_pyobject(py)?
+                        .into_any(),
+                    4 => PyVec4(Vec4::new(vals[0], vals[1], vals[2], vals[3]))
+                        .into_pyobject(py)?
+                        .into_any(),
+                    _ => unreachable!(),
+                })
+            }
+
             fn length(&self) -> f32 { self.0.length() }
             fn length_squared(&self) -> f32 { self.0.length_squared() }
             fn normalize(&self) -> Self { Self(self.0.normalize()) }
@@ -312,6 +365,144 @@ macro_rules! impl_py_vec {
                 PyTuple::new(py, self.0.to_array()).unwrap()
             }
 
+            fn mag(&self) -> f32 { self.0.length() }
+            fn mag_sq(&self) -> f32 { self.0.length_squared() }
+            fn dist(&self, other: &Self) -> f32 { self.0.distance(other.0) }
+
+            fn copy(&self) -> Self { Self(self.0) }
+
+            fn equals(&self, other: &Self) -> bool { self.0 == other.0 }
+
+            fn hash_code(&self) -> u64 {
+                let mut hasher = std::collections::hash_map::DefaultHasher::new();
+                for &c in self.0.to_array().iter() {
+                    hash_f32(c, &mut hasher);
+                }
+                std::hash::Hasher::finish(&hasher)
+            }
+
+            #[pyo3(signature = (*args))]
+            fn set(&mut self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+                match args.len() {
+                    1 => {
+                        let first = args.get_item(0)?;
+                        if let Ok(s) = first.extract::<f32>() {
+                            self.0 = <$glam_ty>::splat(s);
+                            return Ok(());
+                        }
+                        if let Ok(s) = first.extract::<i64>() {
+                            self.0 = <$glam_ty>::splat(s as f32);
+                            return Ok(());
+                        }
+                        if let Ok(v) = first.extract::<PyRef<$name>>() {
+                            self.0 = v.0;
+                            return Ok(());
+                        }
+                        if let Ok(arr) = first.extract::<[f32; $n]>() {
+                            self.0 = <$glam_ty>::from_array(arr);
+                            return Ok(());
+                        }
+                        Err(PyTypeError::new_err(concat!(
+                            "expected scalar, ", $py_name, ", or sequence of ",
+                            stringify!($n), " floats"
+                        )))
+                    }
+                    $n => {
+                        let mut arr = [0.0f32; $n];
+                        $(arr[$idx] = args.get_item($idx)?.extract::<f32>()?;)+
+                        self.0 = <$glam_ty>::from_array(arr);
+                        Ok(())
+                    }
+                    _ => Err(PyTypeError::new_err(concat!(
+                        $py_name, ".set takes 1 or ", stringify!($n), " arguments"
+                    ))),
+                }
+            }
+
+            #[pyo3(signature = (*args))]
+            fn add(&mut self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+                match args.len() {
+                    1 => {
+                        let first = args.get_item(0)?;
+                        if let Ok(v) = first.extract::<PyRef<$name>>() {
+                            self.0 += v.0;
+                            return Ok(());
+                        }
+                        if let Ok(arr) = first.extract::<[f32; $n]>() {
+                            self.0 += <$glam_ty>::from_array(arr);
+                            return Ok(());
+                        }
+                        Err(PyTypeError::new_err(concat!(
+                            "expected ", $py_name, " or sequence of ",
+                            stringify!($n), " floats"
+                        )))
+                    }
+                    $n => {
+                        let mut arr = [0.0f32; $n];
+                        $(arr[$idx] = args.get_item($idx)?.extract::<f32>()?;)+
+                        self.0 += <$glam_ty>::from_array(arr);
+                        Ok(())
+                    }
+                    _ => Err(PyTypeError::new_err(concat!(
+                        $py_name, ".add takes 1 or ", stringify!($n), " arguments"
+                    ))),
+                }
+            }
+
+            #[pyo3(signature = (*args))]
+            fn sub(&mut self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+                match args.len() {
+                    1 => {
+                        let first = args.get_item(0)?;
+                        if let Ok(v) = first.extract::<PyRef<$name>>() {
+                            self.0 -= v.0;
+                            return Ok(());
+                        }
+                        if let Ok(arr) = first.extract::<[f32; $n]>() {
+                            self.0 -= <$glam_ty>::from_array(arr);
+                            return Ok(());
+                        }
+                        Err(PyTypeError::new_err(concat!(
+                            "expected ", $py_name, " or sequence of ",
+                            stringify!($n), " floats"
+                        )))
+                    }
+                    $n => {
+                        let mut arr = [0.0f32; $n];
+                        $(arr[$idx] = args.get_item($idx)?.extract::<f32>()?;)+
+                        self.0 -= <$glam_ty>::from_array(arr);
+                        Ok(())
+                    }
+                    _ => Err(PyTypeError::new_err(concat!(
+                        $py_name, ".sub takes 1 or ", stringify!($n), " arguments"
+                    ))),
+                }
+            }
+
+            fn mult(&mut self, n: f32) { self.0 *= n; }
+            fn div(&mut self, n: f32) { self.0 /= n; }
+
+            fn set_mag(&mut self, len: f32) {
+                self.0 = self.0.normalize_or_zero() * len;
+            }
+
+            fn limit(&mut self, max: f32) {
+                if self.0.length_squared() > max * max {
+                    self.0 = self.0.normalize_or_zero() * max;
+                }
+            }
+
+            #[staticmethod]
+            fn angle_between(v1: &Self, v2: &Self) -> f32 {
+                if v1.0.length_squared() == 0.0 || v2.0.length_squared() == 0.0 {
+                    return 0.0;
+                }
+                let cos_angle = (v1.0.dot(v2.0)
+                    / (v1.0.length() * v2.0.length()))
+                .clamp(-1.0, 1.0);
+                cos_angle.acos()
+            }
+
             $($($extra)*)?
         }
     };
@@ -322,6 +513,10 @@ impl_py_vec!(PyVec2, "Vec2", 2, [(x, set_x, 0), (y, set_y, 1)], Vec2, extra {
         self.0.y.atan2(self.0.x)
     }
 
+    fn heading(&self) -> f32 {
+        self.0.y.atan2(self.0.x)
+    }
+
     fn rotate(&self, angle: f32) -> Self {
         Self(Vec2::from_angle(angle).rotate(self.0))
     }
@@ -329,12 +524,55 @@ impl_py_vec!(PyVec2, "Vec2", 2, [(x, set_x, 0), (y, set_y, 1)], Vec2, extra {
     fn perpendicular(&self) -> Self {
         Self(self.0.perp())
     }
+
+    fn set_heading(&mut self, angle: f32) {
+        let mag = self.0.length();
+        self.0 = Vec2::new(angle.cos() * mag, angle.sin() * mag);
+    }
+
+    #[staticmethod]
+    fn from_angle(angle: f32) -> Self {
+        Self(Vec2::from_angle(angle))
+    }
+
+    #[staticmethod]
+    fn random() -> Self {
+        use rand_distr::{Distribution, UnitCircle};
+        let [x, y]: [f32; 2] = UnitCircle.sample(&mut rand::rng());
+        Self(Vec2::new(x, y))
+    }
+
+    fn extend(&self, z: f32) -> PyVec3 {
+        PyVec3(self.0.extend(z))
+    }
 });
 
 impl_py_vec!(PyVec3, "Vec3", 3, [(x, set_x, 0), (y, set_y, 1), (z, set_z, 2)], Vec3, extra {
     fn cross(&self, other: &Self) -> Self {
         Self(self.0.cross(other.0))
     }
+
+    #[staticmethod]
+    fn random() -> Self {
+        use rand_distr::{Distribution, UnitSphere};
+        let [x, y, z]: [f32; 3] = UnitSphere.sample(&mut rand::rng());
+        Self(Vec3::new(x, y, z))
+    }
+
+    fn extend(&self, w: f32) -> PyVec4 {
+        PyVec4(self.0.extend(w))
+    }
+
+    fn truncate(&self) -> PyVec2 {
+        PyVec2(self.0.truncate())
+    }
+
+    #[getter]
+    fn xy(&self) -> PyVec2 { PyVec2(self.0.xy()) }
+    #[getter]
+    fn xz(&self) -> PyVec2 { PyVec2(self.0.xz()) }
+    #[getter]
+    fn yz(&self) -> PyVec2 { PyVec2(self.0.yz()) }
 });
 
 impl_py_vec!(
@@ -342,7 +580,17 @@ impl_py_vec!(
     "Vec4",
     4,
     [(x, set_x, 0), (y, set_y, 1), (z, set_z, 2), (w, set_w, 3)],
-    Vec4
+    Vec4,
+    extra {
+        fn truncate(&self) -> PyVec3 {
+            PyVec3(self.0.truncate())
+        }
+
+        #[getter]
+        fn xy(&self) -> PyVec2 { PyVec2(self.0.xy()) }
+        #[getter]
+        fn xyz(&self) -> PyVec3 { PyVec3(self.0.xyz()) }
+    }
 );
 
 #[pyclass(name = "Quat", from_py_object)]
@@ -643,5 +891,141 @@ mod tests {
         let a = PyVec3(Vec3::ZERO);
         let b = PyVec3(Vec3::new(3.0, 4.0, 0.0));
         assert!((a.distance(&b) - 5.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_vec3_pvector_aliases() {
+        let a = PyVec3(Vec3::new(3.0, 4.0, 0.0));
+        let b = PyVec3(Vec3::new(0.0, 0.0, 0.0));
+        assert_eq!(a.mag(), 5.0);
+        assert_eq!(a.mag_sq(), 25.0);
+        assert_eq!(a.dist(&b), 5.0);
+    }
+
+    #[test]
+    fn test_vec3_copy_and_equals() {
+        let a = PyVec3(Vec3::new(1.0, 2.0, 3.0));
+        let b = a.copy();
+        assert!(a.equals(&b));
+        assert_eq!(a.hash_code(), b.hash_code());
+    }
+
+    #[test]
+    fn test_vec3_mut_add_sub() {
+        let mut v = PyVec3(Vec3::new(1.0, 2.0, 3.0));
+        v.0 += Vec3::new(1.0, 1.0, 1.0);
+        assert_eq!(v.0, Vec3::new(2.0, 3.0, 4.0));
+        v.0 -= Vec3::new(2.0, 0.0, 4.0);
+        assert_eq!(v.0, Vec3::new(0.0, 3.0, 0.0));
+    }
+
+    #[test]
+    fn test_vec3_mult_div() {
+        let mut v = PyVec3(Vec3::new(1.0, 2.0, 3.0));
+        v.mult(2.0);
+        assert_eq!(v.0, Vec3::new(2.0, 4.0, 6.0));
+        v.div(2.0);
+        assert_eq!(v.0, Vec3::new(1.0, 2.0, 3.0));
+    }
+
+    #[test]
+    fn test_vec3_set_mag() {
+        let mut v = PyVec3(Vec3::new(3.0, 4.0, 0.0));
+        v.set_mag(10.0);
+        assert!((v.0.length() - 10.0).abs() < 1e-5);
+        assert!((v.0.x - 6.0).abs() < 1e-5);
+        assert!((v.0.y - 8.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_vec3_set_mag_zero_vec_stays_zero() {
+        let mut v = PyVec3(Vec3::ZERO);
+        v.set_mag(5.0);
+        assert_eq!(v.0, Vec3::ZERO);
+    }
+
+    #[test]
+    fn test_vec3_limit() {
+        let mut v = PyVec3(Vec3::new(3.0, 4.0, 0.0));
+        v.limit(10.0);
+        assert_eq!(v.0, Vec3::new(3.0, 4.0, 0.0));
+        v.limit(2.5);
+        assert!((v.0.length() - 2.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_angle_between() {
+        let a = PyVec3(Vec3::X);
+        let b = PyVec3(Vec3::Y);
+        assert!((PyVec3::angle_between(&a, &b) - FRAC_PI_2).abs() < 1e-5);
+
+        let z = PyVec3(Vec3::ZERO);
+        assert_eq!(PyVec3::angle_between(&a, &z), 0.0);
+    }
+
+    #[test]
+    fn test_vec2_heading_alias() {
+        let v = PyVec2(Vec2::Y);
+        assert!((v.heading() - FRAC_PI_2).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_vec2_set_heading_preserves_mag() {
+        let mut v = PyVec2(Vec2::new(3.0, 4.0));
+        let mag_before = v.0.length();
+        v.set_heading(0.0);
+        assert!((v.0.length() - mag_before).abs() < 1e-5);
+        assert!((v.0.x - mag_before).abs() < 1e-5);
+        assert!(v.0.y.abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_vec2_from_angle() {
+        let v = PyVec2::from_angle(0.0);
+        assert!((v.0.x - 1.0).abs() < 1e-6);
+        assert!(v.0.y.abs() < 1e-6);
+
+        let v = PyVec2::from_angle(FRAC_PI_2);
+        assert!(v.0.x.abs() < 1e-6);
+        assert!((v.0.y - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_vec2_random_is_unit() {
+        for _ in 0..32 {
+            let v = PyVec2::random();
+            assert!((v.0.length() - 1.0).abs() < 1e-5);
+        }
+    }
+
+    #[test]
+    fn test_vec3_random_is_unit() {
+        for _ in 0..32 {
+            let v = PyVec3::random();
+            assert!((v.0.length() - 1.0).abs() < 1e-5);
+        }
+    }
+
+    #[test]
+    fn test_vec2_extend() {
+        let v = PyVec2(Vec2::new(1.0, 2.0));
+        let v3 = v.extend(3.0);
+        assert_eq!(v3.0, Vec3::new(1.0, 2.0, 3.0));
+    }
+
+    #[test]
+    fn test_vec3_extend_truncate() {
+        let v = PyVec3(Vec3::new(1.0, 2.0, 3.0));
+        let v4 = v.extend(4.0);
+        assert_eq!(v4.0, Vec4::new(1.0, 2.0, 3.0, 4.0));
+        let v2 = v.truncate();
+        assert_eq!(v2.0, Vec2::new(1.0, 2.0));
+    }
+
+    #[test]
+    fn test_vec4_truncate() {
+        let v = PyVec4(Vec4::new(1.0, 2.0, 3.0, 4.0));
+        let v3 = v.truncate();
+        assert_eq!(v3.0, Vec3::new(1.0, 2.0, 3.0));
     }
 }
