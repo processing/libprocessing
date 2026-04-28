@@ -603,9 +603,6 @@ mod mewnala {
     fn init(module: &Bound<'_, PyModule>) -> PyResult<()> {
         use processing::prelude::BlendMode;
 
-        module.add("width", super::DEFAULT_WIDTH)?;
-        module.add("height", super::DEFAULT_HEIGHT)?;
-
         module.add("BLEND", PyBlendMode::from_preset(BlendMode::Blend))?;
         module.add("ADD", PyBlendMode::from_preset(BlendMode::Add))?;
         module.add("SUBTRACT", PyBlendMode::from_preset(BlendMode::Subtract))?;
@@ -1763,38 +1760,6 @@ mod mewnala {
     }
 
     #[pyfunction]
-    #[pyo3(pass_module)]
-    fn mouse_x(module: &Bound<'_, PyModule>) -> PyResult<f32> {
-        let graphics =
-            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        input::mouse_x(graphics.surface.entity, graphics.width)
-    }
-
-    #[pyfunction]
-    #[pyo3(pass_module)]
-    fn mouse_y(module: &Bound<'_, PyModule>) -> PyResult<f32> {
-        let graphics =
-            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        input::mouse_y(graphics.surface.entity, graphics.height)
-    }
-
-    #[pyfunction]
-    #[pyo3(pass_module)]
-    fn pmouse_x(module: &Bound<'_, PyModule>) -> PyResult<f32> {
-        let graphics =
-            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        input::pmouse_x(graphics.surface.entity, graphics.width)
-    }
-
-    #[pyfunction]
-    #[pyo3(pass_module)]
-    fn pmouse_y(module: &Bound<'_, PyModule>) -> PyResult<f32> {
-        let graphics =
-            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        input::pmouse_y(graphics.surface.entity, graphics.height)
-    }
-
-    #[pyfunction]
     fn key_is_down(key_code: u32) -> PyResult<bool> {
         input::key_is_down(key_code)
     }
@@ -1833,18 +1798,20 @@ mod mewnala {
         graphics.surface.display_density()
     }
 
+    // private stuff
+
     #[pyfunction]
-    fn frame_count() -> PyResult<u32> {
+    fn _dyn_frame_count() -> PyResult<u32> {
         time::frame_count()
     }
 
     #[pyfunction]
-    fn delta_time() -> PyResult<f32> {
+    fn _dyn_delta_time() -> PyResult<f32> {
         time::delta_time()
     }
 
     #[pyfunction]
-    fn elapsed_time() -> PyResult<f32> {
+    fn _dyn_elapsed_time() -> PyResult<f32> {
         time::elapsed_time()
     }
 

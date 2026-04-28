@@ -46,7 +46,32 @@ fn main() {
 
     module.incomplete = false;
 
-    let stubs = module_stub_files(&module);
+    let mut stubs = module_stub_files(&module);
+
+    // join in extras
+    
+    let extras_dir = workspace_root()
+        .join("crates")
+        .join("processing_pyo3")
+        .join("stubs");
+    if extras_dir.is_dir() {
+        for entry in fs::read_dir(&extras_dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) != Some("pyi") {
+                continue;
+            }
+            let filename = path.file_name().unwrap().to_owned();
+            let extra = fs::read_to_string(&path).unwrap();
+            let target = stubs.entry(PathBuf::from(&filename)).or_default();
+            if !target.is_empty() && !target.ends_with('\n') {
+                target.push('\n');
+            }
+            target.push('\n');
+            target.push_str(&extra);
+            eprintln!("Appended extras: {}", path.display());
+        }
+    }
 
     let output_dir = workspace_root()
         .join("crates")
