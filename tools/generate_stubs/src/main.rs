@@ -49,7 +49,7 @@ fn main() {
     let mut stubs = module_stub_files(&module);
 
     // join in extras
-    
+
     let extras_dir = workspace_root()
         .join("crates")
         .join("processing_pyo3")
