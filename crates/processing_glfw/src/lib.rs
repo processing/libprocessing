@@ -339,9 +339,7 @@ impl GlfwContext {
             self.window.focus();
         }
 
-        let (cx, cy) = self.window.get_pos();
-        let (inset_l, inset_t, _, _) = self.window.get_frame_size();
-        let frame_pos = IVec2::new(cx - inset_l, cy - inset_t);
+        let frame_pos = self.frame_pos();
         let _ = app_mut(|app| {
             let world = app.world_mut();
             if let Some(mut window) = world.get_mut::<BevyWindow>(surface) {
@@ -358,6 +356,18 @@ impl GlfwContext {
         self.last_applied.position = frame_pos;
     }
 
+    #[cfg(not(feature = "wayland"))]
+    fn frame_pos(&self) -> IVec2 {
+        let (cx, cy) = self.window.get_pos();
+        let (inset_l, inset_t, _, _) = self.window.get_frame_size();
+        IVec2::new(cx - inset_l, cy - inset_t)
+    }
+
+    #[cfg(feature = "wayland")]
+    fn frame_pos(&self) -> IVec2 {
+        self.last_applied.position
+    }
+
     fn apply_window(&mut self, desired: &DesiredWindow) {
         let last = &mut self.last_applied;
 
@@ -365,6 +375,7 @@ impl GlfwContext {
             self.window.set_title(&desired.title);
             last.title.clone_from(&desired.title);
         }
+        #[cfg(not(feature = "wayland"))]
         if let Some(pos) = desired.position
             && pos != last.position
         {
@@ -413,9 +424,9 @@ impl GlfwContext {
         match target {
             Some(monitor_entity) => {
                 if self.last_applied.fullscreen_on.is_none() {
-                    let (x, y) = self.window.get_pos();
                     let (w, h) = self.window.get_size();
-                    self.windowed_geometry = Some((x, y, w as u32, h as u32));
+                    let pos = self.frame_pos();
+                    self.windowed_geometry = Some((pos.x, pos.y, w as u32, h as u32));
                 }
                 let target_name = monitor_name(monitor_entity);
                 let window = &mut self.window;
@@ -438,9 +449,9 @@ impl GlfwContext {
             }
             None => {
                 let (x, y, w, h) = self.windowed_geometry.take().unwrap_or_else(|| {
-                    let (x, y) = self.window.get_pos();
                     let (w, h) = self.window.get_size();
-                    (x, y, w as u32, h as u32)
+                    let pos = self.frame_pos();
+                    (pos.x, pos.y, w as u32, h as u32)
                 });
                 self.window
                     .set_monitor(WindowMode::Windowed, x, y, w, h, None);
@@ -475,6 +486,7 @@ impl GlfwContext {
 #[derive(Clone, Debug)]
 struct DesiredWindow {
     title: String,
+    #[cfg(not(feature = "wayland"))]
     position: Option<IVec2>,
     size: bevy::math::UVec2,
     visible: bool,
@@ -507,6 +519,7 @@ fn read_desired_window(surface: Entity) -> Option<DesiredWindow> {
         };
         Ok(Some(DesiredWindow {
             title: window.title.clone(),
+            #[cfg(not(feature = "wayland"))]
             position: match window.position {
                 WindowPosition::At(p) => Some(p),
                 _ => None,
