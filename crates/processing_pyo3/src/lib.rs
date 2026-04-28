@@ -577,6 +577,22 @@ mod mewnala {
     #[pymodule_export]
     const F12: u32 = 301;
 
+    // Math constants
+    #[pymodule_export]
+    const PI: f32 = std::f32::consts::PI;
+    #[pymodule_export]
+    const TWO_PI: f32 = std::f32::consts::TAU;
+    #[pymodule_export]
+    const HALF_PI: f32 = std::f32::consts::FRAC_PI_2;
+    #[pymodule_export]
+    const QUARTER_PI: f32 = std::f32::consts::FRAC_PI_4;
+    #[pymodule_export]
+    const TAU: f32 = std::f32::consts::TAU;
+    #[pymodule_export]
+    const DEG_TO_RAD: f32 = std::f32::consts::PI / 180.0;
+    #[pymodule_export]
+    const RAD_TO_DEG: f32 = 180.0 / std::f32::consts::PI;
+
     // color space constants for color_mode()
     #[pymodule_export]
     const SRGB: u8 = 0;
