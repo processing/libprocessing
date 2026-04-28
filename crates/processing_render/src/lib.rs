@@ -263,16 +263,7 @@ pub fn graphics_create(
             )
             .unwrap()?;
 
-        app.update();
-        #[cfg(target_os = "macos")]
         graphics::warmup(app, entity)?;
-
-        app.world_mut()
-            .run_system_cached_with(
-                graphics::record_command,
-                (entity, DrawCommand::BackgroundColor(DEFAULT_CLEAR_COLOR)),
-            )
-            .unwrap()?;
         Ok(entity)
     })
 }

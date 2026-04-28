@@ -15,8 +15,7 @@ use bevy::{
     render::{
         RenderApp,
         render_resource::{
-            CommandEncoderDescriptor, Extent3d, LoadOp, MapMode, Operations, Origin3d, PollType,
-            RenderPassColorAttachment, RenderPassDescriptor, StoreOp, TexelCopyBufferInfo,
+            CommandEncoderDescriptor, Extent3d, MapMode, Origin3d, PollType, TexelCopyBufferInfo,
             TexelCopyBufferLayout, TexelCopyTextureInfo, Texture, TextureFormat, TextureUsages,
         },
         renderer::{RenderDevice, RenderQueue},
@@ -448,16 +447,6 @@ pub fn begin_draw(In(entity): In<Entity>, mut state_query: Query<&mut RenderStat
 }
 
 pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
-    // f there's nothing to render, skip the whole render pass. this avoids some issues on
-    // macos with msaa resolve where nothing is rendered
-    let is_empty = graphics_mut!(app, entity)
-        .get::<CommandBuffer>()
-        .map(|c| c.commands.is_empty())
-        .unwrap_or(true);
-    if is_empty {
-        return Ok(());
-    }
-
     graphics_mut!(app, entity).insert(Flush);
     app.update();
     graphics_mut!(app, entity).remove::<Flush>();
@@ -494,49 +483,15 @@ pub fn end_draw(app: &mut App, entity: Entity) -> Result<()> {
 ///
 // TODO: why is metal particularly affected by this? can we remove this?
 pub fn warmup(app: &mut App, entity: Entity) -> Result<()> {
-    let main_texture = {
-        let render_world = app.sub_app_mut(RenderApp).world_mut();
-        let mut query = render_world.query::<(&MainEntity, &ViewTarget)>();
-        let mut found = None;
-        for (main_entity, vt) in query.iter(render_world) {
-            if **main_entity == entity {
-                found = Some(vt.main_texture().clone());
-                break;
-            }
-        }
-        found.ok_or(ProcessingError::GraphicsNotFound)?
-    };
-
-    let render_app = app.sub_app(RenderApp);
-    let render_device = render_app.world().resource::<RenderDevice>();
-    let render_queue = render_app.world().resource::<RenderQueue>();
-
-    let view = main_texture.create_view(&bevy::render::render_resource::TextureViewDescriptor {
-        label: Some("processing_warmup_view"),
-        ..Default::default()
-    });
-    let mut encoder = render_device.create_command_encoder(&CommandEncoderDescriptor {
-        label: Some("processing_warmup_encoder"),
-    });
-    {
-        let _pass = encoder.begin_render_pass(&RenderPassDescriptor {
-            label: Some("processing_warmup_clear"),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                view: &view,
-                depth_slice: None,
-                resolve_target: None,
-                ops: Operations {
-                    load: LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                    store: StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
+    for _ in 0..3 {
+        app.world_mut()
+            .run_system_cached_with(
+                record_command,
+                (entity, DrawCommand::BackgroundColor(DEFAULT_CLEAR_COLOR)),
+            )
+            .unwrap()?;
+        flush(app, entity)?;
     }
-    render_queue.submit([encoder.finish()]);
     Ok(())
 }
 
