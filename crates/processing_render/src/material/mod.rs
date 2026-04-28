@@ -1,6 +1,7 @@
 pub mod custom;
 pub mod pbr;
 
+use crate::compute;
 use crate::render::material::UntypedMaterial;
 use crate::shader_value::ShaderValue;
 use bevy::material::descriptor::RenderPipelineDescriptor;
@@ -12,6 +13,7 @@ use bevy::pbr::{
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, BlendState};
 use bevy::shader::ShaderRef;
+use bevy_naga_reflect::reflect::ParameterCategory;
 use processing_core::error::{self, ProcessingError};
 
 pub struct ProcessingMaterialPlugin;
@@ -59,6 +61,7 @@ pub fn set_property(
     material_handles: Query<&UntypedMaterial>,
     mut extended_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, ProcessingMaterial>>>,
     mut custom_materials: ResMut<Assets<custom::CustomMaterial>>,
+    mut p_buffers: Query<&mut compute::Buffer>,
 ) -> error::Result<()> {
     let untyped = material_handles
         .get(entity)
@@ -79,6 +82,35 @@ pub fn set_property(
         let mut mat = custom_materials
             .get_mut(&handle)
             .ok_or(ProcessingError::MaterialNotFound)?;
+
+        if let ShaderValue::Buffer(buf_entity) = &value {
+            let mut buffer = p_buffers
+                .get_mut(*buf_entity)
+                .map_err(|_| ProcessingError::BufferNotFound)?;
+
+            let category = mat
+                .shader
+                .reflection()
+                .parameter(&name)
+                .map(|p| p.category())
+                .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.clone()))?;
+
+            match category {
+                ParameterCategory::Storage { read_only } => {
+                    mat.shader.insert(&name, buffer.handle.clone());
+                    if !read_only {
+                        buffer.bound_rw = true;
+                    }
+                    return Ok(());
+                }
+                cat => {
+                    return Err(ProcessingError::InvalidArgument(format!(
+                        "property `{name}` expects {cat:?}, got Buffer"
+                    )));
+                }
+            }
+        }
+
         return custom::set_property(&mut mat, &name, &value);
     }
 

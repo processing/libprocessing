@@ -25,6 +25,14 @@ use crate::material::custom::{Shader, apply_reflect_field, shader_value_to_refle
 use crate::shader_value::ShaderValue;
 use processing_core::error::{ProcessingError, Result};
 
+pub struct ComputePlugin;
+
+impl Plugin for ComputePlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Last, invalidate_rw_buffers);
+    }
+}
+
 #[derive(Component)]
 pub struct Buffer {
     pub handle: Handle<ShaderBuffer>,
@@ -34,6 +42,10 @@ pub struct Buffer {
     /// when a pipeline that may write to the buffer runs; the next read or
     /// write must readback first.
     pub synced: bool,
+    /// Set permanently once the buffer is bound to any pipeline as read_write
+    /// storage. When true, any frame tick could have mutated GPU contents via
+    /// a render pass, so `synced` must be cleared after each `app.update()`.
+    pub bound_rw: bool,
 }
 
 fn readback_buffer(device: &RenderDevice, size: u64) -> WgpuBuffer {
@@ -61,6 +73,7 @@ pub fn create_buffer(
             readback_buffer: readback_buffer(&render_device, size),
             size,
             synced: true,
+            bound_rw: false,
         })
         .id()
 }
@@ -79,6 +92,7 @@ pub fn create_buffer_with_data(
             readback_buffer: readback_buffer(&render_device, size),
             size,
             synced: true,
+            bound_rw: false,
         })
         .id()
 }
@@ -137,6 +151,14 @@ pub fn read_buffer_gpu(
     let bytes = buffer_slice.get_mapped_range().to_vec();
     readback_buffer.unmap();
     Ok(bytes)
+}
+
+pub fn invalidate_rw_buffers(mut buffers: Query<&mut Buffer>) {
+    for mut buf in &mut buffers {
+        if buf.bound_rw {
+            buf.synced = false;
+        }
+    }
 }
 
 pub fn destroy_buffer(In(entity): In<Entity>, mut commands: Commands) -> Result<()> {
@@ -267,7 +289,7 @@ pub fn create_compute(app: &mut App, shader_entity: Entity) -> Result<Entity> {
 pub fn set_compute_property(
     In((entity, name, value)): In<(Entity, String, ShaderValue)>,
     mut computes: Query<&mut Compute>,
-    p_buffers: Query<&Buffer>,
+    mut p_buffers: Query<&mut Buffer>,
     p_images: Query<&PImage>,
 ) -> Result<()> {
     use bevy_naga_reflect::reflect::ParameterCategory;
@@ -285,14 +307,15 @@ pub fn set_compute_property(
 
     match (&value, category) {
         (ShaderValue::Buffer(buf_entity), ParameterCategory::Storage { read_only }) => {
-            let buffer = p_buffers
-                .get(*buf_entity)
+            let mut buffer = p_buffers
+                .get_mut(*buf_entity)
                 .map_err(|_| ProcessingError::BufferNotFound)?;
             compute.shader.insert(&name, buffer.handle.clone());
             if read_only {
                 compute.rw_buffers.remove(&name);
             } else {
                 compute.rw_buffers.insert(name.clone(), *buf_entity);
+                buffer.bound_rw = true;
             }
             Ok(())
         }

@@ -63,6 +63,7 @@ impl Plugin for ProcessingRenderPlugin {
             material::ProcessingMaterialPlugin,
             bevy::pbr::wireframe::WireframePlugin::default(),
             material::custom::CustomMaterialPlugin,
+            compute::ComputePlugin,
             camera::OrbitCameraPlugin,
             bevy::camera_controller::free_camera::FreeCameraPlugin,
             bevy::camera_controller::pan_camera::PanCameraPlugin,
