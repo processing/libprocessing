@@ -118,6 +118,7 @@ def draw():
     fill(80, 200, 120)
     rect(20, 240, width - 40, 60)
 
+    # Yellow dot tracks window_x / window_y wrapped into the canvas.
     fill(255, 220, 60)
     if width > 0 and height > 0:
         circle(window_x % width, window_y % height, 12)

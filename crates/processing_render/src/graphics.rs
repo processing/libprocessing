@@ -36,6 +36,8 @@ use crate::{
 };
 use processing_core::error::{ProcessingError, Result};
 
+pub const DEFAULT_CLEAR_COLOR: Color = Color::srgba_u8(208, 208, 208, 255);
+
 pub struct GraphicsPlugin;
 
 impl Plugin for GraphicsPlugin {
@@ -445,16 +447,6 @@ pub fn begin_draw(In(entity): In<Entity>, mut state_query: Query<&mut RenderStat
 }
 
 pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
-    // f there's nothing to render, skip the whole render pass. this avoids some issues on
-    // macos with msaa resolve where nothing is rendered
-    let is_empty = graphics_mut!(app, entity)
-        .get::<CommandBuffer>()
-        .map(|c| c.commands.is_empty())
-        .unwrap_or(true);
-    if is_empty {
-        return Ok(());
-    }
-
     graphics_mut!(app, entity).insert(Flush);
     app.update();
     graphics_mut!(app, entity).remove::<Flush>();
@@ -481,6 +473,26 @@ pub fn present(app: &mut App, entity: Entity) -> Result<()> {
 /// End the current draw
 pub fn end_draw(app: &mut App, entity: Entity) -> Result<()> {
     present(app, entity)
+}
+
+/// Do some work on the GPU to ensure that the render target texture is initialized and can be read
+/// from/written to.
+///
+/// This is necessary on some platforms (notably macOS) to avoid issues with the first few frames of
+/// rendering being corrupted or not appearing at all.
+///
+// TODO: why is metal particularly affected by this? can we remove this?
+pub fn warmup(app: &mut App, entity: Entity) -> Result<()> {
+    for _ in 0..3 {
+        app.world_mut()
+            .run_system_cached_with(
+                record_command,
+                (entity, DrawCommand::BackgroundColor(DEFAULT_CLEAR_COLOR)),
+            )
+            .unwrap()?;
+        flush(app, entity)?;
+    }
+    Ok(())
 }
 
 pub fn record_command(

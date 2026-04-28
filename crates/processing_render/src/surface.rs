@@ -26,8 +26,8 @@ use bevy::{
     prelude::{Commands, Component, Entity, In, Query, ResMut, Window, With, default},
     render::render_resource::{Extent3d, TextureFormat},
     window::{
-        Monitor, RawHandleWrapper, WindowLevel, WindowMode, WindowPosition, WindowResolution,
-        WindowWrapper,
+        CompositeAlphaMode, Monitor, RawHandleWrapper, WindowLevel, WindowMode, WindowPosition,
+        WindowResolution, WindowWrapper,
     },
 };
 use raw_window_handle::{
@@ -122,6 +122,8 @@ fn spawn_surface(
             Window {
                 resolution: WindowResolution::new(physical_width, physical_height)
                     .with_scale_factor_override(scale_factor),
+                transparent: true,
+                composite_alpha_mode: CompositeAlphaMode::PostMultiplied,
                 ..default()
             },
             handle_wrapper,
@@ -380,7 +382,6 @@ pub fn destroy(
     }
 }
 
-/// Update window size when resized. No-op on offscreen surfaces (no `Window` component).
 pub fn resize(
     In((window_entity, width, height)): In<(Entity, u32, u32)>,
     mut windows: Query<&mut Window>,
@@ -437,9 +438,6 @@ pub fn physical_height(In(entity): In<Entity>, query: Query<&Window>) -> u32 {
         .map(|w| w.resolution.physical_height())
         .unwrap_or(0)
 }
-
-// Windowed-surface ops are no-ops for entities without a [`Window`] component, matching
-// PSurfaceNone's behaviour in Processing 4.
 
 pub fn set_title(
     In((entity, title)): In<(Entity, String)>,

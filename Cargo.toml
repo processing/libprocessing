@@ -39,6 +39,8 @@ processing_midi = { path = "crates/processing_midi" }
 processing_input = { path = "crates/processing_input" }
 processing_glfw = { path = "crates/processing_glfw" }
 processing_webcam = { path = "crates/processing_webcam" }
+rand = "0.10"
+rand_distr = "0.6"
 
 [dependencies]
 bevy = { workspace = true }
@@ -58,7 +60,7 @@ web-sys = { version = "0.3", features = ["Window"] }
 
 [dev-dependencies]
 processing_glfw = { workspace = true }
-rand = "0.10.0"
+rand = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 processing_glfw = { workspace = true, features = ["wayland"] }
