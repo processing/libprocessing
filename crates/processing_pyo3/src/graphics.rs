@@ -807,6 +807,9 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    /// Loads an image from a file and returns an Image object.
+    ///
+    /// The path is relative to the sketch's assets directory.
     pub fn load_image(&self, file: &str) -> PyResult<Image> {
         match image_load(file) {
             Ok(image) => Ok(Image { entity: image }),
@@ -814,6 +817,15 @@ impl Graphics {
         }
     }
 
+    /// Draws an image to the screen.
+    ///
+    /// Optional `d_width` and `d_height` resize the image on screen. If omitted,
+    /// the image's original dimensions are used.
+    ///
+    /// Optional `sx`, `sy`, `s_width`, and `s_height` define a sub-region
+    /// of the source image to draw, specified in pixels.
+    ///
+    /// Affected by `image_mode()`, `tint()`, and the current transform.
     #[pyo3(signature = (source, dx, dy, d_width=None, d_height=None, sx=None, sy=None, s_width=None, s_height=None))]
     pub fn image(
         &self,
@@ -844,6 +856,10 @@ impl Graphics {
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    /// Sets a tint color applied when drawing images.
+    ///
+    /// Accepts the same color arguments as `fill()`. The tint is multiplied
+    /// with the image's pixel colors. Use `no_tint()` to remove.
     #[pyo3(signature = (*args))]
     pub fn tint(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
         let color = extract_color_with_mode(
@@ -855,11 +871,17 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    /// Removes the current tint color so images draw without color modification.
     pub fn no_tint(&self) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::NoTint)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    /// Changes how image position arguments are interpreted.
+    ///
+    /// - `CORNER` (default) — `dx`, `dy` is the top-left corner.
+    /// - `CORNERS` — `dx`, `dy` and `d_width`, `d_height` are opposite corners.
+    /// - `CENTER` — `dx`, `dy` is the center of the image.
     pub fn image_mode(&self, mode: u8) -> PyResult<()> {
         graphics_record_command(
             self.entity,
