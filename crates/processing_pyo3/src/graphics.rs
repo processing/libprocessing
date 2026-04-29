@@ -807,11 +807,65 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn image(&self, file: &str) -> PyResult<Image> {
+    pub fn load_image(&self, file: &str) -> PyResult<Image> {
         match image_load(file) {
             Ok(image) => Ok(Image { entity: image }),
             Err(e) => Err(PyRuntimeError::new_err(format!("{e}"))),
         }
+    }
+
+    #[pyo3(signature = (source, dx, dy, d_width=None, d_height=None, sx=None, sy=None, s_width=None, s_height=None))]
+    pub fn image(
+        &self,
+        source: ImageRef,
+        dx: f32,
+        dy: f32,
+        d_width: Option<f32>,
+        d_height: Option<f32>,
+        sx: Option<f32>,
+        sy: Option<f32>,
+        s_width: Option<f32>,
+        s_height: Option<f32>,
+    ) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Image {
+                entity: source.entity,
+                dx,
+                dy,
+                d_width,
+                d_height,
+                sx,
+                sy,
+                s_width,
+                s_height,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    #[pyo3(signature = (*args))]
+    pub fn tint(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let color = extract_color_with_mode(
+            args,
+            &graphics_get_color_mode(self.entity)
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
+        )?;
+        graphics_record_command(self.entity, DrawCommand::Tint(color))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn no_tint(&self) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::NoTint)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn image_mode(&self, mode: u8) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::ImageMode(processing::prelude::ShapeMode::from(mode)),
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn create_image(&self, width: u32, height: u32) -> PyResult<Image> {

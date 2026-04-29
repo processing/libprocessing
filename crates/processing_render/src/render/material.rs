@@ -17,6 +17,7 @@ pub enum MaterialKey {
     Color {
         transparent: bool,
         background_image: Option<Handle<Image>>,
+        uv_transform: Affine2,
         blend_state: Option<BlendState>,
     },
     Pbr {
@@ -109,12 +110,14 @@ impl MaterialKey {
             MaterialKey::Color {
                 transparent,
                 background_image,
+                uv_transform,
                 blend_state,
             } => StandardMaterial {
                 base_color: Color::WHITE,
                 unlit: true,
                 cull_mode: None,
                 base_color_texture: background_image.clone(),
+                uv_transform: *uv_transform,
                 alpha_mode: if blend_state.is_some() || *transparent {
                     AlphaMode::Blend
                 } else {

@@ -1378,10 +1378,46 @@ mod mewnala {
 
     #[pyfunction]
     #[pyo3(pass_module, signature = (image_file))]
-    fn image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<Image> {
+    fn load_image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<Image> {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        graphics.image(image_file)
+        graphics.load_image(image_file)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (source, dx, dy, d_width=None, d_height=None, sx=None, sy=None, s_width=None, s_height=None))]
+    #[allow(clippy::too_many_arguments)]
+    fn image(
+        module: &Bound<'_, PyModule>,
+        source: graphics::ImageRef,
+        dx: f32,
+        dy: f32,
+        d_width: Option<f32>,
+        d_height: Option<f32>,
+        sx: Option<f32>,
+        sy: Option<f32>,
+        s_width: Option<f32>,
+        s_height: Option<f32>,
+    ) -> PyResult<()> {
+        graphics!(module).image(source, dx, dy, d_width, d_height, sx, sy, s_width, s_height)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (*args))]
+    fn tint(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        graphics!(module).tint(args)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn no_tint(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).no_tint()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn image_mode(module: &Bound<'_, PyModule>, mode: u8) -> PyResult<()> {
+        graphics!(module).image_mode(mode)
     }
 
     #[pyfunction]

@@ -793,7 +793,10 @@ impl PyMat2 {
                 let m01: f32 = args.get_item(1)?.extract()?;
                 let m10: f32 = args.get_item(2)?.extract()?;
                 let m11: f32 = args.get_item(3)?.extract()?;
-                Ok(Self(Mat2::from_cols(Vec2::new(m00, m01), Vec2::new(m10, m11))))
+                Ok(Self(Mat2::from_cols(
+                    Vec2::new(m00, m01),
+                    Vec2::new(m10, m11),
+                )))
             }
             _ => Err(PyTypeError::new_err("Mat2 takes 0 or 4 arguments")),
         }
@@ -818,10 +821,7 @@ impl PyMat2 {
                 .unbind());
         }
         if let Ok(v) = rhs.extract::<PyRef<PyVec2>>() {
-            return Ok(PyVec2(self.0 * v.0)
-                .into_pyobject(py)?
-                .into_any()
-                .unbind());
+            return Ok(PyVec2(self.0 * v.0).into_pyobject(py)?.into_any().unbind());
         }
         Err(PyTypeError::new_err(
             "unsupported operand type(s) for *: 'Mat2'",
