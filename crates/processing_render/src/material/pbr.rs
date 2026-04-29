@@ -8,6 +8,7 @@ pub fn set_property(
     material: &mut StandardMaterial,
     name: &str,
     value: &MaterialValue,
+    texture_handle: Option<Handle<Image>>,
 ) -> Result<()> {
     match name {
         "base_color" | "color" => {
@@ -86,6 +87,14 @@ pub fn set_property(
                     )));
                 }
             };
+        }
+        "base_color_texture" | "texture" => {
+            let Some(handle) = texture_handle else {
+                return Err(ProcessingError::InvalidArgument(format!(
+                    "'{name}' expects Texture, got {value:?}"
+                )));
+            };
+            material.base_color_texture = Some(handle);
         }
         _ => {
             return Err(ProcessingError::UnknownMaterialProperty(name.to_string()));

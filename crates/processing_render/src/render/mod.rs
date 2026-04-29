@@ -192,74 +192,41 @@ pub fn flush_draw_commands(
                     state.stroke_config.line_join = join;
                 }
                 DrawCommand::Roughness(r) => {
-                    state.material_key = match state.material_key {
-                        MaterialKey::Pbr {
-                            albedo,
-                            metallic,
-                            emissive,
-                            ..
-                        } => MaterialKey::Pbr {
-                            albedo,
-                            roughness: (r * 255.0) as u8,
-                            metallic,
-                            emissive,
-                            blend_state: None,
-                        },
-                        _ => MaterialKey::Pbr {
-                            albedo: [255, 255, 255, 255],
-                            roughness: (r * 255.0) as u8,
-                            metallic: 0,
-                            emissive: [0, 0, 0, 0],
-                            blend_state: None,
-                        },
-                    };
+                    let mut pbr = state.material_key.as_pbr();
+                    pbr.roughness = (r * 255.0) as u8;
+                    pbr.blend_state = None;
+                    state.material_key = pbr.into();
                 }
                 DrawCommand::Metallic(m) => {
-                    state.material_key = match state.material_key {
-                        MaterialKey::Pbr {
-                            albedo,
-                            roughness,
-                            emissive,
-                            ..
-                        } => MaterialKey::Pbr {
-                            albedo,
-                            roughness,
-                            metallic: (m * 255.0) as u8,
-                            emissive,
-                            blend_state: None,
-                        },
-                        _ => MaterialKey::Pbr {
-                            albedo: [255, 255, 255, 255],
-                            roughness: 128,
-                            metallic: (m * 255.0) as u8,
-                            emissive: [0, 0, 0, 0],
-                            blend_state: None,
-                        },
-                    };
+                    let mut pbr = state.material_key.as_pbr();
+                    pbr.metallic = (m * 255.0) as u8;
+                    pbr.blend_state = None;
+                    state.material_key = pbr.into();
                 }
                 DrawCommand::Emissive(color) => {
-                    let [r, g, b, a] = color.to_srgba().to_u8_array();
-                    state.material_key = match state.material_key {
-                        MaterialKey::Pbr {
-                            albedo,
-                            roughness,
-                            metallic,
-                            ..
-                        } => MaterialKey::Pbr {
-                            albedo,
-                            roughness,
-                            metallic,
-                            emissive: [r, g, b, a],
-                            blend_state: None,
-                        },
-                        _ => MaterialKey::Pbr {
-                            albedo: [255, 255, 255, 255],
-                            roughness: 128,
-                            metallic: 0,
-                            emissive: [r, g, b, a],
-                            blend_state: None,
-                        },
-                    };
+                    let mut pbr = state.material_key.as_pbr();
+                    pbr.emissive = color.to_srgba().to_u8_array();
+                    pbr.blend_state = None;
+                    state.material_key = pbr.into();
+                }
+                DrawCommand::Texture(entity) => {
+                    if let Ok(img) = p_images.get(entity) {
+                        let mut pbr = state.material_key.as_pbr();
+                        pbr.base_color_texture = Some(img.handle.clone());
+                        state.material_key = pbr.into();
+                    }
+                }
+                DrawCommand::NoTexture => {
+                    if let MaterialKey::Pbr { .. } = &state.material_key {
+                        let mut pbr = state.material_key.as_pbr();
+                        pbr.base_color_texture = None;
+                        state.material_key = pbr.into();
+                    }
+                }
+                DrawCommand::TextureTransform(transform) => {
+                    let mut pbr = state.material_key.as_pbr();
+                    pbr.uv_transform = transform;
+                    state.material_key = pbr.into();
                 }
                 DrawCommand::Unlit => {
                     state.material_key = MaterialKey::Color {
@@ -844,6 +811,9 @@ pub fn flush_draw_commands(
                 DrawCommand::ResetMatrix => state.transform.reset(),
                 DrawCommand::Translate(v) => state.transform.translate(v.x, v.y),
                 DrawCommand::Rotate { angle } => state.transform.rotate(angle),
+                DrawCommand::RotateX { angle } => state.transform.rotate_x(angle),
+                DrawCommand::RotateY { angle } => state.transform.rotate_y(angle),
+                DrawCommand::RotateZ { angle } => state.transform.rotate_z(angle),
                 DrawCommand::Scale(v) => state.transform.scale(v.x, v.y),
                 DrawCommand::ShearX { angle } => state.transform.shear_x(angle),
                 DrawCommand::ShearY { angle } => state.transform.shear_y(angle),
@@ -1147,20 +1117,11 @@ fn material_key_with_color(
             background_image: background_image.clone(),
             blend_state,
         },
-        MaterialKey::Pbr {
-            roughness,
-            metallic,
-            emissive,
-            ..
-        } => {
-            let [r, g, b, a] = color.to_srgba().to_u8_array();
-            MaterialKey::Pbr {
-                albedo: [r, g, b, a],
-                roughness: *roughness,
-                metallic: *metallic,
-                emissive: *emissive,
-                blend_state,
-            }
+        MaterialKey::Pbr { .. } => {
+            let mut pbr = key.as_pbr();
+            pbr.albedo = color.to_srgba().to_u8_array();
+            pbr.blend_state = blend_state;
+            pbr.into()
         }
         MaterialKey::Custom { entity, .. } => MaterialKey::Custom {
             entity: *entity,

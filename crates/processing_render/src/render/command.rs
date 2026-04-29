@@ -1,3 +1,4 @@
+use bevy::math::Affine2;
 use bevy::prelude::*;
 use bevy::render::render_resource::{BlendComponent, BlendFactor, BlendOperation, BlendState};
 use processing_core::error::{self, ProcessingError};
@@ -306,6 +307,9 @@ pub enum DrawCommand {
     Roughness(f32),
     Metallic(f32),
     Emissive(Color),
+    Texture(Entity),
+    NoTexture,
+    TextureTransform(Affine2),
     Unlit,
     RectMode(ShapeMode),
     EllipseMode(ShapeMode),
@@ -414,6 +418,15 @@ pub enum DrawCommand {
     ResetMatrix,
     Translate(Vec2),
     Rotate {
+        angle: f32,
+    },
+    RotateX {
+        angle: f32,
+    },
+    RotateY {
+        angle: f32,
+    },
+    RotateZ {
         angle: f32,
     },
     Scale(Vec2),

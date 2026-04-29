@@ -624,6 +624,10 @@ mod mewnala {
         use super::*;
 
         #[pymodule_export]
+        use crate::math::PyAffine2;
+        #[pymodule_export]
+        use crate::math::PyMat2;
+        #[pymodule_export]
         use crate::math::PyQuat;
         #[pymodule_export]
         use crate::math::PyVec2;
@@ -1236,6 +1240,24 @@ mod mewnala {
         graphics!(module).rotate(angle)
     }
 
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn rotate_x(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
+        graphics!(module).rotate_x(angle)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn rotate_y(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
+        graphics!(module).rotate_y(angle)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn rotate_z(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
+        graphics!(module).rotate_z(angle)
+    }
+
     #[pyfunction(name = "box")]
     #[pyo3(pass_module)]
     fn draw_box(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<()> {
@@ -1445,6 +1467,27 @@ mod mewnala {
     #[pyo3(pass_module, signature = (*args))]
     fn emissive(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
         graphics!(module).emissive(args)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn texture(module: &Bound<'_, PyModule>, source: graphics::ImageRef) -> PyResult<()> {
+        graphics!(module).texture(source)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn no_texture(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).no_texture()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn texture_transform(
+        module: &Bound<'_, PyModule>,
+        transform: crate::math::PyAffine2,
+    ) -> PyResult<()> {
+        graphics!(module).texture_transform(transform)
     }
 
     #[pyfunction]

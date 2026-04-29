@@ -1,3 +1,4 @@
+use bevy::math::Affine2;
 use bevy::pbr::ExtendedMaterial;
 use bevy::prelude::*;
 use bevy::render::render_resource::BlendState;
@@ -11,7 +12,7 @@ pub struct UntypedMaterial(pub UntypedHandle);
 
 pub type ProcessingExtendedMaterial = ExtendedMaterial<StandardMaterial, ProcessingMaterial>;
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum MaterialKey {
     Color {
         transparent: bool,
@@ -23,6 +24,8 @@ pub enum MaterialKey {
         roughness: u8,
         metallic: u8,
         emissive: [u8; 4],
+        base_color_texture: Option<Handle<Image>>,
+        uv_transform: Affine2,
         blend_state: Option<BlendState>,
     },
     Custom {
@@ -31,7 +34,68 @@ pub enum MaterialKey {
     },
 }
 
+pub struct PbrFields {
+    pub albedo: [u8; 4],
+    pub roughness: u8,
+    pub metallic: u8,
+    pub emissive: [u8; 4],
+    pub base_color_texture: Option<Handle<Image>>,
+    pub uv_transform: Affine2,
+    pub blend_state: Option<BlendState>,
+}
+
+impl Default for PbrFields {
+    fn default() -> Self {
+        Self {
+            albedo: [255, 255, 255, 255],
+            roughness: 128,
+            metallic: 0,
+            emissive: [0, 0, 0, 0],
+            base_color_texture: None,
+            uv_transform: Affine2::IDENTITY,
+            blend_state: None,
+        }
+    }
+}
+
+impl From<PbrFields> for MaterialKey {
+    fn from(f: PbrFields) -> Self {
+        MaterialKey::Pbr {
+            albedo: f.albedo,
+            roughness: f.roughness,
+            metallic: f.metallic,
+            emissive: f.emissive,
+            base_color_texture: f.base_color_texture,
+            uv_transform: f.uv_transform,
+            blend_state: f.blend_state,
+        }
+    }
+}
+
 impl MaterialKey {
+    pub fn as_pbr(&self) -> PbrFields {
+        match self {
+            MaterialKey::Pbr {
+                albedo,
+                roughness,
+                metallic,
+                emissive,
+                base_color_texture,
+                uv_transform,
+                blend_state,
+            } => PbrFields {
+                albedo: *albedo,
+                roughness: *roughness,
+                metallic: *metallic,
+                emissive: *emissive,
+                base_color_texture: base_color_texture.clone(),
+                uv_transform: *uv_transform,
+                blend_state: *blend_state,
+            },
+            _ => PbrFields::default(),
+        }
+    }
+
     pub fn blend_state(&self) -> Option<BlendState> {
         match self {
             MaterialKey::Color { blend_state, .. } => *blend_state,
@@ -63,6 +127,8 @@ impl MaterialKey {
                 roughness,
                 metallic,
                 emissive,
+                base_color_texture,
+                uv_transform,
                 ..
             } => {
                 let base_color = Color::srgba(
@@ -83,6 +149,8 @@ impl MaterialKey {
                         emissive[2] as f32 / 255.0,
                         emissive[3] as f32 / 255.0,
                     ),
+                    base_color_texture: base_color_texture.clone(),
+                    uv_transform: *uv_transform,
                     ..default()
                 }
             }

@@ -168,10 +168,32 @@ pub struct Image {
     pub(crate) entity: Entity,
 }
 
-impl Image {
-    #[expect(dead_code)] // it's only used by webcam atm
-    pub(crate) fn from_entity(entity: Entity) -> Self {
-        Self { entity }
+pub(crate) struct ImageRef {
+    pub entity: Entity,
+}
+
+impl<'a, 'py> FromPyObject<'a, 'py> for ImageRef {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
+        if let Ok(img) = ob.extract::<PyRef<Image>>() {
+            return Ok(ImageRef { entity: img.entity });
+        }
+        #[cfg(feature = "video")]
+        if let Ok(vid) = ob.extract::<PyRef<crate::video::Video>>() {
+            return Ok(ImageRef {
+                entity: vid.image_entity()?,
+            });
+        }
+        #[cfg(feature = "webcam")]
+        if let Ok(cam) = ob.extract::<PyRef<crate::webcam::Webcam>>() {
+            return Ok(ImageRef {
+                entity: cam.image_entity()?,
+            });
+        }
+        Err(pyo3::exceptions::PyTypeError::new_err(
+            "expected an Image, Video, or Webcam",
+        ))
     }
 }
 
@@ -831,6 +853,21 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    pub fn rotate_x(&self, angle: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::RotateX { angle })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn rotate_y(&self, angle: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::RotateY { angle })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn rotate_z(&self, angle: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::RotateZ { angle })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     pub fn draw_box(&self, width: f32, height: f32, depth: f32) -> PyResult<()> {
         graphics_record_command(
             self.entity,
@@ -957,6 +994,21 @@ impl Graphics {
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
         )?;
         graphics_record_command(self.entity, DrawCommand::Emissive(color))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn texture(&self, source: ImageRef) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Texture(source.entity))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn no_texture(&self) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::NoTexture)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn texture_transform(&self, transform: crate::math::PyAffine2) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::TextureTransform(transform.0))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 

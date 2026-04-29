@@ -3,6 +3,7 @@ use processing::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
+use crate::graphics::ImageRef;
 use crate::math::{PyVec2, PyVec3, PyVec4};
 use crate::shader::Shader;
 
@@ -12,6 +13,9 @@ pub struct Material {
 }
 
 fn py_to_material_value(value: &Bound<'_, PyAny>) -> PyResult<material::MaterialValue> {
+    if let Ok(img_ref) = value.extract::<ImageRef>() {
+        return Ok(material::MaterialValue::Texture(img_ref.entity));
+    }
     if let Ok(v) = value.extract::<f32>() {
         return Ok(material::MaterialValue::Float(v));
     }
