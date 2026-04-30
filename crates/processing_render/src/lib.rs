@@ -933,6 +933,15 @@ pub fn image_update_region(
     })
 }
 
+/// Set the sampler for an image (filter mode + wrap modes).
+pub fn image_set_sampler(entity: Entity, filter: u8, wrap_x: u8, wrap_y: u8) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(image::set_sampler, (entity, filter, wrap_x, wrap_y))
+            .unwrap()
+    })
+}
+
 /// Destroy an existing image and free its resources.
 pub fn image_destroy(entity: Entity) -> error::Result<()> {
     app_mut(|app| {

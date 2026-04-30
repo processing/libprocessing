@@ -1,4 +1,3 @@
-use bevy::math::Affine2;
 use bevy::prelude::*;
 use bevy::render::render_resource::{BlendComponent, BlendFactor, BlendOperation, BlendState};
 use processing_core::error::{self, ProcessingError};
@@ -307,9 +306,6 @@ pub enum DrawCommand {
     Roughness(f32),
     Metallic(f32),
     Emissive(Color),
-    Texture(Entity),
-    NoTexture,
-    TextureTransform(Affine2),
     Unlit,
     Tint(Color),
     NoTint,

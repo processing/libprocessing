@@ -132,6 +132,66 @@ impl PyBlendMode {
     const OP_MAX: u8 = 4;
 }
 
+/// Configures how an image is sampled when drawn.
+///
+/// Controls texture filtering and edge wrapping behavior.
+///
+/// - `filter` — `Sampler.LINEAR` (smooth) or `Sampler.NEAREST` (pixelated).
+/// - `wrap` — `Sampler.CLAMP` (default), `Sampler.REPEAT`, or `Sampler.MIRROR`.
+///   Use `wrap_x`/`wrap_y` to set each axis independently.
+#[pyclass]
+#[derive(Clone)]
+pub struct Sampler {
+    pub(crate) filter: u8,
+    pub(crate) wrap_x: u8,
+    pub(crate) wrap_y: u8,
+}
+
+#[pymethods]
+impl Sampler {
+    #[new]
+    #[pyo3(signature = (*, filter=0, wrap=0, wrap_x=None, wrap_y=None))]
+    fn new(filter: u8, wrap: u8, wrap_x: Option<u8>, wrap_y: Option<u8>) -> Self {
+        Self {
+            filter,
+            wrap_x: wrap_x.unwrap_or(wrap),
+            wrap_y: wrap_y.unwrap_or(wrap),
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        let filter_name = match self.filter {
+            0 => "LINEAR",
+            1 => "NEAREST",
+            _ => "?",
+        };
+        let wrap_name = |v: u8| match v {
+            0 => "CLAMP",
+            1 => "REPEAT",
+            2 => "MIRROR",
+            _ => "?",
+        };
+        format!(
+            "Sampler(filter={}, wrap_x={}, wrap_y={})",
+            filter_name,
+            wrap_name(self.wrap_x),
+            wrap_name(self.wrap_y)
+        )
+    }
+
+    #[classattr]
+    const LINEAR: u8 = 0;
+    #[classattr]
+    const NEAREST: u8 = 1;
+
+    #[classattr]
+    const CLAMP: u8 = 0;
+    #[classattr]
+    const REPEAT: u8 = 1;
+    #[classattr]
+    const MIRROR: u8 = 2;
+}
+
 pub use crate::surface::Surface;
 
 #[pyclass]
@@ -194,6 +254,20 @@ impl<'a, 'py> FromPyObject<'a, 'py> for ImageRef {
         Err(pyo3::exceptions::PyTypeError::new_err(
             "expected an Image, Video, or Webcam",
         ))
+    }
+}
+
+#[pymethods]
+impl Image {
+    /// Applies a `Sampler` to this image, controlling filtering and wrapping.
+    ///
+    /// ```python
+    /// s = Sampler(filter=Sampler.NEAREST, wrap=Sampler.REPEAT)
+    /// img.sampler(s)
+    /// ```
+    fn sampler(&self, sampler: &Sampler) -> PyResult<()> {
+        image_set_sampler(self.entity, sampler.filter, sampler.wrap_x, sampler.wrap_y)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 }
 
@@ -1070,21 +1144,6 @@ impl Graphics {
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
         )?;
         graphics_record_command(self.entity, DrawCommand::Emissive(color))
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
-    }
-
-    pub fn texture(&self, source: ImageRef) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::Texture(source.entity))
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
-    }
-
-    pub fn no_texture(&self) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::NoTexture)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
-    }
-
-    pub fn texture_transform(&self, transform: crate::math::PyAffine2) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::TextureTransform(transform.0))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 

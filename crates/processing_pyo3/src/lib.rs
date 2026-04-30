@@ -26,7 +26,8 @@ mod time;
 mod webcam;
 
 use graphics::{
-    Geometry, Graphics, Image, Light, PyBlendMode, Topology, get_graphics, get_graphics_mut,
+    Geometry, Graphics, Image, Light, PyBlendMode, Sampler, Topology, get_graphics,
+    get_graphics_mut,
 };
 use material::Material;
 
@@ -339,6 +340,8 @@ mod mewnala {
     use super::Material;
     #[pymodule_export]
     use super::PyBlendMode;
+    #[pymodule_export]
+    use super::Sampler;
     #[pymodule_export]
     use super::Shader;
     #[pymodule_export]
@@ -1516,27 +1519,6 @@ mod mewnala {
     #[pyo3(pass_module, signature = (*args))]
     fn emissive(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
         graphics!(module).emissive(args)
-    }
-
-    #[pyfunction]
-    #[pyo3(pass_module)]
-    fn texture(module: &Bound<'_, PyModule>, source: graphics::ImageRef) -> PyResult<()> {
-        graphics!(module).texture(source)
-    }
-
-    #[pyfunction]
-    #[pyo3(pass_module)]
-    fn no_texture(module: &Bound<'_, PyModule>) -> PyResult<()> {
-        graphics!(module).no_texture()
-    }
-
-    #[pyfunction]
-    #[pyo3(pass_module)]
-    fn texture_transform(
-        module: &Bound<'_, PyModule>,
-        transform: crate::math::PyAffine2,
-    ) -> PyResult<()> {
-        graphics!(module).texture_transform(transform)
     }
 
     #[pyfunction]
