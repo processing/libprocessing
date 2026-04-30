@@ -139,7 +139,7 @@ impl PyBlendMode {
 /// - `filter` — `Sampler.LINEAR` (smooth) or `Sampler.NEAREST` (pixelated).
 /// - `wrap` — `Sampler.CLAMP` (default), `Sampler.REPEAT`, or `Sampler.MIRROR`.
 ///   Use `wrap_x`/`wrap_y` to set each axis independently.
-#[pyclass]
+#[pyclass(from_py_object)]
 #[derive(Clone)]
 pub struct Sampler {
     pub(crate) filter: u8,
