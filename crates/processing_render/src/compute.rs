@@ -277,17 +277,25 @@ pub fn set_compute_property(
         .get_mut(entity)
         .map_err(|_| ProcessingError::ComputeNotFound)?;
 
-    let category = compute
-        .shader
-        .reflection()
-        .parameter(&name)
-        .map(|p| p.category())
-        .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.clone()))?;
-
-    match (&value, category) {
-        (ShaderValue::Buffer(buf_entity), ParameterCategory::Storage { read_only }) => {
+    // Resource values (buffers / textures) bind directly to top-level parameters
+    // and need a category check. Scalar / vector / matrix values may target
+    // either a top-level uniform or a nested struct field (e.g. `params.dt`),
+    // so we let `apply_reflect_field` handle the path resolution itself.
+    match value {
+        ShaderValue::Buffer(buf_entity) => {
+            let category = compute
+                .shader
+                .reflection()
+                .parameter(&name)
+                .map(|p| p.category())
+                .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.clone()))?;
+            let ParameterCategory::Storage { read_only } = category else {
+                return Err(ProcessingError::InvalidArgument(format!(
+                    "property `{name}` expects {category:?}, got Buffer",
+                )));
+            };
             let mut buffer = p_buffers
-                .get_mut(*buf_entity)
+                .get_mut(buf_entity)
                 .map_err(|_| ProcessingError::BufferNotFound)?;
             compute.shader.insert(&name, buffer.handle.clone());
             if !read_only {
@@ -295,26 +303,31 @@ pub fn set_compute_property(
             }
             Ok(())
         }
-        (ShaderValue::Texture(img_entity), ParameterCategory::Texture)
-        | (ShaderValue::Texture(img_entity), ParameterCategory::StorageTexture) => {
+        ShaderValue::Texture(img_entity) => {
+            let category = compute
+                .shader
+                .reflection()
+                .parameter(&name)
+                .map(|p| p.category())
+                .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.clone()))?;
+            if !matches!(
+                category,
+                ParameterCategory::Texture | ParameterCategory::StorageTexture
+            ) {
+                return Err(ProcessingError::InvalidArgument(format!(
+                    "property `{name}` expects {category:?}, got Texture",
+                )));
+            }
             let image = p_images
-                .get(*img_entity)
+                .get(img_entity)
                 .map_err(|_| ProcessingError::ImageNotFound)?;
             compute.shader.insert(&name, image.handle.clone());
             Ok(())
         }
-        (ShaderValue::Buffer(_), cat) | (ShaderValue::Texture(_), cat) => {
-            Err(ProcessingError::InvalidArgument(format!(
-                "property `{name}` expects {cat:?}, got {value:?}",
-            )))
-        }
-        (_, ParameterCategory::Uniform) => {
-            let reflect_value: Box<dyn PartialReflect> = shader_value_to_reflect(&value)?;
+        v => {
+            let reflect_value: Box<dyn PartialReflect> = shader_value_to_reflect(&v)?;
             apply_reflect_field(&mut compute.shader, &name, &*reflect_value)
         }
-        (_, cat) => Err(ProcessingError::InvalidArgument(format!(
-            "property `{name}` expects {cat:?}, got non-resource value"
-        ))),
     }
 }
 

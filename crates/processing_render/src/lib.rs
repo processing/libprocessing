@@ -3,6 +3,7 @@
 pub mod camera;
 pub mod color;
 pub mod compute;
+pub mod field;
 pub mod geometry;
 pub mod gltf;
 pub mod graphics;
@@ -64,6 +65,7 @@ impl Plugin for ProcessingRenderPlugin {
             bevy::pbr::wireframe::WireframePlugin::default(),
             material::custom::CustomMaterialPlugin,
             compute::ComputePlugin,
+            field::FieldPlugin,
             camera::OrbitCameraPlugin,
             bevy::camera_controller::free_camera::FreeCameraPlugin,
             bevy::camera_controller::pan_camera::PanCameraPlugin,
@@ -76,6 +78,8 @@ impl Plugin for ProcessingRenderPlugin {
                     flush_draw_commands,
                     add_processing_materials,
                     add_custom_materials,
+                    field::material::add_field_color_materials,
+                    field::material::add_field_pbr_materials,
                 )
                     .chain()
                     .before(AssetEventSystems),
@@ -1078,6 +1082,24 @@ pub fn geometry_attribute_uv() -> Entity {
     app_mut(|app| Ok(app.world().resource::<geometry::BuiltinAttributes>().uv)).unwrap()
 }
 
+pub fn geometry_attribute_rotation() -> Entity {
+    app_mut(|app| {
+        Ok(app
+            .world()
+            .resource::<geometry::BuiltinAttributes>()
+            .rotation)
+    })
+    .unwrap()
+}
+
+pub fn geometry_attribute_scale() -> Entity {
+    app_mut(|app| Ok(app.world().resource::<geometry::BuiltinAttributes>().scale)).unwrap()
+}
+
+pub fn geometry_attribute_dead() -> Entity {
+    app_mut(|app| Ok(app.world().resource::<geometry::BuiltinAttributes>().dead)).unwrap()
+}
+
 pub fn geometry_attribute_destroy(entity: Entity) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
@@ -1413,6 +1435,62 @@ pub fn material_create_pbr() -> error::Result<Entity> {
             .world_mut()
             .run_system_cached(material::create_pbr)
             .unwrap())
+    })
+}
+
+/// Create an unlit material that reads each particle's color from the given
+/// PBuffer. The buffer is expected to hold tightly-packed `Float4` colors
+/// (RGBA, 16 bytes per particle).
+pub fn material_create_field_color(color_buffer_entity: Entity) -> error::Result<Entity> {
+    use crate::field::material::FieldColorMaterial;
+    use crate::render::material::UntypedMaterial;
+    app_mut(|app| {
+        let handle = app
+            .world()
+            .get::<compute::Buffer>(color_buffer_entity)
+            .ok_or(error::ProcessingError::BufferNotFound)?
+            .handle
+            .clone();
+        let world = app.world_mut();
+        let asset_handle = world
+            .resource_mut::<Assets<FieldColorMaterial>>()
+            .add(FieldColorMaterial { colors: handle });
+        Ok(world
+            .spawn(UntypedMaterial(asset_handle.untyped()))
+            .id())
+    })
+}
+
+/// PBR-lit version of [`material_create_field_color`]. Particles get standard
+/// directional/point/spot lighting; per-particle color from the buffer
+/// modulates the StandardMaterial base color (default white).
+pub fn material_create_field_pbr(color_buffer_entity: Entity) -> error::Result<Entity> {
+    use bevy::pbr::ExtendedMaterial;
+    use crate::field::material::{FieldPbrExtension, FieldPbrMaterial};
+    use crate::render::material::UntypedMaterial;
+    app_mut(|app| {
+        let handle = app
+            .world()
+            .get::<compute::Buffer>(color_buffer_entity)
+            .ok_or(error::ProcessingError::BufferNotFound)?
+            .handle
+            .clone();
+        let world = app.world_mut();
+        let asset_handle = world
+            .resource_mut::<Assets<FieldPbrMaterial>>()
+            .add(ExtendedMaterial {
+                base: StandardMaterial {
+                    base_color: Color::WHITE,
+                    perceptual_roughness: 0.4,
+                    metallic: 0.0,
+                    cull_mode: None,
+                    ..default()
+                },
+                extension: FieldPbrExtension { colors: handle },
+            });
+        Ok(world
+            .spawn(UntypedMaterial(asset_handle.untyped()))
+            .id())
     })
 }
 
@@ -1852,4 +1930,169 @@ pub fn compute_destroy(entity: Entity) -> error::Result<()> {
             .run_system_cached_with(compute::destroy_compute, entity)
             .unwrap()
     })
+}
+
+pub fn field_create(capacity: u32, attribute_entities: Vec<Entity>) -> error::Result<Entity> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(field::create, (capacity, attribute_entities))
+            .unwrap()
+    })
+}
+
+/// Create a Field whose capacity matches `geometry`'s vertex count and whose
+/// PBuffers are pre-seeded from the geometry's mesh attributes when names line
+/// up (`position`, `normal`, `color`, `uv`). Custom attributes the mesh doesn't
+/// supply are zero-initialized — the user fills them via `buffer_write` or
+/// `field_emit`.
+pub fn field_create_from_geometry(
+    geometry_entity: Entity,
+    attribute_entities: Vec<Entity>,
+) -> error::Result<Entity> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(
+                field::create_from_geometry,
+                (geometry_entity, attribute_entities),
+            )
+            .unwrap()
+    })
+}
+
+pub fn field_destroy(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(field::destroy, entity)
+            .unwrap()
+    })
+}
+
+pub fn field_capacity(entity: Entity) -> error::Result<u32> {
+    app_mut(|app| {
+        Ok(app
+            .world()
+            .get::<field::Field>(entity)
+            .ok_or(error::ProcessingError::FieldNotFound)?
+            .capacity)
+    })
+}
+
+pub fn field_pbuffer(entity: Entity, attribute_entity: Entity) -> error::Result<Option<Entity>> {
+    app_mut(|app| {
+        Ok(app
+            .world()
+            .get::<field::Field>(entity)
+            .ok_or(error::ProcessingError::FieldNotFound)?
+            .pbuffer(attribute_entity))
+    })
+}
+
+/// Emit `n` particles into a Field, writing per-attribute byte payloads into the
+/// next `n` slots starting at the field's ring-buffer head. Each entry in
+/// `attribute_data` must match the registered attribute's `byte_size * n`.
+/// On wrap, oldest particles in the ring are overwritten.
+pub fn field_emit(
+    field_entity: Entity,
+    n: u32,
+    attribute_data: Vec<(Entity, Vec<u8>)>,
+) -> error::Result<()> {
+    if n == 0 {
+        return Ok(());
+    }
+
+    let (capacity, head, attr_specs) = app_mut(|app| {
+        let world = app.world();
+        let field = world
+            .get::<field::Field>(field_entity)
+            .ok_or(error::ProcessingError::FieldNotFound)?;
+        if n > field.capacity {
+            return Err(error::ProcessingError::InvalidArgument(format!(
+                "field_emit n={} exceeds field capacity {}",
+                n, field.capacity
+            )));
+        }
+        let mut specs: Vec<(Entity, u32, Entity)> = Vec::with_capacity(attribute_data.len());
+        for (attr_entity, _) in &attribute_data {
+            let attr = world
+                .get::<geometry::Attribute>(*attr_entity)
+                .ok_or(error::ProcessingError::InvalidEntity)?;
+            let pbuf = field.pbuffer(*attr_entity).ok_or_else(|| {
+                error::ProcessingError::InvalidArgument(format!(
+                    "field has no PBuffer for attribute {:?}",
+                    attr_entity
+                ))
+            })?;
+            specs.push((*attr_entity, attr.format.byte_size() as u32, pbuf));
+        }
+        Ok((field.capacity, field.emit_head, specs))
+    })?;
+
+    for ((_, bytes), &(_, byte_size, pbuf)) in attribute_data.iter().zip(attr_specs.iter()) {
+        let expected = (n as usize) * (byte_size as usize);
+        if bytes.len() != expected {
+            return Err(error::ProcessingError::InvalidArgument(format!(
+                "expected {} bytes ({} particles * {} bytes), got {}",
+                expected,
+                n,
+                byte_size,
+                bytes.len()
+            )));
+        }
+        let first_chunk_n = (capacity - head).min(n);
+        let split = (first_chunk_n as usize) * (byte_size as usize);
+        let first_offset = (head as u64) * (byte_size as u64);
+        buffer_write_element(pbuf, first_offset, bytes[..split].to_vec())?;
+        if first_chunk_n < n {
+            buffer_write_element(pbuf, 0, bytes[split..].to_vec())?;
+        }
+    }
+
+    app_mut(|app| {
+        let mut field = app
+            .world_mut()
+            .get_mut::<field::Field>(field_entity)
+            .ok_or(error::ProcessingError::FieldNotFound)?;
+        field.emit_head = (field.emit_head + n) % field.capacity;
+        Ok(())
+    })
+}
+
+/// Dispatch a compute pass against a Field's PBuffers. Each PBuffer is bound
+/// by its attribute's name; bindings the shader doesn't declare are skipped.
+/// Workgroup size is fixed at 64 — the shader must declare `@workgroup_size(64)`.
+///
+/// Any non-PBuffer parameters (uniforms, etc.) on the compute should be set via
+/// `compute_set` before calling this.
+pub fn field_apply(field_entity: Entity, compute_entity: Entity) -> error::Result<()> {
+    const WORKGROUP_SIZE: u32 = 64;
+
+    let (capacity, pbuffers) = app_mut(|app| {
+        let world = app.world();
+        let field = world
+            .get::<field::Field>(field_entity)
+            .ok_or(error::ProcessingError::FieldNotFound)?;
+        let mut pbuffers: Vec<(String, Entity)> = Vec::with_capacity(field.pbuffers.len());
+        for (&attr_entity, &pbuf_entity) in &field.pbuffers {
+            let attr = world
+                .get::<geometry::Attribute>(attr_entity)
+                .ok_or(error::ProcessingError::InvalidEntity)?;
+            pbuffers.push((attr.name.to_string(), pbuf_entity));
+        }
+        Ok((field.capacity, pbuffers))
+    })?;
+
+    for (name, pbuf_entity) in pbuffers {
+        match compute_set(
+            compute_entity,
+            name,
+            shader_value::ShaderValue::Buffer(pbuf_entity),
+        ) {
+            Ok(()) => {}
+            Err(error::ProcessingError::UnknownShaderProperty(_)) => {}
+            Err(e) => return Err(e),
+        }
+    }
+
+    let workgroup_count = capacity.div_ceil(WORKGROUP_SIZE);
+    compute_dispatch(compute_entity, workgroup_count, 1, 1)
 }

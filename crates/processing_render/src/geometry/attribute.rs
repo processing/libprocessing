@@ -148,6 +148,15 @@ impl AttributeFormat {
         }
     }
 
+    pub fn byte_size(self) -> usize {
+        match self {
+            Self::Float => 4,
+            Self::Float2 => 8,
+            Self::Float3 => 12,
+            Self::Float4 => 16,
+        }
+    }
+
     pub fn from_u8(value: u8) -> Option<Self> {
         match value {
             1 => Some(Self::Float),
@@ -189,6 +198,22 @@ impl Attribute {
         }
     }
 
+    /// Like [`Self::from_builtin`] but with a friendly user-facing name.
+    /// `inner` is the underlying Bevy mesh attribute (used for mesh layout
+    /// matching); `name` is the identifier the user sees and that custom
+    /// shaders bind by.
+    pub fn from_builtin_with_name(
+        name: &'static str,
+        inner: MeshVertexAttribute,
+        format: AttributeFormat,
+    ) -> Self {
+        Self {
+            name,
+            format,
+            inner,
+        }
+    }
+
     pub fn id(&self) -> u64 {
         hash_attr_name(self.name)
     }
@@ -200,33 +225,54 @@ pub struct BuiltinAttributes {
     pub normal: Entity,
     pub color: Entity,
     pub uv: Entity,
+    /// Per-instance rotation as a quaternion `(x, y, z, w)`. Field-only.
+    pub rotation: Entity,
+    /// Per-instance scale `(x, y, z)`. Field-only.
+    pub scale: Entity,
+    /// Per-particle lifecycle flag: `0.0` = alive, non-zero = dead (skipped in
+    /// preprocessing). Field-only. The pack pass writes this into
+    /// `MeshCullingData::dead`.
+    pub dead: Entity,
 }
 
 impl FromWorld for BuiltinAttributes {
     fn from_world(world: &mut World) -> Self {
         let position = world
-            .spawn(Attribute::from_builtin(
+            .spawn(Attribute::from_builtin_with_name(
+                "position",
                 Mesh::ATTRIBUTE_POSITION,
                 AttributeFormat::Float3,
             ))
             .id();
         let normal = world
-            .spawn(Attribute::from_builtin(
+            .spawn(Attribute::from_builtin_with_name(
+                "normal",
                 Mesh::ATTRIBUTE_NORMAL,
                 AttributeFormat::Float3,
             ))
             .id();
         let color = world
-            .spawn(Attribute::from_builtin(
+            .spawn(Attribute::from_builtin_with_name(
+                "color",
                 Mesh::ATTRIBUTE_COLOR,
                 AttributeFormat::Float4,
             ))
             .id();
         let uv = world
-            .spawn(Attribute::from_builtin(
+            .spawn(Attribute::from_builtin_with_name(
+                "uv",
                 Mesh::ATTRIBUTE_UV_0,
                 AttributeFormat::Float2,
             ))
+            .id();
+        let rotation = world
+            .spawn(Attribute::new("rotation", AttributeFormat::Float4))
+            .id();
+        let scale = world
+            .spawn(Attribute::new("scale", AttributeFormat::Float3))
+            .id();
+        let dead = world
+            .spawn(Attribute::new("dead", AttributeFormat::Float))
             .id();
 
         Self {
@@ -234,6 +280,9 @@ impl FromWorld for BuiltinAttributes {
             normal,
             color,
             uv,
+            rotation,
+            scale,
+            dead,
         }
     }
 }

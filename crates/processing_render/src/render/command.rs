@@ -424,6 +424,10 @@ pub enum DrawCommand {
         angle: f32,
     },
     Geometry(Entity),
+    Field {
+        field: Entity,
+        geometry: Entity,
+    },
     BlendMode(Option<BlendState>),
     Material(Entity),
     Box {

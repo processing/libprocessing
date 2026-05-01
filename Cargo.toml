@@ -24,7 +24,7 @@ too_many_arguments = "allow"
 
 [workspace.dependencies]
 bevy = { git = "https://github.com/processing/bevy", branch = "main", features = ["file_watcher", "shader_format_wesl", "free_camera", "pan_camera"] }
-bevy_naga_reflect = { git = "https://github.com/tychedelia/bevy_naga_reflect" }
+bevy_naga_reflect = { path = "../../tychedelia/bevy_naga_reflect" }
 bevy_cuda = { git = "https://github.com/tychedelia/bevy_cuda" }
 naga = { version = "29", features = ["wgsl-in"] }
 wesl = { version = "0.3", default-features = false }
@@ -164,6 +164,38 @@ path = "examples/camera_controllers.rs"
 [[example]]
 name = "compute_readback"
 path = "examples/compute_readback.rs"
+
+[[example]]
+name = "field_basic"
+path = "examples/field_basic.rs"
+
+[[example]]
+name = "field_animated"
+path = "examples/field_animated.rs"
+
+[[example]]
+name = "field_oriented"
+path = "examples/field_oriented.rs"
+
+[[example]]
+name = "field_colored"
+path = "examples/field_colored.rs"
+
+[[example]]
+name = "field_colored_pbr"
+path = "examples/field_colored_pbr.rs"
+
+[[example]]
+name = "field_emit"
+path = "examples/field_emit.rs"
+
+[[example]]
+name = "field_lifecycle"
+path = "examples/field_lifecycle.rs"
+
+[[example]]
+name = "field_from_mesh"
+path = "examples/field_from_mesh.rs"
 
 [profile.wasm-release]
 inherits = "release"

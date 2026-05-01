@@ -56,4 +56,6 @@ pub enum ProcessingError {
     PipelineCompileError(String),
     #[error("Pipeline not ready after {0} frames")]
     PipelineNotReady(u32),
+    #[error("Field not found")]
+    FieldNotFound,
 }

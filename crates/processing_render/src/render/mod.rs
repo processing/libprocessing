@@ -5,9 +5,10 @@ pub mod primitive;
 pub mod transform;
 
 use bevy::{
-    camera::visibility::RenderLayers,
+    camera::{primitives::Aabb, visibility::RenderLayers},
     ecs::system::SystemParam,
-    math::{Affine3A, Mat4, Vec4},
+    math::{Affine3A, Mat4, Vec3A, Vec4},
+    pbr::gpu_instance_batch::GpuBatchedMesh3d,
     prelude::*,
     render::render_resource::BlendState,
 };
@@ -23,6 +24,7 @@ use transform::TransformStack;
 
 use crate::{
     Flush,
+    field::{Field, FieldDraw},
     geometry::Geometry,
     gltf::GltfNodeTransform,
     image::Image,
@@ -158,6 +160,7 @@ pub fn flush_draw_commands(
     p_images: Query<&Image>,
     p_geometries: Query<(&Geometry, Option<&GltfNodeTransform>)>,
     p_material_handles: Query<&UntypedMaterial>,
+    mut p_fields: Query<&mut Field>,
 ) {
     for (graphics_entity, mut cmd_buffer, mut state, render_layers, projection, camera_transform) in
         graphics.iter_mut()
@@ -893,6 +896,74 @@ pub fn flush_draw_commands(
                         transform,
                         batch.render_layers.clone(),
                     ));
+
+                    batch.draw_index += 1;
+                }
+                DrawCommand::Field { field, geometry } => {
+                    let Some((geometry_data, _)) = p_geometries.get(geometry).ok() else {
+                        warn!("Could not find Geometry for entity {:?}", geometry);
+                        continue;
+                    };
+                    let Ok(mut field_data) = p_fields.get_mut(field) else {
+                        warn!("Could not find Field for entity {:?}", field);
+                        continue;
+                    };
+
+                    let material_key = material_key_with_fill(&state);
+                    let material_handle = match &material_key {
+                        MaterialKey::Custom {
+                            entity: mat_entity,
+                            blend_state,
+                        } => {
+                            let Some(untyped) = p_material_handles.get(*mat_entity).ok() else {
+                                warn!("Could not find material for entity {:?}", mat_entity);
+                                continue;
+                            };
+                            clone_custom_material_with_blend(
+                                &mut res.custom_materials,
+                                &untyped.0,
+                                *blend_state,
+                            )
+                        }
+                        _ => material_key.to_material(&mut res.materials),
+                    };
+
+                    flush_batch(&mut res, &mut batch, &p_material_handles);
+
+                    let mesh_handle = geometry_data.handle.clone();
+                    let capacity = field_data.capacity;
+                    let render_layers = batch.render_layers.clone();
+                    match field_data.draw_entity {
+                        Some(e) => {
+                            res.commands.entity(e).insert((
+                                GpuBatchedMesh3d {
+                                    mesh: mesh_handle,
+                                    max_capacity: capacity,
+                                },
+                                UntypedMaterial(material_handle),
+                                render_layers,
+                            ));
+                        }
+                        None => {
+                            let e = res
+                                .commands
+                                .spawn((
+                                    GpuBatchedMesh3d {
+                                        mesh: mesh_handle,
+                                        max_capacity: capacity,
+                                    },
+                                    UntypedMaterial(material_handle),
+                                    Aabb {
+                                        center: Vec3A::ZERO,
+                                        half_extents: Vec3A::splat(1000.0),
+                                    },
+                                    FieldDraw { field },
+                                    render_layers,
+                                ))
+                                .id();
+                            field_data.draw_entity = Some(e);
+                        }
+                    }
 
                     batch.draw_index += 1;
                 }
