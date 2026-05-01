@@ -279,6 +279,23 @@ impl Geometry {
     pub fn vertex_count(&self) -> PyResult<u32> {
         geometry_vertex_count(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
+
+    /// Retained sphere mesh.
+    #[staticmethod]
+    #[pyo3(signature = (radius, sectors=32, stacks=18))]
+    pub fn sphere(radius: f32, sectors: u32, stacks: u32) -> PyResult<Self> {
+        let entity = geometry_sphere(radius, sectors, stacks)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Self { entity })
+    }
+
+    /// Retained box mesh.
+    #[staticmethod]
+    pub fn r#box(width: f32, height: f32, depth: f32) -> PyResult<Self> {
+        let entity = geometry_box(width, height, depth)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Self { entity })
+    }
 }
 
 #[pyclass(unsendable)]
@@ -968,6 +985,21 @@ impl Graphics {
     pub fn draw_geometry(&self, geometry: &Geometry) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::Geometry(geometry.entity))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn draw_field(
+        &self,
+        field: &crate::field::Field,
+        geometry: &Geometry,
+    ) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Field {
+                field: field.entity,
+                geometry: geometry.entity,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn use_material(&self, material: &crate::material::Material) -> PyResult<()> {

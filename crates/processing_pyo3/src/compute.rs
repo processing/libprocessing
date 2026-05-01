@@ -18,6 +18,20 @@ pub struct Buffer {
     size: u64,
 }
 
+impl Buffer {
+    /// Wrap an existing buffer entity (e.g., one owned by a Field's PBuffer).
+    /// `size` is queried from the buffer; `element_type` is supplied so typed
+    /// reads / `__getitem__` work correctly.
+    pub(crate) fn from_entity(entity: Entity, element_type: Option<ShaderValue>) -> Self {
+        let size = buffer_size(entity).unwrap_or(0);
+        Self {
+            entity,
+            element_type,
+            size,
+        }
+    }
+}
+
 #[pymethods]
 impl Buffer {
     #[new]
@@ -243,6 +257,14 @@ fn shader_value_to_py<'py>(py: Python<'py>, sv: &ShaderValue) -> PyResult<Bound<
 #[pyclass(unsendable)]
 pub struct Compute {
     pub(crate) entity: Entity,
+}
+
+impl Compute {
+    /// Wrap an existing compute entity (e.g., one created by a Rust-side
+    /// factory like `field_kernel_noise`). Not exposed to Python directly.
+    pub(crate) fn from_entity(entity: Entity) -> Self {
+        Self { entity }
+    }
 }
 
 #[pymethods]

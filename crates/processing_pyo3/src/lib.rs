@@ -12,6 +12,7 @@ pub(crate) mod color;
 pub(crate) mod compute;
 #[cfg(feature = "cuda")]
 pub(crate) mod cuda;
+pub(crate) mod field;
 mod glfw;
 mod gltf;
 mod graphics;
@@ -331,6 +332,12 @@ mod mewnala {
     use super::Buffer;
     #[pymodule_export]
     use super::Compute;
+    #[pymodule_export]
+    use super::field::Attribute;
+    #[pymodule_export]
+    use super::field::AttributeFormat;
+    #[pymodule_export]
+    use super::field::Field;
     #[pymodule_export]
     use super::Geometry;
     #[pymodule_export]
@@ -1010,7 +1017,7 @@ mod mewnala {
             return Ok(());
         }
 
-        Python::attach(|py| {
+        let result: PyResult<()> = Python::attach(|py| {
             let builtins = PyModule::import(py, "builtins")?;
             let locals = builtins.getattr("locals")?.call0()?;
 
@@ -1131,7 +1138,15 @@ mod mewnala {
             }
 
             Ok(())
-        })
+        });
+
+        // Tear the App down gracefully while the thread-local is still alive,
+        // matching what `processing::exit()` does in Rust sketches. Without
+        // this the App falls to its eager thread-local destructor at process
+        // exit and a Bevy resource panics inside its own Drop, aborting.
+        let _ = ::processing::exit(0);
+
+        result
     }
 
     #[pyfunction]
@@ -1252,6 +1267,24 @@ mod mewnala {
     #[pyo3(pass_module, signature = (geometry))]
     fn draw_geometry(module: &Bound<'_, PyModule>, geometry: &Bound<'_, Geometry>) -> PyResult<()> {
         graphics!(module).draw_geometry(&*geometry.extract::<PyRef<Geometry>>()?)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (field, geometry))]
+    fn draw_field(
+        module: &Bound<'_, PyModule>,
+        field: &Bound<'_, super::field::Field>,
+        geometry: &Bound<'_, Geometry>,
+    ) -> PyResult<()> {
+        graphics!(module).draw_field(
+            &*field.extract::<PyRef<super::field::Field>>()?,
+            &*geometry.extract::<PyRef<Geometry>>()?,
+        )
+    }
+
+    #[pyfunction]
+    fn kernel_noise() -> PyResult<Compute> {
+        super::field::kernel_noise()
     }
 
     #[pyfunction(name = "color")]

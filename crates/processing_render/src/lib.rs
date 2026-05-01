@@ -1109,6 +1109,16 @@ pub fn geometry_attribute_destroy(entity: Entity) -> error::Result<()> {
     })
 }
 
+pub fn geometry_attribute_info(entity: Entity) -> error::Result<(String, AttributeFormat)> {
+    app_mut(|app| {
+        let attr = app
+            .world()
+            .get::<geometry::Attribute>(entity)
+            .ok_or(error::ProcessingError::InvalidEntity)?;
+        Ok((attr.name.to_string(), attr.format))
+    })
+}
+
 pub fn geometry_create(topology: geometry::Topology) -> error::Result<Entity> {
     app_mut(|app| {
         Ok(app
@@ -1403,9 +1413,10 @@ pub fn shader_create(source: &str) -> error::Result<Entity> {
     })
 }
 
-/// Load a shader from a file path.
+/// Load a shader. Accepts either an asset-relative path (`"shaders/foo.wgsl"`)
+/// or a URL-scheme asset path (`"embedded://crate/file.wgsl"`).
 pub fn shader_load(path: &str) -> error::Result<Entity> {
-    let path = std::path::PathBuf::from(path);
+    let path = path.to_string();
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(material::custom::load_shader, path)
@@ -1987,6 +1998,89 @@ pub fn field_pbuffer(entity: Entity, attribute_entity: Entity) -> error::Result<
     })
 }
 
+/// GPU-side emission. Dispatches `compute_entity` over `count` invocations to
+/// initialize the next `count` ring-buffer slots. The framework auto-binds the
+/// field's PBuffers (same convention as `field_apply`) and sets a `vec4<f32>`
+/// uniform named `emit_range` to `(base_slot, count, capacity, 0.0)` — the
+/// kernel reads it to compute its target slot:
+///
+/// ```wgsl
+/// @group(0) @binding(N) var<uniform> emit_range: vec4<f32>;
+/// // ...
+/// let local_i = gid.x;
+/// if local_i >= u32(emit_range.y) { return; }
+/// let slot = (u32(emit_range.x) + local_i) % u32(emit_range.z);
+/// ```
+///
+/// Use this when per-particle initial state should be computed on the GPU
+/// (random velocities, hashed colors, etc.). Use [`field_emit`] when the CPU
+/// already has the per-particle data.
+pub fn field_emit_gpu(
+    field_entity: Entity,
+    count: u32,
+    compute_entity: Entity,
+) -> error::Result<()> {
+    if count == 0 {
+        return Ok(());
+    }
+    const WORKGROUP_SIZE: u32 = 64;
+
+    let (capacity, head, pbuffers) = app_mut(|app| {
+        let world = app.world();
+        let field = world
+            .get::<field::Field>(field_entity)
+            .ok_or(error::ProcessingError::FieldNotFound)?;
+        if count > field.capacity {
+            return Err(error::ProcessingError::InvalidArgument(format!(
+                "field_emit_gpu count={} exceeds field capacity {}",
+                count, field.capacity
+            )));
+        }
+        let mut pbuffers: Vec<(String, Entity)> = Vec::with_capacity(field.pbuffers.len());
+        for (&attr_entity, &pbuf_entity) in &field.pbuffers {
+            let attr = world
+                .get::<geometry::Attribute>(attr_entity)
+                .ok_or(error::ProcessingError::InvalidEntity)?;
+            pbuffers.push((attr.name.to_string(), pbuf_entity));
+        }
+        Ok((field.capacity, field.emit_head, pbuffers))
+    })?;
+
+    for (name, pbuf_entity) in pbuffers {
+        match compute_set(
+            compute_entity,
+            name,
+            shader_value::ShaderValue::Buffer(pbuf_entity),
+        ) {
+            Ok(()) => {}
+            Err(error::ProcessingError::UnknownShaderProperty(_)) => {}
+            Err(e) => return Err(e),
+        }
+    }
+
+    match compute_set(
+        compute_entity,
+        "emit_range",
+        shader_value::ShaderValue::Float4([head as f32, count as f32, capacity as f32, 0.0]),
+    ) {
+        Ok(()) => {}
+        Err(error::ProcessingError::UnknownShaderProperty(_)) => {}
+        Err(e) => return Err(e),
+    }
+
+    let workgroup_count = count.div_ceil(WORKGROUP_SIZE);
+    compute_dispatch(compute_entity, workgroup_count, 1, 1)?;
+
+    app_mut(|app| {
+        let mut field = app
+            .world_mut()
+            .get_mut::<field::Field>(field_entity)
+            .ok_or(error::ProcessingError::FieldNotFound)?;
+        field.emit_head = (field.emit_head + count) % field.capacity;
+        Ok(())
+    })
+}
+
 /// Emit `n` particles into a Field, writing per-attribute byte payloads into the
 /// next `n` slots starting at the field's ring-buffer head. Each entry in
 /// `attribute_data` must match the registered attribute's `byte_size * n`.
@@ -2055,6 +2149,14 @@ pub fn field_emit(
         field.emit_head = (field.emit_head + n) % field.capacity;
         Ok(())
     })
+}
+
+/// Built-in noise kernel — perturbs each particle's `position` by sampled 3D
+/// value noise. Configure via `compute_set("scale", Float(...))`,
+/// `compute_set("strength", Float(...))`, `compute_set("time", Float(...))`.
+pub fn field_kernel_noise() -> error::Result<Entity> {
+    let shader = shader_load(field::kernels::NOISE_PATH)?;
+    compute_create(shader)
 }
 
 /// Dispatch a compute pass against a Field's PBuffers. Each PBuffer is bound

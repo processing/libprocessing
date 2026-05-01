@@ -197,6 +197,18 @@ path = "examples/field_lifecycle.rs"
 name = "field_from_mesh"
 path = "examples/field_from_mesh.rs"
 
+[[example]]
+name = "field_noise"
+path = "examples/field_noise.rs"
+
+[[example]]
+name = "field_emit_gpu"
+path = "examples/field_emit_gpu.rs"
+
+[[example]]
+name = "field_stress"
+path = "examples/field_stress.rs"
+
 [profile.wasm-release]
 inherits = "release"
 opt-level = "z"

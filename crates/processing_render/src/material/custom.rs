@@ -174,19 +174,27 @@ pub fn create_shader(
         .id())
 }
 
-pub fn load_shader(In(path): In<std::path::PathBuf>, world: &mut World) -> Result<Entity> {
+pub fn load_shader(In(path): In<String>, world: &mut World) -> Result<Entity> {
     use bevy::asset::{
         AssetPath, LoadState, handle_internal_asset_events,
         io::{AssetSourceId, embedded::GetAssetServer},
     };
     use bevy::ecs::system::RunSystemOnce;
 
-    let config = world.resource::<Config>();
-    let asset_path: AssetPath = match config.get(ConfigKey::AssetRootPath) {
-        Some(_) => {
-            AssetPath::from_path_buf(path).with_source(AssetSourceId::from("assets_directory"))
+    // URL-scheme paths (e.g. `embedded://crate/file.wgsl`) parse as-is — they
+    // already specify their asset source. Otherwise treat as a relative path
+    // and fall through to the configured asset directory if any.
+    let asset_path: AssetPath = if path.contains("://") {
+        AssetPath::parse(&path).into_owned()
+    } else {
+        let config = world.resource::<Config>();
+        let path = std::path::PathBuf::from(path);
+        match config.get(ConfigKey::AssetRootPath) {
+            Some(_) => {
+                AssetPath::from_path_buf(path).with_source(AssetSourceId::from("assets_directory"))
+            }
+            None => AssetPath::from_path_buf(path),
         }
-        None => AssetPath::from_path_buf(path),
     };
 
     let handle: Handle<ShaderAsset> = world.get_asset_server().load(asset_path);

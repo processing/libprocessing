@@ -14,7 +14,10 @@ thread_local! {
 }
 
 pub fn app_mut<T>(cb: impl FnOnce(&mut App) -> error::Result<T>) -> error::Result<T> {
-    let res = APP.with(|app_cell| {
+    // `try_with` rather than `with` so callers (especially `Drop`s running
+    // during pyo3 module teardown) get a graceful error instead of a panic
+    // when the thread-local has already been destroyed.
+    let res = APP.try_with(|app_cell| {
         let mut app_borrow = app_cell
             .try_borrow_mut()
             .map_err(|_| error::ProcessingError::AppAccess)?;
@@ -22,8 +25,11 @@ pub fn app_mut<T>(cb: impl FnOnce(&mut App) -> error::Result<T>) -> error::Resul
             .as_mut()
             .ok_or(error::ProcessingError::AppAccess)?;
         cb(app)
-    })?;
-    Ok(res)
+    });
+    match res {
+        Ok(inner) => inner,
+        Err(_) => Err(error::ProcessingError::AppAccess),
+    }
 }
 
 pub fn is_already_init() -> error::Result<bool> {

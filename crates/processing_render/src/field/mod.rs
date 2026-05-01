@@ -9,6 +9,7 @@
 //!
 //! See `docs/field.md` for the full design.
 
+pub mod kernels;
 pub mod material;
 pub mod pack;
 
@@ -33,6 +34,7 @@ impl Plugin for FieldPlugin {
         app.add_plugins(GpuInstanceBatchPlugin);
         app.add_plugins(pack::FieldPackPlugin);
         app.add_plugins(material::FieldColorMaterialPlugin);
+        app.add_plugins(kernels::FieldKernelsPlugin);
     }
 }
 

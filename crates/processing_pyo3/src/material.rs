@@ -89,6 +89,24 @@ impl Material {
         }
         Ok(())
     }
+
+    /// Unlit per-particle color material. Each particle samples its color from
+    /// the given buffer indexed by per-instance tag.
+    #[staticmethod]
+    pub fn field_color(buffer: &Buffer) -> PyResult<Self> {
+        let entity = material_create_field_color(buffer.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Self { entity })
+    }
+
+    /// PBR-lit per-particle color material. Same tag-indexed lookup as
+    /// `field_color`, but composed with `StandardMaterial` for proper lighting.
+    #[staticmethod]
+    pub fn field_pbr(buffer: &Buffer) -> PyResult<Self> {
+        let entity = material_create_field_pbr(buffer.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Self { entity })
+    }
 }
 
 impl Drop for Material {

@@ -5732,6 +5732,7 @@ dependencies = [
  "processing",
  "processing_cuda",
  "processing_glfw",
+ "processing_render",
  "processing_webcam",
  "pyo3",
  "rand 0.10.1",
