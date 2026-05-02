@@ -56,7 +56,7 @@ fn sketch() -> error::Result<()> {
         colors.iter().flat_map(|f| f.to_le_bytes()).collect(),
     )?;
 
-    let mat = material_create_field_color(color_buf)?;
+    let mat = { let m = material_create_unlit()?; material_set_albedo_buffer(m, color_buf)?; m };
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;

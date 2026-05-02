@@ -32,7 +32,7 @@ def setup():
     color_buf.write(colors)
 
     particle = Geometry.sphere(0.18, 10, 8)
-    mat = Material.field_pbr(color_buf)
+    mat = Material.pbr(albedo=color_buf)
     noise = kernel_noise()
 
 

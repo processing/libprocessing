@@ -27,7 +27,7 @@ def setup():
     pos_buf.write([1.0e6] * (capacity * 3))
 
     color_buf = field_obj.buffer(Attribute.color())
-    mat = Material.field_color(color_buf)
+    mat = Material.unlit(albedo=color_buf)
 
 
 def draw():

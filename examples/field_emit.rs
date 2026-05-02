@@ -39,7 +39,7 @@ fn sketch() -> error::Result<()> {
         init_positions.iter().flat_map(|f| f.to_le_bytes()).collect(),
     )?;
 
-    let mat = material_create_field_color(color_buf)?;
+    let mat = { let m = material_create_unlit()?; material_set_albedo_buffer(m, color_buf)?; m };
 
     let mut frame: u32 = 0;
     while glfw_ctx.poll_events() {

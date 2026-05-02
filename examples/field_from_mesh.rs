@@ -54,7 +54,7 @@ fn sketch() -> error::Result<()> {
     buffer_write(color_buf, colors)?;
 
     let particle = geometry_sphere(0.18, 10, 8)?;
-    let mat = material_create_field_pbr(color_buf)?;
+    let mat = { let m = material_create_pbr()?; material_set_albedo_buffer(m, color_buf)?; m };
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;

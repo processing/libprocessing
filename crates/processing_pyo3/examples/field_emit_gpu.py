@@ -153,7 +153,7 @@ def setup():
     dead_buf.write([1.0] * CAPACITY)
 
     color_buf = field_obj.buffer(Attribute.color())
-    mat = Material.field_pbr(color_buf)
+    mat = Material.pbr(albedo=color_buf)
 
     spawn = Compute(Shader(SPAWN_SHADER))
     motion = Compute(Shader(MOTION_SHADER))

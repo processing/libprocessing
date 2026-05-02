@@ -55,7 +55,7 @@ def setup():
         colors.append([c.r, c.g, c.b, 1.0])
     color_buf.write(colors)
 
-    mat = Material.field_pbr(color_buf)
+    mat = Material.pbr(albedo=color_buf)
 
     cube = Geometry.box(0.35, 0.35, 0.35)
 

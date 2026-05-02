@@ -115,7 +115,7 @@ fn sketch() -> error::Result<()> {
         colors.iter().flat_map(|f| f.to_le_bytes()).collect(),
     )?;
 
-    let mat = material_create_field_pbr(color_buf)?;
+    let mat = { let m = material_create_pbr()?; material_set_albedo_buffer(m, color_buf)?; m };
     let spin_shader = shader_create(SPIN_SHADER)?;
     let spin = compute_create(spin_shader)?;
 

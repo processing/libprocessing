@@ -166,7 +166,7 @@ fn sketch() -> error::Result<()> {
 
     let color_buf = field_buffer(field, color_attr)?
         .ok_or(error::ProcessingError::FieldNotFound)?;
-    let mat = material_create_field_pbr(color_buf)?;
+    let mat = { let m = material_create_pbr()?; material_set_albedo_buffer(m, color_buf)?; m };
 
     let spawn_shader = shader_create(SPAWN_SHADER)?;
     let spawn = compute_create(spawn_shader)?;

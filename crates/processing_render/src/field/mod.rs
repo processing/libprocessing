@@ -33,7 +33,7 @@ impl Plugin for FieldPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(GpuInstanceBatchPlugin);
         app.add_plugins(pack::FieldPackPlugin);
-        app.add_plugins(material::FieldColorMaterialPlugin);
+        app.add_plugins(material::FieldMaterialPlugin);
         app.add_plugins(kernels::FieldKernelsPlugin);
     }
 }

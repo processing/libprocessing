@@ -89,7 +89,7 @@ fn sketch() -> error::Result<()> {
         .collect();
     buffer_write(dead_buf, init_dead)?;
 
-    let mat = material_create_field_color(color_buf)?;
+    let mat = { let m = material_create_unlit()?; material_set_albedo_buffer(m, color_buf)?; m };
     let aging_shader = shader_create(AGING_SHADER)?;
     let aging = compute_create(aging_shader)?;
 

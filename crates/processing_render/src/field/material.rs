@@ -1,5 +1,10 @@
-//! `FieldColorMaterial` — unlit material that reads a per-particle color from a
-//! storage buffer indexed by the per-instance tag (set to slot index by the pack pass).
+//! `FieldMaterial` — `ExtendedMaterial<StandardMaterial, FieldExtension>` whose
+//! per-particle color comes from a storage buffer indexed by the per-instance
+//! tag (set to slot index by the pack pass).
+//!
+//! Lit vs unlit is just the `unlit` flag on the base `StandardMaterial`;
+//! `apply_pbr_lighting` short-circuits to `base_color * particle_colors[tag]`
+//! when `unlit = true`, so a single extension serves both cases.
 
 use std::ops::Deref;
 
@@ -11,92 +16,50 @@ use bevy::shader::ShaderRef;
 
 use crate::render::material::UntypedMaterial;
 
-pub struct FieldColorMaterialPlugin;
+pub struct FieldMaterialPlugin;
 
-impl Plugin for FieldColorMaterialPlugin {
+impl Plugin for FieldMaterialPlugin {
     fn build(&self, app: &mut App) {
-        embedded_asset!(app, "field_color.wgsl");
-        embedded_asset!(app, "field_pbr.wgsl");
-        app.add_plugins(MaterialPlugin::<FieldColorMaterial>::default());
-        app.add_plugins(MaterialPlugin::<FieldPbrMaterial>::default());
+        embedded_asset!(app, "field.wgsl");
+        app.add_plugins(MaterialPlugin::<FieldMaterial>::default());
     }
 }
+
+/// PBR material extended with a per-particle color buffer. Set the base
+/// `StandardMaterial`'s `unlit` flag to switch between lit and unlit behavior;
+/// the rest of the material works identically either way.
+pub type FieldMaterial = ExtendedMaterial<StandardMaterial, FieldExtension>;
 
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone)]
-pub struct FieldColorMaterial {
-    #[storage(0, read_only)]
-    pub colors: Handle<ShaderBuffer>,
-}
-
-impl Material for FieldColorMaterial {
-    fn vertex_shader() -> ShaderRef {
-        "embedded://processing_render/field/field_color.wgsl".into()
-    }
-
-    fn fragment_shader() -> ShaderRef {
-        "embedded://processing_render/field/field_color.wgsl".into()
-    }
-}
-
-#[derive(Component, Clone)]
-pub struct FieldColorMaterial3d(pub Handle<FieldColorMaterial>);
-
-impl bevy::asset::AsAssetId for FieldColorMaterial3d {
-    type Asset = FieldColorMaterial;
-    fn as_asset_id(&self) -> AssetId<Self::Asset> {
-        self.0.id()
-    }
-}
-
-/// Sibling to `add_processing_materials` / `add_custom_materials`. Promotes
-/// `UntypedMaterial(handle)` entities whose handle is a [`FieldColorMaterial`]
-/// to having the typed `MeshMaterial3d<FieldColorMaterial>` component required
-/// by the render pipeline.
-pub fn add_field_color_materials(
-    mut commands: Commands,
-    meshes: Query<(Entity, &UntypedMaterial)>,
-) {
-    for (entity, handle) in meshes.iter() {
-        let handle = handle.deref().clone();
-        if let Ok(handle) = handle.try_typed::<FieldColorMaterial>() {
-            commands
-                .entity(entity)
-                .insert(MeshMaterial3d::<FieldColorMaterial>(handle));
-        }
-    }
-}
-
-/// PBR-lit per-particle color material. Wraps `StandardMaterial` via
-/// `ExtendedMaterial` so the user gets standard PBR lighting behavior on top
-/// of per-particle albedo from a storage buffer.
-pub type FieldPbrMaterial = ExtendedMaterial<StandardMaterial, FieldPbrExtension>;
-
-#[derive(Asset, AsBindGroup, Reflect, Debug, Clone)]
-pub struct FieldPbrExtension {
+pub struct FieldExtension {
     #[storage(100, read_only)]
     pub colors: Handle<ShaderBuffer>,
 }
 
-impl MaterialExtension for FieldPbrExtension {
+impl MaterialExtension for FieldExtension {
     fn fragment_shader() -> ShaderRef {
-        "embedded://processing_render/field/field_pbr.wgsl".into()
+        "embedded://processing_render/field/field.wgsl".into()
     }
 
     fn deferred_fragment_shader() -> ShaderRef {
-        "embedded://processing_render/field/field_pbr.wgsl".into()
+        "embedded://processing_render/field/field.wgsl".into()
     }
 }
 
-pub fn add_field_pbr_materials(
+/// Sibling of `add_processing_materials` / `add_custom_materials`. Promotes
+/// `UntypedMaterial(handle)` entities whose handle is a [`FieldMaterial`]
+/// to having the typed `MeshMaterial3d<FieldMaterial>` component required
+/// by the render pipeline.
+pub fn add_field_materials(
     mut commands: Commands,
     meshes: Query<(Entity, &UntypedMaterial)>,
 ) {
     for (entity, handle) in meshes.iter() {
         let handle = handle.deref().clone();
-        if let Ok(handle) = handle.try_typed::<FieldPbrMaterial>() {
+        if let Ok(handle) = handle.try_typed::<FieldMaterial>() {
             commands
                 .entity(entity)
-                .insert(MeshMaterial3d::<FieldPbrMaterial>(handle));
+                .insert(MeshMaterial3d::<FieldMaterial>(handle));
         }
     }
 }

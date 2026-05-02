@@ -78,8 +78,7 @@ impl Plugin for ProcessingRenderPlugin {
                     flush_draw_commands,
                     add_processing_materials,
                     add_custom_materials,
-                    field::material::add_field_color_materials,
-                    field::material::add_field_pbr_materials,
+                    field::material::add_field_materials,
                 )
                     .chain()
                     .before(AssetEventSystems),
@@ -1462,59 +1461,151 @@ pub fn material_create_pbr() -> error::Result<Entity> {
     })
 }
 
-/// Create an unlit material that reads each particle's color from the given
-/// buffer. The buffer is expected to hold tightly-packed `Float4` colors
-/// (RGBA, 16 bytes per particle).
-pub fn material_create_field_color(color_buffer_entity: Entity) -> error::Result<Entity> {
-    use crate::field::material::FieldColorMaterial;
+/// Create a default PBR material with `StandardMaterial::unlit = true` —
+/// shorthand for `material_create_pbr` followed by setting `unlit`.
+pub fn material_create_unlit() -> error::Result<Entity> {
+    let entity = material_create_pbr()?;
+    material_set(entity, "unlit", shader_value::ShaderValue::Float(1.0))?;
+    Ok(entity)
+}
+
+/// Set a material's albedo source to a constant color (RGBA, srgb space).
+///
+/// If the material is currently backed by a buffer (i.e. an `ExtendedMaterial`
+/// wrapping `FieldExtension`), this swaps the backing asset to the plain PBR
+/// type while preserving every `StandardMaterial` field — `base_color` becomes
+/// the new color, `roughness`/`metallic`/`emissive`/`alpha_mode`/`unlit`/etc.
+/// stay as previously set.
+pub fn material_set_albedo_color(entity: Entity, color: [f32; 4]) -> error::Result<()> {
+    use bevy::pbr::ExtendedMaterial;
+    use crate::field::material::FieldMaterial;
+    use crate::material::ProcessingMaterial;
     use crate::render::material::UntypedMaterial;
+
+    type DefaultMat = ExtendedMaterial<StandardMaterial, ProcessingMaterial>;
+
     app_mut(|app| {
-        let handle = app
+        let untyped = app
             .world()
-            .get::<compute::Buffer>(color_buffer_entity)
-            .ok_or(error::ProcessingError::BufferNotFound)?
-            .handle
+            .get::<UntypedMaterial>(entity)
+            .ok_or(error::ProcessingError::MaterialNotFound)?
+            .0
             .clone();
+        let new_color = Color::srgba(color[0], color[1], color[2], color[3]);
+
+        // Already a default-PBR-backed material? Just patch base_color in place.
+        if let Ok(handle) = untyped.clone().try_typed::<DefaultMat>() {
+            let mut mats = app.world_mut().resource_mut::<Assets<DefaultMat>>();
+            let mat = mats
+                .get_mut(&handle)
+                .ok_or(error::ProcessingError::MaterialNotFound)?;
+            mat.into_inner().base.base_color = new_color;
+            return Ok(());
+        }
+
+        // Field-buffer-backed: read the StandardMaterial state, drop the old
+        // asset, create a fresh default-PBR asset carrying the same Std state
+        // plus the new base_color, then re-point the entity at it.
+        let Ok(handle) = untyped.try_typed::<FieldMaterial>() else {
+            return Err(error::ProcessingError::MaterialNotFound);
+        };
         let world = app.world_mut();
-        let asset_handle = world
-            .resource_mut::<Assets<FieldColorMaterial>>()
-            .add(FieldColorMaterial { colors: handle });
-        Ok(world
-            .spawn(UntypedMaterial(asset_handle.untyped()))
-            .id())
+        let preserved = {
+            let mut mats = world.resource_mut::<Assets<FieldMaterial>>();
+            let mat = mats
+                .get(&handle)
+                .ok_or(error::ProcessingError::MaterialNotFound)?;
+            let mut base = mat.base.clone();
+            base.base_color = new_color;
+            mats.remove(&handle);
+            base
+        };
+        let new_handle = world
+            .resource_mut::<Assets<DefaultMat>>()
+            .add(ExtendedMaterial {
+                base: preserved,
+                extension: ProcessingMaterial { blend_state: None },
+            });
+        world
+            .entity_mut(entity)
+            .insert(UntypedMaterial(new_handle.untyped()));
+        Ok(())
     })
 }
 
-/// PBR-lit version of [`material_create_field_color`]. Particles get standard
-/// directional/point/spot lighting; per-particle color from the buffer
-/// modulates the StandardMaterial base color (default white).
-pub fn material_create_field_pbr(color_buffer_entity: Entity) -> error::Result<Entity> {
+/// Set a material's albedo source to a per-particle color buffer (RGBA `Float4`,
+/// 16 bytes per slot, indexed by the per-instance tag the field pack pass
+/// writes).
+///
+/// If the material is currently a plain PBR (no buffer), this swaps the
+/// backing asset to a `FieldMaterial` while preserving every `StandardMaterial`
+/// field — `roughness`/`metallic`/`emissive`/`alpha_mode`/`unlit`/etc. all
+/// carry over. The fragment shader modulates the existing `base_color` by the
+/// per-particle color, so leaving `base_color = WHITE` (the default) gives
+/// "use the buffer color verbatim"; setting it tints all particles.
+pub fn material_set_albedo_buffer(
+    entity: Entity,
+    color_buffer_entity: Entity,
+) -> error::Result<()> {
     use bevy::pbr::ExtendedMaterial;
-    use crate::field::material::{FieldPbrExtension, FieldPbrMaterial};
+    use crate::field::material::{FieldExtension, FieldMaterial};
+    use crate::material::ProcessingMaterial;
     use crate::render::material::UntypedMaterial;
+
+    type DefaultMat = ExtendedMaterial<StandardMaterial, ProcessingMaterial>;
+
     app_mut(|app| {
-        let handle = app
+        let buffer_handle = app
             .world()
             .get::<compute::Buffer>(color_buffer_entity)
             .ok_or(error::ProcessingError::BufferNotFound)?
             .handle
             .clone();
+        let untyped = app
+            .world()
+            .get::<UntypedMaterial>(entity)
+            .ok_or(error::ProcessingError::MaterialNotFound)?
+            .0
+            .clone();
+
+        // Already field-buffer-backed: just swap the buffer handle in place.
+        if let Ok(handle) = untyped.clone().try_typed::<FieldMaterial>() {
+            let mut mats = app.world_mut().resource_mut::<Assets<FieldMaterial>>();
+            let mat = mats
+                .get_mut(&handle)
+                .ok_or(error::ProcessingError::MaterialNotFound)?;
+            mat.into_inner().extension.colors = buffer_handle;
+            return Ok(());
+        }
+
+        // Default-PBR-backed: preserve StandardMaterial state, drop old asset,
+        // create a FieldMaterial with the same base + the buffer.
+        let Ok(handle) = untyped.try_typed::<DefaultMat>() else {
+            return Err(error::ProcessingError::MaterialNotFound);
+        };
         let world = app.world_mut();
-        let asset_handle = world
-            .resource_mut::<Assets<FieldPbrMaterial>>()
+        let preserved = {
+            let mut mats = world.resource_mut::<Assets<DefaultMat>>();
+            let base = mats
+                .get(&handle)
+                .ok_or(error::ProcessingError::MaterialNotFound)?
+                .base
+                .clone();
+            mats.remove(&handle);
+            base
+        };
+        let new_handle = world
+            .resource_mut::<Assets<FieldMaterial>>()
             .add(ExtendedMaterial {
-                base: StandardMaterial {
-                    base_color: Color::WHITE,
-                    perceptual_roughness: 0.4,
-                    metallic: 0.0,
-                    cull_mode: None,
-                    ..default()
+                base: preserved,
+                extension: FieldExtension {
+                    colors: buffer_handle,
                 },
-                extension: FieldPbrExtension { colors: handle },
             });
-        Ok(world
-            .spawn(UntypedMaterial(asset_handle.untyped()))
-            .id())
+        world
+            .entity_mut(entity)
+            .insert(UntypedMaterial(new_handle.untyped()));
+        Ok(())
     })
 }
 

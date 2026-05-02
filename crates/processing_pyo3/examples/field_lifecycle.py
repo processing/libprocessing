@@ -79,7 +79,7 @@ def setup():
     dead_buf.write([1.0] * capacity)
 
     color_buf = field_obj.buffer(color_attr)
-    mat = Material.field_color(color_buf)
+    mat = Material.unlit(albedo=color_buf)
     aging = Compute(Shader(AGING_SHADER))
 
 
