@@ -666,6 +666,19 @@ mod mewnala {
         #[pymodule_export]
         use crate::color::PyColor;
 
+        #[pyfunction(name = "color")]
+        #[pyo3(signature = (*args))]
+        fn color_ctor(py: Python<'_>, args: &Bound<'_, PyTuple>) -> PyResult<PyColor> {
+            let parent = py.import("mewnala.mewnala")?;
+            match get_graphics(&parent)? {
+                Some(g) => g.color(args),
+                None => {
+                    let mode = crate::color::ColorMode::default();
+                    crate::color::extract_color_with_mode(args, &mode).map(PyColor::from)
+                }
+            }
+        }
+
         #[pyfunction]
         fn hex(s: &str) -> PyResult<PyColor> {
             PyColor::hex(s)
@@ -1246,21 +1259,6 @@ mod mewnala {
     #[pyo3(pass_module, signature = (geometry))]
     fn draw_geometry(module: &Bound<'_, PyModule>, geometry: &Bound<'_, Geometry>) -> PyResult<()> {
         graphics!(module).draw_geometry(&*geometry.extract::<PyRef<Geometry>>()?)
-    }
-
-    #[pyfunction(name = "color")]
-    #[pyo3(pass_module, signature = (*args))]
-    fn create_color(
-        module: &Bound<'_, PyModule>,
-        args: &Bound<'_, PyTuple>,
-    ) -> PyResult<super::color::PyColor> {
-        match get_graphics(module)? {
-            Some(g) => g.color(args),
-            None => {
-                let mode = super::color::ColorMode::default();
-                super::color::extract_color_with_mode(args, &mode).map(super::color::PyColor::from)
-            }
-        }
     }
 
     #[pyfunction]
