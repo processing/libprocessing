@@ -1439,7 +1439,8 @@ mod mewnala {
     ) -> PyResult<Light> {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        let light = graphics.light_spot(color, intensity, range, radius, inner_angle, outer_angle)?;
+        let light =
+            graphics.light_spot(color, intensity, range, radius, inner_angle, outer_angle)?;
         apply_light_transform(&light, position, look_at)?;
         Ok(light)
     }
