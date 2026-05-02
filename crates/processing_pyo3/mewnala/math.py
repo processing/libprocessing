@@ -1,9 +1,9 @@
 """Processing math methods and vector/quaternion types."""
+import math as _math
 from .mewnala import math as _native_math
 from math import (
     sin, cos, tan,
-    asin, acos, atan, atan2,
-    sqrt, exp, log,
+    atan, atan2,
     ceil, floor,
     degrees, radians,
 )
@@ -18,13 +18,66 @@ vec3 = _native_math.vec3
 vec4 = _native_math.vec4
 quat = _native_math.quat
 
+_NAN = float("nan")
+_INF = float("inf")
+
+
+def _safe_div(num, den):
+    if den == 0:
+        if num == 0:
+            return _NAN
+        return _INF if num > 0 else -_INF
+    return num / den
+
 
 def sq(x):
     return x * x
 
 
 def pow(base, exponent):
-    return base ** exponent
+    if base < 0 and not float(exponent).is_integer():
+        return _NAN
+    try:
+        return base ** exponent
+    except (OverflowError, ZeroDivisionError):
+        return _INF
+
+
+def sqrt(x):
+    if x < 0:
+        return _NAN
+    return _math.sqrt(x)
+
+
+def exp(x):
+    try:
+        return _math.exp(x)
+    except OverflowError:
+        return _INF
+
+
+def log(x):
+    if x == 0:
+        return -_INF
+    if x < 0:
+        return _NAN
+    return _math.log(x)
+
+
+def asin(x):
+    if x < -1 or x > 1:
+        return _NAN
+    return _math.asin(x)
+
+
+def acos(x):
+    if x < -1 or x > 1:
+        return _NAN
+    return _math.acos(x)
+
+
+def round(x):
+    return _math.floor(x + 0.5)
 
 
 def constrain(value, low, high):
@@ -40,11 +93,11 @@ def lerp(start, stop, amt):
 
 
 def norm(value, start, stop):
-    return (value - start) / (stop - start)
+    return _safe_div(value - start, stop - start)
 
 
 def remap(value, start1, stop1, start2, stop2, within_bounds=False):
-    mapped = start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1))
+    mapped = start2 + (stop2 - start2) * _safe_div(value - start1, stop1 - start1)
     if not within_bounds:
         return mapped
     if start2 < stop2:
