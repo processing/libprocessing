@@ -500,8 +500,6 @@ impl Graphics {
 
     #[pyo3(signature = (*args))]
     pub fn fill(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        // `fill(buffer)` — per-particle albedo for `Particles` draws. Bypasses the
-        // color-mode parser and feeds the buffer entity straight through.
         if args.len() == 1
             && let Ok(buf) = args.get_item(0)?.extract::<PyRef<crate::compute::Buffer>>()
         {

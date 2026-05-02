@@ -1146,10 +1146,8 @@ mod mewnala {
             Ok(())
         });
 
-        // Tear the App down gracefully while the thread-local is still alive,
-        // matching what `processing::exit()` does in Rust sketches. Without
-        // this the App falls to its eager thread-local destructor at process
-        // exit and a Bevy resource panics inside its own Drop, aborting.
+        // Tear down the App while the thread-local is still alive — letting
+        // it run via the eager TLS destructor aborts inside a Bevy resource Drop.
         let _ = ::processing::exit(0);
 
         result

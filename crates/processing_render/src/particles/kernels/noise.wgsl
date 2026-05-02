@@ -1,8 +1,4 @@
-// Built-in noise kernel — perturbs particle positions by sampled 3D value
-// noise. Configure via `compute_set`:
-//   scale    : f32  — input position scale (low = broad pattern)
-//   strength : f32  — output displacement magnitude per dispatch
-//   time     : f32  — animation phase (offset the noise field)
+// Per-particle position displacement by sampled 3D value noise.
 
 struct Params {
     scale: f32,

@@ -13,8 +13,6 @@ def setup():
 
     directional_light((0.95, 0.9, 0.85), 200.0)
 
-    # Source mesh whose vertices become the particle positions. UVs come along
-    # for free and we'll use them to paint each particle a unique color.
     source = Geometry.sphere(5.0, 32, 24)
     p = Particles(
         geometry=source,

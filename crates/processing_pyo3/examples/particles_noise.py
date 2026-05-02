@@ -14,8 +14,6 @@ def setup():
 
     directional_light((0.95, 0.9, 0.85), 200.0)
 
-    # Seed positions from a sphere mesh; noise will jitter them around their
-    # initial sphere shape over time.
     source = Geometry.sphere(5.0, 32, 24)
     p = Particles(
         geometry=source,

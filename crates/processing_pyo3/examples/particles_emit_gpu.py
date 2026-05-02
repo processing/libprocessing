@@ -148,7 +148,7 @@ def setup():
         ],
     )
 
-    # Mark all unemitted slots dead so they don't render at origin.
+    # Park unemitted slots until the spawn kernel fills them.
     dead_buf = p.buffer(Attribute.dead())
     dead_buf.write([1.0] * CAPACITY)
 
@@ -167,7 +167,6 @@ def draw():
     use_material(mat)
     particles(p, particle)
 
-    # Animate spawn point in a small circle so the fountain meanders.
     t = elapsed_time
     sx = math.cos(t) * 0.4
     sz = math.sin(t) * 0.4

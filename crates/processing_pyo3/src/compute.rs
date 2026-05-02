@@ -16,18 +16,14 @@ pub struct Buffer {
     pub(crate) entity: Entity,
     element_type: Option<ShaderValue>,
     size: u64,
-    /// `false` for buffers we created and own — `Drop` destroys the entity.
-    /// `true` for buffers we wrap (e.g. a Field's attribute buffer) where the
-    /// underlying entity belongs to someone else; destroying it would yank the
-    /// buffer out from under the owner.
+    /// `true` for borrowed wrappers (e.g. `Particles.buffer()`) where the
+    /// underlying entity belongs elsewhere; `Drop` skips destroy in that case.
     borrowed: bool,
 }
 
 impl Buffer {
-    /// Wrap an existing buffer entity (e.g., one owned by a Field).
-    /// `size` is queried from the buffer; `element_type` is supplied so typed
-    /// reads / `__getitem__` work correctly. The wrapper does NOT destroy the
-    /// entity on drop — ownership stays with whoever produced it.
+    /// Wrap an existing buffer entity without taking ownership. `Drop` will
+    /// not destroy it.
     pub(crate) fn from_entity(entity: Entity, element_type: Option<ShaderValue>) -> Self {
         let size = buffer_size(entity).unwrap_or(0);
         Self {
@@ -144,10 +140,8 @@ impl Buffer {
     }
 
     pub fn write(&mut self, values: &Bound<'_, PyAny>) -> PyResult<()> {
-        // Fast path: raw bytes go through unchanged. This is essential for
-        // large buffers where iterating Python objects would be unworkably
-        // slow (e.g. 1M-element fields). Element type is preserved if already
-        // known; otherwise the buffer stays untyped (read() returns bytes).
+        // Bytes path skips per-element conversion — the only viable route for
+        // multi-million-element uploads.
         if let Ok(b) = values.cast::<PyBytes>() {
             return buffer_write(self.entity, b.as_bytes().to_vec())
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")));

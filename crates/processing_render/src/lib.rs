@@ -1395,10 +1395,9 @@ pub fn geometry_sphere(radius: f32, sectors: u32, stacks: u32) -> error::Result<
     })
 }
 
-/// 3D lattice of `nx * ny * nz` points centered at the origin, with `spacing`
-/// units between adjacent points. Topology is `PointList` — typically used as a
-/// position source for [`particles_create_from_geometry`] rather than rasterized
-/// directly.
+/// 3D lattice of `nx * ny * nz` `PointList` vertices centered at the origin,
+/// `spacing` units apart. Intended as a position source for
+/// [`particles_create_from_geometry`].
 pub fn geometry_grid(nx: u32, ny: u32, nz: u32, spacing: f32) -> error::Result<Entity> {
     app_mut(|app| {
         Ok(app
@@ -1461,21 +1460,16 @@ pub fn material_create_pbr() -> error::Result<Entity> {
     })
 }
 
-/// Create a default PBR material with `StandardMaterial::unlit = true` —
-/// shorthand for `material_create_pbr` followed by setting `unlit`.
+/// `material_create_pbr` with `unlit = true` set on the base StandardMaterial.
 pub fn material_create_unlit() -> error::Result<Entity> {
     let entity = material_create_pbr()?;
     material_set(entity, "unlit", shader_value::ShaderValue::Float(1.0))?;
     Ok(entity)
 }
 
-/// Set a material's albedo source to a constant color (RGBA, srgb space).
-///
-/// If the material is currently backed by a buffer (i.e. an `ExtendedMaterial`
-/// wrapping `ParticlesExtension`), this swaps the backing asset to the plain PBR
-/// type while preserving every `StandardMaterial` field — `base_color` becomes
-/// the new color, `roughness`/`metallic`/`emissive`/`alpha_mode`/`unlit`/etc.
-/// stay as previously set.
+/// Set the albedo source to a constant srgba color. If the material is
+/// currently buffer-backed, swaps the asset back to plain PBR while
+/// preserving every other `StandardMaterial` field.
 pub fn material_set_albedo_color(entity: Entity, color: [f32; 4]) -> error::Result<()> {
     use bevy::pbr::ExtendedMaterial;
     use crate::particles::material::ParticlesMaterial;
@@ -1493,7 +1487,6 @@ pub fn material_set_albedo_color(entity: Entity, color: [f32; 4]) -> error::Resu
             .clone();
         let new_color = Color::srgba(color[0], color[1], color[2], color[3]);
 
-        // Already a default-PBR-backed material? Just patch base_color in place.
         if let Ok(handle) = untyped.clone().try_typed::<DefaultMat>() {
             let mut mats = app.world_mut().resource_mut::<Assets<DefaultMat>>();
             let mat = mats
@@ -1503,9 +1496,6 @@ pub fn material_set_albedo_color(entity: Entity, color: [f32; 4]) -> error::Resu
             return Ok(());
         }
 
-        // Particles-buffer-backed: read the StandardMaterial state, drop the old
-        // asset, create a fresh default-PBR asset carrying the same Std state
-        // plus the new base_color, then re-point the entity at it.
         let Ok(handle) = untyped.try_typed::<ParticlesMaterial>() else {
             return Err(error::ProcessingError::MaterialNotFound);
         };
@@ -1533,16 +1523,11 @@ pub fn material_set_albedo_color(entity: Entity, color: [f32; 4]) -> error::Resu
     })
 }
 
-/// Set a material's albedo source to a per-particle color buffer (RGBA `Float4`,
-/// 16 bytes per slot, indexed by the per-instance tag the field pack pass
-/// writes).
-///
-/// If the material is currently a plain PBR (no buffer), this swaps the
-/// backing asset to a `ParticlesMaterial` while preserving every `StandardMaterial`
-/// field — `roughness`/`metallic`/`emissive`/`alpha_mode`/`unlit`/etc. all
-/// carry over. The fragment shader modulates the existing `base_color` by the
-/// per-particle color, so leaving `base_color = WHITE` (the default) gives
-/// "use the buffer color verbatim"; setting it tints all particles.
+/// Set the albedo source to a per-particle color buffer (`Float4` per slot,
+/// indexed by `mesh.tag`). If the material is currently plain PBR, swaps the
+/// asset to a `ParticlesMaterial` while preserving every other
+/// `StandardMaterial` field. `base_color` modulates the buffer color, so
+/// leaving it WHITE renders the buffer color verbatim.
 pub fn material_set_albedo_buffer(
     entity: Entity,
     color_buffer_entity: Entity,
@@ -1578,8 +1563,6 @@ pub fn material_set_albedo_buffer(
             return Ok(());
         }
 
-        // Default-PBR-backed: preserve StandardMaterial state, drop old asset,
-        // create a ParticlesMaterial with the same base + the buffer.
         let Ok(handle) = untyped.try_typed::<DefaultMat>() else {
             return Err(error::ProcessingError::MaterialNotFound);
         };
@@ -2055,11 +2038,9 @@ pub fn particles_create(capacity: u32, attribute_entities: Vec<Entity>) -> error
     })
 }
 
-/// Create a Particles whose capacity matches `geometry`'s vertex count and whose
-/// buffers are pre-seeded from the geometry's mesh attributes when names line
-/// up (`position`, `normal`, `color`, `uv`). Custom attributes the mesh doesn't
-/// supply are zero-initialized — the user fills them via `buffer_write` or
-/// `particles_emit`.
+/// Capacity = `geometry`'s vertex count. Builtin attributes (`position`,
+/// `normal`, `color`, `uv`) are seeded from the matching mesh attribute when
+/// formats line up; everything else is zero-initialized.
 pub fn particles_create_from_geometry(
     geometry_entity: Entity,
     attribute_entities: Vec<Entity>,
@@ -2102,23 +2083,11 @@ pub fn particles_buffer(entity: Entity, attribute_entity: Entity) -> error::Resu
     })
 }
 
-/// GPU-side emission. Dispatches `compute_entity` over `count` invocations to
-/// initialize the next `count` ring-buffer slots. The framework auto-binds the
-/// field's buffers (same convention as `particles_apply`) and sets a `vec4<f32>`
-/// uniform named `emit_range` to `(base_slot, count, capacity, 0.0)` — the
-/// kernel reads it to compute its target slot:
-///
-/// ```wgsl
-/// @group(0) @binding(N) var<uniform> emit_range: vec4<f32>;
-/// // ...
-/// let local_i = gid.x;
-/// if local_i >= u32(emit_range.y) { return; }
-/// let slot = (u32(emit_range.x) + local_i) % u32(emit_range.z);
-/// ```
-///
-/// Use this when per-particle initial state should be computed on the GPU
-/// (random velocities, hashed colors, etc.). Use [`particles_emit`] when the CPU
-/// already has the per-particle data.
+/// GPU-driven emission. Dispatches `compute_entity` over `count` invocations
+/// to initialize the next `count` ring-buffer slots. Auto-binds attribute
+/// buffers (same convention as [`particles_apply`]) and a `vec4<f32>` uniform
+/// `emit_range = (base_slot, count, capacity, 0)` from which the kernel
+/// derives its target slot. CPU-side counterpart: [`particles_emit`].
 pub fn particles_emit_gpu(
     particles_entity: Entity,
     count: u32,
@@ -2185,10 +2154,9 @@ pub fn particles_emit_gpu(
     })
 }
 
-/// Emit `n` particles into [`Particles`], writing per-attribute byte payloads into the
-/// next `n` slots starting at the particles' ring-buffer head. Each entry in
-/// `attribute_data` must match the registered attribute's `byte_size * n`.
-/// On wrap, oldest particles in the ring are overwritten.
+/// CPU-driven emission. Writes per-attribute byte payloads into the next `n`
+/// ring-buffer slots. Each entry in `attribute_data` must be exactly
+/// `attr.byte_size * n` bytes. On wrap, oldest slots are overwritten.
 pub fn particles_emit(
     particles_entity: Entity,
     n: u32,
@@ -2255,28 +2223,21 @@ pub fn particles_emit(
     })
 }
 
-/// Built-in noise kernel — perturbs each particle's `position` by sampled 3D
-/// value noise. Configure via `compute_set("scale", Float(...))`,
-/// `compute_set("strength", Float(...))`, `compute_set("time", Float(...))`.
+/// Built-in noise kernel: displaces `position` by 3D value noise. Uniforms:
+/// `scale: f32`, `strength: f32`, `time: f32`.
 pub fn particles_kernel_noise() -> error::Result<Entity> {
     let shader = shader_load(particles::kernels::NOISE_PATH)?;
     compute_create(shader)
 }
 
-/// Built-in transform kernel — applies an affine to each particle's `position`
-/// in scale → axis-angle rotation → translate order. Configure via:
-/// `compute_set("translate", Float3([tx, ty, tz]))`,
-/// `compute_set("rotation_axis", Float3([ax, ay, az]))`,
-/// `compute_set("rotation_angle", Float(angle_radians))`,
-/// `compute_set("scale", Float3([sx, sy, sz]))`. Identity defaults are seeded
-/// at creation time, so any unset parameter is a no-op (rather than zeroing
-/// out positions).
+/// Built-in transform kernel: scale → axis-angle rotate → translate on
+/// `position`. Uniforms: `translate: vec3`, `rotation_axis: vec3`,
+/// `rotation_angle: f32`, `scale: vec3`. Identity defaults are seeded so
+/// any unset parameter behaves as a no-op (without them, default-zero
+/// `scale` would collapse the field to the origin on the first dispatch).
 pub fn particles_kernel_transform() -> error::Result<Entity> {
     let shader = shader_load(particles::kernels::TRANSFORM_PATH)?;
     let entity = compute_create(shader)?;
-    // The uniform struct is zero-initialized by default. Without these,
-    // an unset `scale` would multiply every position by zero on the first
-    // dispatch and collapse the whole field to the origin.
     compute_set(entity, "translate", shader_value::ShaderValue::Float3([0.0; 3]))?;
     compute_set(entity, "rotation_axis", shader_value::ShaderValue::Float3([0.0, 1.0, 0.0]))?;
     compute_set(entity, "rotation_angle", shader_value::ShaderValue::Float(0.0))?;
@@ -2284,12 +2245,9 @@ pub fn particles_kernel_transform() -> error::Result<Entity> {
     Ok(entity)
 }
 
-/// Dispatch a compute pass against a [`Particles`]'s buffers. Each buffer is bound
-/// by its attribute's name; bindings the shader doesn't declare are skipped.
-/// Workgroup size is fixed at 64 — the shader must declare `@workgroup_size(64)`.
-///
-/// Any non-buffer parameters (uniforms, etc.) on the compute should be set via
-/// `compute_set` before calling this.
+/// Dispatch `compute_entity` against the [`Particles`]'s buffers. Each buffer
+/// is auto-bound by attribute name; undeclared bindings are skipped. Kernels
+/// must declare `@workgroup_size(64)`. Set uniforms via `compute_set` first.
 pub fn particles_apply(particles_entity: Entity, compute_entity: Entity) -> error::Result<()> {
     const WORKGROUP_SIZE: u32 = 64;
 

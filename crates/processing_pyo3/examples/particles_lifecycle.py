@@ -74,7 +74,7 @@ def setup():
         attributes=[position_attr, color_attr, scale_attr, dead_attr, age_attr],
     )
 
-    # Mark all slots dead initially so unemitted ring slots don't render.
+    # Park unemitted slots until the spawn loop fills them.
     dead_buf = p.buffer(dead_attr)
     dead_buf.write([1.0] * capacity)
 
@@ -92,12 +92,10 @@ def draw():
     use_material(mat)
     particles(p, sphere)
 
-    # Spawn `BURST` new particles per frame in a small fountain.
     positions = []
     colors = []
     for k in range(BURST):
         i = frame * BURST + k
-        # Cheap pseudo-random offset.
         u = (((i * 2654435761) >> 8) & 0xFFFF) / 65535.0
         v = (((i * 40503) >> 8) & 0xFFFF) / 65535.0
         theta = u * math.tau

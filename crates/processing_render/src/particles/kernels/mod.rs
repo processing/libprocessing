@@ -1,6 +1,5 @@
-//! Built-in compute kernels for [`Particles`](super::Particles). Each kernel is
-//! a small WGSL shader packaged with libprocessing as an embedded asset. Use
-//! them via `particles_apply` after configuring parameters via `compute_set`.
+//! Built-in compute kernels for [`Particles`](super::Particles), embedded as
+//! assets and dispatched via `particles_apply`.
 
 use bevy::asset::embedded_asset;
 use bevy::prelude::*;

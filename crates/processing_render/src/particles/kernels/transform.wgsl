@@ -1,12 +1,4 @@
-// Built-in transform kernel — applies an affine to each particle's position.
-// Order: scale, then rotate around `rotation_axis` by `rotation_angle` radians,
-// then translate. Defaults of zero/one behave as identity.
-//
-// Configure via `compute_set`:
-//   translate      : vec3<f32>  — applied last
-//   rotation_axis  : vec3<f32>  — need not be normalized
-//   rotation_angle : f32        — radians
-//   scale          : vec3<f32>  — per-axis scale factor
+// Affine on each particle position: scale → axis-angle rotate → translate.
 
 struct Params {
     translate: vec3<f32>,
@@ -18,7 +10,6 @@ struct Params {
 @group(0) @binding(0) var<storage, read_write> position: array<f32>;
 @group(0) @binding(1) var<uniform> params: Params;
 
-// Rodrigues' rotation. `axis` must be normalized; `angle` is in radians.
 fn rotate(p: vec3<f32>, axis: vec3<f32>, angle: f32) -> vec3<f32> {
     let c = cos(angle);
     let s = sin(angle);

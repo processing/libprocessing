@@ -21,8 +21,7 @@ def setup():
         attributes=[Attribute.position(), Attribute.color()],
     )
 
-    # Push unemitted slots far off-screen so they don't all render at the
-    # origin while the ring buffer is still filling.
+    # Park unemitted slots far off-screen until the ring buffer fills.
     pos_buf = p.buffer(Attribute.position())
     pos_buf.write([1.0e6] * (capacity * 3))
 
@@ -39,9 +38,7 @@ def draw():
     use_material(mat)
     particles(p, sphere)
 
-    # Emit 4 particles per frame in an outward-spiraling ring; once the ring
-    # buffer fills (~500 frames at 4/frame for capacity 2000), oldest get
-    # overwritten and the swirl continues without bound.
+    # Emit 4 particles per frame in an outward-spiraling ring.
     burst = 4
     positions = []
     colors = []

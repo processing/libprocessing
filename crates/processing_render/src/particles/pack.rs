@@ -1,10 +1,6 @@
-//! Pack pass — bridges a [`Particles`]'s `position` / `rotation` / `scale` buffers into the
-//! upstream `mesh_input_buffer[base..base+capacity].world_from_local` slots reserved by the
-//! entity's [`GpuBatchedMesh3d`].
-//!
-//! The pack shader is specialized via shader_defs (`HAS_ROTATION`, `HAS_SCALE`) based on
-//! which builtin attributes the particles carry. Pipelines and bind-group layouts are cached
-//! per shader_def combination.
+//! Compute pass that writes [`Particles`] position/rotation/scale/dead into
+//! the per-instance slots reserved by [`GpuBatchedMesh3d`]. Pipelines are
+//! cached per `(HAS_ROTATION, HAS_SCALE, HAS_DEAD)` shader_def combination.
 
 use std::num::NonZeroU64;
 

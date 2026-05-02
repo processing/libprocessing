@@ -1,10 +1,6 @@
-//! `ParticlesMaterial` — `ExtendedMaterial<StandardMaterial, ParticlesExtension>`
-//! whose per-particle color comes from a storage buffer indexed by the
-//! per-instance tag (set to slot index by the pack pass).
-//!
-//! Lit vs unlit is just the `unlit` flag on the base `StandardMaterial`;
-//! `apply_pbr_lighting` short-circuits to `base_color * particle_colors[tag]`
-//! when `unlit = true`, so a single extension serves both cases.
+//! Per-particle albedo on top of `StandardMaterial`. The `unlit` flag on the
+//! base material toggles between lit and unlit; `apply_pbr_lighting`
+//! short-circuits when set.
 
 use std::ops::Deref;
 
@@ -25,9 +21,6 @@ impl Plugin for ParticlesMaterialPlugin {
     }
 }
 
-/// PBR material extended with a per-particle color buffer. Set the base
-/// `StandardMaterial`'s `unlit` flag to switch between lit and unlit behavior;
-/// the rest of the material works identically either way.
 pub type ParticlesMaterial = ExtendedMaterial<StandardMaterial, ParticlesExtension>;
 
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone)]
@@ -46,10 +39,8 @@ impl MaterialExtension for ParticlesExtension {
     }
 }
 
-/// Sibling of `add_processing_materials` / `add_custom_materials`. Promotes
-/// `UntypedMaterial(handle)` entities whose handle is a [`ParticlesMaterial`]
-/// to having the typed `MeshMaterial3d<ParticlesMaterial>` component required
-/// by the render pipeline.
+/// Promote `UntypedMaterial(handle)` to `MeshMaterial3d<ParticlesMaterial>`
+/// where the handle's type matches. Sibling of `add_processing_materials`.
 pub fn add_particles_materials(
     mut commands: Commands,
     meshes: Query<(Entity, &UntypedMaterial)>,

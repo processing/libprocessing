@@ -1,17 +1,6 @@
-// Pack pass — bridges libprocessing Particles buffers into the upstream
-// per-instance MeshInputUniform / MeshCullingData slots reserved by
-// `GpuBatchedMesh3d`.
-//
-// Specialized via shader_defs:
-//   HAS_ROTATION — bind a `rotation` buffer (Float4 quaternion `xyzw`)
-//   HAS_SCALE    — bind a `scale` buffer (Float3)
-//   HAS_DEAD     — bind a `dead` buffer (Float, 0 = alive, non-zero = dead)
-//
-// Buffer formats (CPU-tightly-packed):
-//   position : 12 bytes per particle (Float3)
-//   rotation : 16 bytes per particle (Float4 quat)
-//   scale    : 12 bytes per particle (Float3)
-//   dead     :  4 bytes per particle (Float)
+// Packs Particles position/rotation/scale/dead buffers into the per-instance
+// MeshInputUniform / MeshCullingData slots reserved by `GpuBatchedMesh3d`.
+// HAS_ROTATION / HAS_SCALE / HAS_DEAD shader_defs gate the optional bindings.
 
 struct MeshInput {
     world_from_local: mat3x4<f32>,

@@ -1,10 +1,5 @@
-// PBR per-particle color material for [`Field`] rasterization.
-//
-// Composes with `StandardMaterial` via `ExtendedMaterial`. The base material
-// supplies all PBR properties (roughness, metallic, etc.); we modulate the
-// resulting `base_color` by the per-particle color looked up from a storage
-// buffer indexed by `mesh.tag` (the per-instance slot index written by the
-// pack pass).
+// Modulates StandardMaterial base_color by particle_colors[tag] then runs
+// the standard PBR fragment. tag = per-instance slot index from pack.wgsl.
 
 #import bevy_pbr::{
     pbr_fragment::pbr_input_from_standard_material,

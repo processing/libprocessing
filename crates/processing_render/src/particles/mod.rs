@@ -1,13 +1,4 @@
-//! GPU-resident particle / instancing container.
-//!
-//! [`Particles`] holds a set of named [`compute::Buffer`]s — one per registered
-//! attribute. It is pure storage: it carries no instance shape and no material.
-//! The shape is supplied at draw time via the `particles` verb, and the material
-//! is read from ambient state at that point. Rasterization is layered on later
-//! by spawning a transient `bevy::pbr::gpu_instance_batch::GpuBatchedMesh3d`
-//! entity that consumes the buffers through the pack pass.
-//!
-//! See `docs/particles.md` for the full design.
+//! GPU-resident particle / instancing container. See `docs/particles.md`.
 
 pub mod kernels;
 pub mod material;
@@ -38,25 +29,16 @@ impl Plugin for ParticlesPlugin {
     }
 }
 
-/// A GPU-resident container of named per-instance attribute buffers.
-///
-/// `buffers` maps an [`Attribute`](crate::geometry::Attribute) entity to its backing
-/// [`compute::Buffer`] entity. The set of registered attributes is fixed at creation.
-///
-/// `draw_entity` is the persistent rasterization entity carrying `GpuBatchedMesh3d` and
-/// the active material — created lazily on the first `particles` draw call and reused on
-/// subsequent ones. It must persist across frames because the upstream batching queue
-/// processes mesh instance batches one frame after the reservation is created; despawning
-/// per-frame would lose the entity before it ever gets queued.
-///
-/// `emit_head` is the ring-buffer write cursor used by `particles_emit`. New particles are
-/// written to slots `[emit_head, emit_head + n) mod capacity` and the head advances by `n`.
-/// When the ring wraps, oldest particles are overwritten — capacity is a visible contract.
 #[derive(Component)]
 pub struct Particles {
     pub capacity: u32,
+    /// `Attribute` entity → backing `compute::Buffer` entity.
     pub buffers: HashMap<Entity, Entity>,
+    /// Lazy persistent rasterization entity. Must outlive the per-frame draw
+    /// because `GpuInstanceBatchReservations` queue mesh batches one frame
+    /// behind, so respawning per-frame loses the reservation.
     pub draw_entity: Option<Entity>,
+    /// Ring-buffer write cursor for `particles_emit`. Wraps at `capacity`.
     pub emit_head: u32,
 }
 
@@ -66,10 +48,7 @@ impl Particles {
     }
 }
 
-/// Marker on a transient render entity indicating it rasterizes a [`Particles`].
-///
-/// The pack pass uses this to look up which Particles' buffers to read when writing
-/// per-instance transforms into the upstream `mesh_input_buffer`.
+/// Render-side marker pointing at the [`Particles`] entity to pack from.
 #[derive(Component, Clone, Copy)]
 pub struct ParticlesDraw {
     pub particles: Entity,
@@ -108,11 +87,9 @@ pub fn create(
     Ok(entity)
 }
 
-/// Create [`Particles`] whose capacity matches the source [`Geometry`]'s vertex
-/// count and whose buffers are pre-seeded from the geometry's mesh attributes
-/// where names line up. Any registered attribute the mesh doesn't supply (or
-/// whose format doesn't match) gets zero-initialized — the user fills it in via
-/// `buffer_write` or `particles_emit`.
+/// Capacity = source mesh's vertex count. Registered attributes are seeded
+/// from the matching mesh attribute (by name + format); unmatched ones are
+/// zero-initialized.
 pub fn create_from_geometry(
     In((geom_entity, attribute_entities)): In<(Entity, Vec<Entity>)>,
     mut commands: Commands,

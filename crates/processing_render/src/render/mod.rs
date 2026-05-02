@@ -78,9 +78,8 @@ impl BatchState {
 #[derive(Debug, Component)]
 pub struct RenderState {
     pub fill_color: Option<Color>,
-    /// Per-instance color buffer for [`Particles`] draws. Mutually exclusive with
-    /// `fill_color` — set by [`DrawCommand::FillBuffer`], cleared by `Fill` /
-    /// `NoFill`.
+    /// Per-instance albedo buffer for [`Particles`] draws. Mutually exclusive
+    /// with `fill_color`.
     pub fill_buffer: Option<Entity>,
     pub stroke_color: Option<Color>,
     pub stroke_weight: f32,
@@ -923,9 +922,6 @@ pub fn flush_draw_commands(
                         continue;
                     };
 
-                    // `fill(buffer)` short-circuits the regular material key
-                    // path: build a `ParticlesMaterial` whose albedo comes
-                    // from the buffer, indexed by per-instance tag.
                     let material_handle = if let Some(buf_entity) = state.fill_buffer {
                         match particles_fill_material(&mut res, buf_entity) {
                             Some(h) => h,
@@ -1268,15 +1264,12 @@ fn material_key_with_color(
     }
 }
 
-/// Build a `ParticlesMaterial` whose albedo comes from `buf_entity`, returning the
-/// untyped handle ready to attach to the field's draw entity. The asset is
-/// freshly allocated on every call — bind-group construction and uniform
-/// upload are cheap and the bookkeeping isn't worth caching.
+/// Allocate a fresh `ParticlesMaterial` reading albedo from `buf_entity`.
+/// Not cached: bind-group + uniform upload is cheap enough at one per frame.
 fn particles_fill_material(
     res: &mut RenderResources,
     buf_entity: Entity,
 ) -> Option<bevy::asset::UntypedHandle> {
-    use bevy::pbr::ExtendedMaterial;
     use crate::particles::material::{ParticlesExtension, ParticlesMaterial};
 
     let buf = res.particle_buffers.get(buf_entity).ok()?;

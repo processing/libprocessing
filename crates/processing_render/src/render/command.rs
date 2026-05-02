@@ -297,9 +297,8 @@ pub enum DrawCommand {
     BackgroundColor(Color),
     BackgroundImage(Entity),
     Fill(Color),
-    /// Per-instance albedo source for `Field` draws — sets the ambient fill to
-    /// a `compute::Buffer` of `Float4` colors indexed by per-instance tag.
-    /// Mutually exclusive with `Fill(Color)`; setting either clears the other.
+    /// Per-instance albedo for `Particles`: a `compute::Buffer` of `Float4`
+    /// colors indexed by tag. Mutually exclusive with `Fill(Color)`.
     FillBuffer(Entity),
     NoFill,
     StrokeColor(Color),
