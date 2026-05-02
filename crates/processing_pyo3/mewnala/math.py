@@ -43,8 +43,13 @@ def norm(value, start, stop):
     return (value - start) / (stop - start)
 
 
-def remap(value, start1, stop1, start2, stop2):
-    return start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1))
+def remap(value, start1, stop1, start2, stop2, within_bounds=False):
+    mapped = start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1))
+    if not within_bounds:
+        return mapped
+    if start2 < stop2:
+        return constrain(mapped, start2, stop2)
+    return constrain(mapped, stop2, start2)
 
 
 def mag(*args):
