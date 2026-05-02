@@ -1370,35 +1370,59 @@ mod mewnala {
         graphics.create_image(width, height)
     }
 
-    #[pyfunction]
-    #[pyo3(pass_module)]
-    fn create_directional_light(
-        module: &Bound<'_, PyModule>,
-        color: super::color::ColorLike,
-        illuminance: f32,
-    ) -> PyResult<Light> {
-        let graphics =
-            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        graphics.light_directional(color, illuminance)
+    fn apply_light_transform(
+        light: &Light,
+        position: Option<super::math::Vec3Like>,
+        look_at: Option<super::math::Vec3Like>,
+    ) -> PyResult<()> {
+        if let Some(p) = position {
+            ::processing::prelude::transform_set_position(light.entity, p.into_vec3())
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        }
+        if let Some(la) = look_at {
+            ::processing::prelude::transform_look_at(light.entity, la.into_vec3())
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        }
+        Ok(())
     }
 
     #[pyfunction]
-    #[pyo3(pass_module)]
-    fn create_point_light(
+    #[pyo3(pass_module, signature = (color, illuminance, *, position=None, look_at=None))]
+    fn directional_light(
+        module: &Bound<'_, PyModule>,
+        color: super::color::ColorLike,
+        illuminance: f32,
+        position: Option<super::math::Vec3Like>,
+        look_at: Option<super::math::Vec3Like>,
+    ) -> PyResult<Light> {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        let light = graphics.light_directional(color, illuminance)?;
+        apply_light_transform(&light, position, look_at)?;
+        Ok(light)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (color, intensity, range, radius, *, position=None, look_at=None))]
+    fn point_light(
         module: &Bound<'_, PyModule>,
         color: super::color::ColorLike,
         intensity: f32,
         range: f32,
         radius: f32,
+        position: Option<super::math::Vec3Like>,
+        look_at: Option<super::math::Vec3Like>,
     ) -> PyResult<Light> {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        graphics.light_point(color, intensity, range, radius)
+        let light = graphics.light_point(color, intensity, range, radius)?;
+        apply_light_transform(&light, position, look_at)?;
+        Ok(light)
     }
 
     #[pyfunction]
-    #[pyo3(pass_module)]
-    fn create_spot_light(
+    #[pyo3(pass_module, signature = (color, intensity, range, radius, inner_angle, outer_angle, *, position=None, look_at=None))]
+    fn spot_light(
         module: &Bound<'_, PyModule>,
         color: super::color::ColorLike,
         intensity: f32,
@@ -1406,10 +1430,14 @@ mod mewnala {
         radius: f32,
         inner_angle: f32,
         outer_angle: f32,
+        position: Option<super::math::Vec3Like>,
+        look_at: Option<super::math::Vec3Like>,
     ) -> PyResult<Light> {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        graphics.light_spot(color, intensity, range, radius, inner_angle, outer_angle)
+        let light = graphics.light_spot(color, intensity, range, radius, inner_angle, outer_angle)?;
+        apply_light_transform(&light, position, look_at)?;
+        Ok(light)
     }
 
     #[pyfunction(name = "sphere")]
