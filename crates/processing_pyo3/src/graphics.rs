@@ -239,12 +239,6 @@ impl<'a, 'py> FromPyObject<'a, 'py> for ImageRef {
         if let Ok(img) = ob.extract::<PyRef<Image>>() {
             return Ok(ImageRef { entity: img.entity });
         }
-        #[cfg(feature = "video")]
-        if let Ok(vid) = ob.extract::<PyRef<crate::video::Video>>() {
-            return Ok(ImageRef {
-                entity: vid.image_entity()?,
-            });
-        }
         #[cfg(feature = "webcam")]
         if let Ok(cam) = ob.extract::<PyRef<crate::webcam::Webcam>>() {
             return Ok(ImageRef {
@@ -252,7 +246,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for ImageRef {
             });
         }
         Err(pyo3::exceptions::PyTypeError::new_err(
-            "expected an Image, Video, or Webcam",
+            "expected an Image or Webcam",
         ))
     }
 }
