@@ -144,7 +144,7 @@ fn sketch() -> error::Result<()> {
     let velocity_attr = geometry_attribute_create("velocity", AttributeFormat::Float3)?;
     let age_attr = geometry_attribute_create("age", AttributeFormat::Float)?;
 
-    let field = field_create(
+    let p = particles_create(
         capacity,
         vec![
             position_attr,
@@ -157,15 +157,15 @@ fn sketch() -> error::Result<()> {
     )?;
 
     // Mark all unemitted slots dead so they don't render at origin.
-    let dead_buf = field_buffer(field, dead_attr)?
-        .ok_or(error::ProcessingError::FieldNotFound)?;
+    let dead_buf = particles_buffer(p, dead_attr)?
+        .ok_or(error::ProcessingError::ParticlesNotFound)?;
     let init_dead: Vec<u8> = (0..capacity)
         .flat_map(|_| 1.0_f32.to_le_bytes())
         .collect();
     buffer_write(dead_buf, init_dead)?;
 
-    let color_buf = field_buffer(field, color_attr)?
-        .ok_or(error::ProcessingError::FieldNotFound)?;
+    let color_buf = particles_buffer(p, color_attr)?
+        .ok_or(error::ProcessingError::ParticlesNotFound)?;
     let mat = { let m = material_create_pbr()?; material_set_albedo_buffer(m, color_buf)?; m };
 
     let spawn_shader = shader_create(SPAWN_SHADER)?;
@@ -190,10 +190,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(graphics, DrawCommand::Material(mat))?;
         graphics_record_command(
             graphics,
-            DrawCommand::Field {
-                field,
-                geometry: particle,
-            },
+            DrawCommand::Particles { particles: p, geometry: particle },
         )?;
         graphics_end_draw(graphics)?;
 
@@ -211,12 +208,12 @@ fn sketch() -> error::Result<()> {
             "speed",
             shader_value::ShaderValue::Float4([speed, 0.0, 0.0, 0.0]),
         )?;
-        field_emit_gpu(field, burst, spawn)?;
+        particles_emit_gpu(p, burst, spawn)?;
 
         compute_set(motion, "dt", shader_value::ShaderValue::Float(dt))?;
         compute_set(motion, "ttl", shader_value::ShaderValue::Float(ttl))?;
         compute_set(motion, "gravity", shader_value::ShaderValue::Float(gravity))?;
-        field_apply(field, motion)?;
+        particles_apply(p, motion)?;
     }
 
     Ok(())

@@ -299,7 +299,7 @@ impl Geometry {
 
     /// 3D lattice of `nx * ny * nz` points centered at the origin, with
     /// `spacing` units between adjacent points. Topology is `PointList` —
-    /// typically used as a position source for `Field(geometry=...)` rather
+    /// typically used as a position source for `Particles(geometry=...)` rather
     /// than rasterized directly.
     #[staticmethod]
     #[pyo3(signature = (nx, ny, nz, spacing=1.0))]
@@ -500,6 +500,14 @@ impl Graphics {
 
     #[pyo3(signature = (*args))]
     pub fn fill(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        // `fill(buffer)` — per-particle albedo for `Particles` draws. Bypasses the
+        // color-mode parser and feeds the buffer entity straight through.
+        if args.len() == 1
+            && let Ok(buf) = args.get_item(0)?.extract::<PyRef<crate::compute::Buffer>>()
+        {
+            return graphics_record_command(self.entity, DrawCommand::FillBuffer(buf.entity))
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")));
+        }
         let color = extract_color_with_mode(
             args,
             &graphics_get_color_mode(self.entity)
@@ -999,15 +1007,15 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn draw_field(
+    pub fn particles(
         &self,
-        field: &crate::field::Field,
+        particles: &crate::particles::Particles,
         geometry: &Geometry,
     ) -> PyResult<()> {
         graphics_record_command(
             self.entity,
-            DrawCommand::Field {
-                field: field.entity,
+            DrawCommand::Particles {
+                particles: particles.entity,
                 geometry: geometry.entity,
             },
         )

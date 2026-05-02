@@ -1,28 +1,28 @@
 from mewnala import *
 
-field_obj = None
+p = None
 particle = None
 mat = None
 
 
 def setup():
-    global field_obj, particle, mat
+    global p, particle, mat
 
     size(900, 700)
     mode_3d()
 
-    create_directional_light((0.95, 0.9, 0.85), 600.0)
+    directional_light((0.95, 0.9, 0.85), 600.0)
 
     # Source mesh whose vertices become particle positions; uvs come along for
     # free and we use them to color each particle.
     source = Geometry.sphere(5.0, 32, 24)
-    field_obj = Field(
+    p = Particles(
         geometry=source,
         attributes=[Attribute.position(), Attribute.uv(), Attribute.color()],
     )
 
-    uv_buf = field_obj.buffer(Attribute.uv())
-    color_buf = field_obj.buffer(Attribute.color())
+    uv_buf = p.buffer(Attribute.uv())
+    color_buf = p.buffer(Attribute.color())
 
     colors = []
     for uv in uv_buf.read():
@@ -40,7 +40,7 @@ def draw():
     background(15, 15, 20)
 
     use_material(mat)
-    draw_field(field_obj, particle)
+    particles(p, particle)
 
 
 run()

@@ -1,16 +1,18 @@
 // Built-in transform kernel — applies an affine to each particle's position.
-// Order: scale, then rotate around `rotation.xyz` by `rotation.w` radians,
+// Order: scale, then rotate around `rotation_axis` by `rotation_angle` radians,
 // then translate. Defaults of zero/one behave as identity.
 //
 // Configure via `compute_set`:
-//   translate : vec4<f32>  — xyz applied last, w ignored
-//   rotation  : vec4<f32>  — xyz axis (need not be normalized), w = angle radians
-//   scale     : vec4<f32>  — xyz scale factor, w ignored
+//   translate      : vec3<f32>  — applied last
+//   rotation_axis  : vec3<f32>  — need not be normalized
+//   rotation_angle : f32        — radians
+//   scale          : vec3<f32>  — per-axis scale factor
 
 struct Params {
-    translate: vec4<f32>,
-    rotation: vec4<f32>,
-    scale: vec4<f32>,
+    translate: vec3<f32>,
+    rotation_angle: f32,
+    rotation_axis: vec3<f32>,
+    scale: vec3<f32>,
 }
 
 @group(0) @binding(0) var<storage, read_write> position: array<f32>;
@@ -37,14 +39,14 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         position[i * 3u + 2u],
     );
 
-    p = p * params.scale.xyz;
+    p = p * params.scale;
 
-    let axis_len = length(params.rotation.xyz);
-    if axis_len > 1.0e-6 && abs(params.rotation.w) > 1.0e-8 {
-        p = rotate(p, params.rotation.xyz / axis_len, params.rotation.w);
+    let axis_len = length(params.rotation_axis);
+    if axis_len > 1.0e-6 && abs(params.rotation_angle) > 1.0e-8 {
+        p = rotate(p, params.rotation_axis / axis_len, params.rotation_angle);
     }
 
-    p = p + params.translate.xyz;
+    p = p + params.translate;
 
     position[i * 3u + 0u] = p.x;
     position[i * 3u + 1u] = p.y;

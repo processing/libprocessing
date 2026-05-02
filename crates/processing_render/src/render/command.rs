@@ -297,6 +297,10 @@ pub enum DrawCommand {
     BackgroundColor(Color),
     BackgroundImage(Entity),
     Fill(Color),
+    /// Per-instance albedo source for `Field` draws — sets the ambient fill to
+    /// a `compute::Buffer` of `Float4` colors indexed by per-instance tag.
+    /// Mutually exclusive with `Fill(Color)`; setting either clears the other.
+    FillBuffer(Entity),
     NoFill,
     StrokeColor(Color),
     NoStroke,
@@ -424,8 +428,8 @@ pub enum DrawCommand {
         angle: f32,
     },
     Geometry(Entity),
-    Field {
-        field: Entity,
+    Particles {
+        particles: Entity,
         geometry: Entity,
     },
     BlendMode(Option<BlendState>),

@@ -25,11 +25,11 @@ fn sketch() -> error::Result<()> {
     let capacity: u32 = 2000;
     let position_attr = geometry_attribute_position();
     let color_attr = geometry_attribute_color();
-    let field = field_create(capacity, vec![position_attr, color_attr])?;
-    let position_buf = field_buffer(field, position_attr)?
-        .ok_or(error::ProcessingError::FieldNotFound)?;
-    let color_buf = field_buffer(field, color_attr)?
-        .ok_or(error::ProcessingError::FieldNotFound)?;
+    let p = particles_create(capacity, vec![position_attr, color_attr])?;
+    let position_buf = particles_buffer(p, position_attr)?
+        .ok_or(error::ProcessingError::ParticlesNotFound)?;
+    let color_buf = particles_buffer(p, color_attr)?
+        .ok_or(error::ProcessingError::ParticlesNotFound)?;
 
     // Push unemitted slots far off-screen so they don't all render at the
     // origin while the ring buffer is still filling.
@@ -51,10 +51,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(graphics, DrawCommand::Material(mat))?;
         graphics_record_command(
             graphics,
-            DrawCommand::Field {
-                field,
-                geometry: sphere,
-            },
+            DrawCommand::Particles { particles: p, geometry: sphere },
         )?;
         graphics_end_draw(graphics)?;
 
@@ -83,8 +80,8 @@ fn sketch() -> error::Result<()> {
 
         let position_bytes: Vec<u8> = positions.iter().flat_map(|f| f.to_le_bytes()).collect();
         let color_bytes: Vec<u8> = colors.iter().flat_map(|f| f.to_le_bytes()).collect();
-        field_emit(
-            field,
+        particles_emit(
+            p,
             burst,
             vec![(position_attr, position_bytes), (color_attr, color_bytes)],
         )?;

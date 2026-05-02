@@ -68,7 +68,7 @@ fn sketch() -> error::Result<()> {
     let dead_attr = geometry_attribute_dead();
     let age_attr = geometry_attribute_create("age", AttributeFormat::Float)?;
 
-    let field = field_create(
+    let p = particles_create(
         capacity,
         vec![
             position_attr,
@@ -78,10 +78,10 @@ fn sketch() -> error::Result<()> {
             age_attr,
         ],
     )?;
-    let dead_buf = field_buffer(field, dead_attr)?
-        .ok_or(error::ProcessingError::FieldNotFound)?;
-    let color_buf = field_buffer(field, color_attr)?
-        .ok_or(error::ProcessingError::FieldNotFound)?;
+    let dead_buf = particles_buffer(p, dead_attr)?
+        .ok_or(error::ProcessingError::ParticlesNotFound)?;
+    let color_buf = particles_buffer(p, color_attr)?
+        .ok_or(error::ProcessingError::ParticlesNotFound)?;
 
     // Mark all slots dead initially so the unemitted ring slots don't render.
     let init_dead: Vec<u8> = (0..capacity)
@@ -108,10 +108,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(graphics, DrawCommand::Material(mat))?;
         graphics_record_command(
             graphics,
-            DrawCommand::Field {
-                field,
-                geometry: sphere,
-            },
+            DrawCommand::Particles { particles: p, geometry: sphere },
         )?;
         graphics_end_draw(graphics)?;
 
@@ -148,8 +145,8 @@ fn sketch() -> error::Result<()> {
                     .collect::<Vec<u8>>()
             })
             .collect();
-        field_emit(
-            field,
+        particles_emit(
+            p,
             burst,
             vec![
                 (position_attr, position_bytes),
@@ -166,7 +163,7 @@ fn sketch() -> error::Result<()> {
             "params",
             shader_value::ShaderValue::Float4([dt, ttl, 0.0, 0.0]),
         )?;
-        field_apply(field, aging)?;
+        particles_apply(p, aging)?;
 
         frame += 1;
     }

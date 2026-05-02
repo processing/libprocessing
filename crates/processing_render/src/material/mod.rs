@@ -60,7 +60,7 @@ pub fn set_property(
     In((entity, name, value)): In<(Entity, String, ShaderValue)>,
     material_handles: Query<&UntypedMaterial>,
     mut extended_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, ProcessingMaterial>>>,
-    mut field_materials: ResMut<Assets<crate::field::material::FieldMaterial>>,
+    mut particles_materials: ResMut<Assets<crate::particles::material::ParticlesMaterial>>,
     mut custom_materials: ResMut<Assets<custom::CustomMaterial>>,
     mut p_buffers: Query<&mut compute::Buffer>,
 ) -> error::Result<()> {
@@ -82,9 +82,9 @@ pub fn set_property(
     if let Ok(handle) = untyped
         .0
         .clone()
-        .try_typed::<crate::field::material::FieldMaterial>()
+        .try_typed::<crate::particles::material::ParticlesMaterial>()
     {
-        let mut extended = field_materials
+        let mut extended = particles_materials
             .get_mut(&handle)
             .ok_or(ProcessingError::MaterialNotFound)?;
         return pbr::set_property(&mut extended.base, &name, &value);

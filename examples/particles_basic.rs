@@ -40,9 +40,9 @@ fn sketch() -> error::Result<()> {
     let bytes: Vec<u8> = floats.iter().flat_map(|f| f.to_le_bytes()).collect();
 
     let position_attr = geometry_attribute_position();
-    let field = field_create(capacity, vec![position_attr])?;
-    let position_buf = field_buffer(field, position_attr)?
-        .ok_or(error::ProcessingError::FieldNotFound)?;
+    let p = particles_create(capacity, vec![position_attr])?;
+    let position_buf = particles_buffer(p, position_attr)?
+        .ok_or(error::ProcessingError::ParticlesNotFound)?;
     buffer_write(position_buf, bytes)?;
 
     let pbr = material_create_pbr()?;
@@ -61,10 +61,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(graphics, DrawCommand::Material(pbr))?;
         graphics_record_command(
             graphics,
-            DrawCommand::Field {
-                field,
-                geometry: sphere,
-            },
+            DrawCommand::Particles { particles: p, geometry: sphere },
         )?;
         graphics_end_draw(graphics)?;
     }

@@ -1,29 +1,29 @@
 from mewnala import *
 
-field_obj = None
+p = None
 particle = None
 mat = None
 noise = None
 
 
 def setup():
-    global field_obj, particle, mat, noise
+    global p, particle, mat, noise
 
     size(900, 700)
     mode_3d()
 
-    create_directional_light((0.95, 0.9, 0.85), 200.0)
+    directional_light((0.95, 0.9, 0.85), 200.0)
 
     # Seed positions from a sphere mesh; noise will jitter them around their
     # initial sphere shape over time.
     source = Geometry.sphere(5.0, 32, 24)
-    field_obj = Field(
+    p = Particles(
         geometry=source,
         attributes=[Attribute.position(), Attribute.uv(), Attribute.color()],
     )
 
-    uv_buf = field_obj.buffer(Attribute.uv())
-    color_buf = field_obj.buffer(Attribute.color())
+    uv_buf = p.buffer(Attribute.uv())
+    color_buf = p.buffer(Attribute.color())
 
     colors = []
     for uv in uv_buf.read():
@@ -42,10 +42,10 @@ def draw():
     background(15, 15, 20)
 
     use_material(mat)
-    draw_field(field_obj, particle)
+    particles(p, particle)
 
     noise.set(scale=0.25, strength=0.02, time=elapsed_time * 0.5)
-    field_obj.apply(noise)
+    p.apply(noise)
 
 
 run()

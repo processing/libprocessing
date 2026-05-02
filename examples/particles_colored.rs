@@ -20,24 +20,21 @@ fn sketch() -> error::Result<()> {
     transform_set_position(graphics, Vec3::new(0.0, 6.0, 18.0))?;
     transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
-    let _light =
-        light_create_directional(graphics, bevy::color::Color::srgb(0.95, 0.9, 0.85), 200.0)?;
+    let sphere = geometry_sphere(0.25, 12, 8)?;
 
-    let sphere = geometry_sphere(0.3, 16, 12)?;
-
-    // 8x8x8 grid with per-particle color (RGB gradient by index).
-    let capacity: u32 = 512;
+    // 10x10x10 grid with per-particle position + color (RGB gradient by index).
+    let capacity: u32 = 1000;
     let mut positions: Vec<f32> = Vec::with_capacity(capacity as usize * 3);
     let mut colors: Vec<f32> = Vec::with_capacity(capacity as usize * 4);
-    for x in 0..8 {
-        for y in 0..8 {
-            for z in 0..8 {
-                positions.push((x as f32 - 3.5) * 1.4);
-                positions.push((y as f32 - 3.5) * 1.4);
-                positions.push((z as f32 - 3.5) * 1.4);
-                colors.push(x as f32 / 7.0);
-                colors.push(y as f32 / 7.0);
-                colors.push(z as f32 / 7.0);
+    for x in 0..10 {
+        for y in 0..10 {
+            for z in 0..10 {
+                positions.push((x as f32 - 4.5) * 1.0);
+                positions.push((y as f32 - 4.5) * 1.0);
+                positions.push((z as f32 - 4.5) * 1.0);
+                colors.push(x as f32 / 9.0);
+                colors.push(y as f32 / 9.0);
+                colors.push(z as f32 / 9.0);
                 colors.push(1.0);
             }
         }
@@ -45,11 +42,11 @@ fn sketch() -> error::Result<()> {
 
     let position_attr = geometry_attribute_position();
     let color_attr = geometry_attribute_color();
-    let field = field_create(capacity, vec![position_attr, color_attr])?;
-    let position_buf = field_buffer(field, position_attr)?
-        .ok_or(error::ProcessingError::FieldNotFound)?;
-    let color_buf = field_buffer(field, color_attr)?
-        .ok_or(error::ProcessingError::FieldNotFound)?;
+    let p = particles_create(capacity, vec![position_attr, color_attr])?;
+    let position_buf = particles_buffer(p, position_attr)?
+        .ok_or(error::ProcessingError::ParticlesNotFound)?;
+    let color_buf = particles_buffer(p, color_attr)?
+        .ok_or(error::ProcessingError::ParticlesNotFound)?;
     buffer_write(
         position_buf,
         positions.iter().flat_map(|f| f.to_le_bytes()).collect(),
@@ -59,7 +56,7 @@ fn sketch() -> error::Result<()> {
         colors.iter().flat_map(|f| f.to_le_bytes()).collect(),
     )?;
 
-    let mat = { let m = material_create_pbr()?; material_set_albedo_buffer(m, color_buf)?; m };
+    let mat = { let m = material_create_unlit()?; material_set_albedo_buffer(m, color_buf)?; m };
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;
@@ -70,10 +67,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(graphics, DrawCommand::Material(mat))?;
         graphics_record_command(
             graphics,
-            DrawCommand::Field {
-                field,
-                geometry: sphere,
-            },
+            DrawCommand::Particles { particles: p, geometry: sphere },
         )?;
         graphics_end_draw(graphics)?;
     }

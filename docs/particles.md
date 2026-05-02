@@ -1,6 +1,6 @@
-# Field — GPU-resident particle and instancing
+# Particles — GPU-resident particle and instancing
 
-A `Field` is a GPU-resident container of named attribute buffers, drawn by instancing a
+A `Particles` is a GPU-resident container of named attribute buffers, drawn by instancing a
 geometry once per element. It is the libprocessing analogue of a Houdini point cloud: a
 collection of points carrying arbitrary named attributes, where storage is contextual and
 attributes are first-class.
@@ -9,12 +9,12 @@ The implementation rests on two existing libprocessing systems and one upstream 
 
 - **`compute::Buffer`** (`crates/processing_render/src/compute.rs`) — typed GPU storage
   buffers with CPU-side write, GPU readback, compute dispatch, and a Python wrapper that
-  tracks element type for validation. This is what backs every Field attribute buffer.
+  tracks element type for validation. This is what backs every Particles attribute buffer.
 - **`Attribute`** (`crates/processing_render/src/geometry/attribute.rs`) — named typed
   attribute identities (`AttributeFormat::{Float, Float2, Float3, Float4}`) shared between
-  Geometries (per-vertex) and Fields (per-instance). `BuiltinAttributes` exposes
+  Geometries (per-vertex) and Particles (per-instance). `BuiltinAttributes` exposes
   `position`, `normal`, `color`, `uv`, `rotation` (Float4 quat), `scale` (Float3), `dead`
-  (Float, 0=alive). The last three are field-only.
+  (Float, 0=alive). The last three are particles-only.
 - **Upstream `processing/bevy`** commit `ee443e51` adds `GpuBatchedMesh3d` and the
   `GpuInstanceBatchReservations` machinery — a fixed-capacity batch where a compute pass
   can write per-instance transforms into the upstream input buffer before
@@ -22,11 +22,11 @@ The implementation rests on two existing libprocessing systems and one upstream 
 
 ## Concepts
 
-### Field
+### Particles
 
 The top-level container. Holds a set of named attribute buffers (one per registered
 attribute), an optional persistent rasterization entity, a ring-buffer emit cursor, and
-per-Field render state. Does not carry geometry — that's supplied at draw time.
+per-Particles render state. Does not carry geometry — that's supplied at draw time.
 
 ### Attribute buffer
 
@@ -35,34 +35,34 @@ elements. Backed by `compute::Buffer`. Indexed by particle slot.
 
 ### Attribute
 
-The naming + type identity. A Field maps `Attribute` entities to `compute::Buffer`
+The naming + type identity. A Particles maps `Attribute` entities to `compute::Buffer`
 entities. Lookups are typed entity comparisons, never strings. The Format declared at
 attribute creation is the source of truth for element byte size and shader-side semantics
 (Float4 rotation = quat, Float3 = position/scale, etc.).
 
-### Draw verb: `field`
+### Draw verb: `particles`
 
-`field(f, shape)` (`DrawCommand::Field { field, geometry }`) is the rasterization verb.
+`particles(f, shape)` (`DrawCommand::Particles { particles, geometry }`) is the rasterization verb.
 Reads ambient material at call time and instances `shape` once per slot in `f`.
 
 ## Construction
 
-### Empty Field
+### Empty Particles
 
 ```rust
 let position = geometry_attribute_position();
 let velocity = geometry_attribute_create("velocity", AttributeFormat::Float3)?;
-let f = field_create(10_000, vec![position, velocity])?;
+let f = particles_create(10_000, vec![position, velocity])?;
 ```
 
 Allocates one zero-initialized buffer per requested attribute, sized by `capacity *
 attr.format.byte_size()`.
 
-### Mesh-seeded Field
+### Mesh-seeded Particles
 
 ```rust
 let source = geometry_sphere(5.0, 32, 24)?;
-let f = field_create_from_geometry(
+let f = particles_create_from_geometry(
     source,
     vec![position_attr, uv_attr, color_attr],
 )?;
@@ -71,14 +71,14 @@ let f = field_create_from_geometry(
 Capacity = mesh vertex count. Each registered attribute is pre-seeded from the matching
 mesh attribute when names + formats line up:
 
-| Field attribute | Mesh attribute (Bevy) |
+| Particles attribute | Mesh attribute (Bevy) |
 |----|----|
 | `position` (Float3) | `Mesh::ATTRIBUTE_POSITION` |
 | `normal` (Float3) | `Mesh::ATTRIBUTE_NORMAL` |
 | `color` (Float4) | `Mesh::ATTRIBUTE_COLOR` |
 | `uv` (Float2) | `Mesh::ATTRIBUTE_UV_0` |
 
-Field-only builtins (`rotation`, `scale`, `dead`) and custom attributes are zero-init
+Particles-only builtins (`rotation`, `scale`, `dead`) and custom attributes are zero-init
 (meshes don't carry them).
 
 ## Apply (attribute-buffer-only compute)
@@ -87,10 +87,10 @@ Field-only builtins (`rotation`, `scale`, `dead`) and custom attributes are zero
 let shader = shader_create(SPIN_WGSL)?;
 let spin = compute_create(shader)?;
 compute_set(spin, "dt", ShaderValue::Float(0.016))?;
-field_apply(field, spin)?;
+particles_apply(field, spin)?;
 ```
 
-`field_apply` iterates the field's attribute buffers and calls `compute_set(compute,
+`particles_apply` iterates the field's attribute buffers and calls `compute_set(compute,
 attr.name, ShaderValue::Buffer(buf_entity))` for each. Unknown shader properties are
 silently skipped, so the kernel only declares the attributes it needs. Workgroup size is
 fixed at 64 — kernels must declare `@workgroup_size(64)`.
@@ -106,8 +106,8 @@ distinction is purely about placement.
 The pack pass is the only code that bridges to the upstream batch infrastructure. It runs
 as standard render-schedule systems:
 
-- **`extract_field_draws`** (`ExtractSchedule`) — reads `FieldDraw` markers from main
-  world, copies (Field, position/rotation/scale/dead buffer handles) into render world.
+- **`extract_particles_draws`** (`ExtractSchedule`) — reads `ParticlesDraw` markers from main
+  world, copies (Particles, position/rotation/scale/dead buffer handles) into render world.
 - **`prepare_pack_bind_groups`** (`RenderSystems::PrepareBindGroups`) — looks up or
   creates the pack pipeline for the field's specialization key, builds a bind group with
   the field's buffers + the upstream input/culling buffers + a uniform with `(base_index,
@@ -115,7 +115,7 @@ as standard render-schedule systems:
 - **`dispatch_pack`** (`Core3d`, `before(early_gpu_preprocess)`) — dispatches the compute
   pass.
 
-The pack shader (`field/pack.wgsl`) is specialized via shader_defs:
+The pack shader (`particles/pack.wgsl`) is specialized via shader_defs:
 
 - `HAS_ROTATION` — bind a `rotation` buffer (Float4 quat). Otherwise identity.
 - `HAS_SCALE` — bind a `scale` buffer (Float3). Otherwise unit.
@@ -133,31 +133,36 @@ Pipelines are cached per `PackPipelineKey { has_rotation, has_scale, has_dead }`
 
 ## Materials
 
-Two material types support per-particle color via tag-indexed lookup. Both bind a
-`colors: Handle<ShaderBuffer>` storage buffer and read `particle_colors[mesh.tag]`.
+A single material type — `ParticlesMaterial` (`ExtendedMaterial<StandardMaterial,
+ParticlesExtension>`) — handles both lit and unlit per-particle color. The
+extension binds `colors: Handle<ShaderBuffer>` and the shader reads
+`particle_colors[mesh.tag]`. Lit vs unlit is the `unlit` flag on the base
+`StandardMaterial`; `apply_pbr_lighting` short-circuits to base × particle color
+when set.
 
-### `FieldColorMaterial` (unlit)
-
-```rust
-let mat = material_create_field_color(color_buffer_entity)?;
-graphics_record_command(g, DrawCommand::Material(mat))?;
-graphics_record_command(g, DrawCommand::Field { field, geometry: shape })?;
-```
-
-Outputs the per-particle color directly. Use for emissive / no-lighting particle effects.
-
-### `FieldPbrMaterial` (PBR-lit)
+### `fill(buffer)` — immediate-mode
 
 ```rust
-let mat = material_create_field_pbr(color_buffer_entity)?;
+graphics_record_command(g, DrawCommand::FillBuffer(color_buffer_entity))?;
+graphics_record_command(g, DrawCommand::Particles { particles, geometry: shape })?;
 ```
 
-`ExtendedMaterial<StandardMaterial, FieldPbrExtension>`. Composes via
-`pbr_input_from_standard_material` + `apply_pbr_lighting` — modulates the StandardMaterial
-base color (default white) by the per-particle color. Standard PBR lighting (directional /
-point / spot lights) applies normally. Default roughness 0.4, metallic 0.0; not yet
-user-configurable via `material_set` (would need a dispatch arm for the new material
-type).
+Sets the ambient fill source to the buffer; the next `DrawCommand::Particles`
+allocates a `ParticlesMaterial` carrying that buffer. No explicit material
+construction needed.
+
+### Explicit material with `albedo` source
+
+```rust
+let mat = material_create_pbr()?;
+material_set_albedo_buffer(mat, color_buffer_entity)?;
+material_set(mat, "roughness", ShaderValue::Float(0.4))?;
+```
+
+`albedo` accepts either a constant color (`material_set_albedo_color`) or a
+buffer (`material_set_albedo_buffer`); switching between them swaps the backing
+asset type while preserving the `StandardMaterial` state (roughness / metallic /
+emissive / unlit / etc.).
 
 ### Anything richer
 
@@ -167,7 +172,7 @@ WGSL that reads `mesh.tag` and indexes into their own storage buffer.
 ## Emit (ring buffer)
 
 ```rust
-field_emit(
+particles_emit(
     field,
     n,
     vec![
@@ -196,7 +201,7 @@ registered, the pack pass reads it and writes `MeshCullingData::dead` — non-ze
 the slot is skipped in preprocessing and never rendered.
 
 Aging is user-managed: write an apply() shader that increments an age attribute and sets
-`dead = 1.0` when age exceeds a threshold. The canonical pattern (`field_lifecycle.rs`):
+`dead = 1.0` when age exceeds a threshold. The canonical pattern (`particles_lifecycle.rs`):
 
 ```wgsl
 @compute @workgroup_size(64)
@@ -229,19 +234,19 @@ handle ordering.
 ## Immediate-mode compatibility
 
 The "automatic instancing of repeated draw calls with the same material" path remains the
-non-Field instancing escape hatch. A user looping `translate; sphere()` gets
-auto-instancing via `Mesh3d` for free, no Field needed. Field is for cases where compute
+non-Particles instancing escape hatch. A user looping `translate; sphere()` gets
+auto-instancing via `Mesh3d` for free, no Particles needed. Particles is for cases where compute
 matters or populations are large + dynamic.
 
-`GpuBatchedMesh3d` (used by Field's transient draw entity) and `Mesh3d` are mutually
+`GpuBatchedMesh3d` (used by Particles's transient draw entity) and `Mesh3d` are mutually
 exclusive on one entity by upstream design.
 
 ## v1 non-goals
 
 - **Chainable `apply()`** — currently flat function call. Quality of life.
-- **Stateful builder methods on Field** (`field.color() / field.vertex()`) — the
+- **Stateful builder methods on Particles** (`particles.color() / field.vertex()`) — the
   mesh-seeding path covers most cases.
-- **Closure-based `createField(|| { sphere(); ... })` recording mode** — would need
+- **Closure-based `create_particles(|| { sphere(); ... })` recording mode** — would need
   shape-API recording infrastructure (sphere/box dispatching into a Geometry instead of
   drawing).
 - **GPU-driven emission**, sparse alive set / compaction, multi-emitter pools, cross-field
@@ -249,36 +254,36 @@ exclusive on one entity by upstream design.
 - **Per-instance attributes via `@location`** — upstream supports only the transform; the
   tag side-channel into a storage buffer is the only path for non-transform per-instance
   data.
-- **Auto-default attribute reset on `field_emit`**.
-- **User-configurable PBR properties** on `FieldPbrMaterial` (roughness, metallic) via
+- **Auto-default attribute reset on `particles_emit`**.
+- **User-configurable PBR properties** on `ParticlesMaterial` (roughness, metallic) via
   `material_set`.
 - **Built-in compute kernels** (NOISE, CURL, etc.) — packaged WGSL.
 - **Ping-pong apply**.
 
 ## Architectural notes
 
-- **Pack pass schedule.** The original design intent was to tie pack to the `field(f,
+- **Pack pass schedule.** The original design intent was to tie pack to the `particles(f,
   shape)` draw verb call (lazy, one-shot). The implementation runs pack as standard
-  render-schedule systems triggered by the `FieldDraw` marker on transient draw entities.
+  render-schedule systems triggered by the `ParticlesDraw` marker on transient draw entities.
   Same effect (pack only fires when there's something to draw), simpler integration.
 - **Per-particle color material.** The original design intent was to extend
   `ProcessingMaterial`. The implementation is two standalone material types
-  (`FieldColorMaterial`, `FieldPbrMaterial`). Standalone was cleaner; ambient `fill()`
+  (`ParticlesMaterial`, `ParticlesMaterial`). Standalone was cleaner; ambient `fill()`
   doesn't auto-tint particles, but the user explicitly opts in via the dedicated factory.
-- **Persistent draw entity.** The Field's `draw_entity` must persist across frames — the
+- **Persistent draw entity.** The Particles's `draw_entity` must persist across frames — the
   upstream batching queue processes mesh instance batches one frame after the reservation
   is created, so despawning per-frame would lose the entity before queueing.
 
 ## Examples
 
-- `field_basic` — 1000 spheres on a 10×10×10 grid, static positions, default material.
-- `field_animated` — same grid, rotating around Y via per-frame compute apply.
-- `field_oriented` — 125 cubes with per-particle quaternion rotation + per-particle scale.
-- `field_colored` — RGB-gradient cube via `FieldColorMaterial` (unlit).
-- `field_colored_pbr` — same, lit with `FieldPbrMaterial`.
-- `field_emit` — continuous ring-buffer emission in a spiral.
-- `field_lifecycle` — fountain that emits particles with aging + shrink-on-death.
-- `field_from_mesh` — particles positioned at the vertices of a source sphere mesh.
+- `particles_basic` — 1000 spheres on a 10×10×10 grid, static positions, default material.
+- `particles_animated` — same grid, rotating around Y via per-frame compute apply.
+- `particles_oriented` — 125 cubes with per-particle quaternion rotation + per-particle scale.
+- `particles_colored` — RGB-gradient cube via `ParticlesMaterial` (unlit).
+- `particles_colored_pbr` — same, lit with `ParticlesMaterial`.
+- `particles_emit` — continuous ring-buffer emission in a spiral.
+- `particles_lifecycle` — fountain that emits particles with aging + shrink-on-death.
+- `particles_from_mesh` — particles positioned at the vertices of a source sphere mesh.
 
 ## Fixed bugs (during development)
 

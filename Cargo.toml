@@ -166,48 +166,48 @@ name = "compute_readback"
 path = "examples/compute_readback.rs"
 
 [[example]]
-name = "field_basic"
-path = "examples/field_basic.rs"
+name = "particles_basic"
+path = "examples/particles_basic.rs"
 
 [[example]]
-name = "field_animated"
-path = "examples/field_animated.rs"
+name = "particles_animated"
+path = "examples/particles_animated.rs"
 
 [[example]]
-name = "field_oriented"
-path = "examples/field_oriented.rs"
+name = "particles_oriented"
+path = "examples/particles_oriented.rs"
 
 [[example]]
-name = "field_colored"
-path = "examples/field_colored.rs"
+name = "particles_colored"
+path = "examples/particles_colored.rs"
 
 [[example]]
-name = "field_colored_pbr"
-path = "examples/field_colored_pbr.rs"
+name = "particles_colored_pbr"
+path = "examples/particles_colored_pbr.rs"
 
 [[example]]
-name = "field_emit"
-path = "examples/field_emit.rs"
+name = "particles_emit"
+path = "examples/particles_emit.rs"
 
 [[example]]
-name = "field_lifecycle"
-path = "examples/field_lifecycle.rs"
+name = "particles_lifecycle"
+path = "examples/particles_lifecycle.rs"
 
 [[example]]
-name = "field_from_mesh"
-path = "examples/field_from_mesh.rs"
+name = "particles_from_mesh"
+path = "examples/particles_from_mesh.rs"
 
 [[example]]
-name = "field_noise"
-path = "examples/field_noise.rs"
+name = "particles_noise"
+path = "examples/particles_noise.rs"
 
 [[example]]
-name = "field_emit_gpu"
-path = "examples/field_emit_gpu.rs"
+name = "particles_emit_gpu"
+path = "examples/particles_emit_gpu.rs"
 
 [[example]]
-name = "field_stress"
-path = "examples/field_stress.rs"
+name = "particles_stress"
+path = "examples/particles_stress.rs"
 
 [profile.wasm-release]
 inherits = "release"

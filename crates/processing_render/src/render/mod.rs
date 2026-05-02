@@ -24,7 +24,7 @@ use transform::TransformStack;
 
 use crate::{
     Flush,
-    field::{Field, FieldDraw},
+    particles::{Particles, ParticlesDraw},
     geometry::Geometry,
     gltf::GltfNodeTransform,
     image::Image,
@@ -49,6 +49,8 @@ pub struct RenderResources<'w, 's> {
     meshes: ResMut<'w, Assets<Mesh>>,
     materials: ResMut<'w, Assets<ProcessingExtendedMaterial>>,
     custom_materials: ResMut<'w, Assets<CustomMaterial>>,
+    particles_materials: ResMut<'w, Assets<crate::particles::material::ParticlesMaterial>>,
+    particle_buffers: Query<'w, 's, &'static crate::compute::Buffer>,
 }
 
 struct BatchState {
@@ -76,6 +78,10 @@ impl BatchState {
 #[derive(Debug, Component)]
 pub struct RenderState {
     pub fill_color: Option<Color>,
+    /// Per-instance color buffer for [`Particles`] draws. Mutually exclusive with
+    /// `fill_color` — set by [`DrawCommand::FillBuffer`], cleared by `Fill` /
+    /// `NoFill`.
+    pub fill_buffer: Option<Entity>,
     pub stroke_color: Option<Color>,
     pub stroke_weight: f32,
     pub stroke_config: StrokeConfig,
@@ -91,6 +97,7 @@ impl RenderState {
     pub fn new() -> Self {
         Self {
             fill_color: Some(Color::WHITE),
+            fill_buffer: None,
             stroke_color: Some(Color::BLACK),
             stroke_weight: 1.0,
             stroke_config: StrokeConfig::default(),
@@ -109,6 +116,7 @@ impl RenderState {
 
     pub fn reset(&mut self) {
         self.fill_color = Some(Color::WHITE);
+        self.fill_buffer = None;
         self.stroke_color = Some(Color::BLACK);
         self.stroke_weight = 1.0;
         self.stroke_config = StrokeConfig::default();
@@ -160,7 +168,7 @@ pub fn flush_draw_commands(
     p_images: Query<&Image>,
     p_geometries: Query<(&Geometry, Option<&GltfNodeTransform>)>,
     p_material_handles: Query<&UntypedMaterial>,
-    mut p_fields: Query<&mut Field>,
+    mut p_particles: Query<&mut Particles>,
 ) {
     for (graphics_entity, mut cmd_buffer, mut state, render_layers, projection, camera_transform) in
         graphics.iter_mut()
@@ -175,9 +183,15 @@ pub fn flush_draw_commands(
             match cmd {
                 DrawCommand::Fill(color) => {
                     state.fill_color = Some(color);
+                    state.fill_buffer = None;
+                }
+                DrawCommand::FillBuffer(buf_entity) => {
+                    state.fill_buffer = Some(buf_entity);
+                    state.fill_color = None;
                 }
                 DrawCommand::NoFill => {
                     state.fill_color = None;
+                    state.fill_buffer = None;
                 }
                 DrawCommand::StrokeColor(color) => {
                     state.stroke_color = Some(color);
@@ -899,41 +913,55 @@ pub fn flush_draw_commands(
 
                     batch.draw_index += 1;
                 }
-                DrawCommand::Field { field, geometry } => {
+                DrawCommand::Particles { particles, geometry } => {
                     let Some((geometry_data, _)) = p_geometries.get(geometry).ok() else {
                         warn!("Could not find Geometry for entity {:?}", geometry);
                         continue;
                     };
-                    let Ok(mut field_data) = p_fields.get_mut(field) else {
-                        warn!("Could not find Field for entity {:?}", field);
+                    let Ok(mut particles_data) = p_particles.get_mut(particles) else {
+                        warn!("Could not find Particles for entity {:?}", particles);
                         continue;
                     };
 
-                    let material_key = material_key_with_fill(&state);
-                    let material_handle = match &material_key {
-                        MaterialKey::Custom {
-                            entity: mat_entity,
-                            blend_state,
-                        } => {
-                            let Some(untyped) = p_material_handles.get(*mat_entity).ok() else {
-                                warn!("Could not find material for entity {:?}", mat_entity);
+                    // `fill(buffer)` short-circuits the regular material key
+                    // path: build a `ParticlesMaterial` whose albedo comes
+                    // from the buffer, indexed by per-instance tag.
+                    let material_handle = if let Some(buf_entity) = state.fill_buffer {
+                        match particles_fill_material(&mut res, buf_entity) {
+                            Some(h) => h,
+                            None => {
+                                warn!("fill(buffer) entity {:?} not found", buf_entity);
                                 continue;
-                            };
-                            clone_custom_material_with_blend(
-                                &mut res.custom_materials,
-                                &untyped.0,
-                                *blend_state,
-                            )
+                            }
                         }
-                        _ => material_key.to_material(&mut res.materials),
+                    } else {
+                        let material_key = material_key_with_fill(&state);
+                        match &material_key {
+                            MaterialKey::Custom {
+                                entity: mat_entity,
+                                blend_state,
+                            } => {
+                                let Some(untyped) = p_material_handles.get(*mat_entity).ok()
+                                else {
+                                    warn!("Could not find material for entity {:?}", mat_entity);
+                                    continue;
+                                };
+                                clone_custom_material_with_blend(
+                                    &mut res.custom_materials,
+                                    &untyped.0,
+                                    *blend_state,
+                                )
+                            }
+                            _ => material_key.to_material(&mut res.materials),
+                        }
                     };
 
                     flush_batch(&mut res, &mut batch, &p_material_handles);
 
                     let mesh_handle = geometry_data.handle.clone();
-                    let capacity = field_data.capacity;
+                    let capacity = particles_data.capacity;
                     let render_layers = batch.render_layers.clone();
-                    match field_data.draw_entity {
+                    match particles_data.draw_entity {
                         Some(e) => {
                             res.commands.entity(e).insert((
                                 GpuBatchedMesh3d {
@@ -957,11 +985,11 @@ pub fn flush_draw_commands(
                                         center: Vec3A::ZERO,
                                         half_extents: Vec3A::splat(1000.0),
                                     },
-                                    FieldDraw { field },
+                                    ParticlesDraw { particles },
                                     render_layers,
                                 ))
                                 .id();
-                            field_data.draw_entity = Some(e);
+                            particles_data.draw_entity = Some(e);
                         }
                     }
 
@@ -1238,6 +1266,33 @@ fn material_key_with_color(
             blend_state,
         },
     }
+}
+
+/// Build a `ParticlesMaterial` whose albedo comes from `buf_entity`, returning the
+/// untyped handle ready to attach to the field's draw entity. The asset is
+/// freshly allocated on every call — bind-group construction and uniform
+/// upload are cheap and the bookkeeping isn't worth caching.
+fn particles_fill_material(
+    res: &mut RenderResources,
+    buf_entity: Entity,
+) -> Option<bevy::asset::UntypedHandle> {
+    use bevy::pbr::ExtendedMaterial;
+    use crate::particles::material::{ParticlesExtension, ParticlesMaterial};
+
+    let buf = res.particle_buffers.get(buf_entity).ok()?;
+    let handle = res.particles_materials.add(ParticlesMaterial {
+        base: StandardMaterial {
+            base_color: Color::WHITE,
+            perceptual_roughness: 0.4,
+            metallic: 0.0,
+            cull_mode: None,
+            ..Default::default()
+        },
+        extension: ParticlesExtension {
+            colors: buf.handle.clone(),
+        },
+    });
+    Some(handle.untyped())
 }
 
 fn material_key_with_fill(state: &RenderState) -> MaterialKey {

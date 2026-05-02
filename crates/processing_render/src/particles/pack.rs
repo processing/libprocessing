@@ -1,9 +1,9 @@
-//! Pack pass — bridges a [`Field`]'s `position` / `rotation` / `scale` buffers into the
+//! Pack pass — bridges a [`Particles`]'s `position` / `rotation` / `scale` buffers into the
 //! upstream `mesh_input_buffer[base..base+capacity].world_from_local` slots reserved by the
 //! entity's [`GpuBatchedMesh3d`].
 //!
 //! The pack shader is specialized via shader_defs (`HAS_ROTATION`, `HAS_SCALE`) based on
-//! which builtin attributes the field carries. Pipelines and bind-group layouts are cached
+//! which builtin attributes the particles carry. Pipelines and bind-group layouts are cached
 //! per shader_def combination.
 
 use std::num::NonZeroU64;
@@ -33,32 +33,32 @@ use bevy::shader::{Shader, ShaderDefVal};
 use crate::compute;
 use crate::geometry::BuiltinAttributes;
 
-use super::{Field, FieldDraw};
+use super::{Particles, ParticlesDraw};
 
 const WORKGROUP_SIZE: u32 = 64;
 
-pub struct FieldPackPlugin;
+pub struct ParticlesPackPlugin;
 
-impl Plugin for FieldPackPlugin {
+impl Plugin for ParticlesPackPlugin {
     fn build(&self, app: &mut App) {
         let shader = {
             let mut shaders = app.world_mut().resource_mut::<Assets<Shader>>();
             shaders.add(Shader::from_wgsl(
                 include_str!("pack.wgsl"),
-                "processing_render/field/pack.wgsl",
+                "processing_render/particles/pack.wgsl",
             ))
         };
-        app.insert_resource(FieldPackShader(shader.clone()));
+        app.insert_resource(ParticlesPackShader(shader.clone()));
 
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
         };
         render_app
-            .insert_resource(FieldPackShader(shader))
-            .init_resource::<ExtractedFieldDraws>()
-            .init_resource::<FieldPackPipelines>()
-            .init_resource::<FieldPackBindGroups>()
-            .add_systems(ExtractSchedule, extract_field_draws)
+            .insert_resource(ParticlesPackShader(shader))
+            .init_resource::<ExtractedParticlesDraws>()
+            .init_resource::<ParticlesPackPipelines>()
+            .init_resource::<ParticlesPackBindGroups>()
+            .add_systems(ExtractSchedule, extract_particles_draws)
             .add_systems(
                 Render,
                 prepare_pack_bind_groups.in_set(RenderSystems::PrepareBindGroups),
@@ -68,7 +68,7 @@ impl Plugin for FieldPackPlugin {
 }
 
 #[derive(Resource, Clone)]
-pub struct FieldPackShader(pub Handle<Shader>);
+pub struct ParticlesPackShader(pub Handle<Shader>);
 
 /// Specialization key — controls which `#ifdef`s are set when compiling the pack shader,
 /// and which bindings are present in the bind-group layout.
@@ -85,19 +85,19 @@ pub struct CachedPackPipeline {
 }
 
 #[derive(Resource, Default)]
-pub struct FieldPackPipelines {
+pub struct ParticlesPackPipelines {
     pub by_key: HashMap<PackPipelineKey, CachedPackPipeline>,
 }
 
 #[derive(Copy, Clone, Default, ShaderType)]
-struct FieldPackParams {
+struct ParticlesPackParams {
     base_input_index: u32,
     count: u32,
     _pad0: u32,
     _pad1: u32,
 }
 
-pub struct ExtractedFieldData {
+pub struct ExtractedParticlesData {
     pub key: PackPipelineKey,
     pub position: Handle<ShaderBuffer>,
     pub rotation: Option<Handle<ShaderBuffer>>,
@@ -106,12 +106,12 @@ pub struct ExtractedFieldData {
 }
 
 #[derive(Resource, Default)]
-pub struct ExtractedFieldDraws {
-    pub by_main: MainEntityHashMap<ExtractedFieldData>,
+pub struct ExtractedParticlesDraws {
+    pub by_main: MainEntityHashMap<ExtractedParticlesData>,
 }
 
 #[derive(Resource, Default)]
-pub struct FieldPackBindGroups {
+pub struct ParticlesPackBindGroups {
     per_batch: MainEntityHashMap<PerBatchBindGroup>,
 }
 
@@ -180,7 +180,7 @@ fn shader_defs_for(key: PackPipelineKey) -> Vec<ShaderDefVal> {
 }
 
 fn get_or_create_pipeline(
-    pipelines: &mut FieldPackPipelines,
+    pipelines: &mut ParticlesPackPipelines,
     pipeline_cache: &PipelineCache,
     shader: &Handle<Shader>,
     key: PackPipelineKey,
@@ -190,7 +190,7 @@ fn get_or_create_pipeline(
     }
     let bind_group_layout = BindGroupLayoutDescriptor::new(
         format!(
-            "FieldPackBindGroupLayout(rot={},scale={},dead={})",
+            "ParticlesPackBindGroupLayout(rot={},scale={},dead={})",
             key.has_rotation, key.has_scale, key.has_dead
         ),
         &pack_layout_entries(key),
@@ -198,7 +198,7 @@ fn get_or_create_pipeline(
     let pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
         label: Some(
             format!(
-                "field_pack_pipeline(rot={},scale={},dead={})",
+                "particles_pack_pipeline(rot={},scale={},dead={})",
                 key.has_rotation, key.has_scale, key.has_dead
             )
             .into(),
@@ -219,33 +219,33 @@ fn get_or_create_pipeline(
     pipelines.by_key.get(&key).unwrap().pipeline
 }
 
-fn extract_field_draws(
-    field_draws: Extract<Query<(Entity, &FieldDraw)>>,
-    fields: Extract<Query<&Field>>,
+fn extract_particles_draws(
+    particles_draws: Extract<Query<(Entity, &ParticlesDraw)>>,
+    particles_q: Extract<Query<&Particles>>,
     buffers: Extract<Query<&compute::Buffer>>,
     builtins: Extract<Res<BuiltinAttributes>>,
-    mut extracted: ResMut<ExtractedFieldDraws>,
+    mut extracted: ResMut<ExtractedParticlesDraws>,
 ) {
     extracted.by_main.clear();
-    for (entity, field_draw) in field_draws.iter() {
-        let Ok(field) = fields.get(field_draw.field) else {
+    for (entity, particles_draw) in particles_draws.iter() {
+        let Ok(p) = particles_q.get(particles_draw.particles) else {
             continue;
         };
-        let Some(pos_entity) = field.buffer(builtins.position) else {
+        let Some(pos_entity) = p.buffer(builtins.position) else {
             continue;
         };
         let Ok(pos_buf) = buffers.get(pos_entity) else {
             continue;
         };
-        let rotation = field
+        let rotation = p
             .buffer(builtins.rotation)
             .and_then(|e| buffers.get(e).ok())
             .map(|b| b.handle.clone());
-        let scale = field
+        let scale = p
             .buffer(builtins.scale)
             .and_then(|e| buffers.get(e).ok())
             .map(|b| b.handle.clone());
-        let dead = field
+        let dead = p
             .buffer(builtins.dead)
             .and_then(|e| buffers.get(e).ok())
             .map(|b| b.handle.clone());
@@ -257,7 +257,7 @@ fn extract_field_draws(
         };
         extracted.by_main.insert(
             MainEntity::from(entity),
-            ExtractedFieldData {
+            ExtractedParticlesData {
                 key,
                 position: pos_buf.handle.clone(),
                 rotation,
@@ -269,17 +269,17 @@ fn extract_field_draws(
 }
 
 fn prepare_pack_bind_groups(
-    shader: Res<FieldPackShader>,
-    mut pipelines: ResMut<FieldPackPipelines>,
+    shader: Res<ParticlesPackShader>,
+    mut pipelines: ResMut<ParticlesPackPipelines>,
     pipeline_cache: Res<PipelineCache>,
-    extracted: Res<ExtractedFieldDraws>,
+    extracted: Res<ExtractedParticlesDraws>,
     reservations: Res<GpuInstanceBatchReservations>,
     batched_instance_buffers: Res<BatchedInstanceBuffers<MeshUniform, MeshInputUniform>>,
     culling_data_buffer: Res<MeshCullingDataBuffer>,
     gpu_buffers: Res<RenderAssets<GpuShaderBuffer>>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
-    mut bind_groups: ResMut<FieldPackBindGroups>,
+    mut bind_groups: ResMut<ParticlesPackBindGroups>,
 ) {
     bind_groups.per_batch.clear();
 
@@ -327,7 +327,7 @@ fn prepare_pack_bind_groups(
         }
         let cached = pipelines.by_key.get(&data.key).unwrap();
 
-        let params = FieldPackParams {
+        let params = ParticlesPackParams {
             base_input_index: reservation.input_buffer_base,
             count: reservation.max_capacity,
             ..default()
@@ -373,7 +373,7 @@ fn prepare_pack_bind_groups(
         });
 
         let bind_group = render_device.create_bind_group(
-            Some("field_pack_bind_group"),
+            Some("particles_pack_bind_group"),
             &pipeline_cache.get_bind_group_layout(&cached.bind_group_layout),
             &entries,
         );
@@ -392,7 +392,7 @@ fn prepare_pack_bind_groups(
 
 fn dispatch_pack(
     mut render_context: RenderContext,
-    bind_groups: Res<FieldPackBindGroups>,
+    bind_groups: Res<ParticlesPackBindGroups>,
     pipeline_cache: Res<PipelineCache>,
 ) {
     if bind_groups.per_batch.is_empty() {
@@ -402,7 +402,7 @@ fn dispatch_pack(
     let mut pass = render_context
         .command_encoder()
         .begin_compute_pass(&ComputePassDescriptor {
-            label: Some("field_pack"),
+            label: Some("particles_pack"),
             timestamp_writes: None,
         });
 

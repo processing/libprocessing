@@ -1,13 +1,13 @@
 //! GPU-resident particle / instancing container.
 //!
-//! A [`Field`] holds a set of named [`compute::Buffer`]s — one per registered
-//! attribute. It is pure storage: it carries no instance shape and no material. The shape is
-//! supplied at draw time via the `field` verb, and the material is read from ambient state at
-//! that point. Rasterization is layered on later by spawning a transient
-//! `bevy::pbr::gpu_instance_batch::GpuBatchedMesh3d` entity that consumes the Field's buffers
-//! through the pack pass.
+//! [`Particles`] holds a set of named [`compute::Buffer`]s — one per registered
+//! attribute. It is pure storage: it carries no instance shape and no material.
+//! The shape is supplied at draw time via the `particles` verb, and the material
+//! is read from ambient state at that point. Rasterization is layered on later
+//! by spawning a transient `bevy::pbr::gpu_instance_batch::GpuBatchedMesh3d`
+//! entity that consumes the buffers through the pack pass.
 //!
-//! See `docs/field.md` for the full design.
+//! See `docs/particles.md` for the full design.
 
 pub mod kernels;
 pub mod material;
@@ -27,14 +27,14 @@ use processing_core::error::{ProcessingError, Result};
 use crate::compute;
 use crate::geometry::{Attribute, AttributeFormat, Geometry};
 
-pub struct FieldPlugin;
+pub struct ParticlesPlugin;
 
-impl Plugin for FieldPlugin {
+impl Plugin for ParticlesPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(GpuInstanceBatchPlugin);
-        app.add_plugins(pack::FieldPackPlugin);
-        app.add_plugins(material::FieldMaterialPlugin);
-        app.add_plugins(kernels::FieldKernelsPlugin);
+        app.add_plugins(pack::ParticlesPackPlugin);
+        app.add_plugins(material::ParticlesMaterialPlugin);
+        app.add_plugins(kernels::ParticlesKernelsPlugin);
     }
 }
 
@@ -44,35 +44,35 @@ impl Plugin for FieldPlugin {
 /// [`compute::Buffer`] entity. The set of registered attributes is fixed at creation.
 ///
 /// `draw_entity` is the persistent rasterization entity carrying `GpuBatchedMesh3d` and
-/// the active material — created lazily on the first `field` draw call and reused on
+/// the active material — created lazily on the first `particles` draw call and reused on
 /// subsequent ones. It must persist across frames because the upstream batching queue
 /// processes mesh instance batches one frame after the reservation is created; despawning
 /// per-frame would lose the entity before it ever gets queued.
 ///
-/// `emit_head` is the ring-buffer write cursor used by `field_emit`. New particles are
+/// `emit_head` is the ring-buffer write cursor used by `particles_emit`. New particles are
 /// written to slots `[emit_head, emit_head + n) mod capacity` and the head advances by `n`.
 /// When the ring wraps, oldest particles are overwritten — capacity is a visible contract.
 #[derive(Component)]
-pub struct Field {
+pub struct Particles {
     pub capacity: u32,
     pub buffers: HashMap<Entity, Entity>,
     pub draw_entity: Option<Entity>,
     pub emit_head: u32,
 }
 
-impl Field {
+impl Particles {
     pub fn buffer(&self, attribute: Entity) -> Option<Entity> {
         self.buffers.get(&attribute).copied()
     }
 }
 
-/// Marker on a transient render entity indicating it rasterizes a [`Field`].
+/// Marker on a transient render entity indicating it rasterizes a [`Particles`].
 ///
-/// The pack pass uses this to look up which Field's buffers to read when writing
+/// The pack pass uses this to look up which Particles' buffers to read when writing
 /// per-instance transforms into the upstream `mesh_input_buffer`.
 #[derive(Component, Clone, Copy)]
-pub struct FieldDraw {
-    pub field: Entity,
+pub struct ParticlesDraw {
+    pub particles: Entity,
 }
 
 pub fn create(
@@ -97,22 +97,22 @@ pub fn create(
         buffers.insert(attr_entity, buffer_entity);
     }
 
-    let field_entity = commands
-        .spawn(Field {
+    let entity = commands
+        .spawn(Particles {
             capacity,
             buffers,
             draw_entity: None,
             emit_head: 0,
         })
         .id();
-    Ok(field_entity)
+    Ok(entity)
 }
 
-/// Create a Field whose capacity matches the source [`Geometry`]'s vertex count
-/// and whose buffers are pre-seeded from the geometry's mesh attributes where
-/// names line up. Any registered attribute the mesh doesn't supply (or whose
-/// format doesn't match) gets zero-initialized — the user fills it in via
-/// `buffer_write` or `field_emit`.
+/// Create [`Particles`] whose capacity matches the source [`Geometry`]'s vertex
+/// count and whose buffers are pre-seeded from the geometry's mesh attributes
+/// where names line up. Any registered attribute the mesh doesn't supply (or
+/// whose format doesn't match) gets zero-initialized — the user fills it in via
+/// `buffer_write` or `particles_emit`.
 pub fn create_from_geometry(
     In((geom_entity, attribute_entities)): In<(Entity, Vec<Entity>)>,
     mut commands: Commands,
@@ -148,15 +148,15 @@ pub fn create_from_geometry(
         buffers.insert(attr_entity, buffer_entity);
     }
 
-    let field_entity = commands
-        .spawn(Field {
+    let entity = commands
+        .spawn(Particles {
             capacity,
             buffers,
             draw_entity: None,
             emit_head: 0,
         })
         .id();
-    Ok(field_entity)
+    Ok(entity)
 }
 
 fn make_buffer(
@@ -168,7 +168,7 @@ fn make_buffer(
     let byte_size = initial.len() as u64;
     let handle = shader_buffers.add(ShaderBuffer::new(initial, RenderAssetUsages::all()));
     let readback = render_device.create_buffer(&BufferDescriptor {
-        label: Some("Field Buffer Readback"),
+        label: Some("Particles Buffer Readback"),
         size: byte_size,
         usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
         mapped_at_creation: false,
@@ -214,15 +214,15 @@ fn attribute_values_to_bytes(
 pub fn destroy(
     In(entity): In<Entity>,
     mut commands: Commands,
-    fields: Query<&Field>,
+    particles: Query<&Particles>,
 ) -> Result<()> {
-    let field = fields
+    let p = particles
         .get(entity)
-        .map_err(|_| ProcessingError::FieldNotFound)?;
-    for &buffer_entity in field.buffers.values() {
+        .map_err(|_| ProcessingError::ParticlesNotFound)?;
+    for &buffer_entity in p.buffers.values() {
         commands.entity(buffer_entity).despawn();
     }
-    if let Some(draw_entity) = field.draw_entity {
+    if let Some(draw_entity) = p.draw_entity {
         commands.entity(draw_entity).despawn();
     }
     commands.entity(entity).despawn();

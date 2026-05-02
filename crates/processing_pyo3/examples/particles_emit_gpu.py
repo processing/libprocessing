@@ -1,7 +1,7 @@
 from mewnala import *
 import math
 
-field_obj = None
+p = None
 particle = None
 mat = None
 spawn = None
@@ -124,19 +124,19 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 
 def setup():
-    global field_obj, particle, mat, spawn, motion
+    global p, particle, mat, spawn, motion
 
     size(900, 700)
     mode_3d()
 
-    create_directional_light((0.95, 0.9, 0.85), 800.0)
+    directional_light((0.95, 0.9, 0.85), 800.0)
 
     particle = Geometry.sphere(0.12, 8, 6)
 
     velocity_attr = Attribute("velocity", AttributeFormat.Float3)
     age_attr = Attribute("age", AttributeFormat.Float)
 
-    field_obj = Field(
+    p = Particles(
         capacity=CAPACITY,
         attributes=[
             Attribute.position(),
@@ -149,10 +149,10 @@ def setup():
     )
 
     # Mark all unemitted slots dead so they don't render at origin.
-    dead_buf = field_obj.buffer(Attribute.dead())
+    dead_buf = p.buffer(Attribute.dead())
     dead_buf.write([1.0] * CAPACITY)
 
-    color_buf = field_obj.buffer(Attribute.color())
+    color_buf = p.buffer(Attribute.color())
     mat = Material.pbr(albedo=color_buf)
 
     spawn = Compute(Shader(SPAWN_SHADER))
@@ -165,17 +165,17 @@ def draw():
     background(10, 10, 18)
 
     use_material(mat)
-    draw_field(field_obj, particle)
+    particles(p, particle)
 
     # Animate spawn point in a small circle so the fountain meanders.
     t = elapsed_time
     sx = math.cos(t) * 0.4
     sz = math.sin(t) * 0.4
     spawn.set(pos=[sx, 7.0, sz, 0.0], speed=[SPEED, 0.0, 0.0, 0.0])
-    field_obj.emit_gpu(BURST, spawn)
+    p.emit_gpu(BURST, spawn)
 
     motion.set(dt=DT, ttl=TTL, gravity=GRAVITY)
-    field_obj.apply(motion)
+    p.apply(motion)
 
 
 run()

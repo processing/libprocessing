@@ -1,4 +1,4 @@
-// Pack pass — bridges libprocessing Field buffers into the upstream
+// Pack pass — bridges libprocessing Particles buffers into the upstream
 // per-instance MeshInputUniform / MeshCullingData slots reserved by
 // `GpuBatchedMesh3d`.
 //

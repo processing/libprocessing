@@ -1,6 +1,6 @@
 from mewnala import *
 
-field_obj = None
+p = None
 sphere = None
 mat = None
 spin = None
@@ -31,12 +31,12 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 
 def setup():
-    global field_obj, sphere, mat, spin
+    global p, sphere, mat, spin
 
     size(900, 700)
     mode_3d()
 
-    create_directional_light((0.9, 0.85, 0.8), 300.0)
+    directional_light((0.9, 0.85, 0.8), 300.0)
 
     sphere = Geometry.sphere(0.25, 12, 8)
 
@@ -47,8 +47,8 @@ def setup():
             for z in range(10):
                 positions.extend([x - 4.5, y - 4.5, z - 4.5])
 
-    field_obj = Field(capacity=capacity, attributes=[Attribute.position()])
-    pos_buf = field_obj.buffer(Attribute.position())
+    p = Particles(capacity=capacity, attributes=[Attribute.position()])
+    pos_buf = p.buffer(Attribute.position())
     pos_buf.write(positions)
 
     mat = Material(roughness=0.4)
@@ -62,10 +62,10 @@ def draw():
     fill(230, 128, 75)
 
     use_material(mat)
-    draw_field(field_obj, sphere)
+    particles(p, sphere)
 
     spin.set(dt=0.01)
-    field_obj.apply(spin)
+    p.apply(spin)
 
 
 run()

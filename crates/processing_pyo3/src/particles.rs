@@ -95,14 +95,14 @@ impl Attribute {
 }
 
 #[pyclass(unsendable)]
-pub struct Field {
+pub struct Particles {
     pub(crate) entity: Entity,
     /// Cached attribute metadata indexed by name, used to convert kwarg payloads
-    /// in `emit()` into the byte format the underlying `field_emit` expects.
+    /// in `emit()` into the byte format the underlying `particles_emit` expects.
     name_to_attr: HashMap<String, (Entity, AttributeFormat)>,
 }
 
-impl Field {
+impl Particles {
     fn build_name_index(attrs: &[Attribute]) -> PyResult<HashMap<String, (Entity, AttributeFormat)>> {
         let mut map = HashMap::with_capacity(attrs.len());
         for attr in attrs {
@@ -115,8 +115,8 @@ impl Field {
 }
 
 #[pymethods]
-impl Field {
-    /// Construct a Field. Provide either `capacity` (allocates empty buffers)
+impl Particles {
+    /// Construct a Particles container. Provide either `capacity` (allocates empty buffers)
     /// or `geometry` (capacity = vertex count, buffers seeded from matching
     /// mesh attributes), but not both.
     #[new]
@@ -134,40 +134,40 @@ impl Field {
         let attr_entities: Vec<Entity> = attrs.iter().map(|a| a.entity).collect();
 
         let entity = match (capacity, geometry) {
-            (Some(cap), None) => field_create(cap, attr_entities)
+            (Some(cap), None) => particles_create(cap, attr_entities)
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
-            (None, Some(g)) => field_create_from_geometry(g.entity, attr_entities)
+            (None, Some(g)) => particles_create_from_geometry(g.entity, attr_entities)
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
             (None, None) => {
                 return Err(PyRuntimeError::new_err(
-                    "Field requires either capacity or geometry",
+                    "Particles requires either capacity or geometry",
                 ));
             }
             (Some(_), Some(_)) => {
                 return Err(PyRuntimeError::new_err(
-                    "Field accepts capacity or geometry, not both",
+                    "Particles accepts capacity or geometry, not both",
                 ));
             }
         };
 
         Ok(Self {
             entity,
-            name_to_attr: Field::build_name_index(&attrs)?,
+            name_to_attr: Particles::build_name_index(&attrs)?,
         })
     }
 
-    /// Number of slots reserved for this Field.
+    /// Number of slots reserved for this container.
     #[getter]
     pub fn capacity(&self) -> PyResult<u32> {
-        field_capacity(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        particles_capacity(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     /// Get the underlying `Buffer` for a registered attribute, or `None` if the
-    /// attribute isn't part of this Field. The returned buffer's element type
+    /// attribute isn't part of this container. The returned buffer's element type
     /// matches the attribute's format so `read()` / `__getitem__` return typed
     /// values (e.g. lists of vec3 components for a Float3 attribute).
     pub fn buffer(&self, attribute: &Attribute) -> PyResult<Option<Buffer>> {
-        let buf = field_buffer(self.entity, attribute.entity)
+        let buf = particles_buffer(self.entity, attribute.entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         let (_, fmt) = geometry_attribute_info(attribute.entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
@@ -180,11 +180,23 @@ impl Field {
         Ok(buf.map(|e| Buffer::from_entity(e, Some(element_type))))
     }
 
-    /// Run a compute kernel against this Field's buffers. Each buffer is
-    /// auto-bound by its attribute name; uniforms must be set on the compute
-    /// beforehand via `compute.set(...)`.
-    pub fn apply(&self, compute: &Compute) -> PyResult<()> {
-        field_apply(self.entity, compute.entity)
+    /// Run a compute kernel against these particles' buffers. Each buffer is
+    /// auto-bound by its attribute name. Any kwargs are forwarded to
+    /// `compute.set(...)` first, so callers can configure uniforms inline:
+    ///
+    /// ```python
+    /// field.apply(noise, scale=0.25, strength=0.02, time=t)
+    /// ```
+    #[pyo3(signature = (compute, **kwargs))]
+    pub fn apply(
+        &self,
+        compute: &Compute,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<()> {
+        if let Some(kwargs) = kwargs {
+            compute.set(Some(kwargs))?;
+        }
+        particles_apply(self.entity, compute.entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
@@ -198,7 +210,7 @@ impl Field {
     #[pyo3(signature = (n, **kwargs))]
     pub fn emit(&self, n: u32, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<()> {
         let Some(kwargs) = kwargs else {
-            return field_emit(self.entity, n, vec![])
+            return particles_emit(self.entity, n, vec![])
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")));
         };
         let mut data: Vec<(Entity, Vec<u8>)> = Vec::new();
@@ -222,7 +234,7 @@ impl Field {
             let bytes: Vec<u8> = floats.iter().flat_map(|f| f.to_le_bytes()).collect();
             data.push((attr_entity, bytes));
         }
-        field_emit(self.entity, n, data)
+        particles_emit(self.entity, n, data)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
@@ -232,29 +244,29 @@ impl Field {
     /// to `(base_slot, n, capacity, 0)`. User-set uniforms (spawn position,
     /// velocity hint, etc.) must be assigned to the compute beforehand.
     pub fn emit_gpu(&self, n: u32, compute: &Compute) -> PyResult<()> {
-        field_emit_gpu(self.entity, n, compute.entity)
+        particles_emit_gpu(self.entity, n, compute.entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 }
 
-impl Drop for Field {
+impl Drop for Particles {
     fn drop(&mut self) {
-        let _ = field_destroy(self.entity);
+        let _ = particles_destroy(self.entity);
     }
 }
 
 /// Built-in noise compute kernel. Configure via `compute.set(scale=..., strength=..., time=...)`.
 pub fn kernel_noise() -> PyResult<Compute> {
-    let entity = field_kernel_noise().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    let entity = particles_kernel_noise().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
     Ok(Compute::from_entity(entity))
 }
 
 /// Built-in transform compute kernel — applies an affine to each particle's
 /// position in scale → axis-angle rotation → translate order. Configure via
-/// `compute.set(translate=[tx,ty,tz,0], rotation=[ax,ay,az,angle_rad], scale=[sx,sy,sz,0])`
-/// (rotation xyz = axis, w = angle in radians). Defaults of zero/one behave as
-/// identity, so unset parameters are no-ops.
+/// `compute.set(translate=[tx,ty,tz], rotation_axis=[ax,ay,az],
+/// rotation_angle=angle_rad, scale=[sx,sy,sz])`. Defaults of zero/one behave
+/// as identity, so unset parameters are no-ops.
 pub fn kernel_transform() -> PyResult<Compute> {
-    let entity = field_kernel_transform().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    let entity = particles_kernel_transform().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
     Ok(Compute::from_entity(entity))
 }

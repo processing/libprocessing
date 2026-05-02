@@ -83,7 +83,7 @@ fn sketch() -> error::Result<()> {
     let capacity = GRID * GRID * GRID;
     let position_attr = geometry_attribute_position();
     let color_attr = geometry_attribute_color();
-    let field = field_create(capacity, vec![position_attr, color_attr])?;
+    let p = particles_create(capacity, vec![position_attr, color_attr])?;
 
     let mut positions: Vec<f32> = Vec::with_capacity(capacity as usize * 3);
     let mut colors: Vec<f32> = Vec::with_capacity(capacity as usize * 4);
@@ -102,10 +102,10 @@ fn sketch() -> error::Result<()> {
         colors.push(rz);
         colors.push(1.0);
     }
-    let position_buf = field_buffer(field, position_attr)?
-        .ok_or(error::ProcessingError::FieldNotFound)?;
-    let color_buf = field_buffer(field, color_attr)?
-        .ok_or(error::ProcessingError::FieldNotFound)?;
+    let position_buf = particles_buffer(p, position_attr)?
+        .ok_or(error::ProcessingError::ParticlesNotFound)?;
+    let color_buf = particles_buffer(p, color_attr)?
+        .ok_or(error::ProcessingError::ParticlesNotFound)?;
     buffer_write(
         position_buf,
         positions.iter().flat_map(|f| f.to_le_bytes()).collect(),
@@ -130,15 +130,12 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(graphics, DrawCommand::Material(mat))?;
         graphics_record_command(
             graphics,
-            DrawCommand::Field {
-                field,
-                geometry: cube,
-            },
+            DrawCommand::Particles { particles: p, geometry: cube },
         )?;
         graphics_end_draw(graphics)?;
 
         compute_set(spin, "dt", shader_value::ShaderValue::Float(0.003))?;
-        field_apply(field, spin)?;
+        particles_apply(p, spin)?;
     }
 
     Ok(())

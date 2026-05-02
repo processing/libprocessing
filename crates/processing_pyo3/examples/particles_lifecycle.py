@@ -1,7 +1,7 @@
 from mewnala import *
 import math
 
-field_obj = None
+p = None
 sphere = None
 mat = None
 aging = None
@@ -54,7 +54,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 
 def setup():
-    global field_obj, sphere, mat, aging
+    global p, sphere, mat, aging
     global position_attr, color_attr, scale_attr, dead_attr, age_attr
 
     size(900, 700)
@@ -69,16 +69,16 @@ def setup():
     dead_attr = Attribute.dead()
     age_attr = Attribute("age", AttributeFormat.Float)
 
-    field_obj = Field(
+    p = Particles(
         capacity=capacity,
         attributes=[position_attr, color_attr, scale_attr, dead_attr, age_attr],
     )
 
     # Mark all slots dead initially so unemitted ring slots don't render.
-    dead_buf = field_obj.buffer(dead_attr)
+    dead_buf = p.buffer(dead_attr)
     dead_buf.write([1.0] * capacity)
 
-    color_buf = field_obj.buffer(color_attr)
+    color_buf = p.buffer(color_attr)
     mat = Material.unlit(albedo=color_buf)
     aging = Compute(Shader(AGING_SHADER))
 
@@ -90,7 +90,7 @@ def draw():
     background(10, 10, 18)
 
     use_material(mat)
-    draw_field(field_obj, sphere)
+    particles(p, sphere)
 
     # Spawn `BURST` new particles per frame in a small fountain.
     positions = []
@@ -108,7 +108,7 @@ def draw():
 
     zeros = [0.0] * BURST
     ones_scale = [1.0] * (BURST * 3)
-    field_obj.emit(
+    p.emit(
         BURST,
         position=positions,
         color=colors,
@@ -118,7 +118,7 @@ def draw():
     )
 
     aging.set(params=[DT, TTL, 0.0, 0.0])
-    field_obj.apply(aging)
+    p.apply(aging)
 
     frame += 1
 

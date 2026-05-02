@@ -87,13 +87,13 @@ fn sketch() -> error::Result<()> {
     let position_attr = geometry_attribute_position();
     let rotation_attr = geometry_attribute_rotation();
     let scale_attr = geometry_attribute_scale();
-    let field = field_create(capacity, vec![position_attr, rotation_attr, scale_attr])?;
-    let position_buf = field_buffer(field, position_attr)?
-        .ok_or(error::ProcessingError::FieldNotFound)?;
-    let rotation_buf = field_buffer(field, rotation_attr)?
-        .ok_or(error::ProcessingError::FieldNotFound)?;
-    let scale_buf = field_buffer(field, scale_attr)?
-        .ok_or(error::ProcessingError::FieldNotFound)?;
+    let p = particles_create(capacity, vec![position_attr, rotation_attr, scale_attr])?;
+    let position_buf = particles_buffer(p, position_attr)?
+        .ok_or(error::ProcessingError::ParticlesNotFound)?;
+    let rotation_buf = particles_buffer(p, rotation_attr)?
+        .ok_or(error::ProcessingError::ParticlesNotFound)?;
+    let scale_buf = particles_buffer(p, scale_attr)?
+        .ok_or(error::ProcessingError::ParticlesNotFound)?;
     buffer_write(
         position_buf,
         positions.iter().flat_map(|f| f.to_le_bytes()).collect(),
@@ -126,10 +126,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(graphics, DrawCommand::Material(pbr))?;
         graphics_record_command(
             graphics,
-            DrawCommand::Field {
-                field,
-                geometry: cube,
-            },
+            DrawCommand::Particles { particles: p, geometry: cube },
         )?;
         graphics_end_draw(graphics)?;
 
@@ -138,7 +135,7 @@ fn sketch() -> error::Result<()> {
             "params",
             shader_value::ShaderValue::Float4([0.015, 0.0, 0.0, 0.0]),
         )?;
-        field_apply(field, spin)?;
+        particles_apply(p, spin)?;
     }
 
     Ok(())
