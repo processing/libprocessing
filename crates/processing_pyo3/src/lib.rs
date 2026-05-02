@@ -1017,7 +1017,7 @@ mod mewnala {
             return Ok(());
         }
 
-        Python::attach(|py| {
+        let result: PyResult<()> = Python::attach(|py| {
             let builtins = PyModule::import(py, "builtins")?;
             let locals = builtins.getattr("locals")?.call0()?;
 
@@ -1138,7 +1138,13 @@ mod mewnala {
             }
 
             Ok(())
-        })
+        });
+
+        // tear the app down here while the TLS is still alive; the eager
+        // TLS destructor aborts inside a Bevy resource drop
+        let _ = ::processing::exit(0);
+
+        result
     }
 
     #[pyfunction]
