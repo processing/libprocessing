@@ -116,8 +116,8 @@ impl Field {
 
 #[pymethods]
 impl Field {
-    /// Construct a Field. Provide either `capacity` (allocates empty PBuffers)
-    /// or `geometry` (capacity = vertex count, PBuffers seeded from matching
+    /// Construct a Field. Provide either `capacity` (allocates empty buffers)
+    /// or `geometry` (capacity = vertex count, buffers seeded from matching
     /// mesh attributes), but not both.
     #[new]
     #[pyo3(signature = (capacity=None, attributes=None, geometry=None))]
@@ -166,8 +166,8 @@ impl Field {
     /// attribute isn't part of this Field. The returned buffer's element type
     /// matches the attribute's format so `read()` / `__getitem__` return typed
     /// values (e.g. lists of vec3 components for a Float3 attribute).
-    pub fn pbuffer(&self, attribute: &Attribute) -> PyResult<Option<Buffer>> {
-        let pbuf = field_pbuffer(self.entity, attribute.entity)
+    pub fn buffer(&self, attribute: &Attribute) -> PyResult<Option<Buffer>> {
+        let buf = field_buffer(self.entity, attribute.entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         let (_, fmt) = geometry_attribute_info(attribute.entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
@@ -177,10 +177,10 @@ impl Field {
             AttributeFormat::Float3 => shader_value::ShaderValue::Float3([0.0; 3]),
             AttributeFormat::Float4 => shader_value::ShaderValue::Float4([0.0; 4]),
         };
-        Ok(pbuf.map(|e| Buffer::from_entity(e, Some(element_type))))
+        Ok(buf.map(|e| Buffer::from_entity(e, Some(element_type))))
     }
 
-    /// Run a compute kernel against this Field's PBuffers. Each PBuffer is
+    /// Run a compute kernel against this Field's buffers. Each buffer is
     /// auto-bound by its attribute name; uniforms must be set on the compute
     /// beforehand via `compute.set(...)`.
     pub fn apply(&self, compute: &Compute) -> PyResult<()> {
@@ -227,7 +227,7 @@ impl Field {
     }
 
     /// GPU-driven emission. Dispatches `compute` over `n` invocations to
-    /// initialize the next `n` ring-buffer slots. The compute's PBuffer
+    /// initialize the next `n` ring-buffer slots. The compute's buffer
     /// bindings are auto-set; the `emit_range: vec4<f32>` uniform is auto-set
     /// to `(base_slot, n, capacity, 0)`. User-set uniforms (spawn position,
     /// velocity hint, etc.) must be assigned to the compute beforehand.
@@ -246,5 +246,15 @@ impl Drop for Field {
 /// Built-in noise compute kernel. Configure via `compute.set(scale=..., strength=..., time=...)`.
 pub fn kernel_noise() -> PyResult<Compute> {
     let entity = field_kernel_noise().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    Ok(Compute::from_entity(entity))
+}
+
+/// Built-in transform compute kernel — applies an affine to each particle's
+/// position in scale → axis-angle rotation → translate order. Configure via
+/// `compute.set(translate=[tx,ty,tz,0], rotation=[ax,ay,az,angle_rad], scale=[sx,sy,sz,0])`
+/// (rotation xyz = axis, w = angle in radians). Defaults of zero/one behave as
+/// identity, so unset parameters are no-ops.
+pub fn kernel_transform() -> PyResult<Compute> {
+    let entity = field_kernel_transform().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
     Ok(Compute::from_entity(entity))
 }

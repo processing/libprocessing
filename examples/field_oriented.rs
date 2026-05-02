@@ -88,11 +88,11 @@ fn sketch() -> error::Result<()> {
     let rotation_attr = geometry_attribute_rotation();
     let scale_attr = geometry_attribute_scale();
     let field = field_create(capacity, vec![position_attr, rotation_attr, scale_attr])?;
-    let position_buf = field_pbuffer(field, position_attr)?
+    let position_buf = field_buffer(field, position_attr)?
         .ok_or(error::ProcessingError::FieldNotFound)?;
-    let rotation_buf = field_pbuffer(field, rotation_attr)?
+    let rotation_buf = field_buffer(field, rotation_attr)?
         .ok_or(error::ProcessingError::FieldNotFound)?;
-    let scale_buf = field_pbuffer(field, scale_attr)?
+    let scale_buf = field_buffer(field, scale_attr)?
         .ok_or(error::ProcessingError::FieldNotFound)?;
     buffer_write(
         position_buf,

@@ -1396,6 +1396,19 @@ pub fn geometry_sphere(radius: f32, sectors: u32, stacks: u32) -> error::Result<
     })
 }
 
+/// 3D lattice of `nx * ny * nz` points centered at the origin, with `spacing`
+/// units between adjacent points. Topology is `PointList` — typically used as a
+/// position source for [`field_create_from_geometry`] rather than rasterized
+/// directly.
+pub fn geometry_grid(nx: u32, ny: u32, nz: u32, spacing: f32) -> error::Result<Entity> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(geometry::create_grid, (nx, ny, nz, spacing))
+            .unwrap())
+    })
+}
+
 pub fn poll_for_sketch_updates() -> error::Result<Option<sketch::Sketch>> {
     app_mut(|app| {
         Ok(app
@@ -1450,7 +1463,7 @@ pub fn material_create_pbr() -> error::Result<Entity> {
 }
 
 /// Create an unlit material that reads each particle's color from the given
-/// PBuffer. The buffer is expected to hold tightly-packed `Float4` colors
+/// buffer. The buffer is expected to hold tightly-packed `Float4` colors
 /// (RGBA, 16 bytes per particle).
 pub fn material_create_field_color(color_buffer_entity: Entity) -> error::Result<Entity> {
     use crate::field::material::FieldColorMaterial;
@@ -1952,7 +1965,7 @@ pub fn field_create(capacity: u32, attribute_entities: Vec<Entity>) -> error::Re
 }
 
 /// Create a Field whose capacity matches `geometry`'s vertex count and whose
-/// PBuffers are pre-seeded from the geometry's mesh attributes when names line
+/// buffers are pre-seeded from the geometry's mesh attributes when names line
 /// up (`position`, `normal`, `color`, `uv`). Custom attributes the mesh doesn't
 /// supply are zero-initialized — the user fills them via `buffer_write` or
 /// `field_emit`.
@@ -1988,19 +2001,19 @@ pub fn field_capacity(entity: Entity) -> error::Result<u32> {
     })
 }
 
-pub fn field_pbuffer(entity: Entity, attribute_entity: Entity) -> error::Result<Option<Entity>> {
+pub fn field_buffer(entity: Entity, attribute_entity: Entity) -> error::Result<Option<Entity>> {
     app_mut(|app| {
         Ok(app
             .world()
             .get::<field::Field>(entity)
             .ok_or(error::ProcessingError::FieldNotFound)?
-            .pbuffer(attribute_entity))
+            .buffer(attribute_entity))
     })
 }
 
 /// GPU-side emission. Dispatches `compute_entity` over `count` invocations to
 /// initialize the next `count` ring-buffer slots. The framework auto-binds the
-/// field's PBuffers (same convention as `field_apply`) and sets a `vec4<f32>`
+/// field's buffers (same convention as `field_apply`) and sets a `vec4<f32>`
 /// uniform named `emit_range` to `(base_slot, count, capacity, 0.0)` — the
 /// kernel reads it to compute its target slot:
 ///
@@ -2025,7 +2038,7 @@ pub fn field_emit_gpu(
     }
     const WORKGROUP_SIZE: u32 = 64;
 
-    let (capacity, head, pbuffers) = app_mut(|app| {
+    let (capacity, head, buffers) = app_mut(|app| {
         let world = app.world();
         let field = world
             .get::<field::Field>(field_entity)
@@ -2036,21 +2049,21 @@ pub fn field_emit_gpu(
                 count, field.capacity
             )));
         }
-        let mut pbuffers: Vec<(String, Entity)> = Vec::with_capacity(field.pbuffers.len());
-        for (&attr_entity, &pbuf_entity) in &field.pbuffers {
+        let mut buffers: Vec<(String, Entity)> = Vec::with_capacity(field.buffers.len());
+        for (&attr_entity, &buf_entity) in &field.buffers {
             let attr = world
                 .get::<geometry::Attribute>(attr_entity)
                 .ok_or(error::ProcessingError::InvalidEntity)?;
-            pbuffers.push((attr.name.to_string(), pbuf_entity));
+            buffers.push((attr.name.to_string(), buf_entity));
         }
-        Ok((field.capacity, field.emit_head, pbuffers))
+        Ok((field.capacity, field.emit_head, buffers))
     })?;
 
-    for (name, pbuf_entity) in pbuffers {
+    for (name, buf_entity) in buffers {
         match compute_set(
             compute_entity,
             name,
-            shader_value::ShaderValue::Buffer(pbuf_entity),
+            shader_value::ShaderValue::Buffer(buf_entity),
         ) {
             Ok(()) => {}
             Err(error::ProcessingError::UnknownShaderProperty(_)) => {}
@@ -2110,18 +2123,18 @@ pub fn field_emit(
             let attr = world
                 .get::<geometry::Attribute>(*attr_entity)
                 .ok_or(error::ProcessingError::InvalidEntity)?;
-            let pbuf = field.pbuffer(*attr_entity).ok_or_else(|| {
+            let buf = field.buffer(*attr_entity).ok_or_else(|| {
                 error::ProcessingError::InvalidArgument(format!(
-                    "field has no PBuffer for attribute {:?}",
+                    "field has no buffer for attribute {:?}",
                     attr_entity
                 ))
             })?;
-            specs.push((*attr_entity, attr.format.byte_size() as u32, pbuf));
+            specs.push((*attr_entity, attr.format.byte_size() as u32, buf));
         }
         Ok((field.capacity, field.emit_head, specs))
     })?;
 
-    for ((_, bytes), &(_, byte_size, pbuf)) in attribute_data.iter().zip(attr_specs.iter()) {
+    for ((_, bytes), &(_, byte_size, buf)) in attribute_data.iter().zip(attr_specs.iter()) {
         let expected = (n as usize) * (byte_size as usize);
         if bytes.len() != expected {
             return Err(error::ProcessingError::InvalidArgument(format!(
@@ -2135,9 +2148,9 @@ pub fn field_emit(
         let first_chunk_n = (capacity - head).min(n);
         let split = (first_chunk_n as usize) * (byte_size as usize);
         let first_offset = (head as u64) * (byte_size as u64);
-        buffer_write_element(pbuf, first_offset, bytes[..split].to_vec())?;
+        buffer_write_element(buf, first_offset, bytes[..split].to_vec())?;
         if first_chunk_n < n {
-            buffer_write_element(pbuf, 0, bytes[split..].to_vec())?;
+            buffer_write_element(buf, 0, bytes[split..].to_vec())?;
         }
     }
 
@@ -2159,35 +2172,54 @@ pub fn field_kernel_noise() -> error::Result<Entity> {
     compute_create(shader)
 }
 
-/// Dispatch a compute pass against a Field's PBuffers. Each PBuffer is bound
+/// Built-in transform kernel — applies an affine to each particle's `position`
+/// in scale → axis-angle rotation → translate order. Configure via:
+/// `compute_set("translate", Float4([tx, ty, tz, 0.0]))`,
+/// `compute_set("rotation", Float4([ax, ay, az, angle_radians]))` (xyz = axis,
+/// w = angle), `compute_set("scale", Float4([sx, sy, sz, 0.0]))`. Identity
+/// defaults are seeded at creation time, so any unset parameter is a no-op
+/// (rather than zeroing out positions).
+pub fn field_kernel_transform() -> error::Result<Entity> {
+    let shader = shader_load(field::kernels::TRANSFORM_PATH)?;
+    let entity = compute_create(shader)?;
+    // The uniform struct is zero-initialized by default. Without these,
+    // an unset `scale` would multiply every position by zero on the first
+    // dispatch and collapse the whole field to the origin.
+    compute_set(entity, "translate", shader_value::ShaderValue::Float4([0.0; 4]))?;
+    compute_set(entity, "rotation", shader_value::ShaderValue::Float4([0.0, 1.0, 0.0, 0.0]))?;
+    compute_set(entity, "scale", shader_value::ShaderValue::Float4([1.0, 1.0, 1.0, 0.0]))?;
+    Ok(entity)
+}
+
+/// Dispatch a compute pass against a Field's buffers. Each buffer is bound
 /// by its attribute's name; bindings the shader doesn't declare are skipped.
 /// Workgroup size is fixed at 64 — the shader must declare `@workgroup_size(64)`.
 ///
-/// Any non-PBuffer parameters (uniforms, etc.) on the compute should be set via
+/// Any non-buffer parameters (uniforms, etc.) on the compute should be set via
 /// `compute_set` before calling this.
 pub fn field_apply(field_entity: Entity, compute_entity: Entity) -> error::Result<()> {
     const WORKGROUP_SIZE: u32 = 64;
 
-    let (capacity, pbuffers) = app_mut(|app| {
+    let (capacity, buffers) = app_mut(|app| {
         let world = app.world();
         let field = world
             .get::<field::Field>(field_entity)
             .ok_or(error::ProcessingError::FieldNotFound)?;
-        let mut pbuffers: Vec<(String, Entity)> = Vec::with_capacity(field.pbuffers.len());
-        for (&attr_entity, &pbuf_entity) in &field.pbuffers {
+        let mut buffers: Vec<(String, Entity)> = Vec::with_capacity(field.buffers.len());
+        for (&attr_entity, &buf_entity) in &field.buffers {
             let attr = world
                 .get::<geometry::Attribute>(attr_entity)
                 .ok_or(error::ProcessingError::InvalidEntity)?;
-            pbuffers.push((attr.name.to_string(), pbuf_entity));
+            buffers.push((attr.name.to_string(), buf_entity));
         }
-        Ok((field.capacity, pbuffers))
+        Ok((field.capacity, buffers))
     })?;
 
-    for (name, pbuf_entity) in pbuffers {
+    for (name, buf_entity) in buffers {
         match compute_set(
             compute_entity,
             name,
-            shader_value::ShaderValue::Buffer(pbuf_entity),
+            shader_value::ShaderValue::Buffer(buf_entity),
         ) {
             Ok(()) => {}
             Err(error::ProcessingError::UnknownShaderProperty(_)) => {}

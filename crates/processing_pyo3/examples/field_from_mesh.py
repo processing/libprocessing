@@ -11,10 +11,10 @@ def setup():
     size(900, 700)
     mode_3d()
 
-    create_directional_light((0.95, 0.9, 0.85), 600.0)
+    create_directional_light((0.95, 0.9, 0.85), 200.0)
 
-    # Source mesh whose vertices become particle positions; uvs come along for
-    # free and we use them to color each particle.
+    # Source mesh whose vertices become the particle positions. UVs come along
+    # for free and we'll use them to paint each particle a unique color.
     source = Geometry.sphere(5.0, 32, 24)
     field_obj = Field(
         geometry=source,

@@ -33,9 +33,9 @@ fn sketch() -> error::Result<()> {
     let field = field_create_from_geometry(source, vec![position_attr, uv_attr, color_attr])?;
 
     let uv_buf =
-        field_pbuffer(field, uv_attr)?.ok_or(error::ProcessingError::FieldNotFound)?;
+        field_buffer(field, uv_attr)?.ok_or(error::ProcessingError::FieldNotFound)?;
     let color_buf =
-        field_pbuffer(field, color_attr)?.ok_or(error::ProcessingError::FieldNotFound)?;
+        field_buffer(field, color_attr)?.ok_or(error::ProcessingError::FieldNotFound)?;
 
     // Color each particle by hue from its U coord.
     let uv_bytes = buffer_read(uv_buf)?;

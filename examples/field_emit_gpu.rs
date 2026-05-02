@@ -157,14 +157,14 @@ fn sketch() -> error::Result<()> {
     )?;
 
     // Mark all unemitted slots dead so they don't render at origin.
-    let dead_buf = field_pbuffer(field, dead_attr)?
+    let dead_buf = field_buffer(field, dead_attr)?
         .ok_or(error::ProcessingError::FieldNotFound)?;
     let init_dead: Vec<u8> = (0..capacity)
         .flat_map(|_| 1.0_f32.to_le_bytes())
         .collect();
     buffer_write(dead_buf, init_dead)?;
 
-    let color_buf = field_pbuffer(field, color_attr)?
+    let color_buf = field_buffer(field, color_attr)?
         .ok_or(error::ProcessingError::FieldNotFound)?;
     let mat = material_create_field_pbr(color_buf)?;
 

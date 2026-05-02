@@ -35,11 +35,11 @@ fn sketch() -> error::Result<()> {
     // empty and we fill it from uv values.
     let field = field_create_from_geometry(source, vec![position_attr, uv_attr, color_attr])?;
     let uv_buf =
-        field_pbuffer(field, uv_attr)?.ok_or(error::ProcessingError::FieldNotFound)?;
+        field_buffer(field, uv_attr)?.ok_or(error::ProcessingError::FieldNotFound)?;
     let color_buf =
-        field_pbuffer(field, color_attr)?.ok_or(error::ProcessingError::FieldNotFound)?;
+        field_buffer(field, color_attr)?.ok_or(error::ProcessingError::FieldNotFound)?;
 
-    // Read uvs back, build per-particle colors from them, write to color PBuffer.
+    // Read uvs back, build per-particle colors from them, write to color buffer.
     let uv_bytes = buffer_read(uv_buf)?;
     let mut colors: Vec<u8> = Vec::with_capacity(uv_bytes.len() * 2);
     for chunk in uv_bytes.chunks_exact(8) {

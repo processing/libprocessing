@@ -1,10 +1,10 @@
 //! GPU-resident particle / instancing container.
 //!
-//! A [`Field`] holds a set of named [`PBuffer`](crate::compute::Buffer)s — one per registered
+//! A [`Field`] holds a set of named [`compute::Buffer`]s — one per registered
 //! attribute. It is pure storage: it carries no instance shape and no material. The shape is
 //! supplied at draw time via the `field` verb, and the material is read from ambient state at
 //! that point. Rasterization is layered on later by spawning a transient
-//! `bevy::pbr::gpu_instance_batch::GpuBatchedMesh3d` entity that consumes the Field's PBuffers
+//! `bevy::pbr::gpu_instance_batch::GpuBatchedMesh3d` entity that consumes the Field's buffers
 //! through the pack pass.
 //!
 //! See `docs/field.md` for the full design.
@@ -40,7 +40,7 @@ impl Plugin for FieldPlugin {
 
 /// A GPU-resident container of named per-instance attribute buffers.
 ///
-/// `pbuffers` maps an [`Attribute`](crate::geometry::Attribute) entity to its backing
+/// `buffers` maps an [`Attribute`](crate::geometry::Attribute) entity to its backing
 /// [`compute::Buffer`] entity. The set of registered attributes is fixed at creation.
 ///
 /// `draw_entity` is the persistent rasterization entity carrying `GpuBatchedMesh3d` and
@@ -55,20 +55,20 @@ impl Plugin for FieldPlugin {
 #[derive(Component)]
 pub struct Field {
     pub capacity: u32,
-    pub pbuffers: HashMap<Entity, Entity>,
+    pub buffers: HashMap<Entity, Entity>,
     pub draw_entity: Option<Entity>,
     pub emit_head: u32,
 }
 
 impl Field {
-    pub fn pbuffer(&self, attribute: Entity) -> Option<Entity> {
-        self.pbuffers.get(&attribute).copied()
+    pub fn buffer(&self, attribute: Entity) -> Option<Entity> {
+        self.buffers.get(&attribute).copied()
     }
 }
 
 /// Marker on a transient render entity indicating it rasterizes a [`Field`].
 ///
-/// The pack pass uses this to look up which Field's PBuffers to read when writing
+/// The pack pass uses this to look up which Field's buffers to read when writing
 /// per-instance transforms into the upstream `mesh_input_buffer`.
 #[derive(Component, Clone, Copy)]
 pub struct FieldDraw {
@@ -82,25 +82,25 @@ pub fn create(
     mut shader_buffers: ResMut<Assets<ShaderBuffer>>,
     render_device: Res<RenderDevice>,
 ) -> Result<Entity> {
-    let mut pbuffers = HashMap::with_capacity(attribute_entities.len());
+    let mut buffers = HashMap::with_capacity(attribute_entities.len());
     for attr_entity in attribute_entities {
         let attr = attributes
             .get(attr_entity)
             .map_err(|_| ProcessingError::InvalidEntity)?;
         let byte_size = capacity as u64 * attr.format.byte_size() as u64;
-        let buffer_entity = make_pbuffer(
+        let buffer_entity = make_buffer(
             &mut commands,
             &mut shader_buffers,
             &render_device,
             &vec![0u8; byte_size as usize],
         );
-        pbuffers.insert(attr_entity, buffer_entity);
+        buffers.insert(attr_entity, buffer_entity);
     }
 
     let field_entity = commands
         .spawn(Field {
             capacity,
-            pbuffers,
+            buffers,
             draw_entity: None,
             emit_head: 0,
         })
@@ -109,7 +109,7 @@ pub fn create(
 }
 
 /// Create a Field whose capacity matches the source [`Geometry`]'s vertex count
-/// and whose PBuffers are pre-seeded from the geometry's mesh attributes where
+/// and whose buffers are pre-seeded from the geometry's mesh attributes where
 /// names line up. Any registered attribute the mesh doesn't supply (or whose
 /// format doesn't match) gets zero-initialized — the user fills it in via
 /// `buffer_write` or `field_emit`.
@@ -130,7 +130,7 @@ pub fn create_from_geometry(
         .ok_or(ProcessingError::GeometryNotFound)?;
     let capacity = mesh.count_vertices() as u32;
 
-    let mut pbuffers = HashMap::with_capacity(attribute_entities.len());
+    let mut buffers = HashMap::with_capacity(attribute_entities.len());
     for attr_entity in attribute_entities {
         let attr = attributes
             .get(attr_entity)
@@ -144,14 +144,14 @@ pub fn create_from_geometry(
             .unwrap_or_else(|| vec![0u8; byte_size as usize]);
 
         let buffer_entity =
-            make_pbuffer(&mut commands, &mut shader_buffers, &render_device, &initial);
-        pbuffers.insert(attr_entity, buffer_entity);
+            make_buffer(&mut commands, &mut shader_buffers, &render_device, &initial);
+        buffers.insert(attr_entity, buffer_entity);
     }
 
     let field_entity = commands
         .spawn(Field {
             capacity,
-            pbuffers,
+            buffers,
             draw_entity: None,
             emit_head: 0,
         })
@@ -159,7 +159,7 @@ pub fn create_from_geometry(
     Ok(field_entity)
 }
 
-fn make_pbuffer(
+fn make_buffer(
     commands: &mut Commands,
     shader_buffers: &mut Assets<ShaderBuffer>,
     render_device: &RenderDevice,
@@ -168,7 +168,7 @@ fn make_pbuffer(
     let byte_size = initial.len() as u64;
     let handle = shader_buffers.add(ShaderBuffer::new(initial, RenderAssetUsages::all()));
     let readback = render_device.create_buffer(&BufferDescriptor {
-        label: Some("Field PBuffer Readback"),
+        label: Some("Field Buffer Readback"),
         size: byte_size,
         usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
         mapped_at_creation: false,
@@ -219,7 +219,7 @@ pub fn destroy(
     let field = fields
         .get(entity)
         .map_err(|_| ProcessingError::FieldNotFound)?;
-    for &buffer_entity in field.pbuffers.values() {
+    for &buffer_entity in field.buffers.values() {
         commands.entity(buffer_entity).despawn();
     }
     if let Some(draw_entity) = field.draw_entity {

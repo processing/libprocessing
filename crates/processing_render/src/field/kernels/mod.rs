@@ -10,7 +10,9 @@ pub struct FieldKernelsPlugin;
 impl Plugin for FieldKernelsPlugin {
     fn build(&self, app: &mut App) {
         embedded_asset!(app, "noise.wgsl");
+        embedded_asset!(app, "transform.wgsl");
     }
 }
 
 pub const NOISE_PATH: &str = "embedded://processing_render/field/kernels/noise.wgsl";
+pub const TRANSFORM_PATH: &str = "embedded://processing_render/field/kernels/transform.wgsl";

@@ -296,6 +296,18 @@ impl Geometry {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(Self { entity })
     }
+
+    /// 3D lattice of `nx * ny * nz` points centered at the origin, with
+    /// `spacing` units between adjacent points. Topology is `PointList` —
+    /// typically used as a position source for `Field(geometry=...)` rather
+    /// than rasterized directly.
+    #[staticmethod]
+    #[pyo3(signature = (nx, ny, nz, spacing=1.0))]
+    pub fn grid(nx: u32, ny: u32, nz: u32, spacing: f32) -> PyResult<Self> {
+        let entity = geometry_grid(nx, ny, nz, spacing)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Self { entity })
+    }
 }
 
 #[pyclass(unsendable)]

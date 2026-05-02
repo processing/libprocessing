@@ -1,13 +1,13 @@
-// Pack pass — bridges libprocessing Field PBuffers into the upstream
+// Pack pass — bridges libprocessing Field buffers into the upstream
 // per-instance MeshInputUniform / MeshCullingData slots reserved by
 // `GpuBatchedMesh3d`.
 //
 // Specialized via shader_defs:
-//   HAS_ROTATION — bind a `rotation` PBuffer (Float4 quaternion `xyzw`)
-//   HAS_SCALE    — bind a `scale` PBuffer (Float3)
-//   HAS_DEAD     — bind a `dead` PBuffer (Float, 0 = alive, non-zero = dead)
+//   HAS_ROTATION — bind a `rotation` buffer (Float4 quaternion `xyzw`)
+//   HAS_SCALE    — bind a `scale` buffer (Float3)
+//   HAS_DEAD     — bind a `dead` buffer (Float, 0 = alive, non-zero = dead)
 //
-// PBuffer formats (CPU-tightly-packed):
+// Buffer formats (CPU-tightly-packed):
 //   position : 12 bytes per particle (Float3)
 //   rotation : 16 bytes per particle (Float4 quat)
 //   scale    : 12 bytes per particle (Float3)

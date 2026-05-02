@@ -78,9 +78,9 @@ fn sketch() -> error::Result<()> {
             age_attr,
         ],
     )?;
-    let dead_buf = field_pbuffer(field, dead_attr)?
+    let dead_buf = field_buffer(field, dead_attr)?
         .ok_or(error::ProcessingError::FieldNotFound)?;
-    let color_buf = field_pbuffer(field, color_attr)?
+    let color_buf = field_buffer(field, color_attr)?
         .ok_or(error::ProcessingError::FieldNotFound)?;
 
     // Mark all slots dead initially so the unemitted ring slots don't render.

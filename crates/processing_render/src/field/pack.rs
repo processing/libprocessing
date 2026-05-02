@@ -1,4 +1,4 @@
-//! Pack pass — bridges a [`Field`]'s `position` / `rotation` / `scale` PBuffers into the
+//! Pack pass — bridges a [`Field`]'s `position` / `rotation` / `scale` buffers into the
 //! upstream `mesh_input_buffer[base..base+capacity].world_from_local` slots reserved by the
 //! entity's [`GpuBatchedMesh3d`].
 //!
@@ -231,22 +231,22 @@ fn extract_field_draws(
         let Ok(field) = fields.get(field_draw.field) else {
             continue;
         };
-        let Some(pos_pbuf) = field.pbuffer(builtins.position) else {
+        let Some(pos_entity) = field.buffer(builtins.position) else {
             continue;
         };
-        let Ok(pos_buf) = buffers.get(pos_pbuf) else {
+        let Ok(pos_buf) = buffers.get(pos_entity) else {
             continue;
         };
         let rotation = field
-            .pbuffer(builtins.rotation)
+            .buffer(builtins.rotation)
             .and_then(|e| buffers.get(e).ok())
             .map(|b| b.handle.clone());
         let scale = field
-            .pbuffer(builtins.scale)
+            .buffer(builtins.scale)
             .and_then(|e| buffers.get(e).ok())
             .map(|b| b.handle.clone());
         let dead = field
-            .pbuffer(builtins.dead)
+            .buffer(builtins.dead)
             .and_then(|e| buffers.get(e).ok())
             .map(|b| b.handle.clone());
 

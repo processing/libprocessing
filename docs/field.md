@@ -9,7 +9,7 @@ The implementation rests on two existing libprocessing systems and one upstream 
 
 - **`compute::Buffer`** (`crates/processing_render/src/compute.rs`) — typed GPU storage
   buffers with CPU-side write, GPU readback, compute dispatch, and a Python wrapper that
-  tracks element type for validation. This is what backs every PBuffer.
+  tracks element type for validation. This is what backs every Field attribute buffer.
 - **`Attribute`** (`crates/processing_render/src/geometry/attribute.rs`) — named typed
   attribute identities (`AttributeFormat::{Float, Float2, Float3, Float4}`) shared between
   Geometries (per-vertex) and Fields (per-instance). `BuiltinAttributes` exposes
@@ -24,11 +24,11 @@ The implementation rests on two existing libprocessing systems and one upstream 
 
 ### Field
 
-The top-level container. Holds a set of named PBuffers (one per registered attribute), an
-optional persistent rasterization entity, a ring-buffer emit cursor, and per-Field render
-state. Does not carry geometry — that's supplied at draw time.
+The top-level container. Holds a set of named attribute buffers (one per registered
+attribute), an optional persistent rasterization entity, a ring-buffer emit cursor, and
+per-Field render state. Does not carry geometry — that's supplied at draw time.
 
-### PBuffer
+### Attribute buffer
 
 A single typed GPU storage buffer holding the values for one attribute across all
 elements. Backed by `compute::Buffer`. Indexed by particle slot.
@@ -55,7 +55,7 @@ let velocity = geometry_attribute_create("velocity", AttributeFormat::Float3)?;
 let f = field_create(10_000, vec![position, velocity])?;
 ```
 
-Allocates one zero-initialized PBuffer per requested attribute, sized by `capacity *
+Allocates one zero-initialized buffer per requested attribute, sized by `capacity *
 attr.format.byte_size()`.
 
 ### Mesh-seeded Field
@@ -81,7 +81,7 @@ mesh attribute when names + formats line up:
 Field-only builtins (`rotation`, `scale`, `dead`) and custom attributes are zero-init
 (meshes don't carry them).
 
-## Apply (PBuffer-only compute)
+## Apply (attribute-buffer-only compute)
 
 ```rust
 let shader = shader_create(SPIN_WGSL)?;
@@ -90,13 +90,13 @@ compute_set(spin, "dt", ShaderValue::Float(0.016))?;
 field_apply(field, spin)?;
 ```
 
-`field_apply` iterates the field's PBuffers and calls `compute_set(compute, attr.name,
-ShaderValue::Buffer(pbuf_entity))` for each. Unknown shader properties are silently
-skipped, so the kernel only declares the attributes it needs. Workgroup size is fixed at
-64 — kernels must declare `@workgroup_size(64)`.
+`field_apply` iterates the field's attribute buffers and calls `compute_set(compute,
+attr.name, ShaderValue::Buffer(buf_entity))` for each. Unknown shader properties are
+silently skipped, so the kernel only declares the attributes it needs. Workgroup size is
+fixed at 64 — kernels must declare `@workgroup_size(64)`.
 
-The kernel's bind group only ever contains the field's PBuffers + uniforms. The kernel
-never touches upstream input/culling buffers — that's the pack pass's job.
+The kernel's bind group only ever contains the field's attribute buffers + uniforms. The
+kernel never touches upstream input/culling buffers — that's the pack pass's job.
 
 In `setup()` apply runs once; in `draw()` it runs every frame. The retained-vs-dynamic
 distinction is purely about placement.
@@ -107,19 +107,19 @@ The pack pass is the only code that bridges to the upstream batch infrastructure
 as standard render-schedule systems:
 
 - **`extract_field_draws`** (`ExtractSchedule`) — reads `FieldDraw` markers from main
-  world, copies (Field, position/rotation/scale/dead PBuffer handles) into render world.
+  world, copies (Field, position/rotation/scale/dead buffer handles) into render world.
 - **`prepare_pack_bind_groups`** (`RenderSystems::PrepareBindGroups`) — looks up or
   creates the pack pipeline for the field's specialization key, builds a bind group with
-  the field's PBuffers + the upstream input/culling buffers + a uniform with `(base_index,
+  the field's buffers + the upstream input/culling buffers + a uniform with `(base_index,
   count)`.
 - **`dispatch_pack`** (`Core3d`, `before(early_gpu_preprocess)`) — dispatches the compute
   pass.
 
 The pack shader (`field/pack.wgsl`) is specialized via shader_defs:
 
-- `HAS_ROTATION` — bind a `rotation` PBuffer (Float4 quat). Otherwise identity.
-- `HAS_SCALE` — bind a `scale` PBuffer (Float3). Otherwise unit.
-- `HAS_DEAD` — bind a `dead` PBuffer (Float). Otherwise alive.
+- `HAS_ROTATION` — bind a `rotation` buffer (Float4 quat). Otherwise identity.
+- `HAS_SCALE` — bind a `scale` buffer (Float3). Otherwise unit.
+- `HAS_DEAD` — bind a `dead` buffer (Float). Otherwise alive.
 
 For each particle slot the pack writes:
 
@@ -127,7 +127,7 @@ For each particle slot the pack writes:
   position translation.
 - `mesh_input_buffer[base+i].tag = i` — slot index, available to material shaders via
   `mesh_functions::get_tag(instance_index)`.
-- `MeshCullingData[base+i].dead` — from the dead PBuffer if present, else 0.
+- `MeshCullingData[base+i].dead` — from the dead buffer if present, else 0.
 
 Pipelines are cached per `PackPipelineKey { has_rotation, has_scale, has_dead }`.
 

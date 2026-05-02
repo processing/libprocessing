@@ -102,9 +102,9 @@ fn sketch() -> error::Result<()> {
         colors.push(rz);
         colors.push(1.0);
     }
-    let position_buf = field_pbuffer(field, position_attr)?
+    let position_buf = field_buffer(field, position_attr)?
         .ok_or(error::ProcessingError::FieldNotFound)?;
-    let color_buf = field_pbuffer(field, color_attr)?
+    let color_buf = field_buffer(field, color_attr)?
         .ok_or(error::ProcessingError::FieldNotFound)?;
     buffer_write(
         position_buf,

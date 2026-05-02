@@ -48,7 +48,7 @@ def setup():
                 positions.extend([x - 4.5, y - 4.5, z - 4.5])
 
     field_obj = Field(capacity=capacity, attributes=[Attribute.position()])
-    pos_buf = field_obj.pbuffer(Attribute.position())
+    pos_buf = field_obj.buffer(Attribute.position())
     pos_buf.write(positions)
 
     mat = Material(roughness=0.4)
