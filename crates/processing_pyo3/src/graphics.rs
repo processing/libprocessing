@@ -279,6 +279,35 @@ impl Geometry {
     pub fn vertex_count(&self) -> PyResult<u32> {
         geometry_vertex_count(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
+
+    /// Retained sphere mesh.
+    #[staticmethod]
+    #[pyo3(signature = (radius, sectors=32, stacks=18))]
+    pub fn sphere(radius: f32, sectors: u32, stacks: u32) -> PyResult<Self> {
+        let entity = geometry_sphere(radius, sectors, stacks)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Self { entity })
+    }
+
+    /// Retained box mesh.
+    #[staticmethod]
+    pub fn r#box(width: f32, height: f32, depth: f32) -> PyResult<Self> {
+        let entity = geometry_box(width, height, depth)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Self { entity })
+    }
+
+    /// 3D lattice of `nx * ny * nz` points centered at the origin, with
+    /// `spacing` units between adjacent points. Topology is `PointList` —
+    /// typically used as a position source for `Particles(geometry=...)` rather
+    /// than rasterized directly.
+    #[staticmethod]
+    #[pyo3(signature = (nx, ny, nz, spacing=1.0))]
+    pub fn grid(nx: u32, ny: u32, nz: u32, spacing: f32) -> PyResult<Self> {
+        let entity = geometry_grid(nx, ny, nz, spacing)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Self { entity })
+    }
 }
 
 #[pyclass(unsendable)]
@@ -471,6 +500,12 @@ impl Graphics {
 
     #[pyo3(signature = (*args))]
     pub fn fill(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        if args.len() == 1
+            && let Ok(buf) = args.get_item(0)?.extract::<PyRef<crate::compute::Buffer>>()
+        {
+            return graphics_record_command(self.entity, DrawCommand::FillBuffer(buf.entity))
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")));
+        }
         let color = extract_color_with_mode(
             args,
             &graphics_get_color_mode(self.entity)
@@ -968,6 +1003,21 @@ impl Graphics {
     pub fn draw_geometry(&self, geometry: &Geometry) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::Geometry(geometry.entity))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn particles(
+        &self,
+        particles: &crate::particles::Particles,
+        geometry: &Geometry,
+    ) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Particles {
+                particles: particles.entity,
+                geometry: geometry.entity,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn use_material(&self, material: &crate::material::Material) -> PyResult<()> {

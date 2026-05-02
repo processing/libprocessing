@@ -2,8 +2,8 @@ use processing_glfw::GlfwContext;
 
 use bevy::math::Vec3;
 use processing::prelude::*;
-use processing_render::material::MaterialValue;
 use processing_render::render::command::DrawCommand;
+use processing_render::shader_value::ShaderValue;
 
 fn main() {
     match sketch() {
@@ -50,11 +50,7 @@ fn sketch() -> error::Result<()> {
         let r = (t * 8.0).sin() * 0.5 + 0.5;
         let g = (t * 8.0 + 2.0).sin() * 0.5 + 0.5;
         let b = (t * 8.0 + 4.0).sin() * 0.5 + 0.5;
-        material_set(
-            duck_mat,
-            "base_color",
-            MaterialValue::Float4([r, g, b, 1.0]),
-        )?;
+        material_set(duck_mat, "base_color", ShaderValue::Float4([r, g, b, 1.0]))?;
 
         graphics_begin_draw(graphics)?;
 

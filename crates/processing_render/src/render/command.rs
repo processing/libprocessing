@@ -297,6 +297,9 @@ pub enum DrawCommand {
     BackgroundColor(Color),
     BackgroundImage(Entity),
     Fill(Color),
+    /// Per-instance albedo for `Particles`: a `compute::Buffer` of `Float4`
+    /// colors indexed by tag. Mutually exclusive with `Fill(Color)`.
+    FillBuffer(Entity),
     NoFill,
     StrokeColor(Color),
     NoStroke,
@@ -424,6 +427,10 @@ pub enum DrawCommand {
         angle: f32,
     },
     Geometry(Entity),
+    Particles {
+        particles: Entity,
+        geometry: Entity,
+    },
     BlendMode(Option<BlendState>),
     Material(Entity),
     Box {

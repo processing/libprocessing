@@ -1,3 +1,5 @@
+use bevy::asset::RenderAssetUsages;
+use bevy::mesh::PrimitiveTopology;
 use bevy::prelude::*;
 use bevy::render::mesh::VertexAttributeValues;
 
@@ -85,6 +87,41 @@ pub fn tetrahedron_mesh(radius: f32) -> Mesh {
         bevy::math::Vec3::new(-r, -r, r),
     );
     let mut mesh = Mesh::from(tetrahedron);
+    ensure_vertex_colors(&mut mesh);
+    mesh
+}
+
+/// 3D lattice of `nx * ny * nz` points centered at the origin, with `spacing`
+/// units between adjacent points along each axis. Topology is `PointList`;
+/// the mesh is meant primarily as a position source for `field_create_from_geometry`,
+/// not for rasterization. UVs are normalized lattice coordinates `(x/(nx-1), y/(ny-1))`.
+pub fn grid_mesh(nx: u32, ny: u32, nz: u32, spacing: f32) -> Mesh {
+    let count = (nx as usize) * (ny as usize) * (nz as usize);
+    let mut positions = Vec::with_capacity(count);
+    let mut uvs = Vec::with_capacity(count);
+
+    let half_x = (nx as f32 - 1.0) * 0.5 * spacing;
+    let half_y = (ny as f32 - 1.0) * 0.5 * spacing;
+    let half_z = (nz as f32 - 1.0) * 0.5 * spacing;
+    let inv_x = if nx > 1 { 1.0 / (nx as f32 - 1.0) } else { 0.0 };
+    let inv_y = if ny > 1 { 1.0 / (ny as f32 - 1.0) } else { 0.0 };
+
+    for ix in 0..nx {
+        for iy in 0..ny {
+            for iz in 0..nz {
+                positions.push([
+                    ix as f32 * spacing - half_x,
+                    iy as f32 * spacing - half_y,
+                    iz as f32 * spacing - half_z,
+                ]);
+                uvs.push([ix as f32 * inv_x, iy as f32 * inv_y]);
+            }
+        }
+    }
+
+    let mut mesh = Mesh::new(PrimitiveTopology::PointList, RenderAssetUsages::all());
+    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
+    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     ensure_vertex_colors(&mut mesh);
     mesh
 }

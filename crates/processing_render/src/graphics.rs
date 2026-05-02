@@ -303,11 +303,12 @@ pub fn mode_3d(
     let fov = std::f32::consts::PI / 3.0; // 60 degrees
     let aspect = width / height;
     let camera_z = (height / 2.0) / (fov / 2.0).tan();
-    let near = camera_z / 10.0;
+    // Processing4 uses near = camera_z / 10, but that clips anything closer
+    // than ~camera_z/10 to the camera. Since `transform_set_position` lets the
+    // user move the camera without recomputing the projection, a small fixed
+    // near is safer and matches most engines' defaults.
+    let near = 1.0;
     let far = camera_z * 10.0;
-
-    // TODO: Setting this as a default, but we need to think about API around
-    // a user defined value
     let near_clip_plane = vec4(0.0, 0.0, -1.0, -near);
 
     let mut projection = projections

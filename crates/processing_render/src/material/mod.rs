@@ -1,7 +1,9 @@
 pub mod custom;
 pub mod pbr;
 
+use crate::compute;
 use crate::render::material::UntypedMaterial;
+use crate::shader_value::ShaderValue;
 use bevy::material::descriptor::RenderPipelineDescriptor;
 use bevy::material::specialize::SpecializedMeshPipelineError;
 use bevy::mesh::MeshVertexBufferLayoutRef;
@@ -11,6 +13,7 @@ use bevy::pbr::{
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, BlendState};
 use bevy::shader::ShaderRef;
+use bevy_naga_reflect::reflect::ParameterCategory;
 use processing_core::error::{self, ProcessingError};
 
 pub struct ProcessingMaterialPlugin;
@@ -38,21 +41,6 @@ impl Plugin for ProcessingMaterialPlugin {
 #[derive(Resource)]
 pub struct DefaultMaterial(pub Entity);
 
-#[derive(Debug, Clone)]
-pub enum MaterialValue {
-    Float(f32),
-    Float2([f32; 2]),
-    Float3([f32; 3]),
-    Float4([f32; 4]),
-    Int(i32),
-    Int2([i32; 2]),
-    Int3([i32; 3]),
-    Int4([i32; 4]),
-    UInt(u32),
-    Mat4([f32; 16]),
-    Texture(Entity),
-}
-
 pub fn create_pbr(
     mut commands: Commands,
     mut materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, ProcessingMaterial>>>,
@@ -69,10 +57,12 @@ pub fn create_pbr(
 }
 
 pub fn set_property(
-    In((entity, name, value)): In<(Entity, String, MaterialValue)>,
+    In((entity, name, value)): In<(Entity, String, ShaderValue)>,
     material_handles: Query<&UntypedMaterial>,
     mut extended_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, ProcessingMaterial>>>,
+    mut particles_materials: ResMut<Assets<crate::particles::material::ParticlesMaterial>>,
     mut custom_materials: ResMut<Assets<custom::CustomMaterial>>,
+    mut p_buffers: Query<&mut compute::Buffer>,
 ) -> error::Result<()> {
     let untyped = material_handles
         .get(entity)
@@ -89,10 +79,46 @@ pub fn set_property(
         return pbr::set_property(&mut extended.base, &name, &value);
     }
 
+    if let Ok(handle) = untyped
+        .0
+        .clone()
+        .try_typed::<crate::particles::material::ParticlesMaterial>()
+    {
+        let mut extended = particles_materials
+            .get_mut(&handle)
+            .ok_or(ProcessingError::MaterialNotFound)?;
+        return pbr::set_property(&mut extended.base, &name, &value);
+    }
+
     if let Ok(handle) = untyped.0.clone().try_typed::<custom::CustomMaterial>() {
         let mut mat = custom_materials
             .get_mut(&handle)
             .ok_or(ProcessingError::MaterialNotFound)?;
+
+        if let ShaderValue::Buffer(buf_entity) = &value {
+            let mut buffer = p_buffers
+                .get_mut(*buf_entity)
+                .map_err(|_| ProcessingError::BufferNotFound)?;
+
+            let category = mat
+                .shader
+                .reflection()
+                .parameter(&name)
+                .map(|p| p.category())
+                .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.clone()))?;
+
+            let ParameterCategory::Storage { read_only } = category else {
+                return Err(ProcessingError::InvalidArgument(format!(
+                    "property `{name}` expects {category:?}, got Buffer"
+                )));
+            };
+            mat.shader.insert(&name, buffer.handle.clone());
+            if !read_only {
+                buffer.bound_rw = true;
+            }
+            return Ok(());
+        }
+
         return custom::set_property(&mut mat, &name, &value);
     }
 

@@ -10,6 +10,12 @@ use crate::color::Color;
 mod color;
 mod error;
 
+unsafe fn cstr_to_str<'a>(ptr: *const std::ffi::c_char) -> Result<&'a str, ProcessingError> {
+    unsafe { std::ffi::CStr::from_ptr(ptr) }
+        .to_str()
+        .map_err(|_| ProcessingError::InvalidArgument("non-UTF8 C string".to_string()))
+}
+
 /// Initialize libProcessing.
 ///
 /// SAFETY:
@@ -1776,12 +1782,12 @@ pub unsafe extern "C" fn processing_material_set_float(
     value: f32,
 ) {
     error::clear_error();
-    let name = unsafe { std::ffi::CStr::from_ptr(name) }.to_str().unwrap();
     error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
         material_set(
             Entity::from_bits(mat_id),
             name,
-            material::MaterialValue::Float(value),
+            shader_value::ShaderValue::Float(value),
         )
     });
 }
@@ -1800,12 +1806,12 @@ pub unsafe extern "C" fn processing_material_set_float4(
     a: f32,
 ) {
     error::clear_error();
-    let name = unsafe { std::ffi::CStr::from_ptr(name) }.to_str().unwrap();
     error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
         material_set(
             Entity::from_bits(mat_id),
             name,
-            material::MaterialValue::Float4([r, g, b, a]),
+            shader_value::ShaderValue::Float4([r, g, b, a]),
         )
     });
 }
@@ -1822,6 +1828,172 @@ pub extern "C" fn processing_material(window_id: u64, mat_id: u64) {
     let window_entity = Entity::from_bits(window_id);
     let mat_entity = Entity::from_bits(mat_id);
     error::check(|| graphics_record_command(window_entity, DrawCommand::Material(mat_entity)));
+}
+
+// Shader
+
+/// Create a shader from WGSL source.
+///
+/// # Safety
+/// - `source` must be non-null
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_shader_create(source: *const std::ffi::c_char) -> u64 {
+    error::clear_error();
+    error::check(|| {
+        let source = unsafe { cstr_to_str(source) }?;
+        shader_create(source)
+    })
+    .map(|e| e.to_bits())
+    .unwrap_or(0)
+}
+
+/// Load a shader from a file path.
+///
+/// # Safety
+/// - `path` must be non-null
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_shader_load(path: *const std::ffi::c_char) -> u64 {
+    error::clear_error();
+    error::check(|| {
+        let path = unsafe { cstr_to_str(path) }?;
+        shader_load(path)
+    })
+    .map(|e| e.to_bits())
+    .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_shader_destroy(shader_id: u64) {
+    error::clear_error();
+    error::check(|| shader_destroy(Entity::from_bits(shader_id)));
+}
+
+// Buffer
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_buffer_create(size: u64) -> u64 {
+    error::clear_error();
+    error::check(|| buffer_create(size))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+/// Create a buffer initialized with data.
+///
+/// # Safety
+/// - `data` must point to `len` valid bytes
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_buffer_create_with_data(data: *const u8, len: u64) -> u64 {
+    error::clear_error();
+    let bytes = unsafe { std::slice::from_raw_parts(data, len as usize) }.to_vec();
+    error::check(|| buffer_create_with_data(bytes))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+/// Write data to a buffer.
+///
+/// # Safety
+/// - `data` must point to `len` valid bytes
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_buffer_write(buf_id: u64, data: *const u8, len: u64) {
+    error::clear_error();
+    let bytes = unsafe { std::slice::from_raw_parts(data, len as usize) }.to_vec();
+    error::check(|| buffer_write(Entity::from_bits(buf_id), bytes));
+}
+
+/// Returns the byte length of a buffer, or 0 if the buffer does not exist
+/// (in which case the error is set).
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_buffer_size(buf_id: u64) -> u64 {
+    error::clear_error();
+    error::check(|| buffer_size(Entity::from_bits(buf_id))).unwrap_or(0)
+}
+
+/// Read buffer contents into a caller-provided buffer.
+///
+/// # Safety
+/// - `out` must be valid for writes of `out_len` bytes (may be null if
+///   `out_len == 0`, in which case this acts as a size query).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_buffer_read(buf_id: u64, out: *mut u8, out_len: u64) -> u64 {
+    error::clear_error();
+    let Some(data) = error::check(|| buffer_read(Entity::from_bits(buf_id))) else {
+        return 0;
+    };
+    let needed = data.len() as u64;
+    if needed <= out_len {
+        unsafe { std::ptr::copy_nonoverlapping(data.as_ptr(), out, data.len()) };
+    }
+    needed
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_buffer_destroy(buf_id: u64) {
+    error::clear_error();
+    error::check(|| buffer_destroy(Entity::from_bits(buf_id)));
+}
+
+// Compute
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_compute_create(shader_id: u64) -> u64 {
+    error::clear_error();
+    error::check(|| compute_create(Entity::from_bits(shader_id)))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+/// Set a float property on a compute shader.
+///
+/// # Safety
+/// - `name` must be non-null
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_compute_set_float(
+    compute_id: u64,
+    name: *const std::ffi::c_char,
+    value: f32,
+) {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        compute_set(
+            Entity::from_bits(compute_id),
+            name,
+            shader_value::ShaderValue::Float(value),
+        )
+    });
+}
+
+/// # Safety
+/// `name` must be a valid null-terminated C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_compute_set_buffer(
+    compute_id: u64,
+    name: *const std::ffi::c_char,
+    buf_id: u64,
+) {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        compute_set(
+            Entity::from_bits(compute_id),
+            name,
+            shader_value::ShaderValue::Buffer(Entity::from_bits(buf_id)),
+        )
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_compute_dispatch(compute_id: u64, x: u32, y: u32, z: u32) {
+    error::clear_error();
+    error::check(|| compute_dispatch(Entity::from_bits(compute_id), x, y, z));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_compute_destroy(compute_id: u64) {
+    error::clear_error();
+    error::check(|| compute_destroy(Entity::from_bits(compute_id)));
 }
 
 // Mouse buttons

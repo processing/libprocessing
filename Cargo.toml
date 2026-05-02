@@ -24,7 +24,7 @@ too_many_arguments = "allow"
 
 [workspace.dependencies]
 bevy = { git = "https://github.com/processing/bevy", branch = "main", features = ["file_watcher", "shader_format_wesl", "free_camera", "pan_camera"] }
-bevy_naga_reflect = { git = "https://github.com/tychedelia/bevy_naga_reflect" }
+bevy_naga_reflect = { path = "../../tychedelia/bevy_naga_reflect" }
 bevy_cuda = { git = "https://github.com/tychedelia/bevy_cuda" }
 naga = { version = "29", features = ["wgsl-in"] }
 wesl = { version = "0.3", default-features = false }
@@ -160,6 +160,54 @@ path = "examples/blend_modes.rs"
 [[example]]
 name = "camera_controllers"
 path = "examples/camera_controllers.rs"
+
+[[example]]
+name = "compute_readback"
+path = "examples/compute_readback.rs"
+
+[[example]]
+name = "particles_basic"
+path = "examples/particles_basic.rs"
+
+[[example]]
+name = "particles_animated"
+path = "examples/particles_animated.rs"
+
+[[example]]
+name = "particles_oriented"
+path = "examples/particles_oriented.rs"
+
+[[example]]
+name = "particles_colored"
+path = "examples/particles_colored.rs"
+
+[[example]]
+name = "particles_colored_pbr"
+path = "examples/particles_colored_pbr.rs"
+
+[[example]]
+name = "particles_emit"
+path = "examples/particles_emit.rs"
+
+[[example]]
+name = "particles_lifecycle"
+path = "examples/particles_lifecycle.rs"
+
+[[example]]
+name = "particles_from_mesh"
+path = "examples/particles_from_mesh.rs"
+
+[[example]]
+name = "particles_noise"
+path = "examples/particles_noise.rs"
+
+[[example]]
+name = "particles_emit_gpu"
+path = "examples/particles_emit_gpu.rs"
+
+[[example]]
+name = "particles_stress"
+path = "examples/particles_stress.rs"
 
 [profile.wasm-release]
 inherits = "release"

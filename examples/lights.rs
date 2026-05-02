@@ -27,7 +27,7 @@ fn sketch() -> error::Result<()> {
     let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
     let box_geo = geometry_box(100.0, 100.0, 100.0)?;
     let pbr_mat = material_create_pbr()?;
-    material_set(pbr_mat, "roughness", material::MaterialValue::Float(0.0))?;
+    material_set(pbr_mat, "roughness", shader_value::ShaderValue::Float(0.0))?;
 
     // We will only declare lights in `setup`
     // rather than calling some sort of `light()` method inside of `draw`

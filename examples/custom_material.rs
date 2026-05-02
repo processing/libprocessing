@@ -36,7 +36,7 @@ fn sketch() -> error::Result<()> {
     material_set(
         mat,
         "color",
-        material::MaterialValue::Float4([1.0, 0.2, 0.4, 1.0]),
+        shader_value::ShaderValue::Float4([1.0, 0.2, 0.4, 1.0]),
     )?;
 
     let mut angle = 0.0;
