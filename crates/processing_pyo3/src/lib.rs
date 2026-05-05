@@ -26,7 +26,8 @@ mod time;
 mod webcam;
 
 use graphics::{
-    Geometry, Graphics, Image, Light, PyBlendMode, Topology, get_graphics, get_graphics_mut,
+    Geometry, Graphics, Image, Light, PyBlendMode, Sampler, Topology, get_graphics,
+    get_graphics_mut,
 };
 use material::Material;
 
@@ -340,6 +341,8 @@ mod mewnala {
     #[pymodule_export]
     use super::PyBlendMode;
     #[pymodule_export]
+    use super::Sampler;
+    #[pymodule_export]
     use super::Shader;
     #[pymodule_export]
     use super::Topology;
@@ -623,6 +626,10 @@ mod mewnala {
     mod math {
         use super::*;
 
+        #[pymodule_export]
+        use crate::math::PyAffine2;
+        #[pymodule_export]
+        use crate::math::PyMat2;
         #[pymodule_export]
         use crate::math::PyQuat;
         #[pymodule_export]
@@ -1236,6 +1243,24 @@ mod mewnala {
         graphics!(module).rotate(angle)
     }
 
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn rotate_x(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
+        graphics!(module).rotate_x(angle)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn rotate_y(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
+        graphics!(module).rotate_y(angle)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn rotate_z(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
+        graphics!(module).rotate_z(angle)
+    }
+
     #[pyfunction(name = "box")]
     #[pyo3(pass_module, signature = (*args))]
     fn draw_box(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
@@ -1394,12 +1419,61 @@ mod mewnala {
         graphics!(module).rect(x, y, w, h, tl, tr, br, bl)
     }
 
+    /// Loads an image from a file and returns an Image object.
     #[pyfunction]
     #[pyo3(pass_module, signature = (image_file))]
-    fn image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<Image> {
+    fn load_image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<Image> {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        graphics.image(image_file)
+        graphics.load_image(image_file)
+    }
+
+    /// Draws an image to the screen.
+    ///
+    /// Optional `d_width`/`d_height` resize on screen; defaults to the image's
+    /// original dimensions. Optional `sx`/`sy`/`s_width`/`s_height` select a
+    /// sub-region of the source image in pixels.
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (source, dx, dy, d_width=None, d_height=None, sx=None, sy=None, s_width=None, s_height=None))]
+    #[allow(clippy::too_many_arguments)]
+    fn image(
+        module: &Bound<'_, PyModule>,
+        source: graphics::ImageRef,
+        dx: f32,
+        dy: f32,
+        d_width: Option<f32>,
+        d_height: Option<f32>,
+        sx: Option<f32>,
+        sy: Option<f32>,
+        s_width: Option<f32>,
+        s_height: Option<f32>,
+    ) -> PyResult<()> {
+        graphics!(module).image(source, dx, dy, d_width, d_height, sx, sy, s_width, s_height)
+    }
+
+    /// Sets a tint color applied when drawing images.
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (*args))]
+    fn tint(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        graphics!(module).tint(args)
+    }
+
+    /// Removes the current tint so images draw without color modification.
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn no_tint(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).no_tint()
+    }
+
+    /// Changes how image position arguments are interpreted.
+    ///
+    /// - `CORNER` (default) — `dx`, `dy` is the top-left corner.
+    /// - `CENTER` — `dx`, `dy` is the center.
+    /// - `CORNERS` — `dx`, `dy` and `d_width`, `d_height` are opposite corners.
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn image_mode(module: &Bound<'_, PyModule>, mode: u8) -> PyResult<()> {
+        graphics!(module).image_mode(mode)
     }
 
     #[pyfunction]

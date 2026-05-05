@@ -1,6 +1,6 @@
 use std::hash::{Hash, Hasher};
 
-use bevy::math::{EulerRot, Quat, Vec2, Vec3, Vec4};
+use bevy::math::{Affine2, EulerRot, Mat2, Quat, Vec2, Vec3, Vec4};
 use pyo3::{
     exceptions::{PyAttributeError, PyTypeError},
     prelude::*,
@@ -768,6 +768,174 @@ impl PyVecIter {
         } else {
             None
         }
+    }
+}
+
+#[pyclass(name = "Mat2", from_py_object)]
+#[derive(Clone, Debug)]
+pub struct PyMat2(pub(crate) Mat2);
+
+impl From<Mat2> for PyMat2 {
+    fn from(m: Mat2) -> Self {
+        Self(m)
+    }
+}
+
+#[pymethods]
+impl PyMat2 {
+    #[new]
+    #[pyo3(signature = (*args))]
+    pub fn py_new(args: &Bound<'_, PyTuple>) -> PyResult<Self> {
+        match args.len() {
+            0 => Ok(Self(Mat2::IDENTITY)),
+            4 => {
+                let m00: f32 = args.get_item(0)?.extract()?;
+                let m01: f32 = args.get_item(1)?.extract()?;
+                let m10: f32 = args.get_item(2)?.extract()?;
+                let m11: f32 = args.get_item(3)?.extract()?;
+                Ok(Self(Mat2::from_cols(
+                    Vec2::new(m00, m01),
+                    Vec2::new(m10, m11),
+                )))
+            }
+            _ => Err(PyTypeError::new_err("Mat2 takes 0 or 4 arguments")),
+        }
+    }
+
+    #[staticmethod]
+    fn from_scale(scale: PyVec2) -> Self {
+        Self(Mat2::from_diagonal(scale.0))
+    }
+
+    #[staticmethod]
+    fn from_angle(angle: f32) -> Self {
+        Self(Mat2::from_angle(angle))
+    }
+
+    fn __mul__(&self, rhs: &Bound<'_, PyAny>) -> PyResult<Py<PyAny>> {
+        let py = rhs.py();
+        if let Ok(other) = rhs.extract::<PyRef<PyMat2>>() {
+            return Ok(PyMat2(self.0 * other.0)
+                .into_pyobject(py)?
+                .into_any()
+                .unbind());
+        }
+        if let Ok(v) = rhs.extract::<PyRef<PyVec2>>() {
+            return Ok(PyVec2(self.0 * v.0).into_pyobject(py)?.into_any().unbind());
+        }
+        Err(PyTypeError::new_err(
+            "unsupported operand type(s) for *: 'Mat2'",
+        ))
+    }
+
+    fn determinant(&self) -> f32 {
+        self.0.determinant()
+    }
+
+    fn inverse(&self) -> Self {
+        Self(self.0.inverse())
+    }
+
+    fn transpose(&self) -> Self {
+        Self(self.0.transpose())
+    }
+
+    fn __repr__(&self) -> String {
+        let c = self.0.to_cols_array();
+        format!("Mat2({}, {}, {}, {})", c[0], c[1], c[2], c[3])
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+
+    fn __hash__(&self) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        for &c in self.0.to_cols_array().iter() {
+            hash_f32(c, &mut hasher);
+        }
+        std::hash::Hasher::finish(&hasher)
+    }
+}
+
+#[pyclass(name = "Affine2", from_py_object)]
+#[derive(Clone, Debug)]
+pub struct PyAffine2(pub(crate) Affine2);
+
+impl From<Affine2> for PyAffine2 {
+    fn from(a: Affine2) -> Self {
+        Self(a)
+    }
+}
+
+#[pymethods]
+impl PyAffine2 {
+    #[new]
+    #[pyo3(signature = (matrix=None, translation=None))]
+    pub fn py_new(matrix: Option<PyRef<PyMat2>>, translation: Option<PyRef<PyVec2>>) -> Self {
+        Self(Affine2 {
+            matrix2: matrix.map(|m| m.0).unwrap_or(Mat2::IDENTITY),
+            translation: translation.map(|t| t.0).unwrap_or(Vec2::ZERO),
+        })
+    }
+
+    #[staticmethod]
+    fn from_scale(scale: PyVec2) -> Self {
+        Self(Affine2::from_scale(scale.0))
+    }
+
+    #[staticmethod]
+    fn from_scale_angle_translation(scale: PyVec2, angle: f32, translation: PyVec2) -> Self {
+        Self(Affine2::from_scale_angle_translation(
+            scale.0,
+            angle,
+            translation.0,
+        ))
+    }
+
+    #[getter]
+    fn matrix(&self) -> PyMat2 {
+        PyMat2(self.0.matrix2)
+    }
+
+    #[getter]
+    fn translation(&self) -> PyVec2 {
+        PyVec2(self.0.translation)
+    }
+
+    fn inverse(&self) -> Self {
+        Self(self.0.inverse())
+    }
+
+    fn __repr__(&self) -> String {
+        let m = self.0.matrix2.to_cols_array();
+        let t = self.0.translation;
+        format!(
+            "Affine2(Mat2({}, {}, {}, {}), Vec2({}, {}))",
+            m[0], m[1], m[2], m[3], t.x, t.y
+        )
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+
+    fn __eq__(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+
+    fn __hash__(&self) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        for &c in self.0.matrix2.to_cols_array().iter() {
+            hash_f32(c, &mut hasher);
+        }
+        hash_f32(self.0.translation.x, &mut hasher);
+        hash_f32(self.0.translation.y, &mut hasher);
+        std::hash::Hasher::finish(&hasher)
     }
 }
 

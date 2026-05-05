@@ -132,6 +132,66 @@ impl PyBlendMode {
     const OP_MAX: u8 = 4;
 }
 
+/// Configures how an image is sampled when drawn.
+///
+/// Controls texture filtering and edge wrapping behavior.
+///
+/// - `filter` — `Sampler.LINEAR` (smooth) or `Sampler.NEAREST` (pixelated).
+/// - `wrap` — `Sampler.CLAMP` (default), `Sampler.REPEAT`, or `Sampler.MIRROR`.
+///   Use `wrap_x`/`wrap_y` to set each axis independently.
+#[pyclass(from_py_object)]
+#[derive(Clone)]
+pub struct Sampler {
+    pub(crate) filter: u8,
+    pub(crate) wrap_x: u8,
+    pub(crate) wrap_y: u8,
+}
+
+#[pymethods]
+impl Sampler {
+    #[new]
+    #[pyo3(signature = (*, filter=0, wrap=0, wrap_x=None, wrap_y=None))]
+    fn new(filter: u8, wrap: u8, wrap_x: Option<u8>, wrap_y: Option<u8>) -> Self {
+        Self {
+            filter,
+            wrap_x: wrap_x.unwrap_or(wrap),
+            wrap_y: wrap_y.unwrap_or(wrap),
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        let filter_name = match self.filter {
+            0 => "LINEAR",
+            1 => "NEAREST",
+            _ => "?",
+        };
+        let wrap_name = |v: u8| match v {
+            0 => "CLAMP",
+            1 => "REPEAT",
+            2 => "MIRROR",
+            _ => "?",
+        };
+        format!(
+            "Sampler(filter={}, wrap_x={}, wrap_y={})",
+            filter_name,
+            wrap_name(self.wrap_x),
+            wrap_name(self.wrap_y)
+        )
+    }
+
+    #[classattr]
+    const LINEAR: u8 = 0;
+    #[classattr]
+    const NEAREST: u8 = 1;
+
+    #[classattr]
+    const CLAMP: u8 = 0;
+    #[classattr]
+    const REPEAT: u8 = 1;
+    #[classattr]
+    const MIRROR: u8 = 2;
+}
+
 pub use crate::surface::Surface;
 
 #[pyclass]
@@ -168,10 +228,40 @@ pub struct Image {
     pub(crate) entity: Entity,
 }
 
+pub(crate) struct ImageRef {
+    pub entity: Entity,
+}
+
+impl<'a, 'py> FromPyObject<'a, 'py> for ImageRef {
+    type Error = PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
+        if let Ok(img) = ob.extract::<PyRef<Image>>() {
+            return Ok(ImageRef { entity: img.entity });
+        }
+        #[cfg(feature = "webcam")]
+        if let Ok(cam) = ob.extract::<PyRef<crate::webcam::Webcam>>() {
+            return Ok(ImageRef {
+                entity: cam.image_entity()?,
+            });
+        }
+        Err(pyo3::exceptions::PyTypeError::new_err(
+            "expected an Image or Webcam",
+        ))
+    }
+}
+
+#[pymethods]
 impl Image {
-    #[expect(dead_code)] // it's only used by webcam atm
-    pub(crate) fn from_entity(entity: Entity) -> Self {
-        Self { entity }
+    /// Applies a `Sampler` to this image, controlling filtering and wrapping.
+    ///
+    /// ```python
+    /// s = Sampler(filter=Sampler.NEAREST, wrap=Sampler.REPEAT)
+    /// img.sampler(s)
+    /// ```
+    fn sampler(&self, sampler: &Sampler) -> PyResult<()> {
+        image_set_sampler(self.entity, sampler.filter, sampler.wrap_x, sampler.wrap_y)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 }
 
@@ -785,11 +875,87 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn image(&self, file: &str) -> PyResult<Image> {
+    /// Loads an image from a file and returns an Image object.
+    ///
+    /// The path is relative to the sketch's assets directory.
+    pub fn load_image(&self, file: &str) -> PyResult<Image> {
         match image_load(file) {
             Ok(image) => Ok(Image { entity: image }),
             Err(e) => Err(PyRuntimeError::new_err(format!("{e}"))),
         }
+    }
+
+    /// Draws an image to the screen.
+    ///
+    /// Optional `d_width` and `d_height` resize the image on screen. If omitted,
+    /// the image's original dimensions are used.
+    ///
+    /// Optional `sx`, `sy`, `s_width`, and `s_height` define a sub-region
+    /// of the source image to draw, specified in pixels.
+    ///
+    /// Affected by `image_mode()`, `tint()`, and the current transform.
+    #[pyo3(signature = (source, dx, dy, d_width=None, d_height=None, sx=None, sy=None, s_width=None, s_height=None))]
+    pub fn image(
+        &self,
+        source: ImageRef,
+        dx: f32,
+        dy: f32,
+        d_width: Option<f32>,
+        d_height: Option<f32>,
+        sx: Option<f32>,
+        sy: Option<f32>,
+        s_width: Option<f32>,
+        s_height: Option<f32>,
+    ) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Image {
+                entity: source.entity,
+                dx,
+                dy,
+                d_width,
+                d_height,
+                sx,
+                sy,
+                s_width,
+                s_height,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Sets a tint color applied when drawing images.
+    ///
+    /// Accepts the same color arguments as `fill()`. The tint is multiplied
+    /// with the image's pixel colors. Use `no_tint()` to remove.
+    #[pyo3(signature = (*args))]
+    pub fn tint(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let color = extract_color_with_mode(
+            args,
+            &graphics_get_color_mode(self.entity)
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
+        )?;
+        graphics_record_command(self.entity, DrawCommand::Tint(color))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Removes the current tint color so images draw without color modification.
+    pub fn no_tint(&self) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::NoTint)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Changes how image position arguments are interpreted.
+    ///
+    /// - `CORNER` (default) — `dx`, `dy` is the top-left corner.
+    /// - `CORNERS` — `dx`, `dy` and `d_width`, `d_height` are opposite corners.
+    /// - `CENTER` — `dx`, `dy` is the center of the image.
+    pub fn image_mode(&self, mode: u8) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::ImageMode(processing::prelude::ShapeMode::from(mode)),
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn create_image(&self, width: u32, height: u32) -> PyResult<Image> {
@@ -828,6 +994,21 @@ impl Graphics {
 
     pub fn rotate(&self, angle: f32) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::Rotate { angle })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn rotate_x(&self, angle: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::RotateX { angle })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn rotate_y(&self, angle: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::RotateY { angle })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn rotate_z(&self, angle: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::RotateZ { angle })
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
