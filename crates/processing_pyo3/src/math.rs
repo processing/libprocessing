@@ -504,6 +504,11 @@ macro_rules! impl_py_vec {
 }
 
 impl_py_vec!(PyVec2, "Vec2", 2, [(x, set_x, 0), (y, set_y, 1)], Vec2, extra {
+    #[classattr] #[allow(non_snake_case)] fn ZERO() -> Self { Self(Vec2::ZERO) }
+    #[classattr] #[allow(non_snake_case)] fn ONE() -> Self { Self(Vec2::ONE) }
+    #[classattr] #[allow(non_snake_case)] fn X() -> Self { Self(Vec2::X) }
+    #[classattr] #[allow(non_snake_case)] fn Y() -> Self { Self(Vec2::Y) }
+
     fn angle(&self) -> f32 {
         self.0.y.atan2(self.0.x)
     }
@@ -543,6 +548,12 @@ impl_py_vec!(PyVec2, "Vec2", 2, [(x, set_x, 0), (y, set_y, 1)], Vec2, extra {
 });
 
 impl_py_vec!(PyVec3, "Vec3", 3, [(x, set_x, 0), (y, set_y, 1), (z, set_z, 2)], Vec3, extra {
+    #[classattr] #[allow(non_snake_case)] fn ZERO() -> Self { Self(Vec3::ZERO) }
+    #[classattr] #[allow(non_snake_case)] fn ONE() -> Self { Self(Vec3::ONE) }
+    #[classattr] #[allow(non_snake_case)] fn X() -> Self { Self(Vec3::X) }
+    #[classattr] #[allow(non_snake_case)] fn Y() -> Self { Self(Vec3::Y) }
+    #[classattr] #[allow(non_snake_case)] fn Z() -> Self { Self(Vec3::Z) }
+
     fn cross(&self, other: &Self) -> Self {
         Self(self.0.cross(other.0))
     }
@@ -570,6 +581,13 @@ impl_py_vec!(
     [(x, set_x, 0), (y, set_y, 1), (z, set_z, 2), (w, set_w, 3)],
     Vec4,
     extra {
+        #[classattr] #[allow(non_snake_case)] fn ZERO() -> Self { Self(Vec4::ZERO) }
+        #[classattr] #[allow(non_snake_case)] fn ONE() -> Self { Self(Vec4::ONE) }
+        #[classattr] #[allow(non_snake_case)] fn X() -> Self { Self(Vec4::X) }
+        #[classattr] #[allow(non_snake_case)] fn Y() -> Self { Self(Vec4::Y) }
+        #[classattr] #[allow(non_snake_case)] fn Z() -> Self { Self(Vec4::Z) }
+        #[classattr] #[allow(non_snake_case)] fn W() -> Self { Self(Vec4::W) }
+
         fn truncate(&self) -> PyVec3 {
             PyVec3(self.0.truncate())
         }
