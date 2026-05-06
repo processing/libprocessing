@@ -21,6 +21,7 @@ cuda = ["dep:processing_cuda", "processing_cuda/cuda", "processing/cuda"]
 [dependencies]
 pyo3 = { workspace = true, features = ["experimental-inspect", "multiple-pymethods"] }
 processing = { workspace = true }
+processing_render = { workspace = true }
 processing_webcam = { workspace = true, optional = true }
 processing_glfw = { workspace = true }
 bevy = { workspace = true, features = ["file_watcher"] }

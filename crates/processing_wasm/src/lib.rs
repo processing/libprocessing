@@ -744,7 +744,7 @@ pub fn js_material_set_float(mat_id: u64, name: &str, value: f32) -> Result<(), 
     check(material_set(
         Entity::from_bits(mat_id),
         name,
-        material::MaterialValue::Float(value),
+        shader_value::ShaderValue::Float(value),
     ))
 }
 
@@ -760,7 +760,7 @@ pub fn js_material_set_float4(
     check(material_set(
         Entity::from_bits(mat_id),
         name,
-        material::MaterialValue::Float4([r, g, b, a]),
+        shader_value::ShaderValue::Float4([r, g, b, a]),
     ))
 }
 

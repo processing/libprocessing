@@ -30,8 +30,8 @@ pub use shape::{
     build_polygon_stroke,
 };
 pub use shape3d::{
-    box_mesh, capsule_mesh, cone_mesh, conical_frustum_mesh, cylinder_mesh, plane_mesh,
-    sphere_mesh, tetrahedron_mesh, torus_mesh,
+    box_mesh, capsule_mesh, cone_mesh, conical_frustum_mesh, cylinder_mesh, grid_mesh,
+    plane_mesh, sphere_mesh, tetrahedron_mesh, torus_mesh,
 };
 pub use triangle::triangle;
 

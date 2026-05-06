@@ -9,8 +9,10 @@
 //! To allow Python users to create a similar experience, we provide module-level
 //! functions that forward to a singleton Graphics object pub(crate) behind the scenes.
 pub(crate) mod color;
+pub(crate) mod compute;
 #[cfg(feature = "cuda")]
 pub(crate) mod cuda;
+pub(crate) mod particles;
 mod glfw;
 mod gltf;
 mod graphics;
@@ -25,6 +27,7 @@ mod time;
 #[cfg(feature = "webcam")]
 mod webcam;
 
+use compute::{Buffer, Compute};
 use graphics::{
     Geometry, Graphics, Image, Light, PyBlendMode, Sampler, Topology, get_graphics,
     get_graphics_mut,
@@ -327,6 +330,18 @@ mod mewnala {
     use super::*;
 
     #[pymodule_export]
+    use super::Buffer;
+    #[pymodule_export]
+    use super::color::PyColor;
+    #[pymodule_export]
+    use super::Compute;
+    #[pymodule_export]
+    use super::particles::Attribute;
+    #[pymodule_export]
+    use super::particles::AttributeFormat;
+    #[pymodule_export]
+    use super::particles::Particles;
+    #[pymodule_export]
     use super::Geometry;
     #[pymodule_export]
     use super::Gltf;
@@ -338,6 +353,14 @@ mod mewnala {
     use super::Light;
     #[pymodule_export]
     use super::Material;
+    #[pymodule_export]
+    use super::math::PyQuat;
+    #[pymodule_export]
+    use super::math::PyVec2;
+    #[pymodule_export]
+    use super::math::PyVec3;
+    #[pymodule_export]
+    use super::math::PyVec4;
     #[pymodule_export]
     use super::PyBlendMode;
     #[pymodule_export]
@@ -666,90 +689,73 @@ mod mewnala {
         }
     }
 
-    #[pymodule]
-    mod color {
-        use super::*;
+    // Color constructors — promoted to top-level so `from mewnala import *`
+    // exposes `hsva(...)`, `srgb(...)`, etc. directly. Living in a `color`
+    // submodule conflicted with the Processing-style `color()` function.
 
-        #[pymodule_export]
-        use crate::color::PyColor;
+    #[pyfunction]
+    fn color_hex(s: &str) -> PyResult<PyColor> {
+        PyColor::hex(s)
+    }
 
-        #[pyfunction(name = "color")]
-        #[pyo3(signature = (*args))]
-        fn color_ctor(py: Python<'_>, args: &Bound<'_, PyTuple>) -> PyResult<PyColor> {
-            let parent = py.import("mewnala.mewnala")?;
-            match get_graphics(&parent)? {
-                Some(g) => g.color(args),
-                None => {
-                    let mode = crate::color::ColorMode::default();
-                    crate::color::extract_color_with_mode(args, &mode).map(PyColor::from)
-                }
-            }
-        }
+    #[pyfunction]
+    #[pyo3(signature = (r, g, b, a=1.0))]
+    fn srgb(r: f32, g: f32, b: f32, a: f32) -> PyColor {
+        PyColor::srgb(r, g, b, a)
+    }
 
-        #[pyfunction]
-        fn hex(s: &str) -> PyResult<PyColor> {
-            PyColor::hex(s)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (r, g, b, a=1.0))]
+    fn linear_rgb(r: f32, g: f32, b: f32, a: f32) -> PyColor {
+        PyColor::linear(r, g, b, a)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (r, g, b, a=1.0))]
-        fn srgb(r: f32, g: f32, b: f32, a: f32) -> PyColor {
-            PyColor::srgb(r, g, b, a)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (h, s, l, a=1.0))]
+    fn hsla(h: f32, s: f32, l: f32, a: f32) -> PyColor {
+        PyColor::hsla(h, s, l, a)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (r, g, b, a=1.0))]
-        fn linear(r: f32, g: f32, b: f32, a: f32) -> PyColor {
-            PyColor::linear(r, g, b, a)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (h, s, v, a=1.0))]
+    fn hsva(h: f32, s: f32, v: f32, a: f32) -> PyColor {
+        PyColor::hsva(h, s, v, a)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (h, s, l, a=1.0))]
-        fn hsla(h: f32, s: f32, l: f32, a: f32) -> PyColor {
-            PyColor::hsla(h, s, l, a)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (h, w, b, a=1.0))]
+    fn hwba(h: f32, w: f32, b: f32, a: f32) -> PyColor {
+        PyColor::hwba(h, w, b, a)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (h, s, v, a=1.0))]
-        fn hsva(h: f32, s: f32, v: f32, a: f32) -> PyColor {
-            PyColor::hsva(h, s, v, a)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (l, a_axis, b_axis, alpha=1.0))]
+    fn oklab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> PyColor {
+        PyColor::oklab(l, a_axis, b_axis, alpha)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (h, w, b, a=1.0))]
-        fn hwba(h: f32, w: f32, b: f32, a: f32) -> PyColor {
-            PyColor::hwba(h, w, b, a)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (l, c, h, a=1.0))]
+    fn oklch(l: f32, c: f32, h: f32, a: f32) -> PyColor {
+        PyColor::oklch(l, c, h, a)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (l, a_axis, b_axis, alpha=1.0))]
-        fn oklab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> PyColor {
-            PyColor::oklab(l, a_axis, b_axis, alpha)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (l, a_axis, b_axis, alpha=1.0))]
+    fn lab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> PyColor {
+        PyColor::lab(l, a_axis, b_axis, alpha)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (l, c, h, a=1.0))]
-        fn oklch(l: f32, c: f32, h: f32, a: f32) -> PyColor {
-            PyColor::oklch(l, c, h, a)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (l, c, h, a=1.0))]
+    fn lch(l: f32, c: f32, h: f32, a: f32) -> PyColor {
+        PyColor::lch(l, c, h, a)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (l, a_axis, b_axis, alpha=1.0))]
-        fn lab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> PyColor {
-            PyColor::lab(l, a_axis, b_axis, alpha)
-        }
-
-        #[pyfunction]
-        #[pyo3(signature = (l, c, h, a=1.0))]
-        fn lch(l: f32, c: f32, h: f32, a: f32) -> PyColor {
-            PyColor::lch(l, c, h, a)
-        }
-
-        #[pyfunction]
-        #[pyo3(signature = (x, y, z, a=1.0))]
-        fn xyz(x: f32, y: f32, z: f32, a: f32) -> PyColor {
-            PyColor::xyz(x, y, z, a)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (x, y, z, a=1.0))]
+    fn xyz(x: f32, y: f32, z: f32, a: f32) -> PyColor {
+        PyColor::xyz(x, y, z, a)
     }
 
     #[cfg(feature = "webcam")]
@@ -1308,6 +1314,45 @@ mod mewnala {
     fn draw_geometry(module: &Bound<'_, PyModule>, geometry: &Bound<'_, Geometry>) -> PyResult<()> {
         graphics!(module).draw_geometry(&*geometry.extract::<PyRef<Geometry>>()?)
     }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (particles, geometry))]
+    fn particles(
+        module: &Bound<'_, PyModule>,
+        particles: &Bound<'_, super::particles::Particles>,
+        geometry: &Bound<'_, Geometry>,
+    ) -> PyResult<()> {
+        graphics!(module).particles(
+            &*particles.extract::<PyRef<super::particles::Particles>>()?,
+            &*geometry.extract::<PyRef<Geometry>>()?,
+        )
+    }
+
+    #[pyfunction]
+    fn kernel_noise() -> PyResult<Compute> {
+        super::particles::kernel_noise()
+    }
+
+    #[pyfunction]
+    fn kernel_transform() -> PyResult<Compute> {
+        super::particles::kernel_transform()
+    }
+
+    #[pyfunction(name = "color")]
+    #[pyo3(pass_module, signature = (*args))]
+    fn create_color(
+        module: &Bound<'_, PyModule>,
+        args: &Bound<'_, PyTuple>,
+    ) -> PyResult<super::color::PyColor> {
+        match get_graphics(module)? {
+            Some(g) => g.color(args),
+            None => {
+                let mode = super::color::ColorMode::default();
+                super::color::extract_color_with_mode(args, &mode).map(super::color::PyColor::from)
+            }
+        }
+    }
+
 
     #[pyfunction]
     #[pyo3(pass_module, signature = (*args))]
