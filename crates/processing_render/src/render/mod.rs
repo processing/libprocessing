@@ -7,7 +7,7 @@ pub mod transform;
 use bevy::{
     camera::{primitives::Aabb, visibility::RenderLayers},
     ecs::system::SystemParam,
-    math::{Affine3A, Mat4, Vec3A, Vec4},
+    math::{Affine2, Affine3A, Mat4, Vec3A, Vec4},
     pbr::gpu_instance_batch::GpuBatchedMesh3d,
     prelude::*,
     render::render_resource::BlendState,
@@ -87,6 +87,8 @@ pub struct RenderState {
     pub material_key: MaterialKey,
     pub blend_state: Option<BlendState>,
     pub transform: TransformStack,
+    pub tint_color: Option<Color>,
+    pub image_mode: ShapeMode,
     pub rect_mode: ShapeMode,
     pub ellipse_mode: ShapeMode,
     pub shape_builder: Option<ShapeBuilder>,
@@ -103,9 +105,12 @@ impl RenderState {
             material_key: MaterialKey::Color {
                 transparent: false,
                 background_image: None,
+                uv_transform: Affine2::IDENTITY,
                 blend_state: None,
             },
             blend_state: None,
+            tint_color: None,
+            image_mode: ShapeMode::Corner,
             transform: TransformStack::new(),
             rect_mode: ShapeMode::Corner,
             ellipse_mode: ShapeMode::Center,
@@ -122,9 +127,12 @@ impl RenderState {
         self.material_key = MaterialKey::Color {
             transparent: false,
             background_image: None,
+            uv_transform: Affine2::IDENTITY,
             blend_state: None,
         };
         self.blend_state = None;
+        self.tint_color = None;
+        self.image_mode = ShapeMode::Corner;
         self.transform = TransformStack::new();
         self.rect_mode = ShapeMode::Corner;
         self.ellipse_mode = ShapeMode::Center;
@@ -208,79 +216,28 @@ pub fn flush_draw_commands(
                     state.stroke_config.line_join = join;
                 }
                 DrawCommand::Roughness(r) => {
-                    state.material_key = match state.material_key {
-                        MaterialKey::Pbr {
-                            albedo,
-                            metallic,
-                            emissive,
-                            ..
-                        } => MaterialKey::Pbr {
-                            albedo,
-                            roughness: (r * 255.0) as u8,
-                            metallic,
-                            emissive,
-                            blend_state: None,
-                        },
-                        _ => MaterialKey::Pbr {
-                            albedo: [255, 255, 255, 255],
-                            roughness: (r * 255.0) as u8,
-                            metallic: 0,
-                            emissive: [0, 0, 0, 0],
-                            blend_state: None,
-                        },
-                    };
+                    let mut pbr = state.material_key.as_pbr();
+                    pbr.roughness = (r * 255.0) as u8;
+                    pbr.blend_state = None;
+                    state.material_key = pbr.into();
                 }
                 DrawCommand::Metallic(m) => {
-                    state.material_key = match state.material_key {
-                        MaterialKey::Pbr {
-                            albedo,
-                            roughness,
-                            emissive,
-                            ..
-                        } => MaterialKey::Pbr {
-                            albedo,
-                            roughness,
-                            metallic: (m * 255.0) as u8,
-                            emissive,
-                            blend_state: None,
-                        },
-                        _ => MaterialKey::Pbr {
-                            albedo: [255, 255, 255, 255],
-                            roughness: 128,
-                            metallic: (m * 255.0) as u8,
-                            emissive: [0, 0, 0, 0],
-                            blend_state: None,
-                        },
-                    };
+                    let mut pbr = state.material_key.as_pbr();
+                    pbr.metallic = (m * 255.0) as u8;
+                    pbr.blend_state = None;
+                    state.material_key = pbr.into();
                 }
                 DrawCommand::Emissive(color) => {
-                    let [r, g, b, a] = color.to_srgba().to_u8_array();
-                    state.material_key = match state.material_key {
-                        MaterialKey::Pbr {
-                            albedo,
-                            roughness,
-                            metallic,
-                            ..
-                        } => MaterialKey::Pbr {
-                            albedo,
-                            roughness,
-                            metallic,
-                            emissive: [r, g, b, a],
-                            blend_state: None,
-                        },
-                        _ => MaterialKey::Pbr {
-                            albedo: [255, 255, 255, 255],
-                            roughness: 128,
-                            metallic: 0,
-                            emissive: [r, g, b, a],
-                            blend_state: None,
-                        },
-                    };
+                    let mut pbr = state.material_key.as_pbr();
+                    pbr.emissive = color.to_srgba().to_u8_array();
+                    pbr.blend_state = None;
+                    state.material_key = pbr.into();
                 }
                 DrawCommand::Unlit => {
                     state.material_key = MaterialKey::Color {
                         transparent: state.fill_is_transparent(),
                         background_image: None,
+                        uv_transform: Affine2::IDENTITY,
                         blend_state: None,
                     };
                 }
@@ -804,6 +761,82 @@ pub fn flush_draw_commands(
                         }
                     }
                 }
+                DrawCommand::Tint(color) => {
+                    state.tint_color = Some(color);
+                }
+                DrawCommand::NoTint => {
+                    state.tint_color = None;
+                }
+                DrawCommand::ImageMode(mode) => {
+                    state.image_mode = mode;
+                }
+                DrawCommand::Image {
+                    entity,
+                    dx,
+                    dy,
+                    d_width,
+                    d_height,
+                    sx,
+                    sy,
+                    s_width,
+                    s_height,
+                } => {
+                    let Some(p_image) = p_images.get(entity).ok() else {
+                        warn!("Could not find PImage for entity {:?}", entity);
+                        continue;
+                    };
+
+                    let img_w = p_image.size.width as f32;
+                    let img_h = p_image.size.height as f32;
+                    let dw = d_width.unwrap_or(img_w);
+                    let dh = d_height.unwrap_or(img_h);
+                    let (x, y, w, h) = apply_shape_mode(state.image_mode, dx, dy, dw, dh);
+
+                    let uv_xform = match (sx, sy, s_width, s_height) {
+                        (Some(sx), Some(sy), Some(sw), Some(sh)) => {
+                            Affine2::from_scale_angle_translation(
+                                Vec2::new(sw / img_w, sh / img_h),
+                                0.0,
+                                Vec2::new(sx / img_w, sy / img_h),
+                            )
+                        }
+                        _ => Affine2::IDENTITY,
+                    };
+
+                    let tint = state.tint_color.unwrap_or(Color::WHITE);
+                    let material_key = MaterialKey::Color {
+                        transparent: tint.alpha() < 1.0,
+                        background_image: Some(p_image.handle.clone()),
+                        uv_transform: uv_xform,
+                        blend_state: state.blend_state,
+                    };
+                    let stroke_config = state.stroke_config;
+
+                    flush_batch(&mut res, &mut batch, &p_material_handles);
+                    start_batch(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        material_key,
+                        &p_material_handles,
+                    );
+
+                    if let Some(ref mut mesh) = batch.current_mesh {
+                        rect(
+                            mesh,
+                            x,
+                            y,
+                            w,
+                            h,
+                            [0.0; 4],
+                            tint,
+                            TessellationMode::Fill,
+                            &stroke_config,
+                        );
+                    }
+
+                    flush_batch(&mut res, &mut batch, &p_material_handles);
+                }
                 DrawCommand::BackgroundColor(color) => {
                     flush_batch(&mut res, &mut batch, &p_material_handles);
 
@@ -813,6 +846,7 @@ pub fn flush_draw_commands(
                     let material_key = MaterialKey::Color {
                         transparent: color.alpha() < 1.0,
                         background_image: None,
+                        uv_transform: Affine2::IDENTITY,
                         blend_state: Some(BlendState::REPLACE),
                     };
                     let material_handle = material_key.to_material(&mut res.materials);
@@ -841,6 +875,7 @@ pub fn flush_draw_commands(
                     let material_key = MaterialKey::Color {
                         transparent: false,
                         background_image: Some(p_image.handle.clone()),
+                        uv_transform: Affine2::IDENTITY,
                         blend_state: Some(BlendState::REPLACE),
                     };
                     let material_handle = material_key.to_material(&mut res.materials);
@@ -860,6 +895,9 @@ pub fn flush_draw_commands(
                 DrawCommand::ResetMatrix => state.transform.reset(),
                 DrawCommand::Translate(v) => state.transform.translate(v.x, v.y),
                 DrawCommand::Rotate { angle } => state.transform.rotate(angle),
+                DrawCommand::RotateX { angle } => state.transform.rotate_x(angle),
+                DrawCommand::RotateY { angle } => state.transform.rotate_y(angle),
+                DrawCommand::RotateZ { angle } => state.transform.rotate_z(angle),
                 DrawCommand::Scale(v) => state.transform.scale(v.x, v.y),
                 DrawCommand::ShearX { angle } => state.transform.shear_x(angle),
                 DrawCommand::ShearY { angle } => state.transform.shear_y(angle),
@@ -1236,26 +1274,20 @@ fn material_key_with_color(
 ) -> MaterialKey {
     match key {
         MaterialKey::Color {
-            background_image, ..
+            background_image,
+            uv_transform,
+            ..
         } => MaterialKey::Color {
             transparent: color.alpha() < 1.0,
             background_image: background_image.clone(),
+            uv_transform: *uv_transform,
             blend_state,
         },
-        MaterialKey::Pbr {
-            roughness,
-            metallic,
-            emissive,
-            ..
-        } => {
-            let [r, g, b, a] = color.to_srgba().to_u8_array();
-            MaterialKey::Pbr {
-                albedo: [r, g, b, a],
-                roughness: *roughness,
-                metallic: *metallic,
-                emissive: *emissive,
-                blend_state,
-            }
+        MaterialKey::Pbr { .. } => {
+            let mut pbr = key.as_pbr();
+            pbr.albedo = color.to_srgba().to_u8_array();
+            pbr.blend_state = blend_state;
+            pbr.into()
         }
         MaterialKey::Custom { entity, .. } => MaterialKey::Custom {
             entity: *entity,

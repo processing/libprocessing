@@ -310,6 +310,20 @@ pub enum DrawCommand {
     Metallic(f32),
     Emissive(Color),
     Unlit,
+    Tint(Color),
+    NoTint,
+    ImageMode(ShapeMode),
+    Image {
+        entity: Entity,
+        dx: f32,
+        dy: f32,
+        d_width: Option<f32>,
+        d_height: Option<f32>,
+        sx: Option<f32>,
+        sy: Option<f32>,
+        s_width: Option<f32>,
+        s_height: Option<f32>,
+    },
     RectMode(ShapeMode),
     EllipseMode(ShapeMode),
     Rect {
@@ -417,6 +431,15 @@ pub enum DrawCommand {
     ResetMatrix,
     Translate(Vec2),
     Rotate {
+        angle: f32,
+    },
+    RotateX {
+        angle: f32,
+    },
+    RotateY {
+        angle: f32,
+    },
+    RotateZ {
         angle: f32,
     },
     Scale(Vec2),

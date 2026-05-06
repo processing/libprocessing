@@ -335,17 +335,26 @@ impl GlfwContext {
         if desired.maximize {
             self.window.maximize();
         }
+        #[cfg(not(all(target_os = "linux", feature = "wayland")))]
         if desired.focus {
             self.window.focus();
         }
 
-        let (cx, cy) = self.window.get_pos();
-        let (inset_l, inset_t, _, _) = self.window.get_frame_size();
-        let frame_pos = IVec2::new(cx - inset_l, cy - inset_t);
+        #[cfg(all(target_os = "linux", feature = "wayland"))]
+        let frame_pos: Option<IVec2> = None;
+        #[cfg(not(all(target_os = "linux", feature = "wayland")))]
+        let frame_pos = {
+            let (cx, cy) = self.window.get_pos();
+            let (inset_l, inset_t, _, _) = self.window.get_frame_size();
+            Some(IVec2::new(cx - inset_l, cy - inset_t))
+        };
+
         let _ = app_mut(|app| {
             let world = app.world_mut();
-            if let Some(mut window) = world.get_mut::<BevyWindow>(surface) {
-                window.position = WindowPosition::At(frame_pos);
+            if let Some(pos) = frame_pos
+                && let Some(mut window) = world.get_mut::<BevyWindow>(surface)
+            {
+                window.position = WindowPosition::At(pos);
             }
             if let Some(mut controls) = world.get_mut::<WindowControls>(surface) {
                 controls.pending_iconify = false;
@@ -355,7 +364,9 @@ impl GlfwContext {
             }
             Ok(())
         });
-        self.last_applied.position = frame_pos;
+        if let Some(pos) = frame_pos {
+            self.last_applied.position = pos;
+        }
     }
 
     fn apply_window(&mut self, desired: &DesiredWindow) {
@@ -368,8 +379,11 @@ impl GlfwContext {
         if let Some(pos) = desired.position
             && pos != last.position
         {
-            let (inset_l, inset_t, _, _) = self.window.get_frame_size();
-            self.window.set_pos(pos.x + inset_l, pos.y + inset_t);
+            #[cfg(not(all(target_os = "linux", feature = "wayland")))]
+            {
+                let (inset_l, inset_t, _, _) = self.window.get_frame_size();
+                self.window.set_pos(pos.x + inset_l, pos.y + inset_t);
+            }
             last.position = pos;
         }
         if desired.size != last.size && desired.size.x > 0 && desired.size.y > 0 {
@@ -394,6 +408,7 @@ impl GlfwContext {
             last.decorations = desired.decorations;
         }
         if desired.window_level != last.window_level {
+            #[cfg(not(all(target_os = "linux", feature = "wayland")))]
             self.window
                 .set_floating(matches!(desired.window_level, BevyWindowLevel::AlwaysOnTop));
             last.window_level = desired.window_level;
@@ -401,6 +416,7 @@ impl GlfwContext {
         if let Some(opacity) = desired.opacity
             && (opacity - last.opacity).abs() > f32::EPSILON
         {
+            #[cfg(not(all(target_os = "linux", feature = "wayland")))]
             self.window.set_opacity(opacity);
             last.opacity = opacity;
         }
@@ -413,6 +429,9 @@ impl GlfwContext {
         match target {
             Some(monitor_entity) => {
                 if self.last_applied.fullscreen_on.is_none() {
+                    #[cfg(all(target_os = "linux", feature = "wayland"))]
+                    let (x, y) = (0, 0);
+                    #[cfg(not(all(target_os = "linux", feature = "wayland")))]
                     let (x, y) = self.window.get_pos();
                     let (w, h) = self.window.get_size();
                     self.windowed_geometry = Some((x, y, w as u32, h as u32));
@@ -438,6 +457,9 @@ impl GlfwContext {
             }
             None => {
                 let (x, y, w, h) = self.windowed_geometry.take().unwrap_or_else(|| {
+                    #[cfg(all(target_os = "linux", feature = "wayland"))]
+                    let (x, y) = (0, 0);
+                    #[cfg(not(all(target_os = "linux", feature = "wayland")))]
                     let (x, y) = self.window.get_pos();
                     let (w, h) = self.window.get_size();
                     (x, y, w as u32, h as u32)
@@ -486,6 +508,7 @@ struct DesiredWindow {
     iconify: bool,
     restore: bool,
     maximize: bool,
+    #[cfg(not(all(target_os = "linux", feature = "wayland")))]
     focus: bool,
 }
 
@@ -524,6 +547,7 @@ fn read_desired_window(surface: Entity) -> Option<DesiredWindow> {
             iconify: controls.pending_iconify,
             restore: controls.pending_restore,
             maximize: controls.pending_maximize,
+            #[cfg(not(all(target_os = "linux", feature = "wayland")))]
             focus: controls.pending_focus,
         }))
     })

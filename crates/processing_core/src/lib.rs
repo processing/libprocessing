@@ -14,9 +14,8 @@ thread_local! {
 }
 
 pub fn app_mut<T>(cb: impl FnOnce(&mut App) -> error::Result<T>) -> error::Result<T> {
-    // `try_with` rather than `with` so callers (especially `Drop`s running
-    // during pyo3 module teardown) get a graceful error instead of a panic
-    // when the thread-local has already been destroyed.
+    // `try_with` so a `Drop` running after the TLS is destroyed sees an
+    // `AppAccess` error rather than panicking
     let res = APP.try_with(|app_cell| {
         let mut app_borrow = app_cell
             .try_borrow_mut()

@@ -29,7 +29,8 @@ mod webcam;
 
 use compute::{Buffer, Compute};
 use graphics::{
-    Geometry, Graphics, Image, Light, PyBlendMode, Topology, get_graphics, get_graphics_mut,
+    Geometry, Graphics, Image, Light, PyBlendMode, Sampler, Topology, get_graphics,
+    get_graphics_mut,
 };
 use material::Material;
 
@@ -363,6 +364,8 @@ mod mewnala {
     #[pymodule_export]
     use super::PyBlendMode;
     #[pymodule_export]
+    use super::Sampler;
+    #[pymodule_export]
     use super::Shader;
     #[pymodule_export]
     use super::Topology;
@@ -646,6 +649,10 @@ mod mewnala {
     mod math {
         use super::*;
 
+        #[pymodule_export]
+        use crate::math::PyAffine2;
+        #[pymodule_export]
+        use crate::math::PyMat2;
         #[pymodule_export]
         use crate::math::PyQuat;
         #[pymodule_export]
@@ -1146,8 +1153,8 @@ mod mewnala {
             Ok(())
         });
 
-        // Tear down the App while the thread-local is still alive — letting
-        // it run via the eager TLS destructor aborts inside a Bevy resource Drop.
+        // tear the app down here while the TLS is still alive; the eager
+        // TLS destructor aborts inside a Bevy resource drop
         let _ = ::processing::exit(0);
 
         result
@@ -1261,10 +1268,45 @@ mod mewnala {
         graphics!(module).rotate(angle)
     }
 
-    #[pyfunction(name = "box")]
+    #[pyfunction]
     #[pyo3(pass_module)]
-    fn draw_box(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<()> {
-        graphics!(module).draw_box(x, y, z)
+    fn rotate_x(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
+        graphics!(module).rotate_x(angle)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn rotate_y(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
+        graphics!(module).rotate_y(angle)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn rotate_z(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
+        graphics!(module).rotate_z(angle)
+    }
+
+    #[pyfunction(name = "box")]
+    #[pyo3(pass_module, signature = (*args))]
+    fn draw_box(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let (w, h, d) = match args.len() {
+            1 => {
+                let s: f32 = args.get_item(0)?.extract()?;
+                (s, s, s)
+            }
+            3 => {
+                let w = args.get_item(0)?.extract()?;
+                let h = args.get_item(1)?.extract()?;
+                let d = args.get_item(2)?.extract()?;
+                (w, h, d)
+            }
+            n => {
+                return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                    "box() takes 1 or 3 arguments ({n} given)"
+                )));
+            }
+        };
+        graphics!(module).draw_box(w, h, d)
     }
 
     #[pyfunction]
@@ -1310,6 +1352,7 @@ mod mewnala {
             }
         }
     }
+
 
     #[pyfunction]
     #[pyo3(pass_module, signature = (*args))]
@@ -1387,27 +1430,99 @@ mod mewnala {
     }
 
     #[pyfunction]
-    #[pyo3(pass_module, signature = (x, y, w, h, tl=0.0, tr=0.0, br=0.0, bl=0.0))]
-    fn rect(
-        module: &Bound<'_, PyModule>,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-        tl: f32,
-        tr: f32,
-        br: f32,
-        bl: f32,
-    ) -> PyResult<()> {
+    #[pyo3(pass_module, signature = (*args))]
+    fn rect(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let (x, y, w, h, tl, tr, br, bl) = match args.len() {
+            4 => {
+                let x = args.get_item(0)?.extract()?;
+                let y = args.get_item(1)?.extract()?;
+                let w = args.get_item(2)?.extract()?;
+                let h = args.get_item(3)?.extract()?;
+                (x, y, w, h, 0.0, 0.0, 0.0, 0.0)
+            }
+            5 => {
+                let x = args.get_item(0)?.extract()?;
+                let y = args.get_item(1)?.extract()?;
+                let w = args.get_item(2)?.extract()?;
+                let h = args.get_item(3)?.extract()?;
+                let r = args.get_item(4)?.extract()?;
+                (x, y, w, h, r, r, r, r)
+            }
+            8 => {
+                let x = args.get_item(0)?.extract()?;
+                let y = args.get_item(1)?.extract()?;
+                let w = args.get_item(2)?.extract()?;
+                let h = args.get_item(3)?.extract()?;
+                let tl = args.get_item(4)?.extract()?;
+                let tr = args.get_item(5)?.extract()?;
+                let br = args.get_item(6)?.extract()?;
+                let bl = args.get_item(7)?.extract()?;
+                (x, y, w, h, tl, tr, br, bl)
+            }
+            n => {
+                return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                    "rect() takes 4, 5, or 8 arguments ({n} given)"
+                )));
+            }
+        };
         graphics!(module).rect(x, y, w, h, tl, tr, br, bl)
     }
 
+    /// Loads an image from a file and returns an Image object.
     #[pyfunction]
     #[pyo3(pass_module, signature = (image_file))]
-    fn image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<Image> {
+    fn load_image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<Image> {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        graphics.image(image_file)
+        graphics.load_image(image_file)
+    }
+
+    /// Draws an image to the screen.
+    ///
+    /// Optional `d_width`/`d_height` resize on screen; defaults to the image's
+    /// original dimensions. Optional `sx`/`sy`/`s_width`/`s_height` select a
+    /// sub-region of the source image in pixels.
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (source, dx, dy, d_width=None, d_height=None, sx=None, sy=None, s_width=None, s_height=None))]
+    #[allow(clippy::too_many_arguments)]
+    fn image(
+        module: &Bound<'_, PyModule>,
+        source: graphics::ImageRef,
+        dx: f32,
+        dy: f32,
+        d_width: Option<f32>,
+        d_height: Option<f32>,
+        sx: Option<f32>,
+        sy: Option<f32>,
+        s_width: Option<f32>,
+        s_height: Option<f32>,
+    ) -> PyResult<()> {
+        graphics!(module).image(source, dx, dy, d_width, d_height, sx, sy, s_width, s_height)
+    }
+
+    /// Sets a tint color applied when drawing images.
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (*args))]
+    fn tint(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        graphics!(module).tint(args)
+    }
+
+    /// Removes the current tint so images draw without color modification.
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn no_tint(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).no_tint()
+    }
+
+    /// Changes how image position arguments are interpreted.
+    ///
+    /// - `CORNER` (default) — `dx`, `dy` is the top-left corner.
+    /// - `CENTER` — `dx`, `dy` is the center.
+    /// - `CORNERS` — `dx`, `dy` and `d_width`, `d_height` are opposite corners.
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn image_mode(module: &Bound<'_, PyModule>, mode: u8) -> PyResult<()> {
+        graphics!(module).image_mode(mode)
     }
 
     #[pyfunction]
@@ -1483,7 +1598,8 @@ mod mewnala {
     ) -> PyResult<Light> {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        let light = graphics.light_spot(color, intensity, range, radius, inner_angle, outer_angle)?;
+        let light =
+            graphics.light_spot(color, intensity, range, radius, inner_angle, outer_angle)?;
         apply_light_transform(&light, position, look_at)?;
         Ok(light)
     }

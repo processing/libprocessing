@@ -59,11 +59,23 @@ pub fn create_pbr(
 pub fn set_property(
     In((entity, name, value)): In<(Entity, String, ShaderValue)>,
     material_handles: Query<&UntypedMaterial>,
+    images: Query<&crate::image::Image>,
     mut extended_materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, ProcessingMaterial>>>,
     mut particles_materials: ResMut<Assets<crate::particles::material::ParticlesMaterial>>,
     mut custom_materials: ResMut<Assets<custom::CustomMaterial>>,
     mut p_buffers: Query<&mut compute::Buffer>,
 ) -> error::Result<()> {
+    let texture_handle = match &value {
+        ShaderValue::Texture(img_entity) => Some(
+            images
+                .get(*img_entity)
+                .map_err(|_| ProcessingError::ImageNotFound)?
+                .handle
+                .clone(),
+        ),
+        _ => None,
+    };
+
     let untyped = material_handles
         .get(entity)
         .map_err(|_| ProcessingError::MaterialNotFound)?;
@@ -76,7 +88,7 @@ pub fn set_property(
         let mut extended = extended_materials
             .get_mut(&handle)
             .ok_or(ProcessingError::MaterialNotFound)?;
-        return pbr::set_property(&mut extended.base, &name, &value);
+        return pbr::set_property(&mut extended.base, &name, &value, texture_handle);
     }
 
     if let Ok(handle) = untyped
@@ -87,7 +99,7 @@ pub fn set_property(
         let mut extended = particles_materials
             .get_mut(&handle)
             .ok_or(ProcessingError::MaterialNotFound)?;
-        return pbr::set_property(&mut extended.base, &name, &value);
+        return pbr::set_property(&mut extended.base, &name, &value, texture_handle);
     }
 
     if let Ok(handle) = untyped.0.clone().try_typed::<custom::CustomMaterial>() {

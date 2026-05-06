@@ -5,6 +5,7 @@ use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
 use crate::color::PyColor;
 use crate::compute::Buffer;
+use crate::graphics::ImageRef;
 use crate::math::{PyVec2, PyVec3, PyVec4};
 use crate::shader::Shader;
 
@@ -14,6 +15,9 @@ pub struct Material {
 }
 
 pub(crate) fn py_to_shader_value(value: &Bound<'_, PyAny>) -> PyResult<shader_value::ShaderValue> {
+    if let Ok(img_ref) = value.extract::<ImageRef>() {
+        return Ok(shader_value::ShaderValue::Texture(img_ref.entity));
+    }
     if let Ok(v) = value.extract::<f32>() {
         return Ok(shader_value::ShaderValue::Float(v));
     }
