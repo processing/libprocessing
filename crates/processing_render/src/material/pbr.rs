@@ -1,17 +1,18 @@
 use bevy::prelude::*;
 
-use super::MaterialValue;
+use crate::shader_value::ShaderValue;
 use processing_core::error::{ProcessingError, Result};
 
 /// Set a property on a StandardMaterial by name.
 pub fn set_property(
     material: &mut StandardMaterial,
     name: &str,
-    value: &MaterialValue,
+    value: &ShaderValue,
+    texture_handle: Option<Handle<Image>>,
 ) -> Result<()> {
     match name {
         "base_color" | "color" => {
-            let MaterialValue::Float4(c) = value else {
+            let ShaderValue::Float4(c) = value else {
                 return Err(ProcessingError::InvalidArgument(format!(
                     "'{name}' expects Float4, got {value:?}"
                 )));
@@ -19,7 +20,7 @@ pub fn set_property(
             material.base_color = Color::srgba(c[0], c[1], c[2], c[3]);
         }
         "metallic" => {
-            let MaterialValue::Float(v) = value else {
+            let ShaderValue::Float(v) = value else {
                 return Err(ProcessingError::InvalidArgument(format!(
                     "'{name}' expects Float, got {value:?}"
                 )));
@@ -27,7 +28,7 @@ pub fn set_property(
             material.metallic = *v;
         }
         "roughness" | "perceptual_roughness" => {
-            let MaterialValue::Float(v) = value else {
+            let ShaderValue::Float(v) = value else {
                 return Err(ProcessingError::InvalidArgument(format!(
                     "'{name}' expects Float, got {value:?}"
                 )));
@@ -35,7 +36,7 @@ pub fn set_property(
             material.perceptual_roughness = *v;
         }
         "reflectance" => {
-            let MaterialValue::Float(v) = value else {
+            let ShaderValue::Float(v) = value else {
                 return Err(ProcessingError::InvalidArgument(format!(
                     "'{name}' expects Float, got {value:?}"
                 )));
@@ -43,7 +44,7 @@ pub fn set_property(
             material.reflectance = *v;
         }
         "emissive" => {
-            let MaterialValue::Float4(c) = value else {
+            let ShaderValue::Float4(c) = value else {
                 return Err(ProcessingError::InvalidArgument(format!(
                     "'{name}' expects Float4, got {value:?}"
                 )));
@@ -51,7 +52,7 @@ pub fn set_property(
             material.emissive = LinearRgba::new(c[0], c[1], c[2], c[3]);
         }
         "unlit" => {
-            let MaterialValue::Float(v) = value else {
+            let ShaderValue::Float(v) = value else {
                 return Err(ProcessingError::InvalidArgument(format!(
                     "'{name}' expects Float, got {value:?}"
                 )));
@@ -59,7 +60,7 @@ pub fn set_property(
             material.unlit = *v > 0.5;
         }
         "double_sided" => {
-            let MaterialValue::Float(v) = value else {
+            let ShaderValue::Float(v) = value else {
                 return Err(ProcessingError::InvalidArgument(format!(
                     "'{name}' expects Float, got {value:?}"
                 )));
@@ -67,7 +68,7 @@ pub fn set_property(
             material.double_sided = *v > 0.5;
         }
         "alpha_mode" => {
-            let MaterialValue::Int(v) = value else {
+            let ShaderValue::Int(v) = value else {
                 return Err(ProcessingError::InvalidArgument(format!(
                     "'{name}' expects Int, got {value:?}"
                 )));
@@ -87,8 +88,16 @@ pub fn set_property(
                 }
             };
         }
+        "base_color_texture" | "texture" => {
+            let Some(handle) = texture_handle else {
+                return Err(ProcessingError::InvalidArgument(format!(
+                    "'{name}' expects Texture, got {value:?}"
+                )));
+            };
+            material.base_color_texture = Some(handle);
+        }
         _ => {
-            return Err(ProcessingError::UnknownMaterialProperty(name.to_string()));
+            return Err(ProcessingError::UnknownShaderProperty(name.to_string()));
         }
     }
     Ok(())

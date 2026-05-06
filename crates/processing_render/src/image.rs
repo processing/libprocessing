@@ -9,6 +9,7 @@ use bevy::{
         io::{AssetSourceId, embedded::GetAssetServer},
     },
     ecs::system::RunSystemOnce,
+    image::{ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor},
     prelude::*,
     render::{
         RenderApp,
@@ -464,6 +465,50 @@ pub fn create_readback_buffer(
         usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
         mapped_at_creation: false,
     }))
+}
+
+pub fn set_sampler(
+    In((entity, filter, wrap_x, wrap_y)): In<(Entity, u8, u8, u8)>,
+    p_images: Query<&Image>,
+    mut images: ResMut<Assets<bevy::image::Image>>,
+) -> Result<()> {
+    let p_image = p_images
+        .get(entity)
+        .map_err(|_| ProcessingError::ImageNotFound)?;
+
+    let mut image = images
+        .get_mut(&p_image.handle)
+        .ok_or(ProcessingError::ImageNotFound)?;
+
+    let filter_mode = match filter {
+        0 => ImageFilterMode::Linear,
+        1 => ImageFilterMode::Nearest,
+        _ => {
+            return Err(ProcessingError::InvalidArgument(format!(
+                "unknown filter mode: {filter}"
+            )));
+        }
+    };
+
+    let addr_mode = |v: u8| match v {
+        0 => Ok(ImageAddressMode::ClampToEdge),
+        1 => Ok(ImageAddressMode::Repeat),
+        2 => Ok(ImageAddressMode::MirrorRepeat),
+        _ => Err(ProcessingError::InvalidArgument(format!(
+            "unknown wrap mode: {v}"
+        ))),
+    };
+
+    image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+        mag_filter: filter_mode,
+        min_filter: filter_mode,
+        mipmap_filter: filter_mode,
+        address_mode_u: addr_mode(wrap_x)?,
+        address_mode_v: addr_mode(wrap_y)?,
+        ..Default::default()
+    });
+
+    Ok(())
 }
 
 pub fn gpu_image(app: &mut App, entity: Entity) -> Result<&GpuImage> {

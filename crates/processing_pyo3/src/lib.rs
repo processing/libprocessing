@@ -9,8 +9,10 @@
 //! To allow Python users to create a similar experience, we provide module-level
 //! functions that forward to a singleton Graphics object pub(crate) behind the scenes.
 pub(crate) mod color;
+pub(crate) mod compute;
 #[cfg(feature = "cuda")]
 pub(crate) mod cuda;
+pub(crate) mod particles;
 mod glfw;
 mod gltf;
 mod graphics;
@@ -25,8 +27,10 @@ mod time;
 #[cfg(feature = "webcam")]
 mod webcam;
 
+use compute::{Buffer, Compute};
 use graphics::{
-    Geometry, Graphics, Image, Light, PyBlendMode, Topology, get_graphics, get_graphics_mut,
+    Geometry, Graphics, Image, Light, PyBlendMode, Sampler, Topology, get_graphics,
+    get_graphics_mut,
 };
 use material::Material;
 
@@ -326,6 +330,18 @@ mod mewnala {
     use super::*;
 
     #[pymodule_export]
+    use super::Buffer;
+    #[pymodule_export]
+    use super::color::PyColor;
+    #[pymodule_export]
+    use super::Compute;
+    #[pymodule_export]
+    use super::particles::Attribute;
+    #[pymodule_export]
+    use super::particles::AttributeFormat;
+    #[pymodule_export]
+    use super::particles::Particles;
+    #[pymodule_export]
     use super::Geometry;
     #[pymodule_export]
     use super::Gltf;
@@ -338,7 +354,17 @@ mod mewnala {
     #[pymodule_export]
     use super::Material;
     #[pymodule_export]
+    use super::math::PyQuat;
+    #[pymodule_export]
+    use super::math::PyVec2;
+    #[pymodule_export]
+    use super::math::PyVec3;
+    #[pymodule_export]
+    use super::math::PyVec4;
+    #[pymodule_export]
     use super::PyBlendMode;
+    #[pymodule_export]
+    use super::Sampler;
     #[pymodule_export]
     use super::Shader;
     #[pymodule_export]
@@ -624,6 +650,10 @@ mod mewnala {
         use super::*;
 
         #[pymodule_export]
+        use crate::math::PyAffine2;
+        #[pymodule_export]
+        use crate::math::PyMat2;
+        #[pymodule_export]
         use crate::math::PyQuat;
         #[pymodule_export]
         use crate::math::PyVec2;
@@ -659,77 +689,73 @@ mod mewnala {
         }
     }
 
-    #[pymodule]
-    mod color {
-        use super::*;
+    // Color constructors — promoted to top-level so `from mewnala import *`
+    // exposes `hsva(...)`, `srgb(...)`, etc. directly. Living in a `color`
+    // submodule conflicted with the Processing-style `color()` function.
 
-        #[pymodule_export]
-        use crate::color::PyColor;
+    #[pyfunction]
+    fn color_hex(s: &str) -> PyResult<PyColor> {
+        PyColor::hex(s)
+    }
 
-        #[pyfunction]
-        fn hex(s: &str) -> PyResult<PyColor> {
-            PyColor::hex(s)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (r, g, b, a=1.0))]
+    fn srgb(r: f32, g: f32, b: f32, a: f32) -> PyColor {
+        PyColor::srgb(r, g, b, a)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (r, g, b, a=1.0))]
-        fn srgb(r: f32, g: f32, b: f32, a: f32) -> PyColor {
-            PyColor::srgb(r, g, b, a)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (r, g, b, a=1.0))]
+    fn linear_rgb(r: f32, g: f32, b: f32, a: f32) -> PyColor {
+        PyColor::linear(r, g, b, a)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (r, g, b, a=1.0))]
-        fn linear(r: f32, g: f32, b: f32, a: f32) -> PyColor {
-            PyColor::linear(r, g, b, a)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (h, s, l, a=1.0))]
+    fn hsla(h: f32, s: f32, l: f32, a: f32) -> PyColor {
+        PyColor::hsla(h, s, l, a)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (h, s, l, a=1.0))]
-        fn hsla(h: f32, s: f32, l: f32, a: f32) -> PyColor {
-            PyColor::hsla(h, s, l, a)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (h, s, v, a=1.0))]
+    fn hsva(h: f32, s: f32, v: f32, a: f32) -> PyColor {
+        PyColor::hsva(h, s, v, a)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (h, s, v, a=1.0))]
-        fn hsva(h: f32, s: f32, v: f32, a: f32) -> PyColor {
-            PyColor::hsva(h, s, v, a)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (h, w, b, a=1.0))]
+    fn hwba(h: f32, w: f32, b: f32, a: f32) -> PyColor {
+        PyColor::hwba(h, w, b, a)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (h, w, b, a=1.0))]
-        fn hwba(h: f32, w: f32, b: f32, a: f32) -> PyColor {
-            PyColor::hwba(h, w, b, a)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (l, a_axis, b_axis, alpha=1.0))]
+    fn oklab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> PyColor {
+        PyColor::oklab(l, a_axis, b_axis, alpha)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (l, a_axis, b_axis, alpha=1.0))]
-        fn oklab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> PyColor {
-            PyColor::oklab(l, a_axis, b_axis, alpha)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (l, c, h, a=1.0))]
+    fn oklch(l: f32, c: f32, h: f32, a: f32) -> PyColor {
+        PyColor::oklch(l, c, h, a)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (l, c, h, a=1.0))]
-        fn oklch(l: f32, c: f32, h: f32, a: f32) -> PyColor {
-            PyColor::oklch(l, c, h, a)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (l, a_axis, b_axis, alpha=1.0))]
+    fn lab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> PyColor {
+        PyColor::lab(l, a_axis, b_axis, alpha)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (l, a_axis, b_axis, alpha=1.0))]
-        fn lab(l: f32, a_axis: f32, b_axis: f32, alpha: f32) -> PyColor {
-            PyColor::lab(l, a_axis, b_axis, alpha)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (l, c, h, a=1.0))]
+    fn lch(l: f32, c: f32, h: f32, a: f32) -> PyColor {
+        PyColor::lch(l, c, h, a)
+    }
 
-        #[pyfunction]
-        #[pyo3(signature = (l, c, h, a=1.0))]
-        fn lch(l: f32, c: f32, h: f32, a: f32) -> PyColor {
-            PyColor::lch(l, c, h, a)
-        }
-
-        #[pyfunction]
-        #[pyo3(signature = (x, y, z, a=1.0))]
-        fn xyz(x: f32, y: f32, z: f32, a: f32) -> PyColor {
-            PyColor::xyz(x, y, z, a)
-        }
+    #[pyfunction]
+    #[pyo3(signature = (x, y, z, a=1.0))]
+    fn xyz(x: f32, y: f32, z: f32, a: f32) -> PyColor {
+        PyColor::xyz(x, y, z, a)
     }
 
     #[cfg(feature = "webcam")]
@@ -1004,7 +1030,7 @@ mod mewnala {
             return Ok(());
         }
 
-        Python::attach(|py| {
+        let result: PyResult<()> = Python::attach(|py| {
             let builtins = PyModule::import(py, "builtins")?;
             let locals = builtins.getattr("locals")?.call0()?;
 
@@ -1125,7 +1151,13 @@ mod mewnala {
             }
 
             Ok(())
-        })
+        });
+
+        // tear the app down here while the TLS is still alive; the eager
+        // TLS destructor aborts inside a Bevy resource drop
+        let _ = ::processing::exit(0);
+
+        result
     }
 
     #[pyfunction]
@@ -1236,16 +1268,74 @@ mod mewnala {
         graphics!(module).rotate(angle)
     }
 
-    #[pyfunction(name = "box")]
+    #[pyfunction]
     #[pyo3(pass_module)]
-    fn draw_box(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<()> {
-        graphics!(module).draw_box(x, y, z)
+    fn rotate_x(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
+        graphics!(module).rotate_x(angle)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn rotate_y(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
+        graphics!(module).rotate_y(angle)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn rotate_z(module: &Bound<'_, PyModule>, angle: f32) -> PyResult<()> {
+        graphics!(module).rotate_z(angle)
+    }
+
+    #[pyfunction(name = "box")]
+    #[pyo3(pass_module, signature = (*args))]
+    fn draw_box(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let (w, h, d) = match args.len() {
+            1 => {
+                let s: f32 = args.get_item(0)?.extract()?;
+                (s, s, s)
+            }
+            3 => {
+                let w = args.get_item(0)?.extract()?;
+                let h = args.get_item(1)?.extract()?;
+                let d = args.get_item(2)?.extract()?;
+                (w, h, d)
+            }
+            n => {
+                return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                    "box() takes 1 or 3 arguments ({n} given)"
+                )));
+            }
+        };
+        graphics!(module).draw_box(w, h, d)
     }
 
     #[pyfunction]
     #[pyo3(pass_module, signature = (geometry))]
     fn draw_geometry(module: &Bound<'_, PyModule>, geometry: &Bound<'_, Geometry>) -> PyResult<()> {
         graphics!(module).draw_geometry(&*geometry.extract::<PyRef<Geometry>>()?)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (particles, geometry))]
+    fn particles(
+        module: &Bound<'_, PyModule>,
+        particles: &Bound<'_, super::particles::Particles>,
+        geometry: &Bound<'_, Geometry>,
+    ) -> PyResult<()> {
+        graphics!(module).particles(
+            &*particles.extract::<PyRef<super::particles::Particles>>()?,
+            &*geometry.extract::<PyRef<Geometry>>()?,
+        )
+    }
+
+    #[pyfunction]
+    fn kernel_noise() -> PyResult<Compute> {
+        super::particles::kernel_noise()
+    }
+
+    #[pyfunction]
+    fn kernel_transform() -> PyResult<Compute> {
+        super::particles::kernel_transform()
     }
 
     #[pyfunction(name = "color")]
@@ -1262,6 +1352,7 @@ mod mewnala {
             }
         }
     }
+
 
     #[pyfunction]
     #[pyo3(pass_module, signature = (*args))]
@@ -1339,27 +1430,99 @@ mod mewnala {
     }
 
     #[pyfunction]
-    #[pyo3(pass_module, signature = (x, y, w, h, tl=0.0, tr=0.0, br=0.0, bl=0.0))]
-    fn rect(
-        module: &Bound<'_, PyModule>,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-        tl: f32,
-        tr: f32,
-        br: f32,
-        bl: f32,
-    ) -> PyResult<()> {
+    #[pyo3(pass_module, signature = (*args))]
+    fn rect(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let (x, y, w, h, tl, tr, br, bl) = match args.len() {
+            4 => {
+                let x = args.get_item(0)?.extract()?;
+                let y = args.get_item(1)?.extract()?;
+                let w = args.get_item(2)?.extract()?;
+                let h = args.get_item(3)?.extract()?;
+                (x, y, w, h, 0.0, 0.0, 0.0, 0.0)
+            }
+            5 => {
+                let x = args.get_item(0)?.extract()?;
+                let y = args.get_item(1)?.extract()?;
+                let w = args.get_item(2)?.extract()?;
+                let h = args.get_item(3)?.extract()?;
+                let r = args.get_item(4)?.extract()?;
+                (x, y, w, h, r, r, r, r)
+            }
+            8 => {
+                let x = args.get_item(0)?.extract()?;
+                let y = args.get_item(1)?.extract()?;
+                let w = args.get_item(2)?.extract()?;
+                let h = args.get_item(3)?.extract()?;
+                let tl = args.get_item(4)?.extract()?;
+                let tr = args.get_item(5)?.extract()?;
+                let br = args.get_item(6)?.extract()?;
+                let bl = args.get_item(7)?.extract()?;
+                (x, y, w, h, tl, tr, br, bl)
+            }
+            n => {
+                return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                    "rect() takes 4, 5, or 8 arguments ({n} given)"
+                )));
+            }
+        };
         graphics!(module).rect(x, y, w, h, tl, tr, br, bl)
     }
 
+    /// Loads an image from a file and returns an Image object.
     #[pyfunction]
     #[pyo3(pass_module, signature = (image_file))]
-    fn image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<Image> {
+    fn load_image(module: &Bound<'_, PyModule>, image_file: &str) -> PyResult<Image> {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        graphics.image(image_file)
+        graphics.load_image(image_file)
+    }
+
+    /// Draws an image to the screen.
+    ///
+    /// Optional `d_width`/`d_height` resize on screen; defaults to the image's
+    /// original dimensions. Optional `sx`/`sy`/`s_width`/`s_height` select a
+    /// sub-region of the source image in pixels.
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (source, dx, dy, d_width=None, d_height=None, sx=None, sy=None, s_width=None, s_height=None))]
+    #[allow(clippy::too_many_arguments)]
+    fn image(
+        module: &Bound<'_, PyModule>,
+        source: graphics::ImageRef,
+        dx: f32,
+        dy: f32,
+        d_width: Option<f32>,
+        d_height: Option<f32>,
+        sx: Option<f32>,
+        sy: Option<f32>,
+        s_width: Option<f32>,
+        s_height: Option<f32>,
+    ) -> PyResult<()> {
+        graphics!(module).image(source, dx, dy, d_width, d_height, sx, sy, s_width, s_height)
+    }
+
+    /// Sets a tint color applied when drawing images.
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (*args))]
+    fn tint(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        graphics!(module).tint(args)
+    }
+
+    /// Removes the current tint so images draw without color modification.
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn no_tint(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).no_tint()
+    }
+
+    /// Changes how image position arguments are interpreted.
+    ///
+    /// - `CORNER` (default) — `dx`, `dy` is the top-left corner.
+    /// - `CENTER` — `dx`, `dy` is the center.
+    /// - `CORNERS` — `dx`, `dy` and `d_width`, `d_height` are opposite corners.
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn image_mode(module: &Bound<'_, PyModule>, mode: u8) -> PyResult<()> {
+        graphics!(module).image_mode(mode)
     }
 
     #[pyfunction]
@@ -1370,35 +1533,59 @@ mod mewnala {
         graphics.create_image(width, height)
     }
 
-    #[pyfunction]
-    #[pyo3(pass_module)]
-    fn create_directional_light(
-        module: &Bound<'_, PyModule>,
-        color: super::color::ColorLike,
-        illuminance: f32,
-    ) -> PyResult<Light> {
-        let graphics =
-            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        graphics.light_directional(color, illuminance)
+    fn apply_light_transform(
+        light: &Light,
+        position: Option<super::math::Vec3Like>,
+        look_at: Option<super::math::Vec3Like>,
+    ) -> PyResult<()> {
+        if let Some(p) = position {
+            ::processing::prelude::transform_set_position(light.entity, p.into_vec3())
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        }
+        if let Some(la) = look_at {
+            ::processing::prelude::transform_look_at(light.entity, la.into_vec3())
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        }
+        Ok(())
     }
 
     #[pyfunction]
-    #[pyo3(pass_module)]
-    fn create_point_light(
+    #[pyo3(pass_module, signature = (color, illuminance, *, position=None, look_at=None))]
+    fn directional_light(
+        module: &Bound<'_, PyModule>,
+        color: super::color::ColorLike,
+        illuminance: f32,
+        position: Option<super::math::Vec3Like>,
+        look_at: Option<super::math::Vec3Like>,
+    ) -> PyResult<Light> {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        let light = graphics.light_directional(color, illuminance)?;
+        apply_light_transform(&light, position, look_at)?;
+        Ok(light)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (color, intensity, range, radius, *, position=None, look_at=None))]
+    fn point_light(
         module: &Bound<'_, PyModule>,
         color: super::color::ColorLike,
         intensity: f32,
         range: f32,
         radius: f32,
+        position: Option<super::math::Vec3Like>,
+        look_at: Option<super::math::Vec3Like>,
     ) -> PyResult<Light> {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        graphics.light_point(color, intensity, range, radius)
+        let light = graphics.light_point(color, intensity, range, radius)?;
+        apply_light_transform(&light, position, look_at)?;
+        Ok(light)
     }
 
     #[pyfunction]
-    #[pyo3(pass_module)]
-    fn create_spot_light(
+    #[pyo3(pass_module, signature = (color, intensity, range, radius, inner_angle, outer_angle, *, position=None, look_at=None))]
+    fn spot_light(
         module: &Bound<'_, PyModule>,
         color: super::color::ColorLike,
         intensity: f32,
@@ -1406,10 +1593,15 @@ mod mewnala {
         radius: f32,
         inner_angle: f32,
         outer_angle: f32,
+        position: Option<super::math::Vec3Like>,
+        look_at: Option<super::math::Vec3Like>,
     ) -> PyResult<Light> {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        graphics.light_spot(color, intensity, range, radius, inner_angle, outer_angle)
+        let light =
+            graphics.light_spot(color, intensity, range, radius, inner_angle, outer_angle)?;
+        apply_light_transform(&light, position, look_at)?;
+        Ok(light)
     }
 
     #[pyfunction(name = "sphere")]

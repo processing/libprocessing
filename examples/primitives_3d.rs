@@ -24,7 +24,7 @@ fn sketch() -> error::Result<()> {
         light_create_directional(graphics, bevy::color::Color::srgb(0.9, 0.85, 0.8), 300.0)?;
 
     let pbr = material_create_pbr()?;
-    material_set(pbr, "roughness", material::MaterialValue::Float(0.35))?;
+    material_set(pbr, "roughness", shader_value::ShaderValue::Float(0.35))?;
 
     let mut t: f32 = 0.0;
 

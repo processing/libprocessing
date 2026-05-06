@@ -16,7 +16,7 @@ use bevy::{
     render::render_resource::PrimitiveTopology,
 };
 
-use crate::render::primitive::{box_mesh, sphere_mesh};
+use crate::render::primitive::{box_mesh, grid_mesh, sphere_mesh};
 use processing_core::error::{ProcessingError, Result};
 
 pub struct GeometryPlugin;
@@ -185,6 +185,25 @@ pub fn create_sphere(
         .spawn(VertexLayout::with_attributes(vec![
             builtins.position,
             builtins.normal,
+            builtins.color,
+            builtins.uv,
+        ]))
+        .id();
+
+    commands.spawn(Geometry::new(handle, layout_entity)).id()
+}
+
+pub fn create_grid(
+    In((nx, ny, nz, spacing)): In<(u32, u32, u32, f32)>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    builtins: Res<BuiltinAttributes>,
+) -> Entity {
+    let handle = meshes.add(grid_mesh(nx, ny, nz, spacing));
+
+    let layout_entity = commands
+        .spawn(VertexLayout::with_attributes(vec![
+            builtins.position,
             builtins.color,
             builtins.uv,
         ]))

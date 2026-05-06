@@ -8,7 +8,7 @@ def setup():
     mode_3d()
     orbit_camera()                                                                                                                       
 
-    dir_light = create_directional_light((1.0, 0.98, 0.95), 1500.0)                                                                        
+    dir_light = directional_light((1.0, 0.98, 0.95), 1500.0)                                                                        
     dir_light.position(300.0, 400.0, 300.0)
     dir_light.look_at(0.0, 0.0, 0.0)                                                                                                     
                 

@@ -297,6 +297,9 @@ pub enum DrawCommand {
     BackgroundColor(Color),
     BackgroundImage(Entity),
     Fill(Color),
+    /// Per-instance albedo for `Particles`: a `compute::Buffer` of `Float4`
+    /// colors indexed by tag. Mutually exclusive with `Fill(Color)`.
+    FillBuffer(Entity),
     NoFill,
     StrokeColor(Color),
     NoStroke,
@@ -307,6 +310,20 @@ pub enum DrawCommand {
     Metallic(f32),
     Emissive(Color),
     Unlit,
+    Tint(Color),
+    NoTint,
+    ImageMode(ShapeMode),
+    Image {
+        entity: Entity,
+        dx: f32,
+        dy: f32,
+        d_width: Option<f32>,
+        d_height: Option<f32>,
+        sx: Option<f32>,
+        sy: Option<f32>,
+        s_width: Option<f32>,
+        s_height: Option<f32>,
+    },
     RectMode(ShapeMode),
     EllipseMode(ShapeMode),
     Rect {
@@ -416,6 +433,15 @@ pub enum DrawCommand {
     Rotate {
         angle: f32,
     },
+    RotateX {
+        angle: f32,
+    },
+    RotateY {
+        angle: f32,
+    },
+    RotateZ {
+        angle: f32,
+    },
     Scale(Vec2),
     ShearX {
         angle: f32,
@@ -424,6 +450,10 @@ pub enum DrawCommand {
         angle: f32,
     },
     Geometry(Entity),
+    Particles {
+        particles: Entity,
+        geometry: Entity,
+    },
     BlendMode(Option<BlendState>),
     Material(Entity),
     Box {

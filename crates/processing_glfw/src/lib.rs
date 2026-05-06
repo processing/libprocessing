@@ -335,6 +335,7 @@ impl GlfwContext {
         if desired.maximize {
             self.window.maximize();
         }
+        #[cfg(not(all(target_os = "linux", feature = "wayland")))]
         if desired.focus {
             self.window.focus();
         }
@@ -405,6 +406,7 @@ impl GlfwContext {
             last.decorations = desired.decorations;
         }
         if desired.window_level != last.window_level {
+            #[cfg(not(all(target_os = "linux", feature = "wayland")))]
             self.window
                 .set_floating(matches!(desired.window_level, BevyWindowLevel::AlwaysOnTop));
             last.window_level = desired.window_level;
@@ -412,6 +414,7 @@ impl GlfwContext {
         if let Some(opacity) = desired.opacity
             && (opacity - last.opacity).abs() > f32::EPSILON
         {
+            #[cfg(not(all(target_os = "linux", feature = "wayland")))]
             self.window.set_opacity(opacity);
             last.opacity = opacity;
         }
@@ -498,6 +501,7 @@ struct DesiredWindow {
     iconify: bool,
     restore: bool,
     maximize: bool,
+    #[cfg(not(all(target_os = "linux", feature = "wayland")))]
     focus: bool,
 }
 
@@ -537,6 +541,7 @@ fn read_desired_window(surface: Entity) -> Option<DesiredWindow> {
             iconify: controls.pending_iconify,
             restore: controls.pending_restore,
             maximize: controls.pending_maximize,
+            #[cfg(not(all(target_os = "linux", feature = "wayland")))]
             focus: controls.pending_focus,
         }))
     })
