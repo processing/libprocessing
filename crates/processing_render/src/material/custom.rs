@@ -181,9 +181,7 @@ pub fn load_shader(In(path): In<String>, world: &mut World) -> Result<Entity> {
     };
     use bevy::ecs::system::RunSystemOnce;
 
-    // URL-scheme paths (e.g. `embedded://crate/file.wgsl`) parse as-is — they
-    // already specify their asset source. Otherwise treat as a relative path
-    // and fall through to the configured asset directory if any.
+    // url-scheme paths parse as-is; others go through the configured asset dir
     let asset_path: AssetPath = if path.contains("://") {
         AssetPath::parse(&path).into_owned()
     } else {

@@ -55,8 +55,7 @@ pub(crate) fn py_to_shader_value(value: &Bound<'_, PyAny>) -> PyResult<shader_va
     )))
 }
 
-/// Dispatch `albedo=` by Python type to the matching Rust setter. May swap
-/// the backing asset; all other StandardMaterial state survives.
+// dispatch `albedo=` by python type; may swap the backing asset
 fn apply_albedo(entity: Entity, value: &Bound<'_, PyAny>) -> PyResult<()> {
     if let Ok(buf) = value.extract::<PyRef<Buffer>>() {
         return material_set_albedo_buffer(entity, buf.entity)
@@ -96,8 +95,7 @@ fn apply_kwargs(entity: Entity, kwargs: &Bound<'_, PyDict>) -> PyResult<()> {
 
 #[pymethods]
 impl Material {
-    /// No args: default PBR. With `shader`: custom material. Kwargs are
-    /// applied via `set` after construction.
+    /// No args: default PBR. With `shader`: custom material. Kwargs are applied via `set`.
     #[new]
     #[pyo3(signature = (shader=None, **kwargs))]
     pub fn new(shader: Option<&Shader>, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
@@ -114,8 +112,7 @@ impl Material {
         Ok(Self { entity })
     }
 
-    /// PBR-lit material. `albedo` accepts a `Color` or a `Buffer` (the latter
-    /// being per-particle, used with `Particles`).
+    /// PBR-lit material. `albedo` accepts a `Color` or a per-particle `Buffer`.
     #[staticmethod]
     #[pyo3(signature = (**kwargs))]
     pub fn pbr(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
@@ -139,8 +136,7 @@ impl Material {
         Ok(Self { entity })
     }
 
-    /// Patch material properties. `albedo` may swap the backing asset between
-    /// color and buffer variants; other StandardMaterial fields are preserved.
+    /// Set material properties. `albedo` may swap the backing asset; other fields are preserved.
     #[pyo3(signature = (**kwargs))]
     pub fn set(&self, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<()> {
         let Some(kwargs) = kwargs else {

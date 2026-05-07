@@ -194,7 +194,7 @@ fn sketch() -> error::Result<()> {
         )?;
         graphics_end_draw(graphics)?;
 
-        // Animate spawn point in a small circle so the fountain meanders.
+        // orbit the spawn point in a small circle
         let t = start.elapsed().as_secs_f32();
         let sx = t.cos() * 0.4;
         let sz = t.sin() * 0.4;

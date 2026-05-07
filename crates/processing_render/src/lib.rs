@@ -1533,10 +1533,8 @@ pub fn material_set_albedo_color(entity: Entity, color: [f32; 4]) -> error::Resu
 }
 
 /// Set the albedo source to a per-particle color buffer (`Float4` per slot,
-/// indexed by `mesh.tag`). If the material is currently plain PBR, swaps the
-/// asset to a `ParticlesMaterial` while preserving every other
-/// `StandardMaterial` field. `base_color` modulates the buffer color, so
-/// leaving it WHITE renders the buffer color verbatim.
+/// indexed by `mesh.tag`). Preserves all other `StandardMaterial` fields;
+/// `base_color` modulates the buffer color.
 pub fn material_set_albedo_buffer(
     entity: Entity,
     color_buffer_entity: Entity,
@@ -1562,7 +1560,6 @@ pub fn material_set_albedo_buffer(
             .0
             .clone();
 
-        // Already field-buffer-backed: just swap the buffer handle in place.
         if let Ok(handle) = untyped.clone().try_typed::<ParticlesMaterial>() {
             let mut mats = app.world_mut().resource_mut::<Assets<ParticlesMaterial>>();
             let mat = mats
@@ -2092,11 +2089,9 @@ pub fn particles_buffer(entity: Entity, attribute_entity: Entity) -> error::Resu
     })
 }
 
-/// GPU-driven emission. Dispatches `compute_entity` over `count` invocations
-/// to initialize the next `count` ring-buffer slots. Auto-binds attribute
-/// buffers (same convention as [`particles_apply`]) and a `vec4<f32>` uniform
-/// `emit_range = (base_slot, count, capacity, 0)` from which the kernel
-/// derives its target slot. CPU-side counterpart: [`particles_emit`].
+/// GPU-driven emission into the next `count` ring-buffer slots. Auto-binds
+/// attribute buffers (same convention as [`particles_apply`]) and an
+/// `emit_range: vec4<f32> = (base_slot, count, capacity, 0)` uniform.
 pub fn particles_emit_gpu(
     particles_entity: Entity,
     count: u32,
@@ -2241,9 +2236,7 @@ pub fn particles_kernel_noise() -> error::Result<Entity> {
 
 /// Built-in transform kernel: scale → axis-angle rotate → translate on
 /// `position`. Uniforms: `translate: vec3`, `rotation_axis: vec3`,
-/// `rotation_angle: f32`, `scale: vec3`. Identity defaults are seeded so
-/// any unset parameter behaves as a no-op (without them, default-zero
-/// `scale` would collapse the field to the origin on the first dispatch).
+/// `rotation_angle: f32`, `scale: vec3`. Identity defaults are seeded.
 pub fn particles_kernel_transform() -> error::Result<Entity> {
     let shader = shader_load(particles::kernels::TRANSFORM_PATH)?;
     let entity = compute_create(shader)?;

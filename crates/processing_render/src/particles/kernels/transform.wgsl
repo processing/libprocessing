@@ -1,5 +1,3 @@
-// Affine on each particle position: scale → axis-angle rotate → translate.
-
 struct Params {
     translate: vec3<f32>,
     rotation_angle: f32,

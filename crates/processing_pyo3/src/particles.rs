@@ -97,8 +97,7 @@ impl Attribute {
 #[pyclass(unsendable)]
 pub struct Particles {
     pub(crate) entity: Entity,
-    /// Name → (entity, format) so `emit(**kwargs)` can route kwargs to the
-    /// right attribute and pack them into bytes.
+    // name → (entity, format), used by `emit(**kwargs)` to route kwargs and pack bytes
     name_to_attr: HashMap<String, (Entity, AttributeFormat)>,
 }
 
@@ -116,8 +115,7 @@ impl Particles {
 
 #[pymethods]
 impl Particles {
-    /// Pass `capacity` for empty buffers, or `geometry` to seed positions
-    /// (and matching attributes) from a source mesh. Exactly one is required.
+    /// Pass `capacity` for empty buffers, or `geometry` to seed from a source mesh.
     #[new]
     #[pyo3(signature = (capacity=None, attributes=None, geometry=None))]
     pub fn new(
@@ -161,8 +159,6 @@ impl Particles {
     }
 
     /// Backing `Buffer` for a registered attribute, or `None` if not registered.
-    /// The element type matches the attribute's format so `read()` returns
-    /// typed values.
     pub fn buffer(&self, attribute: &Attribute) -> PyResult<Option<Buffer>> {
         let buf = particles_buffer(self.entity, attribute.entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
@@ -177,13 +173,8 @@ impl Particles {
         Ok(buf.map(|e| Buffer::from_entity(e, Some(element_type))))
     }
 
-    /// Dispatch a compute kernel against these particles' buffers. Buffers
-    /// are auto-bound by attribute name; kwargs are forwarded to
-    /// `compute.set(...)`. For example:
-    ///
-    /// ```python
-    /// p.apply(noise, scale=0.25, strength=0.02, time=t)
-    /// ```
+    /// Dispatch a compute kernel against these particles' buffers. Buffers are
+    /// auto-bound by attribute name; kwargs are forwarded to `compute.set(...)`.
     #[pyo3(signature = (compute, **kwargs))]
     pub fn apply(
         &self,
@@ -198,12 +189,8 @@ impl Particles {
     }
 
     /// Emit `n` particles into the next ring-buffer slots. Per-attribute data
-    /// is passed as kwargs keyed by attribute name; each value is a flat list
-    /// of `n * format.float_count()` floats.
-    ///
-    /// ```python
-    /// p.emit(50, position=[x0,y0,z0, x1,y1,z1, ...], color=[r0,g0,b0,a0, ...])
-    /// ```
+    /// is a kwarg keyed by attribute name; each value is a flat list of
+    /// `n * format.float_count()` floats.
     #[pyo3(signature = (n, **kwargs))]
     pub fn emit(&self, n: u32, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<()> {
         let Some(kwargs) = kwargs else {
@@ -235,9 +222,8 @@ impl Particles {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    /// Emit `n` particles via a GPU kernel. Buffer bindings and a
-    /// `emit_range: vec4<f32> = (base_slot, n, capacity, 0)` uniform are
-    /// auto-bound; set any other uniforms via `compute.set(...)` first.
+    /// Emit `n` particles via a GPU kernel. Auto-binds buffers and an
+    /// `emit_range: vec4<f32> = (base_slot, n, capacity, 0)` uniform.
     pub fn emit_gpu(&self, n: u32, compute: &Compute) -> PyResult<()> {
         particles_emit_gpu(self.entity, n, compute.entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
@@ -257,8 +243,7 @@ pub fn kernel_noise() -> PyResult<Compute> {
 }
 
 /// Built-in transform kernel: scale → axis-angle rotate → translate. Uniforms:
-/// `translate: vec3`, `rotation_axis: vec3`, `rotation_angle: f32`,
-/// `scale: vec3`. Identity defaults are seeded so unset uniforms are no-ops.
+/// `translate: vec3`, `rotation_axis: vec3`, `rotation_angle: f32`, `scale: vec3`.
 pub fn kernel_transform() -> PyResult<Compute> {
     let entity = particles_kernel_transform().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
     Ok(Compute::from_entity(entity))

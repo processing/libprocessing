@@ -140,8 +140,7 @@ impl Buffer {
     }
 
     pub fn write(&mut self, values: &Bound<'_, PyAny>) -> PyResult<()> {
-        // Bytes path skips per-element conversion — the only viable route for
-        // multi-million-element uploads.
+        // bytes path skips per-element conversion for large uploads
         if let Ok(b) = values.cast::<PyBytes>() {
             return buffer_write(self.entity, b.as_bytes().to_vec())
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")));

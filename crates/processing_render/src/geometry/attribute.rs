@@ -225,13 +225,11 @@ pub struct BuiltinAttributes {
     pub normal: Entity,
     pub color: Entity,
     pub uv: Entity,
-    /// Per-instance rotation as a quaternion `(x, y, z, w)`. Field-only.
+    /// Per-instance rotation as a quaternion `(x, y, z, w)`.
     pub rotation: Entity,
-    /// Per-instance scale `(x, y, z)`. Field-only.
+    /// Per-instance scale `(x, y, z)`.
     pub scale: Entity,
-    /// Per-particle lifecycle flag: `0.0` = alive, non-zero = dead (skipped in
-    /// preprocessing). Field-only. The pack pass writes this into
-    /// `MeshCullingData::dead`.
+    /// Per-particle lifecycle flag: `0.0` = alive, non-zero = dead.
     pub dead: Entity,
 }
 

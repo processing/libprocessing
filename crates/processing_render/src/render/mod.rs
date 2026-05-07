@@ -1296,8 +1296,7 @@ fn material_key_with_color(
     }
 }
 
-/// Allocate a fresh `ParticlesMaterial` reading albedo from `buf_entity`.
-/// Not cached: bind-group + uniform upload is cheap enough at one per frame.
+/// New `ParticlesMaterial` per call; not cached because per-frame alloc is cheap.
 fn particles_fill_material(
     res: &mut RenderResources,
     buf_entity: Entity,

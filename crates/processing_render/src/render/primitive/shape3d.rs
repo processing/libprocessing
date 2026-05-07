@@ -91,10 +91,7 @@ pub fn tetrahedron_mesh(radius: f32) -> Mesh {
     mesh
 }
 
-/// 3D lattice of `nx * ny * nz` points centered at the origin, with `spacing`
-/// units between adjacent points along each axis. Topology is `PointList`;
-/// the mesh is meant primarily as a position source for `field_create_from_geometry`,
-/// not for rasterization. UVs are normalized lattice coordinates `(x/(nx-1), y/(ny-1))`.
+/// 3D lattice of `nx * ny * nz` points, centered at the origin with `spacing` between them.
 pub fn grid_mesh(nx: u32, ny: u32, nz: u32, spacing: f32) -> Mesh {
     let count = (nx as usize) * (ny as usize) * (nz as usize);
     let mut positions = Vec::with_capacity(count);

@@ -1,5 +1,3 @@
-// Per-particle position displacement by sampled 3D value noise.
-
 struct Params {
     scale: f32,
     strength: f32,

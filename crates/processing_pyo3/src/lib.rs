@@ -689,9 +689,7 @@ mod mewnala {
         }
     }
 
-    // Color constructors — promoted to top-level so `from mewnala import *`
-    // exposes `hsva(...)`, `srgb(...)`, etc. directly. Living in a `color`
-    // submodule conflicted with the Processing-style `color()` function.
+    // color constructors live at module level: a `color` submodule conflicted with `color()`
 
     #[pyfunction]
     fn color_hex(s: &str) -> PyResult<PyColor> {

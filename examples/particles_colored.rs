@@ -22,7 +22,6 @@ fn sketch() -> error::Result<()> {
 
     let sphere = geometry_sphere(0.25, 12, 8)?;
 
-    // 10x10x10 grid with per-particle position + color (RGB gradient by index).
     let capacity: u32 = 1000;
     let mut positions: Vec<f32> = Vec::with_capacity(capacity as usize * 3);
     let mut colors: Vec<f32> = Vec::with_capacity(capacity as usize * 4);

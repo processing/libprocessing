@@ -277,10 +277,7 @@ pub fn set_compute_property(
         .get_mut(entity)
         .map_err(|_| ProcessingError::ComputeNotFound)?;
 
-    // Resource values (buffers / textures) bind directly to top-level parameters
-    // and need a category check. Scalar / vector / matrix values may target
-    // either a top-level uniform or a nested struct field (e.g. `params.dt`),
-    // so we let `apply_reflect_field` handle the path resolution itself.
+    // resources need a category check; scalars/vectors fall through to apply_reflect_field
     match value {
         ShaderValue::Buffer(buf_entity) => {
             let category = compute

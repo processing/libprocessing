@@ -1,7 +1,3 @@
-// Packs Particles position/rotation/scale/dead buffers into the per-instance
-// MeshInputUniform / MeshCullingData slots reserved by `GpuBatchedMesh3d`.
-// HAS_ROTATION / HAS_SCALE / HAS_DEAD shader_defs gate the optional bindings.
-
 struct MeshInput {
     world_from_local: mat3x4<f32>,
     lightmap_uv_rect: vec2<u32>,
@@ -45,8 +41,6 @@ struct PackParams {
 #endif
 @group(0) @binding(6) var<uniform> params: PackParams;
 
-// Convert a unit quaternion (x, y, z, w) into a 3x3 rotation matrix expressed
-// as three column vectors.
 fn quat_to_basis(q: vec4<f32>) -> mat3x3<f32> {
     let x = q.x; let y = q.y; let z = q.z; let w = q.w;
     let xx = x * x; let yy = y * y; let zz = z * z;
@@ -99,8 +93,6 @@ fn pack(@builtin(global_invocation_id) gid: vec3<u32>) {
     let s = vec3<f32>(1.0, 1.0, 1.0);
 #endif
 
-    // mat3x4: 3 columns of vec4. Each column is one basis (x, y, z) row of the
-    // affine, with the column's `w` storing the translation component.
     let c0 = basis[0] * s.x;
     let c1 = basis[1] * s.y;
     let c2 = basis[2] * s.z;

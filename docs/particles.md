@@ -12,3 +12,12 @@ commands. In this way, you can think of a `Particles` object as a compute shader
 attributes as the inputs and outputs of the compute shader. In practice, a compute shader may also require additional
 data, such as textures or bound vertex buffers, but the `Particles` object provides a high level abstraction for 
 sequencing compute shaders and managing their inputs and outputs.
+
+## Rasterization
+
+Of course, it's not very interesting just to have a collection of attribute buffers on the GPU. The real power of 
+`Particles` comes from the ability to rasterize them. This is done using the `particles` function, which takes a 
+`Particles` object and a `Geometry` object as input, and issues a draw call that rasterizes the particles using the
+current drawing state. In other words, it instances the provided geometry over the particles, using the attributes as 
+to determine each instance's position, orientation, and other properties. This provides a powerful bridge between
+`Particles` and the rest of the drawing API.

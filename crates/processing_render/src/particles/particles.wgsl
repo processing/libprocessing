@@ -1,6 +1,3 @@
-// Modulates StandardMaterial base_color by particle_colors[tag] then runs
-// the standard PBR fragment. tag = per-instance slot index from pack.wgsl.
-
 #import bevy_pbr::{
     pbr_fragment::pbr_input_from_standard_material,
     pbr_functions::alpha_discard,

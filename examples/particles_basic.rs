@@ -25,7 +25,6 @@ fn sketch() -> error::Result<()> {
 
     let sphere = geometry_sphere(0.25, 12, 8)?;
 
-    // 10x10x10 grid of positions in a 9-unit cube centered at the origin.
     let capacity: u32 = 1000;
     let mut floats: Vec<f32> = Vec::with_capacity(capacity as usize * 3);
     for x in 0..10 {

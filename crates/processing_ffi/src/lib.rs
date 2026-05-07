@@ -1902,8 +1902,7 @@ pub unsafe extern "C" fn processing_buffer_write(buf_id: u64, data: *const u8, l
     error::check(|| buffer_write(Entity::from_bits(buf_id), bytes));
 }
 
-/// Returns the byte length of a buffer, or 0 if the buffer does not exist
-/// (in which case the error is set).
+/// Returns the byte length of a buffer, or 0 if not found.
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_buffer_size(buf_id: u64) -> u64 {
     error::clear_error();
@@ -1966,7 +1965,7 @@ pub unsafe extern "C" fn processing_compute_set_float(
 }
 
 /// # Safety
-/// `name` must be a valid null-terminated C string.
+/// - `name` must be non-null
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_compute_set_buffer(
     compute_id: u64,
