@@ -14,6 +14,8 @@ crate-type = ["cdylib", "staticlib"]
 default = []
 wayland = ["processing/wayland"]
 x11 = ["processing/x11"]
+webcam = ["processing/webcam"]
+cuda = ["processing/cuda"]
 
 [dependencies]
 processing = { workspace = true }

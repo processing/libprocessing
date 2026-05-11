@@ -150,6 +150,77 @@ jobs:
           name: wheels-sdist
           path: crates/processing_pyo3/dist
 
+  ffi-linux:
+    name: FFI Linux (x86_64)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: ./.github/actions/setup
+      - name: Build FFI shared library
+        run: cargo build --release -p processing_ffi --features wayland,x11,webcam
+      - name: Stage release files
+        run: |
+          mkdir -p staging/lib staging/include
+          cp target/release/libprocessing.so staging/lib/
+          cp target/release/libprocessing.a staging/lib/
+          cp crates/processing_ffi/include/processing.h staging/include/
+          cp LICENSE.md staging/
+          tar -czvf libprocessing-${{ github.ref_name }}-linux-x86_64.tar.gz -C staging .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libprocessing-linux-x86_64
+          path: libprocessing-${{ github.ref_name }}-linux-x86_64.tar.gz
+
+  ffi-macos:
+    name: FFI macOS (aarch64)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build FFI shared library
+        run: cargo build --release -p processing_ffi --features webcam
+      - name: Stage release files
+        run: |
+          mkdir -p staging/lib staging/include
+          cp target/release/libprocessing.dylib staging/lib/
+          cp target/release/libprocessing.a staging/lib/
+          cp crates/processing_ffi/include/processing.h staging/include/
+          cp LICENSE.md staging/
+          tar -czvf libprocessing-${{ github.ref_name }}-macos-aarch64.tar.gz -C staging .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libprocessing-macos-aarch64
+          path: libprocessing-${{ github.ref_name }}-macos-aarch64.tar.gz
+
+  ffi-windows:
+    name: FFI Windows (x64)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build FFI shared library
+        run: cargo build --release -p processing_ffi --features webcam
+      - name: Stage release files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path staging/lib, staging/include | Out-Null
+          Copy-Item target/release/processing.dll staging/lib/
+          Copy-Item target/release/processing.dll.lib staging/lib/
+          Copy-Item target/release/processing.lib staging/lib/
+          Copy-Item crates/processing_ffi/include/processing.h staging/include/
+          Copy-Item LICENSE.md staging/
+          Compress-Archive -Path staging/* -DestinationPath libprocessing-${{ github.ref_name }}-windows-x64.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libprocessing-windows-x64
+          path: libprocessing-${{ github.ref_name }}-windows-x64.zip
+
   publish:
     name: Publish to PyPI
     runs-on: ubuntu-latest
@@ -166,3 +237,26 @@ jobs:
           path: dist
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [ffi-linux, ffi-macos, ffi-windows, linux, macos, windows, sdist]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: libprocessing-*
+          merge-multiple: true
+          path: release-assets
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: release-assets
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          generate_release_notes: true
