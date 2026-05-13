@@ -160,6 +160,54 @@ pub fn surface_create_x11(
     })
 }
 
+/// Create a WebGPU surface on Linux, auto-detecting Wayland vs. X11 from the
+/// environment.
+#[cfg(target_os = "linux")]
+pub fn surface_create_linux(
+    window_handle: u64,
+    display_handle: u64,
+    width: u32,
+    height: u32,
+    scale_factor: f32,
+) -> error::Result<Entity> {
+    // prefer wayland, since x11 may also be available under xwayland
+    let nonempty = |name| std::env::var_os(name).is_some_and(|v| !v.is_empty());
+    let is_wayland = nonempty("WAYLAND_DISPLAY") || nonempty("WAYLAND_SOCKET");
+
+    #[cfg(all(feature = "wayland", feature = "x11"))]
+    {
+        if is_wayland {
+            surface_create_wayland(window_handle, display_handle, width, height, scale_factor)
+        } else {
+            surface_create_x11(window_handle, display_handle, width, height, scale_factor)
+        }
+    }
+    #[cfg(all(feature = "wayland", not(feature = "x11")))]
+    {
+        let _ = is_wayland;
+        surface_create_wayland(window_handle, display_handle, width, height, scale_factor)
+    }
+    #[cfg(all(not(feature = "wayland"), feature = "x11"))]
+    {
+        let _ = is_wayland;
+        surface_create_x11(window_handle, display_handle, width, height, scale_factor)
+    }
+    #[cfg(not(any(feature = "wayland", feature = "x11")))]
+    {
+        let _ = (
+            window_handle,
+            display_handle,
+            width,
+            height,
+            scale_factor,
+            is_wayland,
+        );
+        Err(processing_core::error::ProcessingError::InvalidArgument(
+            "libprocessing was built without `wayland` or `x11` features".into(),
+        ))
+    }
+}
+
 /// Create a WebGPU surface from a web canvas element pointer.
 #[cfg(target_arch = "wasm32")]
 pub fn surface_create_web(
