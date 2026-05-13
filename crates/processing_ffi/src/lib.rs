@@ -132,9 +132,11 @@ pub extern "C" fn processing_surface_create(
     scale_factor: f32,
 ) -> u64 {
     error::clear_error();
-    error::check(|| surface_create_linux(window_handle, display_handle, width, height, scale_factor))
-        .map(|e| e.to_bits())
-        .unwrap_or(0)
+    error::check(|| {
+        surface_create_linux(window_handle, display_handle, width, height, scale_factor)
+    })
+    .map(|e| e.to_bits())
+    .unwrap_or(0)
 }
 
 /// Create a graphics context for a surface.
