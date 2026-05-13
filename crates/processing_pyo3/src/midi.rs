@@ -16,3 +16,9 @@ pub fn list_ports() -> PyResult<Vec<String>> {
 pub fn play_notes(note: u8, duration: u64) -> PyResult<()> {
     midi_play_notes(note, duration).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }
+pub fn note_on(note: u8, velocity: u8) -> PyResult<()> {
+    midi_note_on(note, velocity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+}
+pub fn note_off(note: u8) -> PyResult<()> {
+    midi_note_off(note).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+}

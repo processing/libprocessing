@@ -1947,6 +1947,14 @@ mod mewnala {
     fn midi_play_notes(note: u8, duration: u64) -> PyResult<()> {
         midi::play_notes(note, duration)
     }
+    #[pyfunction]
+    fn midi_note_on(note: u8, velocity: u8) -> PyResult<()> {
+        midi::note_on(note, velocity)
+    }
+    #[pyfunction]
+    fn midi_note_off(note: u8) -> PyResult<()> {
+        midi::note_off(note)
+    }
 
     #[pyfunction]
     fn key_is_down(key_code: u32) -> PyResult<bool> {

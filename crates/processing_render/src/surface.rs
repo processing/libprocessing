@@ -303,7 +303,7 @@ pub fn create_surface_x11(
             HandleError::Unavailable,
         ));
     }
-    let display_ptr = NonNull::new(display_handle as *mut c_void).unwrap();
+    let display_ptr = NonNull::new(display_handle as *mut std::ffi::c_void).unwrap();
     let display = XlibDisplayHandle::new(Some(display_ptr), 0); // screen 0
 
     spawn_surface(
@@ -331,7 +331,7 @@ pub fn create_surface_web(
     if window_handle == 0 {
         return Err(error::ProcessingError::InvalidWindowHandle);
     }
-    let canvas_ptr = NonNull::new(window_handle as *mut c_void).unwrap();
+    let canvas_ptr = NonNull::new(window_handle as *mut std::ffi::c_void).unwrap();
     let window = WebCanvasWindowHandle::new(canvas_ptr.cast());
     let display = WebDisplayHandle::new();
 

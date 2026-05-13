@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 bevy = { workspace = true }
 processing_core = { workspace = true }
-bevy_midi = { git = "https://github.com/BlackPhlox/bevy_midi", branch = "latest" }
+nannou_midi = { git = "https://github.com/nannou-org/nannou", branch = "bevy-refactor" }
 
 [lints]
 workspace = true
