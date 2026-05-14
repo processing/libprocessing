@@ -143,13 +143,21 @@ impl TextContext {
 
     /// Query font metadata for a given family name.
     pub fn font_metadata(&self, family: &str) -> Option<FontMetadata> {
+        use parley::FontStyle;
+
         let mut inner = self.inner.lock().unwrap();
         let family_info = inner.font_cx.collection.family_by_name(family)?;
         let font_info = family_info.default_font()?;
 
+        let style = match font_info.style() {
+            FontStyle::Normal => "normal".to_string(),
+            FontStyle::Italic => "italic".to_string(),
+            FontStyle::Oblique(_) => "oblique".to_string(),
+        };
+
         Some(FontMetadata {
             family: family_info.name().to_string(),
-            style: format!("{:?}", font_info.style()),
+            style,
             weight: font_info.weight().value(),
             width: font_info.width().ratio(),
             is_variable: !font_info.axes().is_empty(),

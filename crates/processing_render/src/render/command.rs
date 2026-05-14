@@ -62,30 +62,6 @@ impl From<u8> for TextWrapMode {
     }
 }
 
-/// Text direction for BiDi layout.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-#[repr(u8)]
-pub enum TextDirection {
-    /// Auto-detect from Unicode character properties.
-    #[default]
-    Auto = 0,
-    /// Left-to-right.
-    Ltr = 1,
-    /// Right-to-left.
-    Rtl = 2,
-}
-
-impl From<u8> for TextDirection {
-    fn from(v: u8) -> Self {
-        match v {
-            0 => Self::Auto,
-            1 => Self::Ltr,
-            2 => Self::Rtl,
-            _ => Self::default(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TextStyle {
@@ -629,7 +605,6 @@ pub enum DrawCommand {
     },
     TextLeading(f32),
     TextWrap(TextWrapMode),
-    TextDirection(TextDirection),
     TextGlyphColors(Vec<Color>),
     Text {
         content: String,

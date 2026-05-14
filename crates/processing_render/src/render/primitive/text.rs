@@ -25,6 +25,7 @@ use skrifa::{
 };
 
 use crate::render::{
+    RenderState,
     command::{TextAlignH, TextAlignV, TextStyle, TextWrapMode},
     mesh_builder::MeshBuilder,
 };
@@ -55,6 +56,70 @@ pub struct TextParams<'a> {
     pub text_variations: &'a [([u8; 4], f32)],
     pub text_features: &'a [([u8; 4], u16)],
     pub glyph_colors: Option<&'a [Color]>,
+}
+
+/// Owned counterpart of [`TextParams`], decoupled from `RenderState`'s borrow.
+///
+/// `TextParams` borrows its string/slice fields, which makes it awkward to
+/// build directly from a `RenderState`. Snapshot into this struct, then call
+/// [`OwnedTextParams::as_params`] at each use site.
+pub struct OwnedTextParams {
+    pub text_size: f32,
+    pub align_h: TextAlignH,
+    pub align_v: TextAlignV,
+    pub leading: Option<f32>,
+    pub max_w: Option<f32>,
+    pub max_h: Option<f32>,
+    pub wrap: TextWrapMode,
+    pub font_family: Option<String>,
+    pub text_style: TextStyle,
+    pub text_weight: Option<f32>,
+    pub text_variations: Vec<([u8; 4], f32)>,
+    pub text_features: Vec<([u8; 4], u16)>,
+    pub glyph_colors: Option<Vec<Color>>,
+}
+
+impl OwnedTextParams {
+    /// Snapshot the text state from a `RenderState` with explicit layout bounds.
+    ///
+    /// `glyph_colors` is left empty: it applies only to an actual `text()` draw
+    /// and is set explicitly by the draw path, not by measurement queries.
+    pub fn from_render_state(state: &RenderState, max_w: Option<f32>, max_h: Option<f32>) -> Self {
+        Self {
+            text_size: state.text_size,
+            align_h: state.text_align_h,
+            align_v: state.text_align_v,
+            leading: state.text_leading,
+            max_w,
+            max_h,
+            wrap: state.text_wrap,
+            font_family: state.text_font_family.clone(),
+            text_style: state.text_style,
+            text_weight: state.text_weight,
+            text_variations: state.text_variations.clone(),
+            text_features: state.text_features.clone(),
+            glyph_colors: None,
+        }
+    }
+
+    /// Borrow as a [`TextParams`] for a layout/rendering call.
+    pub fn as_params(&self) -> TextParams<'_> {
+        TextParams {
+            text_size: self.text_size,
+            align_h: self.align_h,
+            align_v: self.align_v,
+            leading: self.leading,
+            max_w: self.max_w,
+            max_h: self.max_h,
+            wrap: self.wrap,
+            font_family: self.font_family.as_deref(),
+            text_style: self.text_style,
+            text_weight: self.text_weight,
+            text_variations: &self.text_variations,
+            text_features: &self.text_features,
+            glyph_colors: self.glyph_colors.as_deref(),
+        }
+    }
 }
 
 /// Tessellate text into a mesh (fill).
@@ -134,28 +199,16 @@ pub fn text_bounds(content: &str, x: f32, y: f32, params: &TextParams, text_cx: 
     text_cx.with(|font_cx, layout_cx| {
         let layout = build_layout(font_cx, layout_cx, content, Color::BLACK, params);
 
+        // `compute_text_origin` returns the absolute position of the layout's
+        // top-left corner, so the box top-left is exactly the text origin.
+        let (box_x, box_y) = compute_text_origin(&layout, x, y, params.align_v);
         let width = layout.width();
-        let total_height = layout.height();
-        let ascent = layout
-            .get(0)
-            .map(|line| line.metrics().ascent)
-            .unwrap_or(0.0);
-
-        // Clamp height if max_h is set
         let height = match params.max_h {
-            Some(h) => total_height.min(h),
-            None => total_height,
+            Some(h) => layout.height().min(h),
+            None => layout.height(),
         };
 
-        // Compute vertical offset based on alignment (same logic as text())
-        let by = match params.align_v {
-            TextAlignV::Baseline => y - ascent,
-            TextAlignV::Top => y,
-            TextAlignV::Center => y - total_height / 2.0,
-            TextAlignV::Bottom => y - total_height,
-        };
-
-        [x, by, width, height]
+        [box_x, box_y, width, height]
     })
 }
 
@@ -292,8 +345,13 @@ pub fn text_to_paths(
     })
 }
 
+/// Default `sample_factor` for [`text_to_points`].
+pub const DEFAULT_SAMPLE_FACTOR: f32 = 0.1;
+
 /// Sample points along text outlines.
-/// `sample_factor` controls point density (default 0.1 — lower = more points).
+///
+/// `sample_factor` controls point density: higher values place more points
+/// along each segment. See [`DEFAULT_SAMPLE_FACTOR`].
 pub fn text_to_points(
     content: &str,
     x: f32,
@@ -594,18 +652,26 @@ impl<'a> FillGeometryBuilder for Extrusion3DBuilder<'a> {
     }
 }
 
+/// Resolve the absolute position of the layout's top-left corner.
+///
+/// parley's positioned glyphs are expressed relative to the layout's top-left,
+/// so callers add this origin to `glyph.y` to place glyphs. The vertical
+/// reference point of the user-supplied `y` depends on `align_v`:
+///   - `Baseline`: `y` is the first line's baseline (Processing's default).
+///   - `Top` / `Center` / `Bottom`: `y` is the top / center / bottom of the
+///     whole text block.
 fn compute_text_origin(layout: &Layout<Color>, x: f32, y: f32, align_v: TextAlignV) -> (f32, f32) {
     let total_height = layout.height();
-    let ascent = layout
+    let first_baseline = layout
         .get(0)
-        .map(|line| line.metrics().ascent)
+        .map(|line| line.metrics().baseline)
         .unwrap_or(0.0);
 
     let y_offset = match align_v {
-        TextAlignV::Baseline => y,
-        TextAlignV::Top => y + ascent,
-        TextAlignV::Center => y + ascent - total_height / 2.0,
-        TextAlignV::Bottom => y + ascent - total_height,
+        TextAlignV::Baseline => y - first_baseline,
+        TextAlignV::Top => y,
+        TextAlignV::Center => y - total_height / 2.0,
+        TextAlignV::Bottom => y - total_height,
     };
 
     (x, y_offset)
