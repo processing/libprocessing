@@ -253,10 +253,7 @@ impl Font {
     }
 }
 
-/// Convert glyph outline data into per-glyph (or per-contour) lists of Python
-/// tuples. Each command is a variable-length tuple tagged by a single letter:
-/// `("M", x, y)`, `("L", x, y)`, `("Q", cx, cy, x, y)`,
-/// `("C", cx1, cy1, cx2, cy2, x, y)`, or `("Z",)`.
+/// Convert glyph outline groups into per-group lists of Python command tuples.
 fn path_commands_to_py(
     py: Python<'_>,
     groups: Vec<Vec<processing_render::render::primitive::text::PathCommand>>,
@@ -1202,13 +1199,13 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    /// Get the number of lines after text layout.
+    /// Number of lines `content` wraps to.
     pub fn text_line_count(&self, content: &str) -> PyResult<usize> {
         graphics_text_line_count(self.entity, content)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    /// Get per-line info: list of dicts with "text" and "rect" (x, y, w, h).
+    /// Per-line info as a list of `(text, (x, y, w, h))` tuples.
     #[pyo3(signature = (content, x, y, max_w=None, max_h=None))]
     pub fn text_lines(
         &self,
@@ -1228,7 +1225,7 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    /// Get per-glyph bounding rects: list of (x, y, w, h).
+    /// Per-glyph bounding rects as a list of `(x, y, w, h)` tuples.
     #[pyo3(signature = (content, x, y, max_w=None, max_h=None))]
     pub fn text_glyph_rects(
         &self,

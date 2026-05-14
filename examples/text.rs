@@ -29,16 +29,10 @@ fn sketch() -> error::Result<()> {
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;
 
-        // White background
         graphics_record_command(graphics, DrawCommand::BackgroundColor(Color::WHITE))?;
-
-        // Set fill to black for text
         graphics_record_command(graphics, DrawCommand::Fill(Color::BLACK))?;
-
-        // Set text size
         graphics_record_command(graphics, DrawCommand::TextSize(32.0))?;
 
-        // Draw text
         graphics_record_command(
             graphics,
             DrawCommand::Text {
@@ -51,7 +45,6 @@ fn sketch() -> error::Result<()> {
             },
         )?;
 
-        // Smaller text
         graphics_record_command(graphics, DrawCommand::TextSize(18.0))?;
 
         graphics_record_command(
@@ -66,7 +59,6 @@ fn sketch() -> error::Result<()> {
             },
         )?;
 
-        // Text with bounding box (word wrap)
         graphics_record_command(graphics, DrawCommand::TextSize(16.0))?;
 
         graphics_record_command(
@@ -81,7 +73,6 @@ fn sketch() -> error::Result<()> {
             },
         )?;
 
-        // Center-aligned text
         graphics_record_command(
             graphics,
             DrawCommand::TextAlign {

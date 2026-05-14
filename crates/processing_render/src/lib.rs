@@ -2561,10 +2561,7 @@ pub fn graphics_text_glyph_colors(
     graphics_record_command(graphics_entity, DrawCommand::TextGlyphColors(colors))
 }
 
-/// Snapshot a graphics entity's text state plus the shared `TextContext`.
-///
-/// Every text measurement/extraction query needs the same two things, so this
-/// keeps each query down to its one interesting line.
+/// Snapshot a graphics entity's text state and the shared `TextContext`.
 fn text_query_state(
     app: &App,
     graphics_entity: Entity,
