@@ -13,8 +13,7 @@ use bevy::{
     render::render_resource::BlendState,
 };
 use command::{
-    CommandBuffer, DrawCommand, ShapeMode, TextAlignH, TextAlignV, TextDirection, TextStyle,
-    TextWrapMode,
+    CommandBuffer, DrawCommand, ShapeMode, TextAlignH, TextAlignV, TextStyle, TextWrapMode,
 };
 use material::{MaterialKey, ProcessingExtendedMaterial};
 use primitive::{
@@ -106,7 +105,6 @@ pub struct RenderState {
     pub text_align_v: TextAlignV,
     pub text_leading: Option<f32>,
     pub text_wrap: TextWrapMode,
-    pub text_direction: TextDirection,
     pub text_glyph_colors: Option<Vec<Color>>,
 }
 
@@ -141,7 +139,6 @@ impl RenderState {
             text_align_v: TextAlignV::Baseline,
             text_leading: None,
             text_wrap: TextWrapMode::Word,
-            text_direction: TextDirection::Auto,
             text_glyph_colors: None,
         }
     }
@@ -175,7 +172,6 @@ impl RenderState {
         self.text_align_v = TextAlignV::Baseline;
         self.text_leading = None;
         self.text_wrap = TextWrapMode::Word;
-        self.text_direction = TextDirection::Auto;
         self.text_glyph_colors = None;
     }
 
@@ -1243,9 +1239,6 @@ pub fn flush_draw_commands(
                 DrawCommand::TextWrap(mode) => {
                     state.text_wrap = mode;
                 }
-                DrawCommand::TextDirection(dir) => {
-                    state.text_direction = dir;
-                }
                 DrawCommand::TextGlyphColors(colors) => {
                     state.text_glyph_colors = Some(colors);
                 }
@@ -1265,25 +1258,10 @@ pub fn flush_draw_commands(
                         (x, y, max_w, max_h)
                     };
 
-                    let font_family = state.text_font_family.clone();
-                    let text_variations = state.text_variations.clone();
-                    let text_features = state.text_features.clone();
-                    let glyph_colors = state.text_glyph_colors.take();
-                    let params = primitive::text::TextParams {
-                        text_size: state.text_size,
-                        align_h: state.text_align_h,
-                        align_v: state.text_align_v,
-                        leading: state.text_leading,
-                        max_w,
-                        max_h,
-                        wrap: state.text_wrap,
-                        font_family: None,
-                        text_style: state.text_style,
-                        text_weight: state.text_weight,
-                        text_variations: &[],
-                        text_features: &[],
-                        glyph_colors: None,
-                    };
+                    let mut text_params =
+                        primitive::text::OwnedTextParams::from_render_state(&state, max_w, max_h);
+                    // Per-glyph colors apply to this one text() call only.
+                    text_params.glyph_colors = state.text_glyph_colors.take();
                     let text_cx = text_cx.clone();
 
                     if z != 0.0 {
@@ -1295,44 +1273,28 @@ pub fn flush_draw_commands(
                         &mut batch,
                         &state,
                         |mesh, color| {
-                            let params = primitive::text::TextParams {
-                                font_family: font_family.as_deref(),
-                                text_variations: &text_variations,
-                                text_features: &text_features,
-                                glyph_colors: glyph_colors.as_deref(),
-                                ..params
-                            };
                             primitive::text::text(
-                                mesh, &content, x, y, color, &params, &text_cx,
+                                mesh, &content, x, y, color, &text_params.as_params(), &text_cx,
                             );
                         },
                         &p_material_handles,
                     );
 
-                    {
-                        let text_cx = text_cx.clone();
-                        let font_family = font_family.clone();
-                        let text_variations = text_variations.clone();
-                        let text_features = text_features.clone();
-                        add_stroke(
-                            &mut res,
-                            &mut batch,
-                            &state,
-                            |mesh, color, weight| {
-                                let params = primitive::text::TextParams {
-                                    font_family: font_family.as_deref(),
-                                    text_variations: &text_variations,
-                                    text_features: &text_features,
-                                    glyph_colors: None,
-                                    ..params
-                                };
-                                primitive::text::text_stroke(
-                                    mesh, &content, x, y, color, weight, &params, &text_cx,
-                                );
-                            },
-                            &p_material_handles,
-                        );
-                    }
+                    add_stroke(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        |mesh, color, weight| {
+                            // The stroke outlines every glyph in the stroke color;
+                            // per-glyph fill colors don't apply.
+                            let mut params = text_params.as_params();
+                            params.glyph_colors = None;
+                            primitive::text::text_stroke(
+                                mesh, &content, x, y, color, weight, &params, &text_cx,
+                            );
+                        },
+                        &p_material_handles,
+                    );
 
                     if z != 0.0 {
                         state.transform.translate_3d(0.0, 0.0, -z);

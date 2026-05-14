@@ -1400,14 +1400,6 @@ pub extern "C" fn processing_text_leading(graphics_id: u64, leading: f32) {
     error::check(|| graphics_record_command(graphics_entity, DrawCommand::TextLeading(leading)));
 }
 
-/// Set the text direction. 0=AUTO, 1=LTR, 2=RTL
-#[unsafe(no_mangle)]
-pub extern "C" fn processing_text_direction(graphics_id: u64, dir: u8) {
-    error::clear_error();
-    let graphics_entity = Entity::from_bits(graphics_id);
-    error::check(|| graphics_text_direction(graphics_entity, dir));
-}
-
 /// Set the text wrap mode. 0=WORD, 1=CHAR
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_text_wrap(graphics_id: u64, mode: u8) {

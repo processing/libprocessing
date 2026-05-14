@@ -230,7 +230,9 @@ pub struct Font {
 
 #[pymethods]
 impl Font {
-    /// Query variable font axes. Returns list of dicts: {tag, min, max, default}.
+    /// Query variable font axes.
+    ///
+    /// Returns a list of `(tag, min, max, default)` tuples.
     pub fn variations(&self) -> PyResult<Vec<(String, f32, f32, f32)>> {
         font_variations(self.entity)
             .map(|axes| {
@@ -241,12 +243,44 @@ impl Font {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    /// Query font metadata. Returns dict with family, style, weight, width, is_variable.
+    /// Query font metadata.
+    ///
+    /// Returns a `(family, style, weight, width, is_variable)` tuple.
     pub fn metadata(&self) -> PyResult<(String, String, f32, f32, bool)> {
         font_metadata(self.entity)
             .map(|m| (m.family, m.style, m.weight, m.width, m.is_variable))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
+}
+
+/// Convert glyph outline data into per-glyph (or per-contour) lists of Python
+/// tuples. Each command is a variable-length tuple tagged by a single letter:
+/// `("M", x, y)`, `("L", x, y)`, `("Q", cx, cy, x, y)`,
+/// `("C", cx1, cy1, cx2, cy2, x, y)`, or `("Z",)`.
+fn path_commands_to_py(
+    py: Python<'_>,
+    groups: Vec<Vec<processing_render::render::primitive::text::PathCommand>>,
+) -> Vec<Vec<Py<PyAny>>> {
+    use processing_render::render::primitive::text::PathCommand;
+
+    let to_py = |cmd: PathCommand| -> Py<PyAny> {
+        match cmd {
+            PathCommand::MoveTo(x, y) => ("M", x, y).into_pyobject(py).unwrap().into_any().unbind(),
+            PathCommand::LineTo(x, y) => ("L", x, y).into_pyobject(py).unwrap().into_any().unbind(),
+            PathCommand::QuadTo { cx, cy, x, y } => {
+                ("Q", cx, cy, x, y).into_pyobject(py).unwrap().into_any().unbind()
+            }
+            PathCommand::CubicTo { cx1, cy1, cx2, cy2, x, y } => {
+                ("C", cx1, cy1, cx2, cy2, x, y).into_pyobject(py).unwrap().into_any().unbind()
+            }
+            PathCommand::Close => ("Z",).into_pyobject(py).unwrap().into_any().unbind(),
+        }
+    };
+
+    groups
+        .into_iter()
+        .map(|group| group.into_iter().map(to_py).collect())
+        .collect()
 }
 
 #[pyclass]
@@ -1081,60 +1115,23 @@ impl Graphics {
         x: f32,
         y: f32,
     ) -> PyResult<Vec<Vec<Py<PyAny>>>> {
-        use processing_render::render::primitive::text::PathCommand;
-
         let paths = graphics_text_to_paths(self.entity, content, x, y)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-
-        Python::attach(|py| {
-            Ok(paths
-                .into_iter()
-                .map(|glyph| {
-                    glyph
-                        .into_iter()
-                        .map(|cmd| match cmd {
-                            PathCommand::MoveTo(x, y) => ("M", x, y, 0.0, 0.0, 0.0, 0.0).into_pyobject(py).unwrap().into_any().unbind(),
-                            PathCommand::LineTo(x, y) => ("L", x, y, 0.0, 0.0, 0.0, 0.0).into_pyobject(py).unwrap().into_any().unbind(),
-                            PathCommand::QuadTo { cx, cy, x, y } => ("Q", cx, cy, x, y, 0.0, 0.0).into_pyobject(py).unwrap().into_any().unbind(),
-                            PathCommand::CubicTo { cx1, cy1, cx2, cy2, x, y } => ("C", cx1, cy1, cx2, cy2, x, y).into_pyobject(py).unwrap().into_any().unbind(),
-                            PathCommand::Close => ("Z", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0).into_pyobject(py).unwrap().into_any().unbind(),
-                        })
-                        .collect()
-                })
-                .collect())
-        })
+        Python::attach(|py| Ok(path_commands_to_py(py, paths)))
     }
 
     /// Extract glyph outlines as per-contour path commands.
     /// Each contour (MoveTo...Close sequence) is a separate list.
+    /// Commands use the same tuple shapes as `text_to_paths`.
     pub fn text_to_contours(
         &self,
         content: &str,
         x: f32,
         y: f32,
     ) -> PyResult<Vec<Vec<Py<PyAny>>>> {
-        use processing_render::render::primitive::text::PathCommand;
-
         let contours = graphics_text_to_contours(self.entity, content, x, y)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-
-        Python::attach(|py| {
-            Ok(contours
-                .into_iter()
-                .map(|contour| {
-                    contour
-                        .into_iter()
-                        .map(|cmd| match cmd {
-                            PathCommand::MoveTo(x, y) => ("M", x, y, 0.0, 0.0, 0.0, 0.0).into_pyobject(py).unwrap().into_any().unbind(),
-                            PathCommand::LineTo(x, y) => ("L", x, y, 0.0, 0.0, 0.0, 0.0).into_pyobject(py).unwrap().into_any().unbind(),
-                            PathCommand::QuadTo { cx, cy, x, y } => ("Q", cx, cy, x, y, 0.0, 0.0).into_pyobject(py).unwrap().into_any().unbind(),
-                            PathCommand::CubicTo { cx1, cy1, cx2, cy2, x, y } => ("C", cx1, cy1, cx2, cy2, x, y).into_pyobject(py).unwrap().into_any().unbind(),
-                            PathCommand::Close => ("Z", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0).into_pyobject(py).unwrap().into_any().unbind(),
-                        })
-                        .collect()
-                })
-                .collect())
-        })
+        Python::attach(|py| Ok(path_commands_to_py(py, contours)))
     }
 
     /// Sample points along text outlines.
@@ -1167,12 +1164,11 @@ impl Graphics {
     }
 
     /// Set per-glyph colors for the next text() call.
-    /// colors: list of (r, g, b) or (r, g, b, a) tuples with values 0-255.
-    pub fn text_glyph_colors(&self, colors: Vec<(f32, f32, f32, f32)>) -> PyResult<()> {
-        let colors: Vec<bevy::color::Color> = colors
-            .into_iter()
-            .map(|(r, g, b, a)| bevy::color::Color::srgba(r, g, b, a))
-            .collect();
+    ///
+    /// `colors` is a list of color objects (as built by `color(...)`); they are
+    /// cycled across the glyphs of the next `text()` call.
+    pub fn text_glyph_colors(&self, colors: Vec<PyRef<crate::color::PyColor>>) -> PyResult<()> {
+        let colors: Vec<bevy::color::Color> = colors.iter().map(|c| c.0).collect();
         graphics_text_glyph_colors(self.entity, colors)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
@@ -1197,12 +1193,6 @@ impl Graphics {
 
     pub fn text_leading(&self, leading: f32) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::TextLeading(leading))
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
-    }
-
-    /// Set text direction. 0=AUTO, 1=LTR, 2=RTL
-    pub fn text_direction(&self, dir: u8) -> PyResult<()> {
-        graphics_text_direction(self.entity, dir)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
