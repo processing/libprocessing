@@ -264,12 +264,23 @@ fn path_commands_to_py(
         match cmd {
             PathCommand::MoveTo(x, y) => ("M", x, y).into_pyobject(py).unwrap().into_any().unbind(),
             PathCommand::LineTo(x, y) => ("L", x, y).into_pyobject(py).unwrap().into_any().unbind(),
-            PathCommand::QuadTo { cx, cy, x, y } => {
-                ("Q", cx, cy, x, y).into_pyobject(py).unwrap().into_any().unbind()
-            }
-            PathCommand::CubicTo { cx1, cy1, cx2, cy2, x, y } => {
-                ("C", cx1, cy1, cx2, cy2, x, y).into_pyobject(py).unwrap().into_any().unbind()
-            }
+            PathCommand::QuadTo { cx, cy, x, y } => ("Q", cx, cy, x, y)
+                .into_pyobject(py)
+                .unwrap()
+                .into_any()
+                .unbind(),
+            PathCommand::CubicTo {
+                cx1,
+                cy1,
+                cx2,
+                cy2,
+                x,
+                y,
+            } => ("C", cx1, cy1, cx2, cy2, x, y)
+                .into_pyobject(py)
+                .unwrap()
+                .into_any()
+                .unbind(),
             PathCommand::Close => ("Z",).into_pyobject(py).unwrap().into_any().unbind(),
         }
     };
@@ -1018,7 +1029,11 @@ impl Graphics {
                 let h: f32 = args.get_item(2)?.extract()?;
                 (z, Some(w), Some(h))
             }
-            _ => return Err(PyRuntimeError::new_err("text() takes 3-6 positional arguments")),
+            _ => {
+                return Err(PyRuntimeError::new_err(
+                    "text() takes 3-6 positional arguments",
+                ));
+            }
         };
         graphics_record_command(
             self.entity,
@@ -1035,8 +1050,7 @@ impl Graphics {
     }
 
     pub fn text_style(&self, style: u8) -> PyResult<()> {
-        graphics_text_style(self.entity, style)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        graphics_text_style(self.entity, style).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     #[pyo3(signature = (content, x, y, max_w=None, max_h=None))]
@@ -1106,12 +1120,7 @@ impl Graphics {
     /// Extract glyph outlines as path commands (one list per glyph).
     /// Each command is a tuple: ("M", x, y), ("L", x, y), ("Q", cx, cy, x, y),
     /// ("C", cx1, cy1, cx2, cy2, x, y), or ("Z",).
-    pub fn text_to_paths(
-        &self,
-        content: &str,
-        x: f32,
-        y: f32,
-    ) -> PyResult<Vec<Vec<Py<PyAny>>>> {
+    pub fn text_to_paths(&self, content: &str, x: f32, y: f32) -> PyResult<Vec<Vec<Py<PyAny>>>> {
         let paths = graphics_text_to_paths(self.entity, content, x, y)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Python::attach(|py| Ok(path_commands_to_py(py, paths)))
@@ -1120,12 +1129,7 @@ impl Graphics {
     /// Extract glyph outlines as per-contour path commands.
     /// Each contour (MoveTo...Close sequence) is a separate list.
     /// Commands use the same tuple shapes as `text_to_paths`.
-    pub fn text_to_contours(
-        &self,
-        content: &str,
-        x: f32,
-        y: f32,
-    ) -> PyResult<Vec<Vec<Py<PyAny>>>> {
+    pub fn text_to_contours(&self, content: &str, x: f32, y: f32) -> PyResult<Vec<Vec<Py<PyAny>>>> {
         let contours = graphics_text_to_contours(self.entity, content, x, y)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Python::attach(|py| Ok(path_commands_to_py(py, contours)))
@@ -1146,17 +1150,11 @@ impl Graphics {
     }
 
     /// Generate a 3D extruded mesh from text outlines.
-    pub fn text_to_model(
-        &self,
-        content: &str,
-        x: f32,
-        y: f32,
-        depth: f32,
-    ) -> PyResult<Geometry> {
+    pub fn text_to_model(&self, content: &str, x: f32, y: f32, depth: f32) -> PyResult<Geometry> {
         let mesh = graphics_text_to_model(self.entity, content, x, y, depth)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        let entity = geometry_create_from_mesh(mesh)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let entity =
+            geometry_create_from_mesh(mesh).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(Geometry { entity })
     }
 
@@ -1251,13 +1249,11 @@ impl Graphics {
     }
 
     pub fn text_ascent(&self) -> PyResult<f32> {
-        graphics_text_ascent(self.entity)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        graphics_text_ascent(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn text_descent(&self) -> PyResult<f32> {
-        graphics_text_descent(self.entity)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        graphics_text_descent(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     /// Loads an image from a file and returns an Image object.

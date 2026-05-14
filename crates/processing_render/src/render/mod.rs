@@ -1203,7 +1203,9 @@ pub fn flush_draw_commands(
                     state.text_weight = Some(weight);
                 }
                 DrawCommand::TextVariation { tag, value } => {
-                    if let Some(existing) = state.text_variations.iter_mut().find(|(t, _)| *t == tag) {
+                    if let Some(existing) =
+                        state.text_variations.iter_mut().find(|(t, _)| *t == tag)
+                    {
                         existing.1 = value;
                     } else {
                         state.text_variations.push((tag, value));
@@ -1213,7 +1215,8 @@ pub fn flush_draw_commands(
                     state.text_variations.clear();
                 }
                 DrawCommand::TextFeature { tag, value } => {
-                    if let Some(existing) = state.text_features.iter_mut().find(|(t, _)| *t == tag) {
+                    if let Some(existing) = state.text_features.iter_mut().find(|(t, _)| *t == tag)
+                    {
                         existing.1 = value;
                     } else {
                         state.text_features.push((tag, value));
@@ -1274,7 +1277,13 @@ pub fn flush_draw_commands(
                         &state,
                         |mesh, color| {
                             primitive::text::text(
-                                mesh, &content, x, y, color, &text_params.as_params(), &text_cx,
+                                mesh,
+                                &content,
+                                x,
+                                y,
+                                color,
+                                &text_params.as_params(),
+                                &text_cx,
                             );
                         },
                         &p_material_handles,
