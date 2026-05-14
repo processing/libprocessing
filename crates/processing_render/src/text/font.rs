@@ -51,10 +51,7 @@ impl TextContext {
     /// Register font bytes; returns the primary family name if one is found.
     pub fn load_font(&self, data: Vec<u8>) -> Option<String> {
         let mut inner = self.inner.lock().unwrap();
-        let families = inner
-            .font_cx
-            .collection
-            .register_fonts(data.into(), None);
+        let families = inner.font_cx.collection.register_fonts(data.into(), None);
         families.first().and_then(|(fam_id, _)| {
             inner
                 .font_cx

@@ -1017,10 +1017,8 @@ pub extern "C" fn processing_end_contour(graphics_id: u64) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_load_font(path_ptr: *const std::ffi::c_char) -> u64 {
     error::clear_error();
-    let path = unsafe { std::ffi::CStr::from_ptr(path_ptr) }
-        .to_string_lossy();
-    error::check(|| font_load(&path).map(|e| e.to_bits()))
-        .unwrap_or(0)
+    let path = unsafe { std::ffi::CStr::from_ptr(path_ptr) }.to_string_lossy();
+    error::check(|| font_load(&path).map(|e| e.to_bits())).unwrap_or(0)
 }
 
 /// Create a font handle from an existing font family name.
@@ -1031,10 +1029,8 @@ pub unsafe extern "C" fn processing_load_font(path_ptr: *const std::ffi::c_char)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_create_font(name_ptr: *const std::ffi::c_char) -> u64 {
     error::clear_error();
-    let name = unsafe { std::ffi::CStr::from_ptr(name_ptr) }
-        .to_string_lossy();
-    error::check(|| font_create(&name).map(|e| e.to_bits()))
-        .unwrap_or(0)
+    let name = unsafe { std::ffi::CStr::from_ptr(name_ptr) }.to_string_lossy();
+    error::check(|| font_create(&name).map(|e| e.to_bits())).unwrap_or(0)
 }
 
 /// Query the number of variable font axes for a font.
@@ -1043,8 +1039,7 @@ pub unsafe extern "C" fn processing_create_font(name_ptr: *const std::ffi::c_cha
 pub extern "C" fn processing_font_variation_count(font_id: u64) -> u32 {
     error::clear_error();
     let font_entity = Entity::from_bits(font_id);
-    error::check(|| font_variations(font_entity).map(|v| v.len() as u32))
-        .unwrap_or(0)
+    error::check(|| font_variations(font_entity).map(|v| v.len() as u32)).unwrap_or(0)
 }
 
 /// Query variable font axis info.
@@ -1265,8 +1260,7 @@ pub unsafe extern "C" fn processing_text_bounds(
 ) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    let content = unsafe { std::ffi::CStr::from_ptr(str_ptr) }
-        .to_string_lossy();
+    let content = unsafe { std::ffi::CStr::from_ptr(str_ptr) }.to_string_lossy();
     if let Some(bounds) =
         error::check(|| graphics_text_bounds(graphics_entity, &content, x, y, None, None))
     {
@@ -1387,9 +1381,7 @@ pub extern "C" fn processing_text_size(graphics_id: u64, size: f32) {
 pub extern "C" fn processing_text_align(graphics_id: u64, h: u8, v: u8) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    error::check(|| {
-        graphics_text_align(graphics_entity, h, v)
-    });
+    error::check(|| graphics_text_align(graphics_entity, h, v));
 }
 
 /// Set the text leading (line spacing).
@@ -1420,10 +1412,8 @@ pub unsafe extern "C" fn processing_text_width(
 ) -> f32 {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    let content = unsafe { std::ffi::CStr::from_ptr(str_ptr) }
-        .to_string_lossy();
-    error::check(|| graphics_text_width(graphics_entity, &content))
-        .unwrap_or(0.0)
+    let content = unsafe { std::ffi::CStr::from_ptr(str_ptr) }.to_string_lossy();
+    error::check(|| graphics_text_width(graphics_entity, &content)).unwrap_or(0.0)
 }
 
 /// Get the text ascent for the current font size.
@@ -1431,8 +1421,7 @@ pub unsafe extern "C" fn processing_text_width(
 pub extern "C" fn processing_text_ascent(graphics_id: u64) -> f32 {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    error::check(|| graphics_text_ascent(graphics_entity))
-        .unwrap_or(0.0)
+    error::check(|| graphics_text_ascent(graphics_entity)).unwrap_or(0.0)
 }
 
 /// Get the text descent for the current font size.
@@ -1440,8 +1429,7 @@ pub extern "C" fn processing_text_ascent(graphics_id: u64) -> f32 {
 pub extern "C" fn processing_text_descent(graphics_id: u64) -> f32 {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    error::check(|| graphics_text_descent(graphics_entity))
-        .unwrap_or(0.0)
+    error::check(|| graphics_text_descent(graphics_entity)).unwrap_or(0.0)
 }
 
 /// Create an image from raw pixel data.

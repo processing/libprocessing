@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
-use bevy::prelude::*;
 use bevy::mesh::{Indices, VertexAttributeValues};
+use bevy::prelude::*;
 use lyon::{
     geom::Point,
     path::Path,
@@ -19,9 +19,9 @@ use parley::{
     },
 };
 use skrifa::{
+    FontRef, MetadataProvider,
     instance::{LocationRef, NormalizedCoord, Size},
     outline::{DrawSettings, OutlinePen},
-    FontRef, MetadataProvider,
 };
 
 use crate::render::{
@@ -36,8 +36,20 @@ use crate::text::font::{DEFAULT_FONT_FAMILY, TextContext};
 pub enum PathCommand {
     MoveTo(f32, f32),
     LineTo(f32, f32),
-    QuadTo { cx: f32, cy: f32, x: f32, y: f32 },
-    CubicTo { cx1: f32, cy1: f32, cx2: f32, cy2: f32, x: f32, y: f32 },
+    QuadTo {
+        cx: f32,
+        cy: f32,
+        x: f32,
+        y: f32,
+    },
+    CubicTo {
+        cx1: f32,
+        cy1: f32,
+        cx2: f32,
+        cy2: f32,
+        x: f32,
+        y: f32,
+    },
     Close,
 }
 
@@ -117,7 +129,15 @@ impl OwnedTextParams {
 }
 
 /// Tessellate text into a mesh (fill).
-pub fn text(mesh: &mut Mesh, content: &str, x: f32, y: f32, color: Color, params: &TextParams, text_cx: &TextContext) {
+pub fn text(
+    mesh: &mut Mesh,
+    content: &str,
+    x: f32,
+    y: f32,
+    color: Color,
+    params: &TextParams,
+    text_cx: &TextContext,
+) {
     if content.is_empty() {
         return;
     }
@@ -125,12 +145,28 @@ pub fn text(mesh: &mut Mesh, content: &str, x: f32, y: f32, color: Color, params
     text_cx.with(|font_cx, layout_cx| {
         let layout = build_layout(font_cx, layout_cx, content, color, params);
         let (base_x, base_y) = compute_text_origin(&layout, x, y, params.align_v);
-        tessellate_layout(mesh, &layout, base_x, base_y, params.max_h, params.glyph_colors);
+        tessellate_layout(
+            mesh,
+            &layout,
+            base_x,
+            base_y,
+            params.max_h,
+            params.glyph_colors,
+        );
     });
 }
 
 /// Tessellate text outlines as strokes into a mesh.
-pub fn text_stroke(mesh: &mut Mesh, content: &str, x: f32, y: f32, color: Color, stroke_weight: f32, params: &TextParams, text_cx: &TextContext) {
+pub fn text_stroke(
+    mesh: &mut Mesh,
+    content: &str,
+    x: f32,
+    y: f32,
+    color: Color,
+    stroke_weight: f32,
+    params: &TextParams,
+    text_cx: &TextContext,
+) {
     if content.is_empty() {
         return;
     }
@@ -138,7 +174,15 @@ pub fn text_stroke(mesh: &mut Mesh, content: &str, x: f32, y: f32, color: Color,
     text_cx.with(|font_cx, layout_cx| {
         let layout = build_layout(font_cx, layout_cx, content, color, params);
         let (base_x, base_y) = compute_text_origin(&layout, x, y, params.align_v);
-        stroke_layout(mesh, &layout, base_x, base_y, color, stroke_weight, params.max_h);
+        stroke_layout(
+            mesh,
+            &layout,
+            base_x,
+            base_y,
+            color,
+            stroke_weight,
+            params.max_h,
+        );
     });
 }
 
@@ -184,7 +228,13 @@ pub fn text_descent(params: &TextParams, text_cx: &TextContext) -> f32 {
 }
 
 /// Bounding box of text as `[x, y, width, height]`.
-pub fn text_bounds(content: &str, x: f32, y: f32, params: &TextParams, text_cx: &TextContext) -> [f32; 4] {
+pub fn text_bounds(
+    content: &str,
+    x: f32,
+    y: f32,
+    params: &TextParams,
+    text_cx: &TextContext,
+) -> [f32; 4] {
     if content.is_empty() {
         return [x, y, 0.0, 0.0];
     }
@@ -263,7 +313,12 @@ pub fn text_lines(
 
             result.push(TextLineInfo {
                 text: line_text.to_string(),
-                rect: [base_x, line_y, metrics.advance, metrics.ascent + metrics.descent],
+                rect: [
+                    base_x,
+                    line_y,
+                    metrics.advance,
+                    metrics.ascent + metrics.descent,
+                ],
             });
         }
         result
@@ -388,7 +443,12 @@ pub fn text_to_points(
                             points.push([px, py]);
                         }
                     }
-                    Event::Cubic { from, ctrl1, ctrl2, to } => {
+                    Event::Cubic {
+                        from,
+                        ctrl1,
+                        ctrl2,
+                        to,
+                    } => {
                         let steps = (30.0 * step).max(2.0) as usize;
                         for i in 1..=steps {
                             let t = i as f32 / steps as f32;
@@ -453,8 +513,7 @@ pub fn text_to_model(
                 })
                 .unwrap_or(0);
             {
-                let mut builder =
-                    Extrusion3DBuilder::new(&mut mesh, -half_depth, [0.0, 0.0, -1.0]);
+                let mut builder = Extrusion3DBuilder::new(&mut mesh, -half_depth, [0.0, 0.0, -1.0]);
                 let _ = fill_tess.tessellate_path(path, &FillOptions::default(), &mut builder);
             }
 
@@ -489,7 +548,12 @@ pub fn text_to_model(
                             contour_points.push(Point::new(px, py));
                         }
                     }
-                    Event::Cubic { from, ctrl1, ctrl2, to } => {
+                    Event::Cubic {
+                        from,
+                        ctrl1,
+                        ctrl2,
+                        to,
+                    } => {
                         let steps = 12;
                         for s in 1..=steps {
                             let t = s as f32 / steps as f32;
@@ -585,9 +649,7 @@ fn push_vertex_3d(mesh: &mut Mesh, position: [f32; 3], normal: [f32; 3]) {
     {
         colors.push([1.0, 1.0, 1.0, 1.0]);
     }
-    if let Some(VertexAttributeValues::Float32x2(uvs)) =
-        mesh.attribute_mut(Mesh::ATTRIBUTE_UV_0)
-    {
+    if let Some(VertexAttributeValues::Float32x2(uvs)) = mesh.attribute_mut(Mesh::ATTRIBUTE_UV_0) {
         uvs.push([0.0, 0.0]);
     }
 }
@@ -685,14 +747,25 @@ pub fn text_to_contours(
                     }
                     Event::Quadratic { from: _, ctrl, to } => {
                         current_contour.push(PathCommand::QuadTo {
-                            cx: ctrl.x, cy: ctrl.y, x: to.x, y: to.y,
+                            cx: ctrl.x,
+                            cy: ctrl.y,
+                            x: to.x,
+                            y: to.y,
                         });
                     }
-                    Event::Cubic { from: _, ctrl1, ctrl2, to } => {
+                    Event::Cubic {
+                        from: _,
+                        ctrl1,
+                        ctrl2,
+                        to,
+                    } => {
                         current_contour.push(PathCommand::CubicTo {
-                            cx1: ctrl1.x, cy1: ctrl1.y,
-                            cx2: ctrl2.x, cy2: ctrl2.y,
-                            x: to.x, y: to.y,
+                            cx1: ctrl1.x,
+                            cy1: ctrl1.y,
+                            cx2: ctrl2.x,
+                            cy2: ctrl2.y,
+                            x: to.x,
+                            y: to.y,
                         });
                     }
                     Event::End { close, .. } => {
@@ -732,18 +805,31 @@ fn extract_glyph_path_commands(
                     Event::Line { from: _, to } => cmds.push(PathCommand::LineTo(to.x, to.y)),
                     Event::Quadratic { from: _, ctrl, to } => {
                         cmds.push(PathCommand::QuadTo {
-                            cx: ctrl.x, cy: ctrl.y, x: to.x, y: to.y,
+                            cx: ctrl.x,
+                            cy: ctrl.y,
+                            x: to.x,
+                            y: to.y,
                         });
                     }
-                    Event::Cubic { from: _, ctrl1, ctrl2, to } => {
+                    Event::Cubic {
+                        from: _,
+                        ctrl1,
+                        ctrl2,
+                        to,
+                    } => {
                         cmds.push(PathCommand::CubicTo {
-                            cx1: ctrl1.x, cy1: ctrl1.y,
-                            cx2: ctrl2.x, cy2: ctrl2.y,
-                            x: to.x, y: to.y,
+                            cx1: ctrl1.x,
+                            cy1: ctrl1.y,
+                            cx2: ctrl2.x,
+                            cy2: ctrl2.y,
+                            x: to.x,
+                            y: to.y,
                         });
                     }
                     Event::End { close, .. } => {
-                        if close { cmds.push(PathCommand::Close); }
+                        if close {
+                            cmds.push(PathCommand::Close);
+                        }
                     }
                 }
             }
@@ -783,8 +869,7 @@ fn extract_glyph_lyon_paths(
             let font_size = run.font_size();
             let normalized_coords = run.normalized_coords();
 
-            let Ok(font_ref) = FontRef::from_index(font_data.data.as_ref(), font_data.index)
-            else {
+            let Ok(font_ref) = FontRef::from_index(font_data.data.as_ref(), font_data.index) else {
                 continue;
             };
 
@@ -886,9 +971,9 @@ fn build_layout(
                 value,
             })
             .collect();
-        builder.push_default(StyleProperty::FontFeatures(FontSettings::List(
-            Cow::Owned(feats),
-        )));
+        builder.push_default(StyleProperty::FontFeatures(FontSettings::List(Cow::Owned(
+            feats,
+        ))));
     }
 
     let mut layout = builder.build(content);
@@ -1082,8 +1167,7 @@ fn extract_glyph_lyon_paths_yup(
             let font_size = run.font_size();
             let normalized_coords = run.normalized_coords();
 
-            let Ok(font_ref) = FontRef::from_index(font_data.data.as_ref(), font_data.index)
-            else {
+            let Ok(font_ref) = FontRef::from_index(font_data.data.as_ref(), font_data.index) else {
                 continue;
             };
 
@@ -1197,11 +1281,8 @@ impl OutlinePen for LyonOutlinePen {
     }
 
     fn curve_to(&mut self, cx0: f32, cy0: f32, cx1: f32, cy1: f32, x: f32, y: f32) {
-        self.builder.cubic_bezier_to(
-            Point::new(cx0, cy0),
-            Point::new(cx1, cy1),
-            Point::new(x, y),
-        );
+        self.builder
+            .cubic_bezier_to(Point::new(cx0, cy0), Point::new(cx1, cy1), Point::new(x, y));
     }
 
     fn close(&mut self) {

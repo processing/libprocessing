@@ -30,7 +30,11 @@ fn sketch() -> error::Result<()> {
     let glow = material_create_pbr()?;
     material_set(glow, "roughness", shader_value::ShaderValue::Float(0.3))?;
     material_set(glow, "metallic", shader_value::ShaderValue::Float(0.5))?;
-    material_set(glow, "emissive", shader_value::ShaderValue::Float4([2.0, 0.5, 3.0, 1.0]))?;
+    material_set(
+        glow,
+        "emissive",
+        shader_value::ShaderValue::Float4([2.0, 0.5, 3.0, 1.0]),
+    )?;
 
     graphics_record_command(graphics, DrawCommand::TextSize(120.0))?;
     graphics_record_command(graphics, DrawCommand::TextStyle(TextStyle::Bold))?;

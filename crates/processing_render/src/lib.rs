@@ -2401,11 +2401,12 @@ pub fn font_load(path: &str) -> error::Result<Entity> {
 
         app_mut(|app| {
             let text_cx = app.world().resource::<TextContext>().clone();
-            let family_name = text_cx
-                .load_font(data)
-                .ok_or(error::ProcessingError::FontLoadError(
-                    "Could not determine font family name".to_string(),
-                ))?;
+            let family_name =
+                text_cx
+                    .load_font(data)
+                    .ok_or(error::ProcessingError::FontLoadError(
+                        "Could not determine font family name".to_string(),
+                    ))?;
             let entity = app.world_mut().spawn(Font { family_name }).id();
             Ok(entity)
         })
@@ -2446,12 +2447,9 @@ pub fn font_variations(font_entity: Entity) -> error::Result<Vec<text::font::Fon
     use text::font::TextContext;
 
     app_mut(|app| {
-        let font = app
-            .world()
-            .get::<text::font::Font>(font_entity)
-            .ok_or(error::ProcessingError::InvalidArgument(
-                "Invalid font entity".to_string(),
-            ))?;
+        let font = app.world().get::<text::font::Font>(font_entity).ok_or(
+            error::ProcessingError::InvalidArgument("Invalid font entity".to_string()),
+        )?;
         let family = font.family_name.clone();
         let text_cx = app.world().resource::<TextContext>().clone();
         Ok(text_cx.font_variations(&family))
@@ -2463,19 +2461,17 @@ pub fn font_metadata(font_entity: Entity) -> error::Result<text::font::FontMetad
     use text::font::TextContext;
 
     app_mut(|app| {
-        let font = app
-            .world()
-            .get::<text::font::Font>(font_entity)
-            .ok_or(error::ProcessingError::InvalidArgument(
-                "Invalid font entity".to_string(),
-            ))?;
+        let font = app.world().get::<text::font::Font>(font_entity).ok_or(
+            error::ProcessingError::InvalidArgument("Invalid font entity".to_string()),
+        )?;
         let family = font.family_name.clone();
         let text_cx = app.world().resource::<TextContext>().clone();
         text_cx
             .font_metadata(&family)
-            .ok_or(error::ProcessingError::InvalidArgument(
-                format!("Font family '{}' not found", family),
-            ))
+            .ok_or(error::ProcessingError::InvalidArgument(format!(
+                "Font family '{}' not found",
+                family
+            )))
     })
 }
 
@@ -2490,7 +2486,10 @@ pub fn graphics_text_font(
 
 pub fn graphics_text_style(graphics_entity: Entity, style: u8) -> error::Result<()> {
     use render::command::TextStyle;
-    graphics_record_command(graphics_entity, DrawCommand::TextStyle(TextStyle::from(style)))
+    graphics_record_command(
+        graphics_entity,
+        DrawCommand::TextStyle(TextStyle::from(style)),
+    )
 }
 
 pub fn graphics_text_align(graphics_entity: Entity, h: u8, v: u8) -> error::Result<()> {
@@ -2506,7 +2505,10 @@ pub fn graphics_text_align(graphics_entity: Entity, h: u8, v: u8) -> error::Resu
 
 pub fn graphics_text_wrap(graphics_entity: Entity, mode: u8) -> error::Result<()> {
     use render::command::TextWrapMode;
-    graphics_record_command(graphics_entity, DrawCommand::TextWrap(TextWrapMode::from(mode)))
+    graphics_record_command(
+        graphics_entity,
+        DrawCommand::TextWrap(TextWrapMode::from(mode)),
+    )
 }
 
 pub fn graphics_text_weight(graphics_entity: Entity, weight: f32) -> error::Result<()> {
@@ -2516,9 +2518,10 @@ pub fn graphics_text_weight(graphics_entity: Entity, weight: f32) -> error::Resu
 fn parse_tag(tag: &str) -> error::Result<[u8; 4]> {
     let bytes = tag.as_bytes();
     if bytes.len() != 4 {
-        return Err(error::ProcessingError::InvalidArgument(
-            format!("Font tag must be exactly 4 characters, got '{}'", tag),
-        ));
+        return Err(error::ProcessingError::InvalidArgument(format!(
+            "Font tag must be exactly 4 characters, got '{}'",
+            tag
+        )));
     }
     Ok([bytes[0], bytes[1], bytes[2], bytes[3]])
 }
@@ -2536,11 +2539,7 @@ pub fn graphics_clear_text_variations(graphics_entity: Entity) -> error::Result<
     graphics_record_command(graphics_entity, DrawCommand::ClearTextVariations)
 }
 
-pub fn graphics_text_feature(
-    graphics_entity: Entity,
-    tag: &str,
-    value: u16,
-) -> error::Result<()> {
+pub fn graphics_text_feature(graphics_entity: Entity, tag: &str, value: u16) -> error::Result<()> {
     let tag = parse_tag(tag)?;
     graphics_record_command(graphics_entity, DrawCommand::TextFeature { tag, value })
 }
@@ -2567,7 +2566,10 @@ fn text_query_state(
     graphics_entity: Entity,
     max_w: Option<f32>,
     max_h: Option<f32>,
-) -> error::Result<(render::primitive::text::OwnedTextParams, text::font::TextContext)> {
+) -> error::Result<(
+    render::primitive::text::OwnedTextParams,
+    text::font::TextContext,
+)> {
     let state = app
         .world()
         .get::<render::RenderState>(graphics_entity)
@@ -2704,10 +2706,7 @@ pub fn graphics_text_bounds(
     })
 }
 
-pub fn graphics_text_line_count(
-    graphics_entity: Entity,
-    content: &str,
-) -> error::Result<usize> {
+pub fn graphics_text_line_count(graphics_entity: Entity, content: &str) -> error::Result<usize> {
     app_mut(|app| {
         let (params, text_cx) = text_query_state(app, graphics_entity, None, None)?;
         Ok(render::primitive::text::text_line_count(
