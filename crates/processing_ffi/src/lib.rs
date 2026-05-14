@@ -115,6 +115,30 @@ pub extern "C" fn processing_surface_create_x11(
         .unwrap_or(0)
 }
 
+/// Create a WebGPU surface on Linux. The display server is auto-detected from
+/// the environment.
+///
+/// SAFETY:
+/// - Init has been called.
+/// - The handle types match the active display server.
+/// - This is called from the same thread as init.
+#[cfg(target_os = "linux")]
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_surface_create(
+    window_handle: u64,
+    display_handle: u64,
+    width: u32,
+    height: u32,
+    scale_factor: f32,
+) -> u64 {
+    error::clear_error();
+    error::check(|| {
+        surface_create_linux(window_handle, display_handle, width, height, scale_factor)
+    })
+    .map(|e| e.to_bits())
+    .unwrap_or(0)
+}
+
 /// Create a graphics context for a surface.
 ///
 /// SAFETY:
