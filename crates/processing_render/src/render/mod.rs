@@ -1250,7 +1250,7 @@ pub fn flush_draw_commands(
                     max_w,
                     max_h,
                 } => {
-                    // Apply rectMode to bounding box form
+                    // rectMode applies to the bounding-box form
                     let (x, y, max_w, max_h) = if let (Some(w), Some(h)) = (max_w, max_h) {
                         let (bx, by, bw, bh) = apply_shape_mode(state.rect_mode, x, y, w, h);
                         (bx, by, Some(bw), Some(bh))
@@ -1260,7 +1260,7 @@ pub fn flush_draw_commands(
 
                     let mut text_params =
                         primitive::text::OwnedTextParams::from_render_state(&state, max_w, max_h);
-                    // Per-glyph colors apply to this one text() call only.
+                    // per-glyph colors apply to this one text() call only
                     text_params.glyph_colors = state.text_glyph_colors.take();
                     let text_cx = text_cx.clone();
 
@@ -1285,8 +1285,7 @@ pub fn flush_draw_commands(
                         &mut batch,
                         &state,
                         |mesh, color, weight| {
-                            // The stroke outlines every glyph in the stroke color;
-                            // per-glyph fill colors don't apply.
+                            // per-glyph fill colors don't apply to the stroke
                             let mut params = text_params.as_params();
                             params.glyph_colors = None;
                             primitive::text::text_stroke(
