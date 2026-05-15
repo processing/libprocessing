@@ -224,6 +224,75 @@ impl Light {
 
 #[pyclass]
 #[derive(Debug)]
+pub struct Font {
+    pub(crate) entity: Entity,
+}
+
+#[pymethods]
+impl Font {
+    /// Query variable font axes.
+    ///
+    /// Returns a list of `(tag, min, max, default)` tuples.
+    pub fn variations(&self) -> PyResult<Vec<(String, f32, f32, f32)>> {
+        font_variations(self.entity)
+            .map(|axes| {
+                axes.into_iter()
+                    .map(|a| (a.tag, a.min, a.max, a.default))
+                    .collect()
+            })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Query font metadata.
+    ///
+    /// Returns a `(family, style, weight, width, is_variable)` tuple.
+    pub fn metadata(&self) -> PyResult<(String, String, f32, f32, bool)> {
+        font_metadata(self.entity)
+            .map(|m| (m.family, m.style, m.weight, m.width, m.is_variable))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+}
+
+/// Convert glyph outline groups into per-group lists of Python command tuples.
+fn path_commands_to_py(
+    py: Python<'_>,
+    groups: Vec<Vec<processing_render::render::primitive::text::PathCommand>>,
+) -> Vec<Vec<Py<PyAny>>> {
+    use processing_render::render::primitive::text::PathCommand;
+
+    let to_py = |cmd: PathCommand| -> Py<PyAny> {
+        match cmd {
+            PathCommand::MoveTo(x, y) => ("M", x, y).into_pyobject(py).unwrap().into_any().unbind(),
+            PathCommand::LineTo(x, y) => ("L", x, y).into_pyobject(py).unwrap().into_any().unbind(),
+            PathCommand::QuadTo { cx, cy, x, y } => ("Q", cx, cy, x, y)
+                .into_pyobject(py)
+                .unwrap()
+                .into_any()
+                .unbind(),
+            PathCommand::CubicTo {
+                cx1,
+                cy1,
+                cx2,
+                cy2,
+                x,
+                y,
+            } => ("C", cx1, cy1, cx2, cy2, x, y)
+                .into_pyobject(py)
+                .unwrap()
+                .into_any()
+                .unbind(),
+            PathCommand::Close => ("Z",).into_pyobject(py).unwrap().into_any().unbind(),
+        }
+    };
+
+    groups
+        .into_iter()
+        .map(|group| group.into_iter().map(to_py).collect())
+        .collect()
+}
+
+#[pyclass]
+#[derive(Debug)]
 pub struct Image {
     pub(crate) entity: Entity,
 }
@@ -904,6 +973,287 @@ impl Graphics {
     pub fn end_contour(&self) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::EndContour)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    // --- Font ---
+
+    pub fn load_font(&self, path: &str) -> PyResult<Font> {
+        font_load(path)
+            .map(|entity| Font { entity })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn create_font(&self, name: &str) -> PyResult<Font> {
+        font_create(name)
+            .map(|entity| Font { entity })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn list_fonts(&self) -> PyResult<Vec<String>> {
+        font_list().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    #[pyo3(signature = (font=None))]
+    pub fn text_font(&self, font: Option<&Font>) -> PyResult<()> {
+        graphics_text_font(self.entity, font.map(|f| f.entity))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    // --- Text ---
+
+    #[pyo3(signature = (content, x, y, *args, max_w=None, max_h=None))]
+    pub fn text(
+        &self,
+        content: &str,
+        x: f32,
+        y: f32,
+        args: &Bound<'_, pyo3::types::PyTuple>,
+        max_w: Option<f32>,
+        max_h: Option<f32>,
+    ) -> PyResult<()> {
+        // text(content, x, y) or text(content, x, y, z) or text(content, x, y, max_w, max_h)
+        let (z, mw, mh) = match args.len() {
+            0 => (0.0, max_w, max_h),
+            1 => {
+                let z: f32 = args.get_item(0)?.extract()?;
+                (z, max_w, max_h)
+            }
+            2 => {
+                let w: f32 = args.get_item(0)?.extract()?;
+                let h: f32 = args.get_item(1)?.extract()?;
+                (0.0, Some(w), Some(h))
+            }
+            3 => {
+                let z: f32 = args.get_item(0)?.extract()?;
+                let w: f32 = args.get_item(1)?.extract()?;
+                let h: f32 = args.get_item(2)?.extract()?;
+                (z, Some(w), Some(h))
+            }
+            _ => {
+                return Err(PyRuntimeError::new_err(
+                    "text() takes 3-6 positional arguments",
+                ));
+            }
+        };
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Text {
+                content: content.to_string(),
+                x,
+                y,
+                z,
+                max_w: mw,
+                max_h: mh,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn text_style(&self, style: u8) -> PyResult<()> {
+        graphics_text_style(self.entity, style).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    #[pyo3(signature = (content, x, y, max_w=None, max_h=None))]
+    pub fn text_bounds(
+        &self,
+        content: &str,
+        x: f32,
+        y: f32,
+        max_w: Option<f32>,
+        max_h: Option<f32>,
+    ) -> PyResult<(f32, f32, f32, f32)> {
+        graphics_text_bounds(self.entity, content, x, y, max_w, max_h)
+            .map(|b| (b[0], b[1], b[2], b[3]))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn text_weight(&self, weight: f32) -> PyResult<()> {
+        graphics_text_weight(self.entity, weight)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn text_variation(&self, tag: &str, value: f32) -> PyResult<()> {
+        graphics_text_variation(self.entity, tag, value)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn clear_text_variations(&self) -> PyResult<()> {
+        graphics_clear_text_variations(self.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Enable/configure an OpenType font feature.
+    /// text_feature("smcp")          -> enable (value=1)
+    /// text_feature("smcp", True)    -> enable (value=1)
+    /// text_feature("smcp", False)   -> disable (value=0)
+    /// text_feature("salt", 3)       -> select alternate 3
+    #[pyo3(signature = (tag, value=None))]
+    pub fn text_feature(&self, tag: &str, value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let v: u16 = match value {
+            None => 1,
+            Some(val) => {
+                if let Ok(b) = val.extract::<bool>() {
+                    if b { 1 } else { 0 }
+                } else if let Ok(i) = val.extract::<u16>() {
+                    i
+                } else {
+                    return Err(PyRuntimeError::new_err(
+                        "text_feature value must be bool or int",
+                    ));
+                }
+            }
+        };
+        graphics_text_feature(self.entity, tag, v)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn no_text_feature(&self, tag: &str) -> PyResult<()> {
+        graphics_no_text_feature(self.entity, tag)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn clear_text_features(&self) -> PyResult<()> {
+        graphics_clear_text_features(self.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Extract glyph outlines as path commands (one list per glyph).
+    /// Each command is a tuple: ("M", x, y), ("L", x, y), ("Q", cx, cy, x, y),
+    /// ("C", cx1, cy1, cx2, cy2, x, y), or ("Z",).
+    pub fn text_to_paths(&self, content: &str, x: f32, y: f32) -> PyResult<Vec<Vec<Py<PyAny>>>> {
+        let paths = graphics_text_to_paths(self.entity, content, x, y)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Python::attach(|py| Ok(path_commands_to_py(py, paths)))
+    }
+
+    /// Extract glyph outlines as per-contour path commands.
+    /// Each contour (MoveTo...Close sequence) is a separate list.
+    /// Commands use the same tuple shapes as `text_to_paths`.
+    pub fn text_to_contours(&self, content: &str, x: f32, y: f32) -> PyResult<Vec<Vec<Py<PyAny>>>> {
+        let contours = graphics_text_to_contours(self.entity, content, x, y)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Python::attach(|py| Ok(path_commands_to_py(py, contours)))
+    }
+
+    /// Sample points along text outlines.
+    /// Returns list of [x, y] points.
+    #[pyo3(signature = (content, x, y, sample_factor=None))]
+    pub fn text_to_points(
+        &self,
+        content: &str,
+        x: f32,
+        y: f32,
+        sample_factor: Option<f32>,
+    ) -> PyResult<Vec<[f32; 2]>> {
+        graphics_text_to_points(self.entity, content, x, y, sample_factor)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Generate a 3D extruded mesh from text outlines.
+    pub fn text_to_model(&self, content: &str, x: f32, y: f32, depth: f32) -> PyResult<Geometry> {
+        let mesh = graphics_text_to_model(self.entity, content, x, y, depth)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let entity =
+            geometry_create_from_mesh(mesh).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Geometry { entity })
+    }
+
+    /// Set per-glyph colors for the next text() call.
+    ///
+    /// `colors` is a list of color objects (as built by `color(...)`); they are
+    /// cycled across the glyphs of the next `text()` call.
+    pub fn text_glyph_colors(&self, colors: Vec<PyRef<crate::color::PyColor>>) -> PyResult<()> {
+        let colors: Vec<bevy::color::Color> = colors.iter().map(|c| c.0).collect();
+        graphics_text_glyph_colors(self.entity, colors)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn text_size(&self, size: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::TextSize(size))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    #[pyo3(signature = (h, v=None))]
+    pub fn text_align(&self, h: u8, v: Option<u8>) -> PyResult<()> {
+        use processing::prelude::{TextAlignH, TextAlignV};
+        graphics_record_command(
+            self.entity,
+            DrawCommand::TextAlign {
+                h: TextAlignH::from(h),
+                v: TextAlignV::from(v.unwrap_or(0)),
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn text_leading(&self, leading: f32) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::TextLeading(leading))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn text_wrap(&self, mode: u8) -> PyResult<()> {
+        use processing::prelude::TextWrapMode;
+        graphics_record_command(self.entity, DrawCommand::TextWrap(TextWrapMode::from(mode)))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Number of lines `content` wraps to.
+    pub fn text_line_count(&self, content: &str) -> PyResult<usize> {
+        graphics_text_line_count(self.entity, content)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Per-line info as a list of `(text, (x, y, w, h))` tuples.
+    #[pyo3(signature = (content, x, y, max_w=None, max_h=None))]
+    pub fn text_lines(
+        &self,
+        content: &str,
+        x: f32,
+        y: f32,
+        max_w: Option<f32>,
+        max_h: Option<f32>,
+    ) -> PyResult<Vec<(String, (f32, f32, f32, f32))>> {
+        graphics_text_lines(self.entity, content, x, y, max_w, max_h)
+            .map(|lines| {
+                lines
+                    .into_iter()
+                    .map(|li| (li.text, (li.rect[0], li.rect[1], li.rect[2], li.rect[3])))
+                    .collect()
+            })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Per-glyph bounding rects as a list of `(x, y, w, h)` tuples.
+    #[pyo3(signature = (content, x, y, max_w=None, max_h=None))]
+    pub fn text_glyph_rects(
+        &self,
+        content: &str,
+        x: f32,
+        y: f32,
+        max_w: Option<f32>,
+        max_h: Option<f32>,
+    ) -> PyResult<Vec<(f32, f32, f32, f32)>> {
+        graphics_text_glyph_rects(self.entity, content, x, y, max_w, max_h)
+            .map(|glyphs| {
+                glyphs
+                    .into_iter()
+                    .map(|g| (g.rect[0], g.rect[1], g.rect[2], g.rect[3]))
+                    .collect()
+            })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn text_width(&self, content: &str) -> PyResult<f32> {
+        graphics_text_width(self.entity, content)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn text_ascent(&self) -> PyResult<f32> {
+        graphics_text_ascent(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn text_descent(&self) -> PyResult<f32> {
+        graphics_text_descent(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     /// Loads an image from a file and returns an Image object.

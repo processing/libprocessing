@@ -15,6 +15,7 @@ pub mod render;
 pub mod shader_value;
 pub mod sketch;
 pub mod surface;
+pub mod text;
 pub mod time;
 pub mod transform;
 
@@ -69,6 +70,7 @@ impl Plugin for ProcessingRenderPlugin {
             camera::OrbitCameraPlugin,
             bevy::camera_controller::free_camera::FreeCameraPlugin,
             bevy::camera_controller::pan_camera::PanCameraPlugin,
+            text::font::TextPlugin,
         ));
 
         app.add_systems(First, (clear_transient_meshes, activate_cameras))
@@ -1434,6 +1436,15 @@ pub fn geometry_set_attribute(
     })
 }
 
+pub fn geometry_create_from_mesh(mesh: Mesh) -> error::Result<Entity> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(geometry::create_from_mesh, mesh)
+            .unwrap())
+    })
+}
+
 pub fn geometry_box(width: f32, height: f32, depth: f32) -> error::Result<Entity> {
     app_mut(|app| {
         Ok(app
@@ -2346,4 +2357,384 @@ pub fn particles_apply(particles_entity: Entity, compute_entity: Entity) -> erro
 
     let workgroup_count = capacity.div_ceil(WORKGROUP_SIZE);
     compute_dispatch(compute_entity, workgroup_count, 1, 1)
+}
+
+// --- Font API ---
+
+/// Load a font file and return a font entity handle.
+///
+/// Reading fonts from the filesystem is not available on wasm; callers should
+/// register font bytes through another path there.
+pub fn font_load(path: &str) -> error::Result<Entity> {
+    use text::font::{Font, TextContext};
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = path;
+        return Err(error::ProcessingError::FontLoadError(
+            "loading fonts from a file is not supported on wasm".to_string(),
+        ));
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let data = std::fs::read(path)
+            .map_err(|e| error::ProcessingError::FontLoadError(format!("{}: {}", path, e)))?;
+
+        app_mut(|app| {
+            let text_cx = app.world().resource::<TextContext>().clone();
+            let family_name =
+                text_cx
+                    .load_font(data)
+                    .ok_or(error::ProcessingError::FontLoadError(
+                        "Could not determine font family name".to_string(),
+                    ))?;
+            let entity = app.world_mut().spawn(Font { family_name }).id();
+            Ok(entity)
+        })
+    }
+}
+
+/// Create a font handle from an existing font family name.
+pub fn font_create(name: &str) -> error::Result<Entity> {
+    use text::font::{Font, TextContext};
+
+    app_mut(|app| {
+        let text_cx = app.world().resource::<TextContext>().clone();
+        if !text_cx.has_font(name) {
+            return Err(error::ProcessingError::FontNotFound);
+        }
+        let entity = app
+            .world_mut()
+            .spawn(Font {
+                family_name: name.to_string(),
+            })
+            .id();
+        Ok(entity)
+    })
+}
+
+/// List all available font family names (system + registered).
+pub fn font_list() -> error::Result<Vec<String>> {
+    use text::font::TextContext;
+
+    app_mut(|app| {
+        let text_cx = app.world().resource::<TextContext>().clone();
+        Ok(text_cx.list_fonts())
+    })
+}
+
+/// Query variable font axes for a loaded font.
+pub fn font_variations(font_entity: Entity) -> error::Result<Vec<text::font::FontAxisInfo>> {
+    use text::font::TextContext;
+
+    app_mut(|app| {
+        let font = app.world().get::<text::font::Font>(font_entity).ok_or(
+            error::ProcessingError::InvalidArgument("Invalid font entity".to_string()),
+        )?;
+        let family = font.family_name.clone();
+        let text_cx = app.world().resource::<TextContext>().clone();
+        Ok(text_cx.font_variations(&family))
+    })
+}
+
+/// Query font metadata for a loaded font.
+pub fn font_metadata(font_entity: Entity) -> error::Result<text::font::FontMetadata> {
+    use text::font::TextContext;
+
+    app_mut(|app| {
+        let font = app.world().get::<text::font::Font>(font_entity).ok_or(
+            error::ProcessingError::InvalidArgument("Invalid font entity".to_string()),
+        )?;
+        let family = font.family_name.clone();
+        let text_cx = app.world().resource::<TextContext>().clone();
+        text_cx
+            .font_metadata(&family)
+            .ok_or(error::ProcessingError::InvalidArgument(format!(
+                "Font family '{}' not found",
+                family
+            )))
+    })
+}
+
+// --- Text API ---
+
+pub fn graphics_text_font(
+    graphics_entity: Entity,
+    font_entity: Option<Entity>,
+) -> error::Result<()> {
+    graphics_record_command(graphics_entity, DrawCommand::TextFont(font_entity))
+}
+
+pub fn graphics_text_style(graphics_entity: Entity, style: u8) -> error::Result<()> {
+    use render::command::TextStyle;
+    graphics_record_command(
+        graphics_entity,
+        DrawCommand::TextStyle(TextStyle::from(style)),
+    )
+}
+
+pub fn graphics_text_align(graphics_entity: Entity, h: u8, v: u8) -> error::Result<()> {
+    use render::command::{TextAlignH, TextAlignV};
+    graphics_record_command(
+        graphics_entity,
+        DrawCommand::TextAlign {
+            h: TextAlignH::from(h),
+            v: TextAlignV::from(v),
+        },
+    )
+}
+
+pub fn graphics_text_wrap(graphics_entity: Entity, mode: u8) -> error::Result<()> {
+    use render::command::TextWrapMode;
+    graphics_record_command(
+        graphics_entity,
+        DrawCommand::TextWrap(TextWrapMode::from(mode)),
+    )
+}
+
+pub fn graphics_text_weight(graphics_entity: Entity, weight: f32) -> error::Result<()> {
+    graphics_record_command(graphics_entity, DrawCommand::TextWeight(weight))
+}
+
+fn parse_tag(tag: &str) -> error::Result<[u8; 4]> {
+    let bytes = tag.as_bytes();
+    if bytes.len() != 4 {
+        return Err(error::ProcessingError::InvalidArgument(format!(
+            "Font tag must be exactly 4 characters, got '{}'",
+            tag
+        )));
+    }
+    Ok([bytes[0], bytes[1], bytes[2], bytes[3]])
+}
+
+pub fn graphics_text_variation(
+    graphics_entity: Entity,
+    tag: &str,
+    value: f32,
+) -> error::Result<()> {
+    let tag = parse_tag(tag)?;
+    graphics_record_command(graphics_entity, DrawCommand::TextVariation { tag, value })
+}
+
+pub fn graphics_clear_text_variations(graphics_entity: Entity) -> error::Result<()> {
+    graphics_record_command(graphics_entity, DrawCommand::ClearTextVariations)
+}
+
+pub fn graphics_text_feature(graphics_entity: Entity, tag: &str, value: u16) -> error::Result<()> {
+    let tag = parse_tag(tag)?;
+    graphics_record_command(graphics_entity, DrawCommand::TextFeature { tag, value })
+}
+
+pub fn graphics_no_text_feature(graphics_entity: Entity, tag: &str) -> error::Result<()> {
+    let tag = parse_tag(tag)?;
+    graphics_record_command(graphics_entity, DrawCommand::NoTextFeature { tag })
+}
+
+pub fn graphics_clear_text_features(graphics_entity: Entity) -> error::Result<()> {
+    graphics_record_command(graphics_entity, DrawCommand::ClearTextFeatures)
+}
+
+pub fn graphics_text_glyph_colors(
+    graphics_entity: Entity,
+    colors: Vec<Color>,
+) -> error::Result<()> {
+    graphics_record_command(graphics_entity, DrawCommand::TextGlyphColors(colors))
+}
+
+/// Snapshot a graphics entity's text state and the shared `TextContext`.
+fn text_query_state(
+    app: &App,
+    graphics_entity: Entity,
+    max_w: Option<f32>,
+    max_h: Option<f32>,
+) -> error::Result<(
+    render::primitive::text::OwnedTextParams,
+    text::font::TextContext,
+)> {
+    let state = app
+        .world()
+        .get::<render::RenderState>(graphics_entity)
+        .ok_or(error::ProcessingError::GraphicsNotFound)?;
+    let params = render::primitive::text::OwnedTextParams::from_render_state(state, max_w, max_h);
+    let text_cx = app.world().resource::<text::font::TextContext>().clone();
+    Ok((params, text_cx))
+}
+
+pub fn graphics_text_to_paths(
+    graphics_entity: Entity,
+    content: &str,
+    x: f32,
+    y: f32,
+) -> error::Result<Vec<Vec<render::primitive::text::PathCommand>>> {
+    app_mut(|app| {
+        let (params, text_cx) = text_query_state(app, graphics_entity, None, None)?;
+        Ok(render::primitive::text::text_to_paths(
+            content,
+            x,
+            y,
+            &params.as_params(),
+            &text_cx,
+        ))
+    })
+}
+
+pub fn graphics_text_to_contours(
+    graphics_entity: Entity,
+    content: &str,
+    x: f32,
+    y: f32,
+) -> error::Result<Vec<Vec<render::primitive::text::PathCommand>>> {
+    app_mut(|app| {
+        let (params, text_cx) = text_query_state(app, graphics_entity, None, None)?;
+        Ok(render::primitive::text::text_to_contours(
+            content,
+            x,
+            y,
+            &params.as_params(),
+            &text_cx,
+        ))
+    })
+}
+
+pub fn graphics_text_to_points(
+    graphics_entity: Entity,
+    content: &str,
+    x: f32,
+    y: f32,
+    sample_factor: Option<f32>,
+) -> error::Result<Vec<[f32; 2]>> {
+    app_mut(|app| {
+        let (params, text_cx) = text_query_state(app, graphics_entity, None, None)?;
+        Ok(render::primitive::text::text_to_points(
+            content,
+            x,
+            y,
+            sample_factor.unwrap_or(render::primitive::text::DEFAULT_SAMPLE_FACTOR),
+            &params.as_params(),
+            &text_cx,
+        ))
+    })
+}
+
+pub fn graphics_text_to_model(
+    graphics_entity: Entity,
+    content: &str,
+    x: f32,
+    y: f32,
+    depth: f32,
+) -> error::Result<Mesh> {
+    app_mut(|app| {
+        let (params, text_cx) = text_query_state(app, graphics_entity, None, None)?;
+        Ok(render::primitive::text::text_to_model(
+            content,
+            x,
+            y,
+            depth,
+            &params.as_params(),
+            &text_cx,
+        ))
+    })
+}
+
+pub fn graphics_text_width(graphics_entity: Entity, content: &str) -> error::Result<f32> {
+    app_mut(|app| {
+        let (params, text_cx) = text_query_state(app, graphics_entity, None, None)?;
+        Ok(render::primitive::text::text_width(
+            content,
+            &params.as_params(),
+            &text_cx,
+        ))
+    })
+}
+
+pub fn graphics_text_ascent(graphics_entity: Entity) -> error::Result<f32> {
+    app_mut(|app| {
+        let (params, text_cx) = text_query_state(app, graphics_entity, None, None)?;
+        Ok(render::primitive::text::text_ascent(
+            &params.as_params(),
+            &text_cx,
+        ))
+    })
+}
+
+pub fn graphics_text_descent(graphics_entity: Entity) -> error::Result<f32> {
+    app_mut(|app| {
+        let (params, text_cx) = text_query_state(app, graphics_entity, None, None)?;
+        Ok(render::primitive::text::text_descent(
+            &params.as_params(),
+            &text_cx,
+        ))
+    })
+}
+
+pub fn graphics_text_bounds(
+    graphics_entity: Entity,
+    content: &str,
+    x: f32,
+    y: f32,
+    max_w: Option<f32>,
+    max_h: Option<f32>,
+) -> error::Result<[f32; 4]> {
+    app_mut(|app| {
+        let (params, text_cx) = text_query_state(app, graphics_entity, max_w, max_h)?;
+        Ok(render::primitive::text::text_bounds(
+            content,
+            x,
+            y,
+            &params.as_params(),
+            &text_cx,
+        ))
+    })
+}
+
+pub fn graphics_text_line_count(graphics_entity: Entity, content: &str) -> error::Result<usize> {
+    app_mut(|app| {
+        let (params, text_cx) = text_query_state(app, graphics_entity, None, None)?;
+        Ok(render::primitive::text::text_line_count(
+            content,
+            &params.as_params(),
+            &text_cx,
+        ))
+    })
+}
+
+pub fn graphics_text_lines(
+    graphics_entity: Entity,
+    content: &str,
+    x: f32,
+    y: f32,
+    max_w: Option<f32>,
+    max_h: Option<f32>,
+) -> error::Result<Vec<render::primitive::text::TextLineInfo>> {
+    app_mut(|app| {
+        let (params, text_cx) = text_query_state(app, graphics_entity, max_w, max_h)?;
+        Ok(render::primitive::text::text_lines(
+            content,
+            x,
+            y,
+            &params.as_params(),
+            &text_cx,
+        ))
+    })
+}
+
+pub fn graphics_text_glyph_rects(
+    graphics_entity: Entity,
+    content: &str,
+    x: f32,
+    y: f32,
+    max_w: Option<f32>,
+    max_h: Option<f32>,
+) -> error::Result<Vec<render::primitive::text::TextGlyphInfo>> {
+    app_mut(|app| {
+        let (params, text_cx) = text_query_state(app, graphics_entity, max_w, max_h)?;
+        Ok(render::primitive::text::text_glyph_rects(
+            content,
+            x,
+            y,
+            &params.as_params(),
+            &text_cx,
+        ))
+    })
 }
