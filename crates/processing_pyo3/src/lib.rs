@@ -756,6 +756,52 @@ mod mewnala {
         PyColor::xyz(x, y, z, a)
     }
 
+
+    // ── Processing math constants (issue #128) ──────────────────────────────
+    #[pyfunction] fn PI() -> f32 { std::f32::consts::PI }
+    #[pyfunction] fn TWO_PI() -> f32 { std::f32::consts::TAU }
+    #[pyfunction] fn TAU() -> f32 { std::f32::consts::TAU }
+    #[pyfunction] fn HALF_PI() -> f32 { std::f32::consts::FRAC_PI_2 }
+    #[pyfunction] fn QUARTER_PI() -> f32 { std::f32::consts::FRAC_PI_4 }
+    #[pyfunction] fn DEG_TO_RAD() -> f32 { std::f32::consts::PI / 180.0 }
+    #[pyfunction] fn RAD_TO_DEG() -> f32 { 180.0 / std::f32::consts::PI }
+
+    // ── Processing-specific math functions (issues #135, #140) ─────────────
+    // Note: stdlib duplicates (sin, cos, abs, min, max, floor, etc.) are
+    // intentionally omitted -- users should use Python's math module instead.
+
+    // sq(x) = x squared
+    #[pyfunction] fn sq(x: f32) -> f32 { x * x }
+
+    // constrain: clamp a value to [lo, hi]
+    #[pyfunction] fn constrain(x: f32, lo: f32, hi: f32) -> f32 { x.clamp(lo, hi) }
+
+    // remap: map a value from one range to another (renamed from map() to avoid collision with Python builtin)
+    #[pyfunction]
+    fn remap(value: f32, start1: f32, stop1: f32, start2: f32, stop2: f32) -> f32 {
+        start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1))
+    }
+
+    // lerp: linear interpolation
+    #[pyfunction] fn lerp(start: f32, stop: f32, t: f32) -> f32 { start + (stop - start) * t }
+
+    // norm: normalize a value to [0, 1] within a range
+    #[pyfunction] fn norm(value: f32, start: f32, stop: f32) -> f32 { (value - start) / (stop - start) }
+
+    // dist: Euclidean distance between two points (2D or 3D)
+    #[pyfunction]
+    #[pyo3(signature = (x1, y1, x2, y2, z1=0.0, z2=0.0))]
+    fn dist(x1: f32, y1: f32, x2: f32, y2: f32, z1: f32, z2: f32) -> f32 {
+        let dx = x2 - x1; let dy = y2 - y1; let dz = z2 - z1;
+        (dx*dx + dy*dy + dz*dz).sqrt()
+    }
+
+    // mag: magnitude of a vector
+    #[pyfunction]
+    #[pyo3(signature = (x, y, z=0.0))]
+    fn mag(x: f32, y: f32, z: f32) -> f32 { (x*x + y*y + z*z).sqrt() }
+
+    // ─────────────────────────────────────────────────────────────────────────
     #[cfg(feature = "webcam")]
     #[pymodule_export]
     use super::webcam::Webcam;
