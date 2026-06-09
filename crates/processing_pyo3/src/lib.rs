@@ -756,6 +756,85 @@ mod mewnala {
         PyColor::xyz(x, y, z, a)
     }
 
+
+    // ── Processing math functions (issues #135, #140) ────────────────────────
+
+    // Trig
+    #[pyfunction] fn sin(x: f32) -> f32 { x.sin() }
+    #[pyfunction] fn cos(x: f32) -> f32 { x.cos() }
+    #[pyfunction] fn tan(x: f32) -> f32 { x.tan() }
+    #[pyfunction] fn asin(x: f32) -> f32 { x.asin() }
+    #[pyfunction] fn acos(x: f32) -> f32 { x.acos() }
+    #[pyfunction] fn atan(x: f32) -> f32 { x.atan() }
+    #[pyfunction] fn atan2(y: f32, x: f32) -> f32 { y.atan2(x) }
+
+    // Math
+    #[pyfunction] fn sqrt(x: f32) -> f32 { x.sqrt() }
+    #[pyfunction] fn sq(x: f32) -> f32 { x * x }
+    #[pyfunction] fn pow(x: f32, e: f32) -> f32 { x.powf(e) }
+    #[pyfunction] fn exp(x: f32) -> f32 { x.exp() }
+    #[pyfunction] fn log(x: f32) -> f32 { x.ln() }
+
+    // Rounding
+    #[pyfunction] fn floor(x: f32) -> f32 { x.floor() }
+    #[pyfunction] fn ceil(x: f32) -> f32 { x.ceil() }
+    #[pyfunction] fn round(x: f32) -> f32 { x.round() }
+
+    // Abs / sign
+    #[pyfunction]
+    fn abs(x: &Bound<'_, PyAny>) -> PyResult<f32> {
+        if let Ok(v) = x.extract::<f32>() { return Ok(v.abs()); }
+        if let Ok(v) = x.extract::<i64>() { return Ok((v.abs()) as f32); }
+        Err(pyo3::exceptions::PyTypeError::new_err("abs() requires a number"))
+    }
+
+    // Min / max (handle int and float)
+    #[pyfunction]
+    fn min(a: &Bound<'_, PyAny>, b: &Bound<'_, PyAny>) -> PyResult<f32> {
+        let a: f32 = a.extract::<f32>().or_else(|_| a.extract::<i64>().map(|v| v as f32))?;
+        let b: f32 = b.extract::<f32>().or_else(|_| b.extract::<i64>().map(|v| v as f32))?;
+        Ok(a.min(b))
+    }
+    #[pyfunction]
+    fn max(a: &Bound<'_, PyAny>, b: &Bound<'_, PyAny>) -> PyResult<f32> {
+        let a: f32 = a.extract::<f32>().or_else(|_| a.extract::<i64>().map(|v| v as f32))?;
+        let b: f32 = b.extract::<f32>().or_else(|_| b.extract::<i64>().map(|v| v as f32))?;
+        Ok(a.max(b))
+    }
+
+    // Constrain / clamp
+    #[pyfunction] fn constrain(x: f32, lo: f32, hi: f32) -> f32 { x.clamp(lo, hi) }
+
+    // Map range
+    #[pyfunction]
+    fn map(value: f32, start1: f32, stop1: f32, start2: f32, stop2: f32) -> f32 {
+        start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1))
+    }
+
+    // Lerp
+    #[pyfunction] fn lerp(start: f32, stop: f32, t: f32) -> f32 { start + (stop - start) * t }
+
+    // Norm
+    #[pyfunction] fn norm(value: f32, start: f32, stop: f32) -> f32 { (value - start) / (stop - start) }
+
+    // Distance
+    #[pyfunction]
+    #[pyo3(signature = (x1, y1, x2, y2, z1=0.0, z2=0.0))]
+    fn dist(x1: f32, y1: f32, x2: f32, y2: f32, z1: f32, z2: f32) -> f32 {
+        let dx = x2 - x1; let dy = y2 - y1; let dz = z2 - z1;
+        (dx*dx + dy*dy + dz*dz).sqrt()
+    }
+
+    // Mag
+    #[pyfunction]
+    #[pyo3(signature = (x, y, z=0.0))]
+    fn mag(x: f32, y: f32, z: f32) -> f32 { (x*x + y*y + z*z).sqrt() }
+
+    // Degrees / radians
+    #[pyfunction] fn degrees(r: f32) -> f32 { r.to_degrees() }
+    #[pyfunction] fn radians(d: f32) -> f32 { d.to_radians() }
+
+    // ─────────────────────────────────────────────────────────────────────────
     #[cfg(feature = "webcam")]
     #[pymodule_export]
     use super::webcam::Webcam;
