@@ -757,6 +757,15 @@ mod mewnala {
     }
 
 
+    // ── Processing math constants (issue #128) ──────────────────────────────
+    #[pyfunction] fn PI() -> f32 { std::f32::consts::PI }
+    #[pyfunction] fn TWO_PI() -> f32 { std::f32::consts::TAU }
+    #[pyfunction] fn TAU() -> f32 { std::f32::consts::TAU }
+    #[pyfunction] fn HALF_PI() -> f32 { std::f32::consts::FRAC_PI_2 }
+    #[pyfunction] fn QUARTER_PI() -> f32 { std::f32::consts::FRAC_PI_4 }
+    #[pyfunction] fn DEG_TO_RAD() -> f32 { std::f32::consts::PI / 180.0 }
+    #[pyfunction] fn RAD_TO_DEG() -> f32 { 180.0 / std::f32::consts::PI }
+
     // ── Processing-specific math functions (issues #135, #140) ─────────────
     // Note: stdlib duplicates (sin, cos, abs, min, max, floor, etc.) are
     // intentionally omitted -- users should use Python's math module instead.
