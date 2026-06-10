@@ -8,14 +8,16 @@ use bevy::{
     },
     camera::visibility::RenderLayers,
     ecs::system::RunSystemOnce,
-    gltf::{Gltf, GltfMeshName},
+    gltf::{Gltf, GltfMaterial, GltfMeshName},
+    pbr::ExtendedMaterial,
     prelude::*,
     world_serialization::WorldInstanceSpawner,
 };
 
 use crate::geometry::{BuiltinAttributes, Geometry, layout::VertexLayout};
 use crate::graphics;
-use crate::render::material::UntypedMaterial;
+use crate::material::ProcessingMaterial;
+use crate::render::material::{ProcessingExtendedMaterial, UntypedMaterial};
 use processing_core::config::{Config, ConfigKey};
 use processing_core::error::{ProcessingError, Result};
 
@@ -67,7 +69,6 @@ pub struct GltfHandle {
     handle: Handle<Gltf>,
     instance_id: bevy::world_serialization::InstanceId,
     graphics_entity: Entity,
-    base_path: String,
 }
 
 pub fn load(
@@ -76,10 +77,10 @@ pub fn load(
 ) -> Result<Entity> {
     let config = world.resource::<Config>().clone();
     let base_path = match path.find('#') {
-        Some(idx) => path[..idx].to_string(),
-        None => path.clone(),
+        Some(idx) => &path[..idx],
+        None => path.as_str(),
     };
-    let asset_path = resolve_asset_path(&config, &base_path);
+    let asset_path = resolve_asset_path(&config, base_path);
     let handle: Handle<Gltf> = world.get_asset_server().load(asset_path);
     block_on_load(world, |w| w.get_asset_server().load_state(&handle))?;
 
@@ -122,7 +123,6 @@ pub fn load(
             handle,
             instance_id,
             graphics_entity,
-            base_path,
         })
         .id();
     Ok(entity)
@@ -182,40 +182,69 @@ pub fn geometry(
     Ok(entity)
 }
 
+/// Translate a bevy [`GltfMaterial`] into the [`StandardMaterial`] base of a
+/// [`ProcessingExtendedMaterial`]. `GltfMaterial` mirrors `StandardMaterial`'s
+/// fields, so we copy across the ones that drive shading and let the rest fall
+/// back to defaults.
+fn gltf_material_to_standard(m: &GltfMaterial) -> StandardMaterial {
+    StandardMaterial {
+        base_color: m.base_color,
+        base_color_channel: m.base_color_channel.clone(),
+        base_color_texture: m.base_color_texture.clone(),
+        emissive: m.emissive,
+        emissive_channel: m.emissive_channel.clone(),
+        emissive_texture: m.emissive_texture.clone(),
+        perceptual_roughness: m.perceptual_roughness,
+        metallic: m.metallic,
+        metallic_roughness_channel: m.metallic_roughness_channel.clone(),
+        metallic_roughness_texture: m.metallic_roughness_texture.clone(),
+        normal_map_channel: m.normal_map_channel.clone(),
+        normal_map_texture: m.normal_map_texture.clone(),
+        occlusion_channel: m.occlusion_channel.clone(),
+        occlusion_texture: m.occlusion_texture.clone(),
+        double_sided: m.double_sided,
+        cull_mode: m.cull_mode,
+        unlit: m.unlit,
+        alpha_mode: m.alpha_mode,
+        uv_transform: m.uv_transform,
+        ..default()
+    }
+}
+
 pub fn material(
     In((gltf_entity, name)): In<(Entity, String)>,
     world: &mut World,
 ) -> Result<Entity> {
-    let handle = world
+    let gltf_handle = world
         .get::<GltfHandle>(gltf_entity)
-        .ok_or(ProcessingError::InvalidEntity)?;
-    let gltf_handle = handle.handle.clone();
-    let base_path = handle.base_path.clone();
+        .ok_or(ProcessingError::InvalidEntity)?
+        .handle
+        .clone();
 
-    let material_index = {
+    let standard = {
         let gltf_assets = world.resource::<Assets<Gltf>>();
         let gltf = gltf_assets
             .get(&gltf_handle)
             .ok_or_else(|| ProcessingError::GltfLoadError("GLTF asset not found".into()))?;
-        let named_handle = gltf.named_materials.get(name.as_str()).ok_or_else(|| {
+        let mat_handle = gltf.named_materials.get(name.as_str()).ok_or_else(|| {
             ProcessingError::GltfLoadError(format!("Material '{}' not found in GLTF", name))
         })?;
-        gltf.materials
-            .iter()
-            .position(|h| h.id() == named_handle.id())
-            .ok_or_else(|| {
-                ProcessingError::GltfLoadError(format!(
-                    "Material '{}' not found in materials list",
-                    name
-                ))
-            })?
+
+        let gltf_materials = world.resource::<Assets<GltfMaterial>>();
+        let gltf_material = gltf_materials.get(mat_handle).ok_or_else(|| {
+            ProcessingError::GltfLoadError(format!("Material '{}' asset not loaded", name))
+        })?;
+        gltf_material_to_standard(gltf_material)
     };
 
-    let config = world.resource::<Config>().clone();
-    let std_path = format!("{}#Material{}/std", base_path, material_index);
-    let asset_path = resolve_asset_path(&config, &std_path);
-    let handle: Handle<StandardMaterial> = world.get_asset_server().load(asset_path);
-    block_on_load(world, |w| w.get_asset_server().load_state(&handle))?;
+    // wrap in the extended material the processing renderer's pipeline expects, so
+    // the draw systems attach a `MeshMaterial3d` and `material_set` can mutate it
+    let handle = world
+        .resource_mut::<Assets<ProcessingExtendedMaterial>>()
+        .add(ExtendedMaterial {
+            base: standard,
+            extension: ProcessingMaterial { blend_state: None },
+        });
     let entity = world.spawn(UntypedMaterial(handle.untyped())).id();
     Ok(entity)
 }
