@@ -8,8 +8,8 @@ def setup():
     mode_3d()
 
     dir_light = directional_light((1.0, 0.98, 0.95), 1500.0)
-    point_light = point_light((1.0, 1.0, 1.0), 100000.0, 800.0, 0.0)
-    point_light.position(200.0, 200.0, 400.0)
+    p_light = point_light((1.0, 1.0, 1.0), 100000.0, 800.0, 0.0)
+    p_light.position(200.0, 200.0, 400.0)
 
     mat = Material()
     mat.set(roughness=0.3)

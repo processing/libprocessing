@@ -19,9 +19,9 @@ def setup():
     point_light_b.look_at(0.0, 0.0, 0.0)
 
     # Spot Light
-    spot_light = spot_light((0.25, 0.8, 0.19), 15.0 * 1000000.0, 200.0, 0.84, 0.0, 0.7854)
-    spot_light.position(40.0, 0.0, 70.0)
-    spot_light.look_at(0.0, 0.0, 0.0)
+    spot_light_a = spot_light((0.25, 0.8, 0.19), 15.0 * 1000000.0, 200.0, 0.84, 0.0, 0.7854)
+    spot_light_a.position(40.0, 0.0, 70.0)
+    spot_light_a.look_at(0.0, 0.0, 0.0)
 
 def draw():
     global angle

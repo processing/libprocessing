@@ -3,7 +3,7 @@ from mewnala import *
 def setup():
     global i
     size(800, 600)
-    i = image("images/logo.png")
+    i = load_image("images/logo.png")
 
 
 def draw():
