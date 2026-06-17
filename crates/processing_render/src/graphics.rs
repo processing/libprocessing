@@ -118,6 +118,8 @@ impl CameraProjection for ProcessingProjection {
         // this gets called with the render target's physical dimensions (i.e. accounting for
         // scale factor), but our projection is in logical pixel units
         // TODO: handle resizes?
+        // self.width = _width;
+        // self.height = _height;
     }
 
     fn far(&self) -> f32 {

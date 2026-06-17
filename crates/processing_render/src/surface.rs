@@ -21,13 +21,14 @@
 use bevy::{
     app::{App, Plugin},
     asset::Assets,
+    camera::{CameraProjection, Projection, RenderTarget},
     ecs::query::QueryEntityError,
     math::{IRect, IVec2},
     prelude::{Commands, Component, Entity, In, Query, ResMut, Window, With, default},
     render::render_resource::{Extent3d, TextureFormat},
     window::{
         CompositeAlphaMode, Monitor, RawHandleWrapper, WindowLevel, WindowMode, WindowPosition,
-        WindowResolution, WindowWrapper,
+        WindowRef, WindowResolution, WindowWrapper,
     },
 };
 use raw_window_handle::{
@@ -39,7 +40,10 @@ use processing_core::error::{self, ProcessingError, Result};
 #[cfg(not(target_os = "windows"))]
 use std::ptr::NonNull;
 
-use crate::image::Image;
+use crate::{
+    graphics::{ProcessingProjection, SurfaceSize},
+    image::Image,
+};
 
 #[derive(Component, Debug, Clone)]
 pub struct Surface;
@@ -394,7 +398,19 @@ pub fn destroy(
 pub fn resize(
     In((window_entity, width, height)): In<(Entity, u32, u32)>,
     mut windows: Query<&mut Window>,
+    mut graphics_query: Query<(&RenderTarget, &mut SurfaceSize, &mut Projection)>,
 ) -> Result<()> {
+    let width = width.max(1);
+    let height = height.max(1);
+
+    // let Ok(window) = windows.get_mut(window_entity) else {
+    //     return Ok(());
+    // };
+    //
+    // if window.mode != WindowMode::Windowed {
+    //     return Ok(());
+    // }
+
     if let Ok(mut window) = windows.get_mut(window_entity) {
         let scale = window.resolution.scale_factor();
         let physical_w = (width as f32 * scale) as u32;
@@ -403,6 +419,17 @@ pub fn resize(
             .resolution
             .set_physical_resolution(physical_w, physical_h);
     }
+
+    // for (target, mut surface_size, mut projection) in graphics_query.iter_mut() {
+    //     if let RenderTarget::Window(WindowRef::Entity(surface)) = *target {
+    //         if surface == window_entity {
+    //             *surface_size = SurfaceSize(width, height);
+    //             if let Projection::Custom(ref mut custom) = *projection {
+    //                 custom.update(width as f32, height as f32);
+    //             }
+    //         }
+    //     }
+    // }
     Ok(())
 }
 
@@ -445,6 +472,20 @@ pub fn physical_height(In(entity): In<Entity>, query: Query<&Window>) -> u32 {
     query
         .get(entity)
         .map(|w| w.resolution.physical_height())
+        .unwrap_or(0)
+}
+
+pub fn logical_width(In(entity): In<Entity>, query: Query<&Window>) -> u32 {
+    query
+        .get(entity)
+        .map(|w| w.resolution.width() as u32)
+        .unwrap_or(0)
+}
+
+pub fn logical_height(In(entity): In<Entity>, query: Query<&Window>) -> u32 {
+    query
+        .get(entity)
+        .map(|w| w.resolution.height() as u32)
         .unwrap_or(0)
 }
 
