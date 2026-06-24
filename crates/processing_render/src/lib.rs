@@ -1702,20 +1702,20 @@ pub fn surface_physical_height(entity: Entity) -> error::Result<u32> {
     })
 }
 
-pub fn surface_logical_width(entity: Entity) -> error::Result<u32> {
+pub fn surface_width(entity: Entity) -> error::Result<u32> {
     app_mut(|app| {
         Ok(app
             .world_mut()
-            .run_system_cached_with(surface::logical_width, entity)
+            .run_system_cached_with(surface::width, entity)
             .unwrap())
     })
 }
 
-pub fn surface_logical_height(entity: Entity) -> error::Result<u32> {
+pub fn surface_height(entity: Entity) -> error::Result<u32> {
     app_mut(|app| {
         Ok(app
             .world_mut()
-            .run_system_cached_with(surface::logical_height, entity)
+            .run_system_cached_with(surface::height, entity)
             .unwrap())
     })
 }

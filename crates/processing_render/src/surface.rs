@@ -40,10 +40,7 @@ use processing_core::error::{self, ProcessingError, Result};
 #[cfg(not(target_os = "windows"))]
 use std::ptr::NonNull;
 
-use crate::{
-    graphics::SurfaceSize,
-    image::Image,
-};
+use crate::{graphics::SurfaceSize, image::Image};
 
 #[derive(Component, Debug, Clone)]
 pub struct Surface;
@@ -464,14 +461,14 @@ pub fn physical_height(In(entity): In<Entity>, query: Query<&Window>) -> u32 {
         .unwrap_or(0)
 }
 
-pub fn logical_width(In(entity): In<Entity>, query: Query<&Window>) -> u32 {
+pub fn width(In(entity): In<Entity>, query: Query<&Window>) -> u32 {
     query
         .get(entity)
         .map(|w| w.resolution.width() as u32)
         .unwrap_or(0)
 }
 
-pub fn logical_height(In(entity): In<Entity>, query: Query<&Window>) -> u32 {
+pub fn height(In(entity): In<Entity>, query: Query<&Window>) -> u32 {
     query
         .get(entity)
         .map(|w| w.resolution.height() as u32)
