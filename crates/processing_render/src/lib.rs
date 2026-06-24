@@ -1702,6 +1702,24 @@ pub fn surface_physical_height(entity: Entity) -> error::Result<u32> {
     })
 }
 
+pub fn surface_width(entity: Entity) -> error::Result<u32> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(surface::width, entity)
+            .unwrap())
+    })
+}
+
+pub fn surface_height(entity: Entity) -> error::Result<u32> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(surface::height, entity)
+            .unwrap())
+    })
+}
+
 pub fn monitor_list() -> error::Result<Vec<Entity>> {
     app_mut(|app| Ok(app.world_mut().run_system_cached(monitor::list).unwrap()))
 }
