@@ -359,6 +359,9 @@ impl GlfwContext {
             Ok(())
         });
         self.last_applied.position = frame_pos;
+
+        let (w, h) = self.window.get_size();
+        self.last_applied.size = bevy::math::UVec2::new(w.max(0) as u32, h.max(0) as u32);
     }
 
     #[cfg(not(feature = "wayland"))]
