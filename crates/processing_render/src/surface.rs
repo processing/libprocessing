@@ -412,7 +412,8 @@ pub fn resize(
     // SurfaceSize changes on resize, if not handled will break APIs dependent on correct SurfaceSize
     for (target, mut surface_size) in graphics_query.iter_mut() {
         if let RenderTarget::Window(WindowRef::Entity(surface)) = *target
-            && surface == window_entity {
+            && surface == window_entity
+        {
             *surface_size = SurfaceSize(width, height);
         }
     }
