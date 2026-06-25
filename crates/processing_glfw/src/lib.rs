@@ -301,12 +301,8 @@ impl GlfwContext {
                     input_set_focus(surface, focused).unwrap();
                 }
                 WindowEvent::Size(width, height) => {
-                    processing_render::surface_resize(
-                        surface,
-                        width.max(1) as u32,
-                        height.max(1) as u32,
-                    )
-                    .unwrap();
+                    processing_render::surface_resize(surface, width as u32, height as u32)
+                        .unwrap();
                 }
                 _ => {}
             }

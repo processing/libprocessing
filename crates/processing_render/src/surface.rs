@@ -21,7 +21,7 @@
 use bevy::{
     app::{App, Plugin},
     asset::Assets,
-    camera::{Projection, RenderTarget},
+    camera::RenderTarget,
     ecs::query::QueryEntityError,
     math::{IRect, IVec2},
     prelude::{Commands, Component, Entity, In, Query, ResMut, Window, With, default},
@@ -395,8 +395,11 @@ pub fn destroy(
 pub fn resize(
     In((window_entity, width, height)): In<(Entity, u32, u32)>,
     mut windows: Query<&mut Window>,
-    mut graphics_query: Query<(&RenderTarget, &mut SurfaceSize, &mut Projection)>,
+    mut graphics_query: Query<(&RenderTarget, &mut SurfaceSize)>,
 ) -> Result<()> {
+    let width = width.max(1);
+    let height = height.max(1);
+
     if let Ok(mut window) = windows.get_mut(window_entity) {
         let scale = window.resolution.scale_factor();
         let physical_w = (width as f32 * scale) as u32;
@@ -405,14 +408,12 @@ pub fn resize(
             .resolution
             .set_physical_resolution(physical_w, physical_h);
     }
-
-    for (target, mut surface_size, mut projection) in graphics_query.iter_mut() {
+    
+    // SurfaceSize changes on resize, if not handled will break APIs dependent on correct SurfaceSize
+    for (target, mut surface_size) in graphics_query.iter_mut() {
         if let RenderTarget::Window(WindowRef::Entity(surface)) = *target {
             if surface == window_entity {
                 *surface_size = SurfaceSize(width, height);
-                if let Projection::Custom(ref mut custom) = *projection {
-                    custom.update(width as f32, height as f32);
-                }
             }
         }
     }
