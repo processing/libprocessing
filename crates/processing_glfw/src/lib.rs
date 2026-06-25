@@ -300,6 +300,10 @@ impl GlfwContext {
                 WindowEvent::Focus(focused) => {
                     input_set_focus(surface, focused).unwrap();
                 }
+                WindowEvent::Size(width, height) => {
+                    processing_render::surface_resize(surface, width as u32, height as u32)
+                        .unwrap();
+                }
                 _ => {}
             }
         }
@@ -355,6 +359,9 @@ impl GlfwContext {
             Ok(())
         });
         self.last_applied.position = frame_pos;
+
+        let (w, h) = self.window.get_size();
+        self.last_applied.size = bevy::math::UVec2::new(w.max(0) as u32, h.max(0) as u32);
     }
 
     #[cfg(not(feature = "wayland"))]
@@ -529,8 +536,8 @@ fn read_desired_window(surface: Entity) -> Option<DesiredWindow> {
                 _ => None,
             },
             size: bevy::math::UVec2::new(
-                window.resolution.physical_width(),
-                window.resolution.physical_height(),
+                window.resolution.width() as u32,
+                window.resolution.height() as u32,
             ),
             visible: window.visible,
             resizable: window.resizable,

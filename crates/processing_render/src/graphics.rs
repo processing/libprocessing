@@ -22,7 +22,7 @@ use bevy::{
         sync_world::MainEntity,
         view::ViewTarget,
     },
-    window::WindowRef,
+    window::{WindowRef, WindowResized},
 };
 
 use crate::{
@@ -118,6 +118,8 @@ impl CameraProjection for ProcessingProjection {
         // this gets called with the render target's physical dimensions (i.e. accounting for
         // scale factor), but our projection is in logical pixel units
         // TODO: handle resizes?
+        self.width = _width;
+        self.height = _height;
     }
 
     fn far(&self) -> f32 {
@@ -258,6 +260,7 @@ pub fn sync_to_surface(
     mut graphics_query: Query<(&mut Graphics, &RenderTarget)>,
     windows: Query<&Window, (With<Surface>, Changed<Window>)>,
     render_device: Res<RenderDevice>,
+    mut resize_messages: MessageWriter<WindowResized>,
 ) {
     for (mut graphics, target) in graphics_query.iter_mut() {
         let RenderTarget::Window(WindowRef::Entity(surface_entity)) = *target else {
@@ -271,6 +274,12 @@ pub fn sync_to_surface(
         if graphics.size.width == physical_w && graphics.size.height == physical_h {
             continue;
         }
+        //winit plugin disabled, so WindowResized is never triggered automatically
+        resize_messages.write(WindowResized {
+            window: surface_entity,
+            width: window.width(),
+            height: window.height(),
+        });
         graphics.size = Extent3d {
             width: physical_w,
             height: physical_h,
