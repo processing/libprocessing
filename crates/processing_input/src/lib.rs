@@ -8,7 +8,7 @@ use bevy::input::mouse::{
 };
 use bevy::input::touch::TouchPhase;
 use bevy::prelude::*;
-use bevy::window::CursorMoved;
+use bevy::window::{CursorMoved, WindowResized};
 
 use processing_core::app_mut;
 use processing_core::error;
@@ -340,5 +340,16 @@ pub fn input_mouse_scrolled() -> error::Result<bool> {
     app_mut(|app| {
         let d = app.world().resource::<AccumulatedMouseScroll>().delta;
         Ok(d.x != 0.0 || d.y != 0.0)
+    })
+}
+
+pub fn input_window_resize(surface: Entity, width: f32, height: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut().write_message(WindowResized {
+            window: surface,
+            width,
+            height,
+        });
+        Ok(())
     })
 }
