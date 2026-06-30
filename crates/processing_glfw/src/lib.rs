@@ -13,7 +13,7 @@ use processing_core::error::Result;
 use processing_input::{
     input_cursor_grab_mode, input_cursor_visible, input_flush, input_set_char,
     input_set_cursor_enter, input_set_cursor_leave, input_set_focus, input_set_key,
-    input_set_mouse_button, input_set_mouse_move, input_set_scroll,
+    input_set_mouse_button, input_set_mouse_move, input_set_scroll, input_window_resize,
 };
 use processing_render::surface::{MonitorWorkarea, WindowControls};
 
@@ -256,6 +256,7 @@ impl GlfwContext {
             }
         };
 
+        let mut pending_resize: Option<(i32, i32)> = None;
         for (_, event) in glfw::flush_messages(&self.events) {
             match event {
                 WindowEvent::Close => {
@@ -300,6 +301,10 @@ impl GlfwContext {
                 WindowEvent::Focus(focused) => {
                     input_set_focus(surface, focused).unwrap();
                 }
+                WindowEvent::Size(width, height) => {
+                    // A drag delivers many Size events per poll; keep only the last and apply it once after the loop.
+                    pending_resize = Some((width, height));
+                }
                 _ => {}
             }
         }
@@ -307,6 +312,12 @@ impl GlfwContext {
         if self.window.should_close() {
             self.window.hide();
             return false;
+        }
+
+        // Apply the coalesced resize once, the WindowResized message and Window change are processed this poll.
+        if let Some((width, height)) = pending_resize {
+            input_window_resize(surface, width as f32, height as f32).unwrap();
+            processing_render::surface_resize(surface, width as u32, height as u32).unwrap();
         }
 
         let Ok(_) = input_flush() else {
@@ -355,6 +366,9 @@ impl GlfwContext {
             Ok(())
         });
         self.last_applied.position = frame_pos;
+
+        let (w, h) = self.window.get_size();
+        self.last_applied.size = bevy::math::UVec2::new(w.max(0) as u32, h.max(0) as u32);
     }
 
     #[cfg(not(feature = "wayland"))]
@@ -529,8 +543,8 @@ fn read_desired_window(surface: Entity) -> Option<DesiredWindow> {
                 _ => None,
             },
             size: bevy::math::UVec2::new(
-                window.resolution.physical_width(),
-                window.resolution.physical_height(),
+                window.resolution.width() as u32,
+                window.resolution.height() as u32,
             ),
             visible: window.visible,
             resizable: window.resizable,
