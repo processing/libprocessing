@@ -68,6 +68,9 @@ processing_glfw = { workspace = true, features = ["wayland"] }
 [patch."https://github.com/bevyengine/bevy"]
 bevy = { git = "https://github.com/processing/bevy", branch = "main" }
 
+[patch.crates-io]
+bevy = { git = "https://github.com/processing/bevy", branch = "main" }
+
 [[example]]
 name = "rectangle"
 path = "examples/rectangle.rs"
