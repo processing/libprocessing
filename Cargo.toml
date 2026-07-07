@@ -23,7 +23,37 @@ type_complexity = "allow"
 too_many_arguments = "allow"
 
 [workspace.dependencies]
-bevy = { git = "https://github.com/processing/bevy", branch = "main", features = ["file_watcher", "shader_format_wesl", "free_camera", "pan_camera"] }
+bevy = { git = "https://github.com/processing/bevy", branch = "main", default-features = false, features = [
+  # 2d
+  "2d_bevy_render",
+  "default_app",
+  "picking",
+  "scene",
+
+  # 3d
+  "3d_bevy_render",
+
+  # ui
+  "ui_api",
+  "ui_bevy_render",
+
+  # default_platform
+  "android-game-activity",
+  "bevy_gilrs",
+  "bevy_winit",
+  "default_font",
+  "multi_threaded",
+  "std",
+  "sysinfo_plugin",
+  "wayland",
+  "webgl2",
+  "x11",
+  "file_watcher",
+  "shader_format_wesl",
+  "free_camera",
+  "pan_camera",
+  
+] }
 bevy_naga_reflect = { git = "https://github.com/tychedelia/bevy_naga_reflect" }
 bevy_cuda = { git = "https://github.com/tychedelia/bevy_cuda" }
 naga = { version = "29", features = ["wgsl-in"] }
@@ -36,6 +66,7 @@ processing_cuda = { path = "crates/processing_cuda" }
 processing_pyo3 = { path = "crates/processing_pyo3" }
 processing_render = { path = "crates/processing_render" }
 processing_midi = { path = "crates/processing_midi" }
+processing_audio = { path = "crates/processing_audio" }
 processing_input = { path = "crates/processing_input" }
 processing_glfw = { path = "crates/processing_glfw" }
 processing_webcam = { path = "crates/processing_webcam" }
@@ -47,6 +78,7 @@ bevy = { workspace = true }
 processing_core = { workspace = true }
 processing_render = { workspace = true }
 processing_midi = { workspace = true }
+processing_audio = { workspace = true }
 processing_input = { workspace = true }
 processing_webcam = { workspace = true, optional = true }
 processing_cuda = { workspace = true, optional = true }
@@ -65,11 +97,24 @@ rand = { workspace = true }
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 processing_glfw = { workspace = true, features = ["wayland"] }
 
+## TODO: Remove these patches once we've moved back to depending on upstream bevy
 [patch."https://github.com/bevyengine/bevy"]
 bevy = { git = "https://github.com/processing/bevy", branch = "main" }
 
 [patch.crates-io]
 bevy = { git = "https://github.com/processing/bevy", branch = "main" }
+# bevy_seedling depends on bevy sub-crates directly, so they must be patched too
+bevy_app = { git = "https://github.com/processing/bevy", branch = "main" }
+bevy_asset = { git = "https://github.com/processing/bevy", branch = "main" }
+bevy_diagnostic = { git = "https://github.com/processing/bevy", branch = "main" }
+bevy_ecs = { git = "https://github.com/processing/bevy", branch = "main" }
+bevy_log = { git = "https://github.com/processing/bevy", branch = "main" }
+bevy_math = { git = "https://github.com/processing/bevy", branch = "main" }
+bevy_platform = { git = "https://github.com/processing/bevy", branch = "main" }
+bevy_reflect = { git = "https://github.com/processing/bevy", branch = "main" }
+bevy_time = { git = "https://github.com/processing/bevy", branch = "main" }
+bevy_transform = { git = "https://github.com/processing/bevy", branch = "main" }
+bevy_utils = { git = "https://github.com/processing/bevy", branch = "main" }
 
 [[example]]
 name = "rectangle"
