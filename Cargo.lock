@@ -3403,7 +3403,7 @@ dependencies = [
  "linebender_resource_handle",
  "memmap2",
  "parlance",
- "read-fonts",
+ "read-fonts 0.39.2",
  "smallvec",
 ]
 
@@ -3844,14 +3844,11 @@ dependencies = [
 
 [[package]]
 name = "harfrust"
-<<<<<<< HEAD
-version = "0.6.2"
-=======
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92c020db12c71d8a12a3fe7607873cade3a01a6287e29d540c8723276221b9d8"
 dependencies = [
- "bitflags 2.11.1",
+ "bitflags 2.13.0",
  "bytemuck",
  "core_maths",
  "read-fonts 0.35.0",
@@ -3860,15 +3857,14 @@ dependencies = [
 
 [[package]]
 name = "harfrust"
-version = "0.6.0"
->>>>>>> 52a451b (Text.)
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "551ed25397e4b444e89686602877d5cf3a7f6e3d548dcac37a8357d1e195f4df"
 dependencies = [
  "bitflags 2.13.0",
  "bytemuck",
  "core_maths",
- "read-fonts",
+ "read-fonts 0.39.2",
  "smallvec",
 ]
 
@@ -5824,7 +5820,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fad031076f48f0d4d85ce1aea9b94b4e715a4d636a030a123038f8f5b5e4343"
 dependencies = [
  "fontique 0.9.0",
- "harfrust 0.6.0",
+ "harfrust 0.6.2",
  "hashbrown 0.17.1",
  "icu_normalizer",
  "icu_properties",
@@ -5832,7 +5828,7 @@ dependencies = [
  "linebender_resource_handle",
  "parlance",
  "parley_data",
- "skrifa",
+ "skrifa 0.42.1",
 ]
 
 [[package]]
@@ -6247,7 +6243,7 @@ checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 [[package]]
 name = "pyo3"
 version = "0.29.0"
-source = "git+https://github.com/PyO3/pyo3?branch=main#9e6697d1aacdb3fd914dc282494925a24e6a1db2"
+source = "git+https://github.com/PyO3/pyo3?branch=main#8fcf8fc63b8ed4559cbd3fe523164498ae808824"
 dependencies = [
  "inventory",
  "libc",
@@ -6261,7 +6257,7 @@ dependencies = [
 [[package]]
 name = "pyo3-build-config"
 version = "0.29.0"
-source = "git+https://github.com/PyO3/pyo3?branch=main#9e6697d1aacdb3fd914dc282494925a24e6a1db2"
+source = "git+https://github.com/PyO3/pyo3?branch=main#8fcf8fc63b8ed4559cbd3fe523164498ae808824"
 dependencies = [
  "target-lexicon",
 ]
@@ -6269,7 +6265,7 @@ dependencies = [
 [[package]]
 name = "pyo3-ffi"
 version = "0.29.0"
-source = "git+https://github.com/PyO3/pyo3?branch=main#9e6697d1aacdb3fd914dc282494925a24e6a1db2"
+source = "git+https://github.com/PyO3/pyo3?branch=main#8fcf8fc63b8ed4559cbd3fe523164498ae808824"
 dependencies = [
  "libc",
  "pyo3-build-config",
@@ -6278,7 +6274,7 @@ dependencies = [
 [[package]]
 name = "pyo3-introspection"
 version = "0.29.0"
-source = "git+https://github.com/PyO3/pyo3?branch=main#9e6697d1aacdb3fd914dc282494925a24e6a1db2"
+source = "git+https://github.com/PyO3/pyo3?branch=main#8fcf8fc63b8ed4559cbd3fe523164498ae808824"
 dependencies = [
  "anyhow",
  "goblin",
@@ -6289,7 +6285,7 @@ dependencies = [
 [[package]]
 name = "pyo3-macros"
 version = "0.29.0"
-source = "git+https://github.com/PyO3/pyo3?branch=main#9e6697d1aacdb3fd914dc282494925a24e6a1db2"
+source = "git+https://github.com/PyO3/pyo3?branch=main#8fcf8fc63b8ed4559cbd3fe523164498ae808824"
 dependencies = [
  "proc-macro2",
  "pyo3-macros-backend",
@@ -6300,7 +6296,7 @@ dependencies = [
 [[package]]
 name = "pyo3-macros-backend"
 version = "0.29.0"
-source = "git+https://github.com/PyO3/pyo3?branch=main#9e6697d1aacdb3fd914dc282494925a24e6a1db2"
+source = "git+https://github.com/PyO3/pyo3?branch=main#8fcf8fc63b8ed4559cbd3fe523164498ae808824"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -6511,9 +6507,6 @@ dependencies = [
 
 [[package]]
 name = "read-fonts"
-<<<<<<< HEAD
-version = "0.39.2"
-=======
 version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6717cf23b488adf64b9d711329542ba34de147df262370221940dfabc2c91358"
@@ -6525,8 +6518,7 @@ dependencies = [
 
 [[package]]
 name = "read-fonts"
-version = "0.37.0"
->>>>>>> 52a451b (Text.)
+version = "0.39.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4ed38b89c2c77ff968c524145ad65fb010f38af5c7a224b53b81d47ac2daa81"
 dependencies = [
@@ -6540,13 +6532,7 @@ version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f821338fddb99d089116342c46e9f1fbf3828dba077674613e734e01d6ea8677"
 dependencies = [
-<<<<<<< HEAD
  "rustfft",
-=======
- "bytemuck",
- "core_maths",
- "font-types 0.11.3",
->>>>>>> 52a451b (Text.)
 ]
 
 [[package]]
@@ -6672,7 +6658,15 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
+name = "roxmltree"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1964b10c76125c36f8afe190065a4bf9a87bf324842c05701330bba9f1cacbb"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "rtaudio"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6720,14 +6714,6 @@ dependencies = [
  "realfft",
  "visibility",
  "windowfunctions",
-=======
-name = "roxmltree"
-version = "0.21.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1964b10c76125c36f8afe190065a4bf9a87bf324842c05701330bba9f1cacbb"
-dependencies = [
- "memchr",
->>>>>>> 52a451b (Text.)
 ]
 
 [[package]]
@@ -6988,8 +6974,6 @@ checksum = "8ee5873ec9cce0195efcb7a4e9507a04cd49aec9c83d0389df45b1ef7ba2e649"
 
 [[package]]
 name = "skrifa"
-<<<<<<< HEAD
-=======
 version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c31071dedf532758ecf3fed987cdb4bd9509f900e026ab684b4ecb81ea49841"
@@ -7000,23 +6984,12 @@ dependencies = [
 
 [[package]]
 name = "skrifa"
-version = "0.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fbdfe3d2475fbd7ddd1f3e5cf8288a30eb3e5f95832829570cd88115a7434ac"
-dependencies = [
- "bytemuck",
- "read-fonts 0.37.0",
-]
-
-[[package]]
-name = "skrifa"
->>>>>>> 52a451b (Text.)
 version = "0.42.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c34617370ae968efb7161bb2beb517d9084659aae19e24b89e3db25b46e4564"
 dependencies = [
  "bytemuck",
- "read-fonts",
+ "read-fonts 0.39.2",
 ]
 
 [[package]]
@@ -7164,7 +7137,7 @@ version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0811b01ca2c4e8718760713911feaf4675c24f94e50530a015ec646cfb622f7c"
 dependencies = [
- "skrifa",
+ "skrifa 0.42.1",
  "yazi",
  "zeno",
 ]
