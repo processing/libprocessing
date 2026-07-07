@@ -302,11 +302,10 @@ pub fn text_lines(
             };
             let metrics = line.metrics();
 
-            if let Some(h) = params.max_h {
-                if metrics.baseline + metrics.descent > h {
+            if let Some(h) = params.max_h
+                && metrics.baseline + metrics.descent > h {
                     break;
                 }
-            }
 
             let line_y = base_y + metrics.baseline - metrics.ascent;
             let line_text = &content[line.text_range()];
@@ -347,11 +346,10 @@ pub fn text_glyph_rects(
             };
             let metrics = line.metrics();
 
-            if let Some(h) = params.max_h {
-                if metrics.baseline + metrics.descent > h {
+            if let Some(h) = params.max_h
+                && metrics.baseline + metrics.descent > h {
                     break;
                 }
-            }
 
             for item in line.items() {
                 let PositionedLayoutItem::GlyphRun(glyph_run) = item else {
@@ -1024,7 +1022,7 @@ fn tessellate_layout(
             let font_data = run.font();
             let font_size = run.font_size();
             let normalized_coords = run.normalized_coords();
-            let color = glyph_run.style().brush.clone();
+            let color = glyph_run.style().brush;
 
             let Ok(font_ref) = FontRef::from_index(font_data.data.as_ref(), font_data.index) else {
                 continue;
@@ -1044,7 +1042,7 @@ fn tessellate_layout(
                 let glyph_color = glyph_colors
                     .filter(|colors| !colors.is_empty())
                     .map(|colors| colors[glyph_index % colors.len()])
-                    .unwrap_or(color.clone());
+                    .unwrap_or(color);
                 glyph_index += 1;
 
                 let glyph_id = skrifa::GlyphId::new(glyph.id);
@@ -1061,7 +1059,7 @@ fn tessellate_layout(
 
                         let translated = translate_path_flip_y(&path, tx, ty);
 
-                        let mut builder = MeshBuilder::new(mesh, glyph_color.clone());
+                        let mut builder = MeshBuilder::new(mesh, glyph_color);
                         let _ = fill_tess.tessellate_path(
                             &translated,
                             &FillOptions::default(),
@@ -1088,7 +1086,7 @@ fn stroke_layout(
 
     let glyph_paths = extract_glyph_lyon_paths(layout, base_x, base_y, max_h);
     for path in &glyph_paths {
-        let mut builder = MeshBuilder::new(mesh, color.clone());
+        let mut builder = MeshBuilder::new(mesh, color);
         let _ = stroke_tess.tessellate_path(path, &stroke_opts, &mut builder);
     }
 }

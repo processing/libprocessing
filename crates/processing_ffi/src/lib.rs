@@ -1060,8 +1060,8 @@ pub unsafe extern "C" fn processing_font_variation(
     error::clear_error();
     let font_entity = Entity::from_bits(font_id);
     let axes = error::check(|| font_variations(font_entity));
-    if let Some(axes) = axes {
-        if let Some(axis) = axes.get(index as usize) {
+    if let Some(axes) = axes
+        && let Some(axis) = axes.get(index as usize) {
             let tag_bytes = axis.tag.as_bytes();
             let len = tag_bytes.len().min(4);
             unsafe {
@@ -1075,7 +1075,6 @@ pub unsafe extern "C" fn processing_font_variation(
             }
             return true;
         }
-    }
     false
 }
 
