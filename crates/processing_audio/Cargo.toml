@@ -1,0 +1,11 @@
+[package]
+name = "processing_audio"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bevy = { workspace = true }
+bevy_seedling = { git = "https://github.com/CorvusPrudens/bevy_seedling", branch = "master" }
+
+[lints]
+workspace = true
