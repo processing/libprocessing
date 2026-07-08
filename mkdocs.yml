@@ -51,6 +51,7 @@ nav:
   - API Reference:
       - Overview: reference/index.md
       - Math: reference/math.md
+      - Color: reference/color.md
   - Design:
       - Principles: principles.md
       - Internal API: api.md

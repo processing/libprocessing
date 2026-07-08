@@ -12,7 +12,9 @@ use bevy::{
     prelude::*,
     render::render_resource::BlendState,
 };
-use command::{CommandBuffer, DrawCommand, ShapeMode};
+use command::{
+    CommandBuffer, DrawCommand, ShapeMode, TextAlignH, TextAlignV, TextStyle, TextWrapMode,
+};
 use material::{MaterialKey, ProcessingExtendedMaterial};
 use primitive::{
     ShapeBuilder, StrokeConfig, TessellationMode, VertexType, arc_fill, arc_stroke, bezier,
@@ -31,6 +33,7 @@ use crate::{
     material::custom::CustomMaterial,
     particles::{Particles, ParticlesDraw},
     render::{material::UntypedMaterial, primitive::rect},
+    text::font::TextContext,
 };
 
 pub(crate) const BATCH_INDEX_STEP: f32 = 0.001;
@@ -92,6 +95,17 @@ pub struct RenderState {
     pub rect_mode: ShapeMode,
     pub ellipse_mode: ShapeMode,
     pub shape_builder: Option<ShapeBuilder>,
+    pub text_font_family: Option<String>,
+    pub text_style: TextStyle,
+    pub text_weight: Option<f32>,
+    pub text_variations: Vec<([u8; 4], f32)>,
+    pub text_features: Vec<([u8; 4], u16)>,
+    pub text_size: f32,
+    pub text_align_h: TextAlignH,
+    pub text_align_v: TextAlignV,
+    pub text_leading: Option<f32>,
+    pub text_wrap: TextWrapMode,
+    pub text_glyph_colors: Option<Vec<Color>>,
 }
 
 impl RenderState {
@@ -115,6 +129,17 @@ impl RenderState {
             rect_mode: ShapeMode::Corner,
             ellipse_mode: ShapeMode::Center,
             shape_builder: None,
+            text_font_family: None,
+            text_style: TextStyle::Normal,
+            text_weight: None,
+            text_variations: Vec::new(),
+            text_features: Vec::new(),
+            text_size: 12.0,
+            text_align_h: TextAlignH::Left,
+            text_align_v: TextAlignV::Baseline,
+            text_leading: None,
+            text_wrap: TextWrapMode::Word,
+            text_glyph_colors: None,
         }
     }
 
@@ -137,6 +162,17 @@ impl RenderState {
         self.rect_mode = ShapeMode::Corner;
         self.ellipse_mode = ShapeMode::Center;
         self.shape_builder = None;
+        self.text_font_family = None;
+        self.text_style = TextStyle::Normal;
+        self.text_weight = None;
+        self.text_variations.clear();
+        self.text_features.clear();
+        self.text_size = 12.0;
+        self.text_align_h = TextAlignH::Left;
+        self.text_align_v = TextAlignV::Baseline;
+        self.text_leading = None;
+        self.text_wrap = TextWrapMode::Word;
+        self.text_glyph_colors = None;
     }
 
     pub fn begin_frame(&mut self) {
@@ -176,6 +212,8 @@ pub fn flush_draw_commands(
     p_geometries: Query<(&Geometry, Option<&GltfNodeTransform>)>,
     p_material_handles: Query<&UntypedMaterial>,
     mut p_particles: Query<&mut Particles>,
+    p_fonts: Query<&crate::text::font::Font>,
+    text_cx: Res<TextContext>,
 ) {
     for (graphics_entity, mut cmd_buffer, mut state, render_layers, projection, camera_transform) in
         graphics.iter_mut()
@@ -1148,6 +1186,127 @@ pub fn flush_draw_commands(
                         tetrahedron_mesh(radius),
                         &p_material_handles,
                     );
+                }
+                DrawCommand::TextFont(font_entity) => {
+                    if let Some(entity) = font_entity {
+                        if let Ok(font) = p_fonts.get(entity) {
+                            state.text_font_family = Some(font.family_name.clone());
+                        }
+                    } else {
+                        state.text_font_family = None;
+                    }
+                }
+                DrawCommand::TextStyle(style) => {
+                    state.text_style = style;
+                }
+                DrawCommand::TextWeight(weight) => {
+                    state.text_weight = Some(weight);
+                }
+                DrawCommand::TextVariation { tag, value } => {
+                    if let Some(existing) =
+                        state.text_variations.iter_mut().find(|(t, _)| *t == tag)
+                    {
+                        existing.1 = value;
+                    } else {
+                        state.text_variations.push((tag, value));
+                    }
+                }
+                DrawCommand::ClearTextVariations => {
+                    state.text_variations.clear();
+                }
+                DrawCommand::TextFeature { tag, value } => {
+                    if let Some(existing) = state.text_features.iter_mut().find(|(t, _)| *t == tag)
+                    {
+                        existing.1 = value;
+                    } else {
+                        state.text_features.push((tag, value));
+                    }
+                }
+                DrawCommand::NoTextFeature { tag } => {
+                    state.text_features.retain(|(t, _)| *t != tag);
+                }
+                DrawCommand::ClearTextFeatures => {
+                    state.text_features.clear();
+                }
+                DrawCommand::TextSize(size) => {
+                    state.text_size = size;
+                    state.text_leading = None;
+                }
+                DrawCommand::TextAlign { h, v } => {
+                    state.text_align_h = h;
+                    state.text_align_v = v;
+                }
+                DrawCommand::TextLeading(leading) => {
+                    state.text_leading = Some(leading);
+                }
+                DrawCommand::TextWrap(mode) => {
+                    state.text_wrap = mode;
+                }
+                DrawCommand::TextGlyphColors(colors) => {
+                    state.text_glyph_colors = Some(colors);
+                }
+                DrawCommand::Text {
+                    content,
+                    x,
+                    y,
+                    z,
+                    max_w,
+                    max_h,
+                } => {
+                    // rectMode applies to the bounding-box form
+                    let (x, y, max_w, max_h) = if let (Some(w), Some(h)) = (max_w, max_h) {
+                        let (bx, by, bw, bh) = apply_shape_mode(state.rect_mode, x, y, w, h);
+                        (bx, by, Some(bw), Some(bh))
+                    } else {
+                        (x, y, max_w, max_h)
+                    };
+
+                    let mut text_params =
+                        primitive::text::OwnedTextParams::from_render_state(&state, max_w, max_h);
+                    // per-glyph colors apply to this one text() call only
+                    text_params.glyph_colors = state.text_glyph_colors.take();
+                    let text_cx = text_cx.clone();
+
+                    if z != 0.0 {
+                        state.transform.translate_3d(0.0, 0.0, z);
+                    }
+
+                    add_fill(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        |mesh, color| {
+                            primitive::text::text(
+                                mesh,
+                                &content,
+                                x,
+                                y,
+                                color,
+                                &text_params.as_params(),
+                                &text_cx,
+                            );
+                        },
+                        &p_material_handles,
+                    );
+
+                    add_stroke(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        |mesh, color, weight| {
+                            // per-glyph fill colors don't apply to the stroke
+                            let mut params = text_params.as_params();
+                            params.glyph_colors = None;
+                            primitive::text::text_stroke(
+                                mesh, &content, x, y, color, weight, &params, &text_cx,
+                            );
+                        },
+                        &p_material_handles,
+                    );
+
+                    if z != 0.0 {
+                        state.transform.translate_3d(0.0, 0.0, -z);
+                    }
                 }
             }
         }
