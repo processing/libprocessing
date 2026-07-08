@@ -1061,20 +1061,21 @@ pub unsafe extern "C" fn processing_font_variation(
     let font_entity = Entity::from_bits(font_id);
     let axes = error::check(|| font_variations(font_entity));
     if let Some(axes) = axes
-        && let Some(axis) = axes.get(index as usize) {
-            let tag_bytes = axis.tag.as_bytes();
-            let len = tag_bytes.len().min(4);
-            unsafe {
-                std::ptr::copy_nonoverlapping(tag_bytes.as_ptr(), out_tag, len);
-                for i in len..4 {
-                    *out_tag.add(i) = b' ';
-                }
-                *out_min = axis.min;
-                *out_max = axis.max;
-                *out_default = axis.default;
+        && let Some(axis) = axes.get(index as usize)
+    {
+        let tag_bytes = axis.tag.as_bytes();
+        let len = tag_bytes.len().min(4);
+        unsafe {
+            std::ptr::copy_nonoverlapping(tag_bytes.as_ptr(), out_tag, len);
+            for i in len..4 {
+                *out_tag.add(i) = b' ';
             }
-            return true;
+            *out_min = axis.min;
+            *out_max = axis.max;
+            *out_default = axis.default;
         }
+        return true;
+    }
     false
 }
 

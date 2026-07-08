@@ -303,9 +303,10 @@ pub fn text_lines(
             let metrics = line.metrics();
 
             if let Some(h) = params.max_h
-                && metrics.baseline + metrics.descent > h {
-                    break;
-                }
+                && metrics.baseline + metrics.descent > h
+            {
+                break;
+            }
 
             let line_y = base_y + metrics.baseline - metrics.ascent;
             let line_text = &content[line.text_range()];
@@ -347,9 +348,10 @@ pub fn text_glyph_rects(
             let metrics = line.metrics();
 
             if let Some(h) = params.max_h
-                && metrics.baseline + metrics.descent > h {
-                    break;
-                }
+                && metrics.baseline + metrics.descent > h
+            {
+                break;
+            }
 
             for item in line.items() {
                 let PositionedLayoutItem::GlyphRun(glyph_run) = item else {
