@@ -1012,8 +1012,8 @@ pub extern "C" fn processing_end_contour(graphics_id: u64) {
 /// Load a font file and return a font entity ID.
 /// Returns 0 on error.
 ///
-/// SAFETY:
-/// - path_ptr is a valid pointer to a null-terminated UTF-8 string.
+/// # Safety
+/// - path_ptr is a valid pointer to a null-terminated string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_load_font(path_ptr: *const std::ffi::c_char) -> u64 {
     error::clear_error();
@@ -1024,8 +1024,8 @@ pub unsafe extern "C" fn processing_load_font(path_ptr: *const std::ffi::c_char)
 /// Create a font handle from an existing font family name.
 /// Returns 0 on error.
 ///
-/// SAFETY:
-/// - name_ptr is a valid pointer to a null-terminated UTF-8 string.
+/// # Safety
+/// - name_ptr is a valid pointer to a null-terminated string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_create_font(name_ptr: *const std::ffi::c_char) -> u64 {
     error::clear_error();
@@ -1045,9 +1045,9 @@ pub extern "C" fn processing_font_variation_count(font_id: u64) -> u32 {
 /// Query variable font axis info.
 /// Writes tag (4 bytes), min, max, default to out buffer at the given index.
 ///
-/// SAFETY:
-/// - out_tag is a valid pointer to at least 4 bytes.
-/// - out_min, out_max, out_default are valid pointers.
+/// # Safety
+/// - out_tag is a valid pointer to at least 4 writable bytes.
+/// - out_min, out_max, out_default are valid pointers to writable f32 values.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_font_variation(
     font_id: u64,
@@ -1096,9 +1096,8 @@ pub extern "C" fn processing_text_font(graphics_id: u64, font_id: u64) {
 
 /// Draw text at a position.
 ///
-/// SAFETY:
-/// - graphics_id is a valid ID returned from graphics_create.
-/// - str_ptr is a valid pointer to a null-terminated UTF-8 string.
+/// # Safety
+/// - str_ptr is a valid pointer to a null-terminated string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_text(
     graphics_id: u64,
@@ -1128,9 +1127,8 @@ pub unsafe extern "C" fn processing_text(
 
 /// Draw text at a 3D position.
 ///
-/// SAFETY:
-/// - graphics_id is a valid ID returned from graphics_create.
-/// - str_ptr is a valid pointer to a null-terminated UTF-8 string.
+/// # Safety
+/// - str_ptr is a valid pointer to a null-terminated string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_text_3d(
     graphics_id: u64,
@@ -1203,9 +1201,8 @@ pub extern "C" fn processing_text_float(graphics_id: u64, value: f32, x: f32, y:
 
 /// Draw text within a bounding box (with word wrapping).
 ///
-/// SAFETY:
-/// - graphics_id is a valid ID returned from graphics_create.
-/// - str_ptr is a valid pointer to a null-terminated UTF-8 string.
+/// # Safety
+/// - str_ptr is a valid pointer to a null-terminated string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_text_box(
     graphics_id: u64,
@@ -1245,10 +1242,9 @@ pub extern "C" fn processing_text_style(graphics_id: u64, style: u8) {
 
 /// Compute the bounding box of text. Writes [x, y, w, h] to out_bounds.
 ///
-/// SAFETY:
-/// - graphics_id is a valid ID returned from graphics_create.
-/// - str_ptr is a valid pointer to a null-terminated UTF-8 string.
-/// - out_bounds is a valid pointer to a float array of at least 4 elements.
+/// # Safety
+/// - str_ptr is a valid pointer to a null-terminated string.
+/// - out_bounds is a valid pointer to a writable float array of at least 4 elements.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_text_bounds(
     graphics_id: u64,
@@ -1274,8 +1270,8 @@ pub unsafe extern "C" fn processing_text_bounds(
 
 /// Set a font variation axis value (e.g. "wdth", 75.0).
 ///
-/// SAFETY:
-/// - tag_ptr is a valid pointer to a null-terminated UTF-8 string of exactly 4 characters.
+/// # Safety
+/// - tag_ptr is a valid pointer to a null-terminated string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_text_variation(
     graphics_id: u64,
@@ -1298,8 +1294,8 @@ pub extern "C" fn processing_clear_text_variations(graphics_id: u64) {
 
 /// Enable/configure an OpenType font feature (e.g. "smcp", 1).
 ///
-/// SAFETY:
-/// - tag_ptr is a valid pointer to a null-terminated UTF-8 string of exactly 4 characters.
+/// # Safety
+/// - tag_ptr is a valid pointer to a null-terminated string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_text_feature(
     graphics_id: u64,
@@ -1314,8 +1310,8 @@ pub unsafe extern "C" fn processing_text_feature(
 
 /// Disable an OpenType font feature.
 ///
-/// SAFETY:
-/// - tag_ptr is a valid pointer to a null-terminated UTF-8 string of exactly 4 characters.
+/// # Safety
+/// - tag_ptr is a valid pointer to a null-terminated string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_no_text_feature(
     graphics_id: u64,
@@ -1338,8 +1334,8 @@ pub extern "C" fn processing_clear_text_features(graphics_id: u64) {
 /// Set per-glyph colors for the next text() call.
 /// colors_ptr points to an array of (r, g, b, a) float tuples.
 ///
-/// SAFETY:
-/// - colors_ptr is a valid pointer to count * 4 floats.
+/// # Safety
+/// - colors_ptr is a valid pointer to count * 4 readable floats.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_text_glyph_colors(
     graphics_id: u64,
@@ -1401,9 +1397,8 @@ pub extern "C" fn processing_text_wrap(graphics_id: u64, mode: u8) {
 
 /// Measure the width of text.
 ///
-/// SAFETY:
-/// - graphics_id is a valid ID returned from graphics_create.
-/// - str_ptr is a valid pointer to a null-terminated UTF-8 string.
+/// # Safety
+/// - str_ptr is a valid pointer to a null-terminated string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_text_width(
     graphics_id: u64,
