@@ -161,6 +161,9 @@ integrate_pass = None
 center = None
 extent = 0.0
 max_speed = 0.0
+boid_count = 0
+title_last_time = 0.0
+title_last_frame = 0
 
 
 # Two triangles folded slightly along the nose-tail spine, like a paper
@@ -185,7 +188,7 @@ def boid_geometry(half_width, length, droop):
 
 
 def setup():
-    global p, boid, mat, flock_pass, integrate_pass, center, extent, max_speed
+    global p, boid, mat, flock_pass, integrate_pass, center, extent, max_speed, boid_count
 
     size(900, 700)
     mode_3d()
@@ -215,6 +218,8 @@ def setup():
     # derived from the mesh's bounding box, so the sketch doesn't care what
     # units the model was authored in.
     homes = p.buffer(Attribute.position()).read()
+    boid_count = len(homes)
+    window_title(f"GPU Flocking Duck — {boid_count:,} boids")
     lo = [min(v[i] for v in homes) for i in range(3)]
     hi = [max(v[i] for v in homes) for i in range(3)]
     center = [(lo[i] + hi[i]) * 0.5 for i in range(3)]
@@ -246,6 +251,15 @@ def setup():
 
 
 def draw():
+    global title_last_time, title_last_frame
+
+    title_elapsed = elapsed_time - title_last_time
+    if title_elapsed >= 0.5:
+        fps = (frame_count - title_last_frame) / title_elapsed
+        window_title(f"GPU Flocking Duck — {boid_count:,} boids — {fps:.0f} FPS")
+        title_last_time = elapsed_time
+        title_last_frame = frame_count
+
     t = elapsed_time * 0.2
     r = extent * 1.1
     camera_position(center[0] + cos(t) * r, center[1] + extent * 0.35, center[2] + sin(t) * r)

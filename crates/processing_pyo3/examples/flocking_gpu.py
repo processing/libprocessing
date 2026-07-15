@@ -156,6 +156,8 @@ boid = None
 mat = None
 flock_pass = None
 integrate_pass = None
+title_last_time = 0.0
+title_last_frame = 0
 
 
 # Two triangles folded slightly along the nose-tail spine, like a paper
@@ -183,6 +185,7 @@ def setup():
     global p, boid, mat, flock_pass, integrate_pass
 
     size(900, 700)
+    window_title(f"GPU Flocking — {BOID_COUNT:,} boids")
     mode_3d()
 
     directional_light((0.95, 0.9, 0.85), 800.0)
@@ -226,6 +229,15 @@ def setup():
 
 
 def draw():
+    global title_last_time, title_last_frame
+
+    title_elapsed = elapsed_time - title_last_time
+    if title_elapsed >= 0.5:
+        fps = (frame_count - title_last_frame) / title_elapsed
+        window_title(f"GPU Flocking — {BOID_COUNT:,} boids — {fps:.0f} FPS")
+        title_last_time = elapsed_time
+        title_last_frame = frame_count
+
     t = elapsed_time * 0.1
     r = BOUND * 2.6
     camera_position(cos(t) * r, BOUND * 0.8, sin(t) * r)
