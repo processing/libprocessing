@@ -11,17 +11,29 @@ from mewnala import *
 
 flock = None
 
+title_last_time = 0.0
+title_last_frame = 0
+boid_count = 150
 
 def setup():
     global flock
     size(640, 360)
     flock = Flock()
     # Add an initial set of boids into the system
-    for i in range(150):
+    for i in range(boid_count):
         flock.add_boid(Boid(width / 2, height / 2))
 
 
 def draw():
+    global title_last_time, title_last_frame
+
+    title_elapsed = elapsed_time - title_last_time
+    if title_elapsed >= 0.5:
+        fps = (frame_count - title_last_frame) / title_elapsed
+        window_title(f"GPU Flocking Duck — {boid_count:,} boids — {fps:.0f} FPS")
+        title_last_time = elapsed_time
+        title_last_frame = frame_count
+
     background(50)
     flock.run()
 
