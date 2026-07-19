@@ -18,6 +18,8 @@ naga = { workspace = true }
 wesl = { workspace = true }
 lyon = "1.0"
 parley = { version = "0.7", features = ["system"] }
+# dlopen fontconfig at runtime instead of linking it, so Linux wheels stay manylinux-compliant
+fontique = { version = "0.7", features = ["fontconfig-dlopen"] }
 skrifa = "0.37"
 notosans = "0.1"
 raw-window-handle = "0.6"

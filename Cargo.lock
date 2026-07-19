@@ -6174,6 +6174,7 @@ dependencies = [
  "bevy",
  "bevy_naga_reflect",
  "crossbeam-channel",
+ "fontique 0.7.0",
  "half",
  "js-sys",
  "lyon",
