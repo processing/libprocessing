@@ -48,7 +48,6 @@ bevy = { git = "https://github.com/processing/bevy", branch = "main", default-fe
   "wayland",
   "webgl2",
   "x11",
-  "file_watcher",
   "shader_format_wesl",
   "free_camera",
   "pan_camera",
