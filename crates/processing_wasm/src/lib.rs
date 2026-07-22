@@ -65,8 +65,13 @@ pub fn js_surface_create_from_canvas(
 #[wasm_bindgen(js_name = "graphicsCreate")]
 pub fn js_graphics_create(surface_id: u64, width: u32, height: u32) -> Result<u64, JsValue> {
     let surface_entity = Entity::from_bits(surface_id);
-    check(graphics_create(surface_entity, width, height, TextureFormat::Rgba16Float))
-        .map(|e| e.to_bits())
+    check(graphics_create(
+        surface_entity,
+        width,
+        height,
+        TextureFormat::Rgba16Float,
+    ))
+    .map(|e| e.to_bits())
 }
 
 #[wasm_bindgen(js_name = "graphicsDestroy")]
@@ -97,7 +102,13 @@ pub fn js_background_color(
     space: u8,
 ) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    let color = Color { c1, c2, c3, a, space };
+    let color = Color {
+        c1,
+        c2,
+        c3,
+        a,
+        space,
+    };
     check((|| {
         let mode = graphics_get_color_mode(graphics_entity)?;
         let color = color.resolve(&mode);
@@ -169,7 +180,13 @@ pub fn js_set_fill(
     space: u8,
 ) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    let color = Color { c1, c2, c3, a, space };
+    let color = Color {
+        c1,
+        c2,
+        c3,
+        a,
+        space,
+    };
     check((|| {
         let mode = graphics_get_color_mode(graphics_entity)?;
         graphics_record_command(graphics_entity, DrawCommand::Fill(color.resolve(&mode)))
@@ -186,7 +203,13 @@ pub fn js_set_stroke_color(
     space: u8,
 ) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    let color = Color { c1, c2, c3, a, space };
+    let color = Color {
+        c1,
+        c2,
+        c3,
+        a,
+        space,
+    };
     check((|| {
         let mode = graphics_get_color_mode(graphics_entity)?;
         graphics_record_command(
@@ -199,7 +222,10 @@ pub fn js_set_stroke_color(
 #[wasm_bindgen(js_name = "setStrokeWeight")]
 pub fn js_set_stroke_weight(graphics_id: u64, weight: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::StrokeWeight(weight)))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::StrokeWeight(weight),
+    ))
 }
 
 #[wasm_bindgen(js_name = "setStrokeCap")]
@@ -241,31 +267,46 @@ pub fn js_ellipse_mode(graphics_id: u64, mode: u8) -> Result<(), JsValue> {
 #[wasm_bindgen(js_name = "noFill")]
 pub fn js_no_fill(graphics_id: u64) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::NoFill))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::NoFill,
+    ))
 }
 
 #[wasm_bindgen(js_name = "noStroke")]
 pub fn js_no_stroke(graphics_id: u64) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::NoStroke))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::NoStroke,
+    ))
 }
 
 #[wasm_bindgen(js_name = "pushMatrix")]
 pub fn js_push_matrix(graphics_id: u64) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::PushMatrix))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::PushMatrix,
+    ))
 }
 
 #[wasm_bindgen(js_name = "popMatrix")]
 pub fn js_pop_matrix(graphics_id: u64) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::PopMatrix))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::PopMatrix,
+    ))
 }
 
 #[wasm_bindgen(js_name = "resetMatrix")]
 pub fn js_reset_matrix(graphics_id: u64) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::ResetMatrix))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::ResetMatrix,
+    ))
 }
 
 #[wasm_bindgen(js_name = "translate")]
@@ -280,25 +321,37 @@ pub fn js_translate(graphics_id: u64, x: f32, y: f32) -> Result<(), JsValue> {
 #[wasm_bindgen(js_name = "rotate")]
 pub fn js_rotate(graphics_id: u64, angle: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::Rotate { angle }))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::Rotate { angle },
+    ))
 }
 
 #[wasm_bindgen(js_name = "scale")]
 pub fn js_scale(graphics_id: u64, x: f32, y: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::Scale(Vec2::new(x, y))))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::Scale(Vec2::new(x, y)),
+    ))
 }
 
 #[wasm_bindgen(js_name = "shearX")]
 pub fn js_shear_x(graphics_id: u64, angle: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::ShearX { angle }))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::ShearX { angle },
+    ))
 }
 
 #[wasm_bindgen(js_name = "shearY")]
 pub fn js_shear_y(graphics_id: u64, angle: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::ShearY { angle }))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::ShearY { angle },
+    ))
 }
 
 #[wasm_bindgen(js_name = "setBlendMode")]
@@ -357,7 +410,10 @@ pub fn js_rect(
 #[wasm_bindgen(js_name = "ellipse")]
 pub fn js_ellipse(graphics_id: u64, cx: f32, cy: f32, w: f32, h: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::Ellipse { cx, cy, w, h }))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::Ellipse { cx, cy, w, h },
+    ))
 }
 
 #[wasm_bindgen(js_name = "circle")]
@@ -372,7 +428,10 @@ pub fn js_circle(graphics_id: u64, cx: f32, cy: f32, d: f32) -> Result<(), JsVal
 #[wasm_bindgen(js_name = "line")]
 pub fn js_line(graphics_id: u64, x1: f32, y1: f32, x2: f32, y2: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::Line { x1, y1, x2, y2 }))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::Line { x1, y1, x2, y2 },
+    ))
 }
 
 #[wasm_bindgen(js_name = "triangle")]
@@ -430,7 +489,10 @@ pub fn js_quad(
 #[wasm_bindgen(js_name = "point")]
 pub fn js_point(graphics_id: u64, x: f32, y: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::Point { x, y }))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::Point { x, y },
+    ))
 }
 
 #[wasm_bindgen(js_name = "square")]
@@ -579,7 +641,10 @@ pub fn js_torus(
 #[wasm_bindgen(js_name = "plane")]
 pub fn js_plane(graphics_id: u64, width: f32, height: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::Plane { width, height }))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::Plane { width, height },
+    ))
 }
 
 #[wasm_bindgen(js_name = "capsule")]
@@ -618,7 +683,10 @@ pub fn js_conical_frustum(
 #[wasm_bindgen(js_name = "tetrahedron")]
 pub fn js_tetrahedron(graphics_id: u64, radius: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::Tetrahedron { radius }))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::Tetrahedron { radius },
+    ))
 }
 
 #[wasm_bindgen(js_name = "beginShape")]
@@ -635,13 +703,19 @@ pub fn js_begin_shape(graphics_id: u64, kind: u8) -> Result<(), JsValue> {
 #[wasm_bindgen(js_name = "endShape")]
 pub fn js_end_shape(graphics_id: u64, close: bool) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::EndShape { close }))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::EndShape { close },
+    ))
 }
 
 #[wasm_bindgen(js_name = "vertex")]
 pub fn js_vertex(graphics_id: u64, x: f32, y: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::ShapeVertex { x, y }))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::ShapeVertex { x, y },
+    ))
 }
 
 #[wasm_bindgen(js_name = "bezierVertex")]
@@ -686,19 +760,28 @@ pub fn js_quadratic_vertex(
 #[wasm_bindgen(js_name = "curveVertex")]
 pub fn js_curve_vertex(graphics_id: u64, x: f32, y: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::ShapeCurveVertex { x, y }))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::ShapeCurveVertex { x, y },
+    ))
 }
 
 #[wasm_bindgen(js_name = "beginContour")]
 pub fn js_begin_contour(graphics_id: u64) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::BeginContour))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::BeginContour,
+    ))
 }
 
 #[wasm_bindgen(js_name = "endContour")]
 pub fn js_end_contour(graphics_id: u64) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::EndContour))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::EndContour,
+    ))
 }
 
 #[wasm_bindgen(js_name = "loadFont")]
@@ -854,7 +937,14 @@ pub fn js_text_bounds(
     y: f32,
 ) -> Result<Vec<f32>, JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    let bounds = check(graphics_text_bounds(graphics_entity, content, x, y, None, None))?;
+    let bounds = check(graphics_text_bounds(
+        graphics_entity,
+        content,
+        x,
+        y,
+        None,
+        None,
+    ))?;
     Ok(bounds.to_vec())
 }
 
@@ -895,7 +985,12 @@ pub fn js_text_glyph_colors(graphics_id: u64, colors: &[f32]) -> Result<(), JsVa
     let colors: Vec<BevyColor> = (0..count)
         .map(|i| {
             let base = i * 4;
-            BevyColor::srgba(colors[base], colors[base + 1], colors[base + 2], colors[base + 3])
+            BevyColor::srgba(
+                colors[base],
+                colors[base + 1],
+                colors[base + 2],
+                colors[base + 3],
+            )
         })
         .collect();
     check(graphics_text_glyph_colors(graphics_entity, colors))
@@ -910,7 +1005,10 @@ pub fn js_text_weight(graphics_id: u64, weight: f32) -> Result<(), JsValue> {
 #[wasm_bindgen(js_name = "textSize")]
 pub fn js_text_size(graphics_id: u64, size: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::TextSize(size)))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::TextSize(size),
+    ))
 }
 
 #[wasm_bindgen(js_name = "textAlign")]
@@ -922,7 +1020,10 @@ pub fn js_text_align(graphics_id: u64, h: u8, v: u8) -> Result<(), JsValue> {
 #[wasm_bindgen(js_name = "textLeading")]
 pub fn js_text_leading(graphics_id: u64, leading: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::TextLeading(leading)))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::TextLeading(leading),
+    ))
 }
 
 #[wasm_bindgen(js_name = "textWrap")]
@@ -1032,7 +1133,15 @@ pub fn js_ortho(
     far: f32,
 ) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    check(graphics_ortho(graphics_entity, left, right, bottom, top, near, far))
+    check(graphics_ortho(
+        graphics_entity,
+        left,
+        right,
+        bottom,
+        top,
+        near,
+        far,
+    ))
 }
 
 #[wasm_bindgen(js_name = "transformSetPosition")]
@@ -1080,7 +1189,11 @@ pub fn js_transform_rotate_axis(
     axis_z: f32,
 ) -> Result<(), JsValue> {
     let entity = Entity::from_bits(entity_id);
-    check(transform_rotate_axis(entity, angle, Vec3::new(axis_x, axis_y, axis_z)))
+    check(transform_rotate_axis(
+        entity,
+        angle,
+        Vec3::new(axis_x, axis_y, axis_z),
+    ))
 }
 
 #[wasm_bindgen(js_name = "transformSetScale")]
@@ -1103,7 +1216,10 @@ pub fn js_transform_look_at(
     target_z: f32,
 ) -> Result<(), JsValue> {
     let entity = Entity::from_bits(entity_id);
-    check(transform_look_at(entity, Vec3::new(target_x, target_y, target_z)))
+    check(transform_look_at(
+        entity,
+        Vec3::new(target_x, target_y, target_z),
+    ))
 }
 
 #[wasm_bindgen(js_name = "transformReset")]
@@ -1315,7 +1431,14 @@ pub fn js_geometry_attribute_float4(
 ) -> Result<(), JsValue> {
     let geo_entity = Entity::from_bits(geo_id);
     let attr_entity = Entity::from_bits(attr_id);
-    check(geometry_attribute_float4(geo_entity, attr_entity, x, y, z, w))
+    check(geometry_attribute_float4(
+        geo_entity,
+        attr_entity,
+        x,
+        y,
+        z,
+        w,
+    ))
 }
 
 #[wasm_bindgen(js_name = "geometryVertex")]
@@ -1429,7 +1552,10 @@ pub fn js_geometry_destroy(geo_id: u64) -> Result<(), JsValue> {
 pub fn js_model(graphics_id: u64, geo_id: u64) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
     let geo_entity = Entity::from_bits(geo_id);
-    check(graphics_record_command(graphics_entity, DrawCommand::Geometry(geo_entity)))
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::Geometry(geo_entity),
+    ))
 }
 
 #[wasm_bindgen(js_name = "geometryBox")]
@@ -1453,7 +1579,13 @@ pub fn js_light_create_directional(
     illuminance: f32,
 ) -> Result<u64, JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    let color = Color { c1, c2, c3, a, space };
+    let color = Color {
+        c1,
+        c2,
+        c3,
+        a,
+        space,
+    };
     check((|| {
         let mode = graphics_get_color_mode(graphics_entity)?;
         light_create_directional(graphics_entity, color.resolve(&mode), illuminance)
@@ -1474,7 +1606,13 @@ pub fn js_light_create_point(
     radius: f32,
 ) -> Result<u64, JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    let color = Color { c1, c2, c3, a, space };
+    let color = Color {
+        c1,
+        c2,
+        c3,
+        a,
+        space,
+    };
     check((|| {
         let mode = graphics_get_color_mode(graphics_entity)?;
         light_create_point(
@@ -1503,7 +1641,13 @@ pub fn js_light_create_spot(
     outer_angle: f32,
 ) -> Result<u64, JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
-    let color = Color { c1, c2, c3, a, space };
+    let color = Color {
+        c1,
+        c2,
+        c3,
+        a,
+        space,
+    };
     check((|| {
         let mode = graphics_get_color_mode(graphics_entity)?;
         light_create_spot(
@@ -1558,7 +1702,10 @@ pub fn js_material_destroy(mat_id: u64) -> Result<(), JsValue> {
 pub fn js_material(window_id: u64, mat_id: u64) -> Result<(), JsValue> {
     let window_entity = Entity::from_bits(window_id);
     let mat_entity = Entity::from_bits(mat_id);
-    check(graphics_record_command(window_entity, DrawCommand::Material(mat_entity)))
+    check(graphics_record_command(
+        window_entity,
+        DrawCommand::Material(mat_entity),
+    ))
 }
 
 #[wasm_bindgen(js_name = "shaderCreate")]
@@ -2137,7 +2284,10 @@ pub fn js_geometry_attribute_dead() -> u64 {
 
 #[wasm_bindgen(js_name = "particlesCreate")]
 pub fn js_particles_create(capacity: u32, attribute_entities: Vec<u64>) -> Result<u64, JsValue> {
-    let attrs: Vec<Entity> = attribute_entities.into_iter().map(Entity::from_bits).collect();
+    let attrs: Vec<Entity> = attribute_entities
+        .into_iter()
+        .map(Entity::from_bits)
+        .collect();
     check(particles_create(capacity, attrs).map(|e| e.to_bits()))
 }
 
@@ -2146,10 +2296,11 @@ pub fn js_particles_create_from_geometry(
     geometry: u64,
     attribute_entities: Vec<u64>,
 ) -> Result<u64, JsValue> {
-    let attrs: Vec<Entity> = attribute_entities.into_iter().map(Entity::from_bits).collect();
-    check(
-        particles_create_from_geometry(Entity::from_bits(geometry), attrs).map(|e| e.to_bits()),
-    )
+    let attrs: Vec<Entity> = attribute_entities
+        .into_iter()
+        .map(Entity::from_bits)
+        .collect();
+    check(particles_create_from_geometry(Entity::from_bits(geometry), attrs).map(|e| e.to_bits()))
 }
 
 #[wasm_bindgen(js_name = "particlesDestroy")]
