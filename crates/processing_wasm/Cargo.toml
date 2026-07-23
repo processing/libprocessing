@@ -10,7 +10,8 @@ crate-type = ["cdylib", "rlib"]
 workspace = true
 
 [dependencies]
-processing_render = { workspace = true }
+processing = { path = "../..", default-features = false }
+bevy = { workspace = true, features = ["webgpu"] }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
@@ -26,5 +27,7 @@ features = [
     "console",
 ]
 
-[dependencies.bevy]
-workspace = true
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom_040 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
+getrandom_030 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
+getrandom_020 = { package = "getrandom", version = "0.2", features = ["js"] }
