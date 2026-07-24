@@ -1537,6 +1537,153 @@ pub unsafe extern "C" fn processing_image_readback(
     });
 }
 
+/// Set the tint color applied to images.
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_tint(graphics_id: u64, color: Color) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        let mode = graphics_get_color_mode(graphics_entity)?;
+        graphics_record_command(graphics_entity, DrawCommand::Tint(color.resolve(&mode)))
+    });
+}
+
+/// Remove the image tint.
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_no_tint(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::NoTint));
+}
+
+/// Set how image() interprets its coordinates (CORNER/CORNERS/CENTER/RADIUS).
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_image_mode(graphics_id: u64, mode: u8) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::ImageMode(processing::prelude::ShapeMode::from(mode)),
+        )
+    });
+}
+
+/// Draw an image at (dx, dy) at its native size.
+///
+/// SAFETY:
+/// - graphics_id and image_id are valid IDs from graphics_create/image_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_image(graphics_id: u64, image_id: u64, dx: f32, dy: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let image_entity = Entity::from_bits(image_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Image {
+                entity: image_entity,
+                dx,
+                dy,
+                d_width: None,
+                d_height: None,
+                sx: None,
+                sy: None,
+                s_width: None,
+                s_height: None,
+            },
+        )
+    });
+}
+
+/// Draw an image at (dx, dy) scaled to (d_width, d_height).
+///
+/// SAFETY:
+/// - graphics_id and image_id are valid IDs from graphics_create/image_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_image_scaled(
+    graphics_id: u64,
+    image_id: u64,
+    dx: f32,
+    dy: f32,
+    d_width: f32,
+    d_height: f32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let image_entity = Entity::from_bits(image_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Image {
+                entity: image_entity,
+                dx,
+                dy,
+                d_width: Some(d_width),
+                d_height: Some(d_height),
+                sx: None,
+                sy: None,
+                s_width: None,
+                s_height: None,
+            },
+        )
+    });
+}
+
+/// Draw the (sx, sy, s_width, s_height) source region of an image into the
+/// (dx, dy, d_width, d_height) destination rectangle.
+///
+/// SAFETY:
+/// - graphics_id and image_id are valid IDs from graphics_create/image_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_image_region(
+    graphics_id: u64,
+    image_id: u64,
+    dx: f32,
+    dy: f32,
+    d_width: f32,
+    d_height: f32,
+    sx: f32,
+    sy: f32,
+    s_width: f32,
+    s_height: f32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let image_entity = Entity::from_bits(image_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Image {
+                entity: image_entity,
+                dx,
+                dy,
+                d_width: Some(d_width),
+                d_height: Some(d_height),
+                sx: Some(sx),
+                sy: Some(sy),
+                s_width: Some(s_width),
+                s_height: Some(s_height),
+            },
+        )
+    });
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_mode_3d(graphics_id: u64) {
     error::clear_error();
