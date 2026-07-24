@@ -929,21 +929,13 @@ pub fn flush_draw_commands(
                 DrawCommand::PushMatrix => state.transform.push(),
                 DrawCommand::PopMatrix => state.transform.pop(),
                 DrawCommand::ResetMatrix => state.transform.reset(),
-                DrawCommand::Translate(v) => {
-                    state.transform.apply(Affine3A::from_translation(v))
-                }
-                DrawCommand::Rotate { angle, axis } => {
-                    state
-                        .transform
-                        .apply(Affine3A::from_axis_angle(axis.normalize(), angle))
-                }
+                DrawCommand::Translate(v) => state.transform.apply(Affine3A::from_translation(v)),
+                DrawCommand::Rotate { angle, axis } => state
+                    .transform
+                    .apply(Affine3A::from_axis_angle(axis.normalize(), angle)),
                 DrawCommand::Scale(v) => state.transform.apply(Affine3A::from_scale(v)),
-                DrawCommand::ShearX { angle } => {
-                    state.transform.apply(transform::shear_x(angle))
-                }
-                DrawCommand::ShearY { angle } => {
-                    state.transform.apply(transform::shear_y(angle))
-                }
+                DrawCommand::ShearX { angle } => state.transform.apply(transform::shear_x(angle)),
+                DrawCommand::ShearY { angle } => state.transform.apply(transform::shear_y(angle)),
                 DrawCommand::Geometry(entity) => {
                     let Some((geometry, node_transform)) = p_geometries.get(entity).ok() else {
                         warn!("Could not find Geometry for entity {:?}", entity);

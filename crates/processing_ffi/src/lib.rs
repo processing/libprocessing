@@ -503,7 +503,9 @@ pub extern "C" fn processing_rotate(graphics_id: u64, angle: f32, x: f32, y: f32
 pub extern "C" fn processing_scale(graphics_id: u64, x: f32, y: f32, z: f32) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Scale(Vec3::new(x, y, z))));
+    error::check(|| {
+        graphics_record_command(graphics_entity, DrawCommand::Scale(Vec3::new(x, y, z)))
+    });
 }
 
 /// Shear along the X axis.

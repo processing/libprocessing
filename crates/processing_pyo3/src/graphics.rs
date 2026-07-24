@@ -1378,23 +1378,47 @@ impl Graphics {
     }
 
     pub fn rotate(&self, angle: f32) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::Rotate { angle, axis: Vec3::Z })
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Rotate {
+                angle,
+                axis: Vec3::Z,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn rotate_x(&self, angle: f32) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::Rotate { angle, axis: Vec3::X })
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Rotate {
+                angle,
+                axis: Vec3::X,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn rotate_y(&self, angle: f32) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::Rotate { angle, axis: Vec3::Y })
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Rotate {
+                angle,
+                axis: Vec3::Y,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn rotate_z(&self, angle: f32) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::Rotate { angle, axis: Vec3::Z })
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Rotate {
+                angle,
+                axis: Vec3::Z,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     #[pyo3(signature = (angle, *args))]
