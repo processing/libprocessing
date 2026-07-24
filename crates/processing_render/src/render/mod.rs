@@ -929,14 +929,21 @@ pub fn flush_draw_commands(
                 DrawCommand::PushMatrix => state.transform.push(),
                 DrawCommand::PopMatrix => state.transform.pop(),
                 DrawCommand::ResetMatrix => state.transform.reset(),
-                DrawCommand::Translate(v) => state.transform.translate(v.x, v.y),
-                DrawCommand::Rotate { angle } => state.transform.rotate(angle),
-                DrawCommand::RotateX { angle } => state.transform.rotate_x(angle),
-                DrawCommand::RotateY { angle } => state.transform.rotate_y(angle),
-                DrawCommand::RotateZ { angle } => state.transform.rotate_z(angle),
-                DrawCommand::Scale(v) => state.transform.scale(v.x, v.y),
-                DrawCommand::ShearX { angle } => state.transform.shear_x(angle),
-                DrawCommand::ShearY { angle } => state.transform.shear_y(angle),
+                DrawCommand::Translate(v) => {
+                    state.transform.apply(Affine3A::from_translation(v))
+                }
+                DrawCommand::Rotate { angle, axis } => {
+                    state
+                        .transform
+                        .apply(Affine3A::from_axis_angle(axis.normalize(), angle))
+                }
+                DrawCommand::Scale(v) => state.transform.apply(Affine3A::from_scale(v)),
+                DrawCommand::ShearX { angle } => {
+                    state.transform.apply(transform::shear_x(angle))
+                }
+                DrawCommand::ShearY { angle } => {
+                    state.transform.apply(transform::shear_y(angle))
+                }
                 DrawCommand::Geometry(entity) => {
                     let Some((geometry, node_transform)) = p_geometries.get(entity).ok() else {
                         warn!("Could not find Geometry for entity {:?}", entity);
@@ -1268,7 +1275,9 @@ pub fn flush_draw_commands(
                     let text_cx = text_cx.clone();
 
                     if z != 0.0 {
-                        state.transform.translate_3d(0.0, 0.0, z);
+                        state
+                            .transform
+                            .apply(Affine3A::from_translation(Vec3::new(0.0, 0.0, z)));
                     }
 
                     add_fill(
@@ -1305,7 +1314,9 @@ pub fn flush_draw_commands(
                     );
 
                     if z != 0.0 {
-                        state.transform.translate_3d(0.0, 0.0, -z);
+                        state
+                            .transform
+                            .apply(Affine3A::from_translation(Vec3::new(0.0, 0.0, -z)));
                     }
                 }
             }

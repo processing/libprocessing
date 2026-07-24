@@ -466,24 +466,32 @@ pub extern "C" fn processing_reset_matrix(graphics_id: u64) {
 /// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_translate(graphics_id: u64, x: f32, y: f32) {
+pub extern "C" fn processing_translate(graphics_id: u64, x: f32, y: f32, z: f32) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
     error::check(|| {
-        graphics_record_command(graphics_entity, DrawCommand::Translate(Vec2::new(x, y)))
+        graphics_record_command(graphics_entity, DrawCommand::Translate(Vec3::new(x, y, z)))
     });
 }
 
-/// Rotate the coordinate system.
+/// Rotate the coordinate system by `angle` about the axis (x, y, z).
 ///
 /// SAFETY:
 /// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_rotate(graphics_id: u64, angle: f32) {
+pub extern "C" fn processing_rotate(graphics_id: u64, angle: f32, x: f32, y: f32, z: f32) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Rotate { angle }));
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Rotate {
+                angle,
+                axis: Vec3::new(x, y, z),
+            },
+        )
+    });
 }
 
 /// Scale the coordinate system.
@@ -492,10 +500,10 @@ pub extern "C" fn processing_rotate(graphics_id: u64, angle: f32) {
 /// - graphics_id is a valid ID returned from graphics_create.
 /// - This is called from the same thread as init.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_scale(graphics_id: u64, x: f32, y: f32) {
+pub extern "C" fn processing_scale(graphics_id: u64, x: f32, y: f32, z: f32) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Scale(Vec2::new(x, y))));
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::Scale(Vec3::new(x, y, z))));
 }
 
 /// Shear along the X axis.

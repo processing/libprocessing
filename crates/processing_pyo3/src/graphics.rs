@@ -4,7 +4,7 @@ use crate::input;
 use crate::math::{extract_vec2, extract_vec3, extract_vec4};
 use bevy::{
     color::{ColorToPacked, Srgba},
-    math::Vec4,
+    math::{Vec3, Vec4},
     prelude::Entity,
     render::render_resource::{Extent3d, TextureFormat},
 };
@@ -1368,28 +1368,39 @@ impl Graphics {
 
     #[pyo3(signature = (*args))]
     pub fn translate(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let v = extract_vec2(args)?;
+        let v = if args.len() == 3 {
+            extract_vec3(args)?
+        } else {
+            extract_vec2(args)?.extend(0.0)
+        };
         graphics_record_command(self.entity, DrawCommand::Translate(v))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn rotate(&self, angle: f32) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::Rotate { angle })
+        graphics_record_command(self.entity, DrawCommand::Rotate { angle, axis: Vec3::Z })
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn rotate_x(&self, angle: f32) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::RotateX { angle })
+        graphics_record_command(self.entity, DrawCommand::Rotate { angle, axis: Vec3::X })
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn rotate_y(&self, angle: f32) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::RotateY { angle })
+        graphics_record_command(self.entity, DrawCommand::Rotate { angle, axis: Vec3::Y })
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn rotate_z(&self, angle: f32) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::RotateZ { angle })
+        graphics_record_command(self.entity, DrawCommand::Rotate { angle, axis: Vec3::Z })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    #[pyo3(signature = (angle, *args))]
+    pub fn rotate_axis(&self, angle: f32, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let axis = extract_vec3(args)?;
+        graphics_record_command(self.entity, DrawCommand::Rotate { angle, axis })
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
@@ -1554,7 +1565,16 @@ impl Graphics {
 
     #[pyo3(signature = (*args))]
     pub fn scale(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let v = extract_vec2(args)?;
+        let v = if args.len() == 3 {
+            extract_vec3(args)?
+        } else if args.len() == 1 {
+            match args.get_item(0)?.extract::<f32>() {
+                Ok(s) => Vec3::splat(s),
+                Err(_) => extract_vec2(args)?.extend(1.0),
+            }
+        } else {
+            extract_vec2(args)?.extend(1.0)
+        };
         graphics_record_command(self.entity, DrawCommand::Scale(v))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }

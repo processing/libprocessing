@@ -1301,6 +1301,16 @@ mod mewnala {
         graphics!(module).rotate_z(angle)
     }
 
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (angle, *args))]
+    fn rotate_axis(
+        module: &Bound<'_, PyModule>,
+        angle: f32,
+        args: &Bound<'_, PyTuple>,
+    ) -> PyResult<()> {
+        graphics!(module).rotate_axis(angle, args)
+    }
+
     #[pyfunction(name = "box")]
     #[pyo3(pass_module, signature = (*args))]
     fn draw_box(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
