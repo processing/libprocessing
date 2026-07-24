@@ -448,6 +448,60 @@ pub extern "C" fn processing_pop_matrix(graphics_id: u64) {
     error::check(|| graphics_record_command(graphics_entity, DrawCommand::PopMatrix));
 }
 
+/// Push the current style onto the style stack.
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_push_style(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::PushStyle));
+}
+
+/// Pop the most recently saved style off the style stack.
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_pop_style(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_record_command(graphics_entity, DrawCommand::PopStyle));
+}
+
+/// Push both the style and the transformation matrix onto their stacks.
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_push(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(graphics_entity, DrawCommand::PushStyle)?;
+        graphics_record_command(graphics_entity, DrawCommand::PushMatrix)
+    });
+}
+
+/// Pop both the style and the transformation matrix off their stacks.
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_pop(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(graphics_entity, DrawCommand::PopStyle)?;
+        graphics_record_command(graphics_entity, DrawCommand::PopMatrix)
+    });
+}
+
 /// Reset the transformation matrix to identity.
 ///
 /// SAFETY:

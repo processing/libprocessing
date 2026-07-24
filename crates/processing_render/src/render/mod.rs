@@ -2,6 +2,7 @@ pub mod command;
 pub mod material;
 pub mod mesh_builder;
 pub mod primitive;
+pub mod style;
 pub mod transform;
 
 use bevy::{
@@ -12,16 +13,15 @@ use bevy::{
     prelude::*,
     render::render_resource::BlendState,
 };
-use command::{
-    CommandBuffer, DrawCommand, ShapeMode, TextAlignH, TextAlignV, TextStyle, TextWrapMode,
-};
+use command::{CommandBuffer, DrawCommand, ShapeMode};
 use material::{MaterialKey, ProcessingExtendedMaterial};
 use primitive::{
-    ShapeBuilder, StrokeConfig, TessellationMode, VertexType, arc_fill, arc_stroke, bezier,
+    ShapeBuilder, TessellationMode, VertexType, arc_fill, arc_stroke, bezier,
     box_mesh, build_direct_fill, build_direct_stroke, build_polygon_fill, build_polygon_stroke,
     capsule_mesh, cone_mesh, conical_frustum_mesh, curve, cylinder_mesh, ellipse, empty_mesh, line,
     plane_mesh, quad, sphere_mesh, tetrahedron_mesh, torus_mesh, triangle,
 };
+use style::{Fill, StyleStack};
 use transform::TransformStack;
 
 use crate::{
@@ -80,112 +80,45 @@ impl BatchState {
 
 #[derive(Debug, Component)]
 pub struct RenderState {
-    pub fill_color: Option<Color>,
-    /// per-instance albedo buffer for [`Particles`] draws. mutually exclusive
-    /// with `fill_color`.
-    pub fill_buffer: Option<Entity>,
-    pub stroke_color: Option<Color>,
-    pub stroke_weight: f32,
-    pub stroke_config: StrokeConfig,
-    pub material_key: MaterialKey,
-    pub blend_state: Option<BlendState>,
+    pub style: StyleStack,
     pub transform: TransformStack,
-    pub tint_color: Option<Color>,
-    pub image_mode: ShapeMode,
-    pub rect_mode: ShapeMode,
-    pub ellipse_mode: ShapeMode,
     pub shape_builder: Option<ShapeBuilder>,
-    pub text_font_family: Option<String>,
-    pub text_style: TextStyle,
-    pub text_weight: Option<f32>,
-    pub text_variations: Vec<([u8; 4], f32)>,
-    pub text_features: Vec<([u8; 4], u16)>,
-    pub text_size: f32,
-    pub text_align_h: TextAlignH,
-    pub text_align_v: TextAlignV,
-    pub text_leading: Option<f32>,
-    pub text_wrap: TextWrapMode,
-    pub text_glyph_colors: Option<Vec<Color>>,
 }
 
 impl RenderState {
     pub fn new() -> Self {
         Self {
-            fill_color: Some(Color::WHITE),
-            fill_buffer: None,
-            stroke_color: Some(Color::BLACK),
-            stroke_weight: 1.0,
-            stroke_config: StrokeConfig::default(),
-            material_key: MaterialKey::Color {
-                transparent: false,
-                background_image: None,
-                uv_transform: Affine2::IDENTITY,
-                blend_state: None,
-            },
-            blend_state: None,
-            tint_color: None,
-            image_mode: ShapeMode::Corner,
+            style: StyleStack::new(),
             transform: TransformStack::new(),
-            rect_mode: ShapeMode::Corner,
-            ellipse_mode: ShapeMode::Center,
             shape_builder: None,
-            text_font_family: None,
-            text_style: TextStyle::Normal,
-            text_weight: None,
-            text_variations: Vec::new(),
-            text_features: Vec::new(),
-            text_size: 12.0,
-            text_align_h: TextAlignH::Left,
-            text_align_v: TextAlignV::Baseline,
-            text_leading: None,
-            text_wrap: TextWrapMode::Word,
-            text_glyph_colors: None,
         }
     }
 
     pub fn reset(&mut self) {
-        self.fill_color = Some(Color::WHITE);
-        self.fill_buffer = None;
-        self.stroke_color = Some(Color::BLACK);
-        self.stroke_weight = 1.0;
-        self.stroke_config = StrokeConfig::default();
-        self.material_key = MaterialKey::Color {
-            transparent: false,
-            background_image: None,
-            uv_transform: Affine2::IDENTITY,
-            blend_state: None,
-        };
-        self.blend_state = None;
-        self.tint_color = None;
-        self.image_mode = ShapeMode::Corner;
+        self.style = StyleStack::new();
         self.transform = TransformStack::new();
-        self.rect_mode = ShapeMode::Corner;
-        self.ellipse_mode = ShapeMode::Center;
         self.shape_builder = None;
-        self.text_font_family = None;
-        self.text_style = TextStyle::Normal;
-        self.text_weight = None;
-        self.text_variations.clear();
-        self.text_features.clear();
-        self.text_size = 12.0;
-        self.text_align_h = TextAlignH::Left;
-        self.text_align_v = TextAlignV::Baseline;
-        self.text_leading = None;
-        self.text_wrap = TextWrapMode::Word;
-        self.text_glyph_colors = None;
     }
 
     pub fn begin_frame(&mut self) {
         self.transform = TransformStack::new();
+        self.style.clear_saved();
         self.shape_builder = None;
     }
 
     pub fn fill_is_transparent(&self) -> bool {
-        self.fill_color.map(|c| c.alpha() < 1.0).unwrap_or(false)
+        self.style
+            .fill
+            .color()
+            .map(|c| c.alpha() < 1.0)
+            .unwrap_or(false)
     }
 
     pub fn stroke_is_transparent(&self) -> bool {
-        self.stroke_color.map(|c| c.alpha() < 1.0).unwrap_or(false)
+        self.style
+            .stroke_color
+            .map(|c| c.alpha() < 1.0)
+            .unwrap_or(false)
     }
 }
 
@@ -227,52 +160,49 @@ pub fn flush_draw_commands(
         for cmd in draw_commands {
             match cmd {
                 DrawCommand::Fill(color) => {
-                    state.fill_color = Some(color);
-                    state.fill_buffer = None;
+                    state.style.fill = Fill::Color(color);
                 }
                 DrawCommand::FillBuffer(buf_entity) => {
-                    state.fill_buffer = Some(buf_entity);
-                    state.fill_color = None;
+                    state.style.fill = Fill::Buffer(buf_entity);
                 }
                 DrawCommand::NoFill => {
-                    state.fill_color = None;
-                    state.fill_buffer = None;
+                    state.style.fill = Fill::None;
                 }
                 DrawCommand::StrokeColor(color) => {
-                    state.stroke_color = Some(color);
+                    state.style.stroke_color = Some(color);
                 }
                 DrawCommand::NoStroke => {
-                    state.stroke_color = None;
+                    state.style.stroke_color = None;
                 }
                 DrawCommand::StrokeWeight(weight) => {
-                    state.stroke_weight = weight;
+                    state.style.stroke_weight = weight;
                 }
                 DrawCommand::StrokeCap(cap) => {
-                    state.stroke_config.line_cap = cap;
+                    state.style.stroke_config.line_cap = cap;
                 }
                 DrawCommand::StrokeJoin(join) => {
-                    state.stroke_config.line_join = join;
+                    state.style.stroke_config.line_join = join;
                 }
                 DrawCommand::Roughness(r) => {
-                    let mut pbr = state.material_key.as_pbr();
+                    let mut pbr = state.style.material_key.as_pbr();
                     pbr.roughness = (r * 255.0) as u8;
                     pbr.blend_state = None;
-                    state.material_key = pbr.into();
+                    state.style.material_key = pbr.into();
                 }
                 DrawCommand::Metallic(m) => {
-                    let mut pbr = state.material_key.as_pbr();
+                    let mut pbr = state.style.material_key.as_pbr();
                     pbr.metallic = (m * 255.0) as u8;
                     pbr.blend_state = None;
-                    state.material_key = pbr.into();
+                    state.style.material_key = pbr.into();
                 }
                 DrawCommand::Emissive(color) => {
-                    let mut pbr = state.material_key.as_pbr();
+                    let mut pbr = state.style.material_key.as_pbr();
                     pbr.emissive = color.to_srgba().to_u8_array();
                     pbr.blend_state = None;
-                    state.material_key = pbr.into();
+                    state.style.material_key = pbr.into();
                 }
                 DrawCommand::Unlit => {
-                    state.material_key = MaterialKey::Color {
+                    state.style.material_key = MaterialKey::Color {
                         transparent: state.fill_is_transparent(),
                         background_image: None,
                         uv_transform: Affine2::IDENTITY,
@@ -280,14 +210,14 @@ pub fn flush_draw_commands(
                     };
                 }
                 DrawCommand::RectMode(mode) => {
-                    state.rect_mode = mode;
+                    state.style.rect_mode = mode;
                 }
                 DrawCommand::EllipseMode(mode) => {
-                    state.ellipse_mode = mode;
+                    state.style.ellipse_mode = mode;
                 }
                 DrawCommand::Rect { x, y, w, h, radii } => {
-                    let (x, y, w, h) = apply_shape_mode(state.rect_mode, x, y, w, h);
-                    let stroke_config = state.stroke_config;
+                    let (x, y, w, h) = apply_shape_mode(state.style.rect_mode, x, y, w, h);
+                    let stroke_config = state.style.stroke_config;
                     add_fill(
                         &mut res,
                         &mut batch,
@@ -331,10 +261,10 @@ pub fn flush_draw_commands(
                 DrawCommand::Ellipse { cx, cy, w, h } => {
                     // apply_shape_mode converts to top-left corner form, then we
                     // compute center from that
-                    let (x, y, w, h) = apply_shape_mode(state.ellipse_mode, cx, cy, w, h);
+                    let (x, y, w, h) = apply_shape_mode(state.style.ellipse_mode, cx, cy, w, h);
                     let cx = x + w / 2.0;
                     let cy = y + h / 2.0;
-                    let stroke_config = state.stroke_config;
+                    let stroke_config = state.style.stroke_config;
                     add_fill(
                         &mut res,
                         &mut batch,
@@ -374,7 +304,7 @@ pub fn flush_draw_commands(
                     );
                 }
                 DrawCommand::Line { x1, y1, x2, y2 } => {
-                    let stroke_config = state.stroke_config;
+                    let stroke_config = state.style.stroke_config;
                     add_stroke(
                         &mut res,
                         &mut batch,
@@ -393,7 +323,7 @@ pub fn flush_draw_commands(
                     x3,
                     y3,
                 } => {
-                    let stroke_config = state.stroke_config;
+                    let stroke_config = state.style.stroke_config;
                     add_fill(
                         &mut res,
                         &mut batch,
@@ -446,7 +376,7 @@ pub fn flush_draw_commands(
                     x4,
                     y4,
                 } => {
-                    let stroke_config = state.stroke_config;
+                    let stroke_config = state.style.stroke_config;
                     add_fill(
                         &mut res,
                         &mut batch,
@@ -494,10 +424,13 @@ pub fn flush_draw_commands(
                     );
                 }
                 DrawCommand::Point { x, y } => {
-                    if let Some(color) = state.stroke_color {
-                        let d = state.stroke_weight;
-                        let material_key =
-                            material_key_with_color(&state.material_key, color, state.blend_state);
+                    if let Some(color) = state.style.stroke_color {
+                        let d = state.style.stroke_weight;
+                        let material_key = material_key_with_color(
+                            &state.style.material_key,
+                            color,
+                            state.style.blend_state,
+                        );
 
                         if needs_batch(&batch, &state, &material_key) {
                             start_batch(
@@ -510,7 +443,7 @@ pub fn flush_draw_commands(
                         }
 
                         if let Some(ref mut mesh) = batch.current_mesh {
-                            let stroke_config = state.stroke_config;
+                            let stroke_config = state.style.stroke_config;
                             ellipse(
                                 mesh,
                                 x,
@@ -533,10 +466,10 @@ pub fn flush_draw_commands(
                     stop,
                     mode,
                 } => {
-                    let (x, y, w, h) = apply_shape_mode(state.ellipse_mode, cx, cy, w, h);
+                    let (x, y, w, h) = apply_shape_mode(state.style.ellipse_mode, cx, cy, w, h);
                     let cx = x + w / 2.0;
                     let cy = y + h / 2.0;
-                    let stroke_config = state.stroke_config;
+                    let stroke_config = state.style.stroke_config;
                     add_fill(
                         &mut res,
                         &mut batch,
@@ -579,7 +512,7 @@ pub fn flush_draw_commands(
                     x4,
                     y4,
                 } => {
-                    let stroke_config = state.stroke_config;
+                    let stroke_config = state.style.stroke_config;
                     add_stroke(
                         &mut res,
                         &mut batch,
@@ -613,7 +546,7 @@ pub fn flush_draw_commands(
                     x4,
                     y4,
                 } => {
-                    let stroke_config = state.stroke_config;
+                    let stroke_config = state.style.stroke_config;
                     add_stroke(
                         &mut res,
                         &mut batch,
@@ -686,7 +619,7 @@ pub fn flush_draw_commands(
                 }
                 DrawCommand::EndShape { close } => {
                     if let Some(sb) = state.shape_builder.take() {
-                        let stroke_config = state.stroke_config;
+                        let stroke_config = state.style.stroke_config;
                         use crate::render::command::ShapeKind;
 
                         match sb.kind {
@@ -718,12 +651,12 @@ pub fn flush_draw_commands(
                                 );
                             }
                             ShapeKind::Points => {
-                                if let Some(color) = state.stroke_color {
-                                    let d = state.stroke_weight;
+                                if let Some(color) = state.style.stroke_color {
+                                    let d = state.style.stroke_weight;
                                     let material_key = material_key_with_color(
-                                        &state.material_key,
+                                        &state.style.material_key,
                                         color,
-                                        state.blend_state,
+                                        state.style.blend_state,
                                     );
                                     if needs_batch(&batch, &state, &material_key) {
                                         start_batch(
@@ -798,13 +731,13 @@ pub fn flush_draw_commands(
                     }
                 }
                 DrawCommand::Tint(color) => {
-                    state.tint_color = Some(color);
+                    state.style.tint_color = Some(color);
                 }
                 DrawCommand::NoTint => {
-                    state.tint_color = None;
+                    state.style.tint_color = None;
                 }
                 DrawCommand::ImageMode(mode) => {
-                    state.image_mode = mode;
+                    state.style.image_mode = mode;
                 }
                 DrawCommand::Image {
                     entity,
@@ -826,7 +759,7 @@ pub fn flush_draw_commands(
                     let img_h = p_image.size.height as f32;
                     let dw = d_width.unwrap_or(img_w);
                     let dh = d_height.unwrap_or(img_h);
-                    let (x, y, w, h) = apply_shape_mode(state.image_mode, dx, dy, dw, dh);
+                    let (x, y, w, h) = apply_shape_mode(state.style.image_mode, dx, dy, dw, dh);
 
                     let uv_xform = match (sx, sy, s_width, s_height) {
                         (Some(sx), Some(sy), Some(sw), Some(sh)) => {
@@ -839,14 +772,14 @@ pub fn flush_draw_commands(
                         _ => Affine2::IDENTITY,
                     };
 
-                    let tint = state.tint_color.unwrap_or(Color::WHITE);
+                    let tint = state.style.tint_color.unwrap_or(Color::WHITE);
                     let material_key = MaterialKey::Color {
                         transparent: tint.alpha() < 1.0,
                         background_image: Some(p_image.handle.clone()),
                         uv_transform: uv_xform,
-                        blend_state: state.blend_state,
+                        blend_state: state.style.blend_state,
                     };
-                    let stroke_config = state.stroke_config;
+                    let stroke_config = state.style.stroke_config;
 
                     flush_batch(&mut res, &mut batch, &p_material_handles);
                     start_batch(
@@ -929,6 +862,8 @@ pub fn flush_draw_commands(
                 DrawCommand::PushMatrix => state.transform.push(),
                 DrawCommand::PopMatrix => state.transform.pop(),
                 DrawCommand::ResetMatrix => state.transform.reset(),
+                DrawCommand::PushStyle => state.style.push(),
+                DrawCommand::PopStyle => state.style.pop(),
                 DrawCommand::Translate(v) => state.transform.translate(v.x, v.y),
                 DrawCommand::Rotate { angle } => state.transform.rotate(angle),
                 DrawCommand::RotateX { angle } => state.transform.rotate_x(angle),
@@ -999,7 +934,7 @@ pub fn flush_draw_commands(
                         continue;
                     };
 
-                    let material_handle = if let Some(buf_entity) = state.fill_buffer {
+                    let material_handle = if let Fill::Buffer(buf_entity) = state.style.fill {
                         match particles_fill_material(&mut res, buf_entity) {
                             Some(h) => h,
                             None => {
@@ -1068,10 +1003,10 @@ pub fn flush_draw_commands(
                     batch.draw_index += 1;
                 }
                 DrawCommand::BlendMode(blend_state) => {
-                    state.blend_state = blend_state;
+                    state.style.blend_state = blend_state;
                 }
                 DrawCommand::Material(entity) => {
-                    state.material_key = MaterialKey::Custom {
+                    state.style.material_key = MaterialKey::Custom {
                         entity,
                         blend_state: None,
                     };
@@ -1190,60 +1125,67 @@ pub fn flush_draw_commands(
                 DrawCommand::TextFont(font_entity) => {
                     if let Some(entity) = font_entity {
                         if let Ok(font) = p_fonts.get(entity) {
-                            state.text_font_family = Some(font.family_name.clone());
+                            state.style.text_font_family = Some(font.family_name.clone());
                         }
                     } else {
-                        state.text_font_family = None;
+                        state.style.text_font_family = None;
                     }
                 }
                 DrawCommand::TextStyle(style) => {
-                    state.text_style = style;
+                    state.style.text_style = style;
                 }
                 DrawCommand::TextWeight(weight) => {
-                    state.text_weight = Some(weight);
+                    state.style.text_weight = Some(weight);
                 }
                 DrawCommand::TextVariation { tag, value } => {
-                    if let Some(existing) =
-                        state.text_variations.iter_mut().find(|(t, _)| *t == tag)
+                    if let Some(existing) = state
+                        .style
+                        .text_variations
+                        .iter_mut()
+                        .find(|(t, _)| *t == tag)
                     {
                         existing.1 = value;
                     } else {
-                        state.text_variations.push((tag, value));
+                        state.style.text_variations.push((tag, value));
                     }
                 }
                 DrawCommand::ClearTextVariations => {
-                    state.text_variations.clear();
+                    state.style.text_variations.clear();
                 }
                 DrawCommand::TextFeature { tag, value } => {
-                    if let Some(existing) = state.text_features.iter_mut().find(|(t, _)| *t == tag)
+                    if let Some(existing) = state
+                        .style
+                        .text_features
+                        .iter_mut()
+                        .find(|(t, _)| *t == tag)
                     {
                         existing.1 = value;
                     } else {
-                        state.text_features.push((tag, value));
+                        state.style.text_features.push((tag, value));
                     }
                 }
                 DrawCommand::NoTextFeature { tag } => {
-                    state.text_features.retain(|(t, _)| *t != tag);
+                    state.style.text_features.retain(|(t, _)| *t != tag);
                 }
                 DrawCommand::ClearTextFeatures => {
-                    state.text_features.clear();
+                    state.style.text_features.clear();
                 }
                 DrawCommand::TextSize(size) => {
-                    state.text_size = size;
-                    state.text_leading = None;
+                    state.style.text_size = size;
+                    state.style.text_leading = None;
                 }
                 DrawCommand::TextAlign { h, v } => {
-                    state.text_align_h = h;
-                    state.text_align_v = v;
+                    state.style.text_align_h = h;
+                    state.style.text_align_v = v;
                 }
                 DrawCommand::TextLeading(leading) => {
-                    state.text_leading = Some(leading);
+                    state.style.text_leading = Some(leading);
                 }
                 DrawCommand::TextWrap(mode) => {
-                    state.text_wrap = mode;
+                    state.style.text_wrap = mode;
                 }
                 DrawCommand::TextGlyphColors(colors) => {
-                    state.text_glyph_colors = Some(colors);
+                    state.style.text_glyph_colors = Some(colors);
                 }
                 DrawCommand::Text {
                     content,
@@ -1255,7 +1197,7 @@ pub fn flush_draw_commands(
                 } => {
                     // rectMode applies to the bounding-box form
                     let (x, y, max_w, max_h) = if let (Some(w), Some(h)) = (max_w, max_h) {
-                        let (bx, by, bw, bh) = apply_shape_mode(state.rect_mode, x, y, w, h);
+                        let (bx, by, bw, bh) = apply_shape_mode(state.style.rect_mode, x, y, w, h);
                         (bx, by, Some(bw), Some(bh))
                     } else {
                         (x, y, max_w, max_h)
@@ -1264,7 +1206,7 @@ pub fn flush_draw_commands(
                     let mut text_params =
                         primitive::text::OwnedTextParams::from_render_state(&state, max_w, max_h);
                     // per-glyph colors apply to this one text() call only
-                    text_params.glyph_colors = state.text_glyph_colors.take();
+                    text_params.glyph_colors = state.style.text_glyph_colors.take();
                     let text_cx = text_cx.clone();
 
                     if z != 0.0 {
@@ -1379,7 +1321,7 @@ fn spawn_mesh(
 fn needs_batch(batch: &BatchState, state: &RenderState, material_key: &MaterialKey) -> bool {
     let material_changed = batch.material_key.as_ref() != Some(material_key);
     let transform_changed = batch.transform != state.transform.current();
-    let requires_separate_draws = state.blend_state.is_some();
+    let requires_separate_draws = state.style.blend_state.is_some();
     material_changed || transform_changed || requires_separate_draws
 }
 
@@ -1479,8 +1421,8 @@ fn particles_fill_material(
 }
 
 fn material_key_with_fill(state: &RenderState) -> MaterialKey {
-    let color = state.fill_color.unwrap_or(Color::WHITE);
-    material_key_with_color(&state.material_key, color, state.blend_state)
+    let color = state.style.fill.color().unwrap_or(Color::WHITE);
+    material_key_with_color(&state.style.material_key, color, state.style.blend_state)
 }
 
 fn add_fill(
@@ -1490,10 +1432,11 @@ fn add_fill(
     tessellate: impl FnOnce(&mut Mesh, Color),
     material_handles: &Query<&UntypedMaterial>,
 ) {
-    let Some(color) = state.fill_color else {
+    let Some(color) = state.style.fill.color() else {
         return;
     };
-    let material_key = material_key_with_color(&state.material_key, color, state.blend_state);
+    let material_key =
+        material_key_with_color(&state.style.material_key, color, state.style.blend_state);
 
     if needs_batch(batch, state, &material_key) {
         start_batch(res, batch, state, material_key, material_handles);
@@ -1511,11 +1454,12 @@ fn add_stroke(
     tessellate: impl FnOnce(&mut Mesh, Color, f32),
     material_handles: &Query<&UntypedMaterial>,
 ) {
-    let Some(color) = state.stroke_color else {
+    let Some(color) = state.style.stroke_color else {
         return;
     };
-    let stroke_weight = state.stroke_weight;
-    let material_key = material_key_with_color(&state.material_key, color, state.blend_state);
+    let stroke_weight = state.style.stroke_weight;
+    let material_key =
+        material_key_with_color(&state.style.material_key, color, state.style.blend_state);
 
     if needs_batch(batch, state, &material_key) {
         start_batch(res, batch, state, material_key, material_handles);
@@ -1551,8 +1495,8 @@ fn add_shape3d(
     flush_batch(res, batch, material_handles);
 
     let mesh_handle = res.meshes.add(mesh);
-    let fill_color = state.fill_color.unwrap_or(Color::WHITE);
-    let material_handle = match &state.material_key {
+    let fill_color = state.style.fill.color().unwrap_or(Color::WHITE);
+    let material_handle = match &state.style.material_key {
         MaterialKey::Custom { entity, .. } => {
             let Some(untyped) = material_handles.get(*entity).ok() else {
                 warn!("Custom material entity {:?} not found", entity);
@@ -1561,7 +1505,7 @@ fn add_shape3d(
             clone_custom_material_with_blend(
                 &mut res.custom_materials,
                 &untyped.0,
-                state.blend_state,
+                state.style.blend_state,
             )
         }
         // TODO: in 2d, we use vertex colors. `to_material` becomes complicated if we also encode
@@ -1572,7 +1516,7 @@ fn add_shape3d(
                 base_color: fill_color,
                 unlit: true,
                 cull_mode: None,
-                alpha_mode: if state.blend_state.is_some() || *transparent {
+                alpha_mode: if state.style.blend_state.is_some() || *transparent {
                     AlphaMode::Blend
                 } else {
                     AlphaMode::Opaque
@@ -1582,7 +1526,7 @@ fn add_shape3d(
             let extended = ProcessingExtendedMaterial {
                 base,
                 extension: ProcessingMaterial {
-                    blend_state: state.blend_state,
+                    blend_state: state.style.blend_state,
                 },
             };
             res.materials.add(extended).untyped()
@@ -1605,14 +1549,14 @@ fn add_shape3d(
         batch.render_layers.clone(),
     ));
 
-    if let Some(stroke_color) = state.stroke_color {
+    if let Some(stroke_color) = state.style.stroke_color {
         entity.insert((
             Wireframe,
             WireframeColor {
                 color: stroke_color,
             },
             WireframeLineWidth {
-                width: state.stroke_weight,
+                width: state.style.stroke_weight,
             },
             WireframeTopology::Quads,
         ));

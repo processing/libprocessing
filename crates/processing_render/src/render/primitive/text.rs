@@ -92,18 +92,18 @@ impl OwnedTextParams {
     /// draw path fills it in, measurement queries don't need it.
     pub fn from_render_state(state: &RenderState, max_w: Option<f32>, max_h: Option<f32>) -> Self {
         Self {
-            text_size: state.text_size,
-            align_h: state.text_align_h,
-            align_v: state.text_align_v,
-            leading: state.text_leading,
+            text_size: state.style.text_size,
+            align_h: state.style.text_align_h,
+            align_v: state.style.text_align_v,
+            leading: state.style.text_leading,
             max_w,
             max_h,
-            wrap: state.text_wrap,
-            font_family: state.text_font_family.clone(),
-            text_style: state.text_style,
-            text_weight: state.text_weight,
-            text_variations: state.text_variations.clone(),
-            text_features: state.text_features.clone(),
+            wrap: state.style.text_wrap,
+            font_family: state.style.text_font_family.clone(),
+            text_style: state.style.text_style,
+            text_weight: state.style.text_weight,
+            text_variations: state.style.text_variations.clone(),
+            text_features: state.style.text_features.clone(),
             glyph_colors: None,
         }
     }

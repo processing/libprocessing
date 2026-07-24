@@ -511,6 +511,8 @@ pub enum DrawCommand {
     PushMatrix,
     PopMatrix,
     ResetMatrix,
+    PushStyle,
+    PopStyle,
     Translate(Vec2),
     Rotate {
         angle: f32,

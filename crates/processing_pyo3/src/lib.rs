@@ -1272,6 +1272,30 @@ mod mewnala {
     }
 
     #[pyfunction]
+    #[pyo3(pass_module)]
+    fn push_style(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).push_style()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn pop_style(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).pop_style()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn push(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).push()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn pop(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).pop()
+    }
+
+    #[pyfunction]
     #[pyo3(pass_module, signature = (*args))]
     fn translate(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
         graphics!(module).translate(args)
