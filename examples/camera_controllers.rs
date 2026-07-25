@@ -70,7 +70,7 @@ fn sketch() -> error::Result<()> {
             graphics_record_command(graphics, DrawCommand::Roughness(0.3))?;
             graphics_record_command(graphics, DrawCommand::Metallic(0.8))?;
             graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-            graphics_record_command(graphics, DrawCommand::Rotate { angle })?;
+            graphics_record_command(graphics, DrawCommand::Rotate { angle, axis: Vec3::Z })?;
             graphics_record_command(graphics, DrawCommand::Geometry(box_geo))?;
             graphics_record_command(graphics, DrawCommand::PopMatrix)?;
         } else {

@@ -1,6 +1,6 @@
 use processing_glfw::GlfwContext;
 
-use bevy::math::Vec2;
+use bevy::math::{Vec2, Vec3};
 use processing::prelude::*;
 use processing_render::render::command::DrawCommand;
 use std::f32::consts::PI;
@@ -36,14 +36,14 @@ fn sketch() -> error::Result<()> {
                     DrawCommand::Translate(Vec2::new(
                         50.0 + j as f32 * 100.0,
                         50.0 + i as f32 * 100.0,
-                    )),
+                    ).extend(0.0)),
                 )?;
 
                 let angle = t + (i + j) as f32 * PI / 8.0;
-                graphics_record_command(graphics, DrawCommand::Rotate { angle })?;
+                graphics_record_command(graphics, DrawCommand::Rotate { angle, axis: Vec3::Z })?;
 
                 let s = 0.8 + (t * 2.0 + (i * j) as f32).sin() * 0.2;
-                graphics_record_command(graphics, DrawCommand::Scale(Vec2::splat(s)))?;
+                graphics_record_command(graphics, DrawCommand::Scale(Vec2::splat(s).extend(1.0)))?;
 
                 let r = j as f32 / 3.0;
                 let g = i as f32 / 3.0;

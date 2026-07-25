@@ -61,8 +61,8 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(graphics, DrawCommand::Material(glow))?;
 
         graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(graphics, DrawCommand::Scale(Vec2::new(15.0, 15.0)))?;
-        graphics_record_command(graphics, DrawCommand::Rotate { angle: t * 0.3 })?;
+        graphics_record_command(graphics, DrawCommand::Scale(Vec2::new(15.0, 15.0).extend(1.0)))?;
+        graphics_record_command(graphics, DrawCommand::Rotate { angle: t * 0.3, axis: Vec3::Z })?;
         graphics_record_command(graphics, DrawCommand::Geometry(geom))?;
         graphics_record_command(graphics, DrawCommand::PopMatrix)?;
 
