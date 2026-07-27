@@ -10,6 +10,7 @@
 //! functions that forward to a singleton Graphics object pub(crate) behind the scenes.
 pub(crate) mod color;
 pub(crate) mod compute;
+mod constants;
 #[cfg(feature = "cuda")]
 pub(crate) mod cuda;
 mod glfw;
@@ -29,8 +30,7 @@ mod webcam;
 
 use compute::{Buffer, Compute};
 use graphics::{
-    Font, Geometry, Graphics, Image, Light, PyBlendMode, Sampler, Topology, get_graphics,
-    get_graphics_mut,
+    Font, Geometry, Graphics, Image, Light, PyBlendMode, Sampler, get_graphics, get_graphics_mut,
 };
 use material::Material;
 
@@ -353,8 +353,6 @@ mod mewnala {
     #[pymodule_export]
     use super::Shader;
     #[pymodule_export]
-    use super::Topology;
-    #[pymodule_export]
     use super::color::PyColor;
     #[cfg(feature = "cuda")]
     #[pymodule_export]
@@ -378,288 +376,9 @@ mod mewnala {
     #[pymodule_export]
     use super::surface::Surface;
 
-    // Stroke cap/join
-    #[pymodule_export]
-    const ROUND: u8 = 0;
-    #[pymodule_export]
-    const SQUARE: u8 = 1;
-    #[pymodule_export]
-    const PROJECT: u8 = 2;
-    #[pymodule_export]
-    const MITER: u8 = 1;
-    #[pymodule_export]
-    const BEVEL: u8 = 2;
-
-    // Shape kinds
-    #[pymodule_export]
-    const POLYGON: u8 = 0;
-    #[pymodule_export]
-    const POINTS: u8 = 1;
-    #[pymodule_export]
-    const LINES: u8 = 2;
-    #[pymodule_export]
-    const TRIANGLES: u8 = 3;
-    #[pymodule_export]
-    const TRIANGLE_FAN: u8 = 4;
-    #[pymodule_export]
-    const TRIANGLE_STRIP: u8 = 5;
-    #[pymodule_export]
-    const QUADS: u8 = 6;
-    #[pymodule_export]
-    const QUAD_STRIP: u8 = 7;
-
-    // Shape modes
-    #[pymodule_export]
-    const CORNER: u8 = 0;
-    #[pymodule_export]
-    const CORNERS: u8 = 1;
-    // CENTER = 1
-    #[pymodule_export]
-    const RADIUS: u8 = 3;
-
-    // Arc modes
-    #[pymodule_export]
-    const OPEN: u8 = 0;
-    #[pymodule_export]
-    const CHORD: u8 = 1;
-    #[pymodule_export]
-    const PIE: u8 = 2;
-
-    #[pymodule_export]
-    const CLOSE: bool = true;
-
-    // Mouse buttons
-    #[pymodule_export]
-    const LEFT: u8 = 0;
-    #[pymodule_export]
-    const CENTER: u8 = 1;
-    #[pymodule_export]
-    const RIGHT: u8 = 2;
-
-    // Letters
-    #[pymodule_export]
-    const KEY_A: u32 = 65;
-    #[pymodule_export]
-    const KEY_B: u32 = 66;
-    #[pymodule_export]
-    const KEY_C: u32 = 67;
-    #[pymodule_export]
-    const KEY_D: u32 = 68;
-    #[pymodule_export]
-    const KEY_E: u32 = 69;
-    #[pymodule_export]
-    const KEY_F: u32 = 70;
-    #[pymodule_export]
-    const KEY_G: u32 = 71;
-    #[pymodule_export]
-    const KEY_H: u32 = 72;
-    #[pymodule_export]
-    const KEY_I: u32 = 73;
-    #[pymodule_export]
-    const KEY_J: u32 = 74;
-    #[pymodule_export]
-    const KEY_K: u32 = 75;
-    #[pymodule_export]
-    const KEY_L: u32 = 76;
-    #[pymodule_export]
-    const KEY_M: u32 = 77;
-    #[pymodule_export]
-    const KEY_N: u32 = 78;
-    #[pymodule_export]
-    const KEY_O: u32 = 79;
-    #[pymodule_export]
-    const KEY_P: u32 = 80;
-    #[pymodule_export]
-    const KEY_Q: u32 = 81;
-    #[pymodule_export]
-    const KEY_R: u32 = 82;
-    #[pymodule_export]
-    const KEY_S: u32 = 83;
-    #[pymodule_export]
-    const KEY_T: u32 = 84;
-    #[pymodule_export]
-    const KEY_U: u32 = 85;
-    #[pymodule_export]
-    const KEY_V: u32 = 86;
-    #[pymodule_export]
-    const KEY_W: u32 = 87;
-    #[pymodule_export]
-    const KEY_X: u32 = 88;
-    #[pymodule_export]
-    const KEY_Y: u32 = 89;
-    #[pymodule_export]
-    const KEY_Z: u32 = 90;
-
-    // Digits
-    #[pymodule_export]
-    const KEY_0: u32 = 48;
-    #[pymodule_export]
-    const KEY_1: u32 = 49;
-    #[pymodule_export]
-    const KEY_2: u32 = 50;
-    #[pymodule_export]
-    const KEY_3: u32 = 51;
-    #[pymodule_export]
-    const KEY_4: u32 = 52;
-    #[pymodule_export]
-    const KEY_5: u32 = 53;
-    #[pymodule_export]
-    const KEY_6: u32 = 54;
-    #[pymodule_export]
-    const KEY_7: u32 = 55;
-    #[pymodule_export]
-    const KEY_8: u32 = 56;
-    #[pymodule_export]
-    const KEY_9: u32 = 57;
-
-    // Punctuation/symbols
-    #[pymodule_export]
-    const SPACE: u32 = 32;
-    #[pymodule_export]
-    const QUOTE: u32 = 39;
-    #[pymodule_export]
-    const COMMA: u32 = 44;
-    #[pymodule_export]
-    const MINUS: u32 = 45;
-    #[pymodule_export]
-    const PERIOD: u32 = 46;
-    #[pymodule_export]
-    const SLASH: u32 = 47;
-    #[pymodule_export]
-    const SEMICOLON: u32 = 59;
-    #[pymodule_export]
-    const EQUAL: u32 = 61;
-    #[pymodule_export]
-    const BRACKET_LEFT: u32 = 91;
-    #[pymodule_export]
-    const BACKSLASH: u32 = 92;
-    #[pymodule_export]
-    const BRACKET_RIGHT: u32 = 93;
-    #[pymodule_export]
-    const BACKQUOTE: u32 = 96;
-
-    // Navigation/editing
-    #[pymodule_export]
-    const ESCAPE: u32 = 256;
-    #[pymodule_export]
-    const ENTER: u32 = 257;
-    #[pymodule_export]
-    const TAB: u32 = 258;
-    #[pymodule_export]
-    const BACKSPACE: u32 = 259;
-    #[pymodule_export]
-    const INSERT: u32 = 260;
-    #[pymodule_export]
-    const DELETE: u32 = 261;
-    #[pymodule_export]
-    const UP: u32 = 265;
-    #[pymodule_export]
-    const DOWN: u32 = 264;
-    #[pymodule_export]
-    const LEFT_ARROW: u32 = 263;
-    #[pymodule_export]
-    const RIGHT_ARROW: u32 = 262;
-    #[pymodule_export]
-    const PAGE_UP: u32 = 266;
-    #[pymodule_export]
-    const PAGE_DOWN: u32 = 267;
-    #[pymodule_export]
-    const HOME: u32 = 268;
-    #[pymodule_export]
-    const END: u32 = 269;
-
-    // Modifiers
-    #[pymodule_export]
-    const SHIFT: u32 = 340;
-    #[pymodule_export]
-    const CONTROL: u32 = 341;
-    #[pymodule_export]
-    const ALT: u32 = 342;
-    #[pymodule_export]
-    const SUPER: u32 = 343;
-
-    // Function keys
-    #[pymodule_export]
-    const F1: u32 = 290;
-    #[pymodule_export]
-    const F2: u32 = 291;
-    #[pymodule_export]
-    const F3: u32 = 292;
-    #[pymodule_export]
-    const F4: u32 = 293;
-    #[pymodule_export]
-    const F5: u32 = 294;
-    #[pymodule_export]
-    const F6: u32 = 295;
-    #[pymodule_export]
-    const F7: u32 = 296;
-    #[pymodule_export]
-    const F8: u32 = 297;
-    #[pymodule_export]
-    const F9: u32 = 298;
-    #[pymodule_export]
-    const F10: u32 = 299;
-    #[pymodule_export]
-    const F11: u32 = 300;
-    #[pymodule_export]
-    const F12: u32 = 301;
-
-    // Math constants
-    #[pymodule_export]
-    const PI: f32 = std::f32::consts::PI;
-    #[pymodule_export]
-    const TWO_PI: f32 = std::f32::consts::TAU;
-    #[pymodule_export]
-    const HALF_PI: f32 = std::f32::consts::FRAC_PI_2;
-    #[pymodule_export]
-    const QUARTER_PI: f32 = std::f32::consts::FRAC_PI_4;
-    #[pymodule_export]
-    const TAU: f32 = std::f32::consts::TAU;
-    #[pymodule_export]
-    const DEG_TO_RAD: f32 = std::f32::consts::PI / 180.0;
-    #[pymodule_export]
-    const RAD_TO_DEG: f32 = 180.0 / std::f32::consts::PI;
-
-    // color space constants for color_mode()
-    #[pymodule_export]
-    const SRGB: u8 = 0;
-    #[pymodule_export]
-    const LINEAR: u8 = 1;
-    #[pymodule_export]
-    const HSL: u8 = 2;
-    #[pymodule_export]
-    const HSV: u8 = 3;
-    #[pymodule_export]
-    const HWB: u8 = 4;
-    #[pymodule_export]
-    const OKLAB: u8 = 5;
-    #[pymodule_export]
-    const OKLCH: u8 = 6;
-    #[pymodule_export]
-    const LAB: u8 = 7;
-    #[pymodule_export]
-    const LCH: u8 = 8;
-    #[pymodule_export]
-    const XYZ: u8 = 9;
-
     #[pymodule_init]
     fn init(module: &Bound<'_, PyModule>) -> PyResult<()> {
-        use processing::prelude::BlendMode;
-
-        module.add("BLEND", PyBlendMode::from_preset(BlendMode::Blend))?;
-        module.add("ADD", PyBlendMode::from_preset(BlendMode::Add))?;
-        module.add("SUBTRACT", PyBlendMode::from_preset(BlendMode::Subtract))?;
-        module.add("DARKEST", PyBlendMode::from_preset(BlendMode::Darkest))?;
-        module.add("LIGHTEST", PyBlendMode::from_preset(BlendMode::Lightest))?;
-        module.add(
-            "DIFFERENCE",
-            PyBlendMode::from_preset(BlendMode::Difference),
-        )?;
-        module.add("EXCLUSION", PyBlendMode::from_preset(BlendMode::Exclusion))?;
-        module.add("MULTIPLY", PyBlendMode::from_preset(BlendMode::Multiply))?;
-        module.add("SCREEN", PyBlendMode::from_preset(BlendMode::Screen))?;
-        module.add("REPLACE", PyBlendMode::from_preset(BlendMode::Replace))?;
-        Ok(())
+        super::constants::register(module)
     }
 
     #[pymodule]
@@ -1384,7 +1103,7 @@ mod mewnala {
     #[pyo3(pass_module, signature = (mode, max1=None, max2=None, max3=None, max_alpha=None))]
     fn color_mode<'py>(
         module: &Bound<'py, PyModule>,
-        mode: u8,
+        mode: &str,
         max1: Option<&Bound<'py, PyAny>>,
         max2: Option<&Bound<'py, PyAny>>,
         max3: Option<&Bound<'py, PyAny>>,
@@ -1427,13 +1146,13 @@ mod mewnala {
 
     #[pyfunction]
     #[pyo3(pass_module)]
-    fn stroke_cap(module: &Bound<'_, PyModule>, cap: u8) -> PyResult<()> {
+    fn stroke_cap(module: &Bound<'_, PyModule>, cap: &str) -> PyResult<()> {
         graphics!(module).stroke_cap(cap)
     }
 
     #[pyfunction]
     #[pyo3(pass_module)]
-    fn stroke_join(module: &Bound<'_, PyModule>, join: u8) -> PyResult<()> {
+    fn stroke_join(module: &Bound<'_, PyModule>, join: &str) -> PyResult<()> {
         graphics!(module).stroke_join(join)
     }
 
@@ -1535,7 +1254,7 @@ mod mewnala {
     /// - `CORNERS` — `dx`, `dy` and `d_width`, `d_height` are opposite corners.
     #[pyfunction]
     #[pyo3(pass_module)]
-    fn image_mode(module: &Bound<'_, PyModule>, mode: u8) -> PyResult<()> {
+    fn image_mode(module: &Bound<'_, PyModule>, mode: &str) -> PyResult<()> {
         graphics!(module).image_mode(mode)
     }
 
@@ -1720,7 +1439,7 @@ mod mewnala {
     }
 
     #[pyfunction]
-    #[pyo3(pass_module, signature = (cx, cy, w, h, start, stop, mode=0))]
+    #[pyo3(pass_module, signature = (cx, cy, w, h, start, stop, mode=processing::prelude::constants::OPEN))]
     fn arc(
         module: &Bound<'_, PyModule>,
         cx: f32,
@@ -1729,7 +1448,7 @@ mod mewnala {
         h: f32,
         start: f32,
         stop: f32,
-        mode: u8,
+        mode: &str,
     ) -> PyResult<()> {
         graphics!(module).arc(cx, cy, w, h, start, stop, mode)
     }
@@ -1767,8 +1486,8 @@ mod mewnala {
     }
 
     #[pyfunction]
-    #[pyo3(pass_module, signature = (kind=0))]
-    fn begin_shape(module: &Bound<'_, PyModule>, kind: u8) -> PyResult<()> {
+    #[pyo3(pass_module, signature = (kind=processing::prelude::constants::POLYGON))]
+    fn begin_shape(module: &Bound<'_, PyModule>, kind: &str) -> PyResult<()> {
         graphics!(module).begin_shape(kind)
     }
 
@@ -1854,13 +1573,13 @@ mod mewnala {
 
     #[pyfunction]
     #[pyo3(pass_module)]
-    fn rect_mode(module: &Bound<'_, PyModule>, mode: u8) -> PyResult<()> {
+    fn rect_mode(module: &Bound<'_, PyModule>, mode: &str) -> PyResult<()> {
         graphics!(module).rect_mode(mode)
     }
 
     #[pyfunction]
     #[pyo3(pass_module)]
-    fn ellipse_mode(module: &Bound<'_, PyModule>, mode: u8) -> PyResult<()> {
+    fn ellipse_mode(module: &Bound<'_, PyModule>, mode: &str) -> PyResult<()> {
         graphics!(module).ellipse_mode(mode)
     }
 

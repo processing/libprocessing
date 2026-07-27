@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy::render::render_resource::{BlendComponent, BlendFactor, BlendOperation, BlendState};
+use processing_core::constants as consts;
 use processing_core::error::{self, ProcessingError};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -104,6 +105,17 @@ impl From<u8> for StrokeCapMode {
     }
 }
 
+impl StrokeCapMode {
+    pub fn parse(s: &str) -> Option<Self> {
+        match () {
+            _ if s.eq_ignore_ascii_case(consts::ROUND) => Some(Self::Round),
+            _ if s.eq_ignore_ascii_case(consts::SQUARE) => Some(Self::Square),
+            _ if s.eq_ignore_ascii_case(consts::PROJECT) => Some(Self::Project),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[repr(u8)]
 pub enum StrokeJoinMode {
@@ -120,6 +132,17 @@ impl From<u8> for StrokeJoinMode {
             1 => Self::Miter,
             2 => Self::Bevel,
             _ => Self::default(),
+        }
+    }
+}
+
+impl StrokeJoinMode {
+    pub fn parse(s: &str) -> Option<Self> {
+        match () {
+            _ if s.eq_ignore_ascii_case(consts::ROUND) => Some(Self::Round),
+            _ if s.eq_ignore_ascii_case(consts::MITER) => Some(Self::Miter),
+            _ if s.eq_ignore_ascii_case(consts::BEVEL) => Some(Self::Bevel),
+            _ => None,
         }
     }
 }
@@ -144,6 +167,17 @@ impl From<u8> for ArcMode {
     }
 }
 
+impl ArcMode {
+    pub fn parse(s: &str) -> Option<Self> {
+        match () {
+            _ if s.eq_ignore_ascii_case(consts::OPEN) => Some(Self::Open),
+            _ if s.eq_ignore_ascii_case(consts::CHORD) => Some(Self::Chord),
+            _ if s.eq_ignore_ascii_case(consts::PIE) => Some(Self::Pie),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ShapeMode {
@@ -162,6 +196,18 @@ impl From<u8> for ShapeMode {
             2 => Self::Center,
             3 => Self::Radius,
             _ => Self::default(),
+        }
+    }
+}
+
+impl ShapeMode {
+    pub fn parse(s: &str) -> Option<Self> {
+        match () {
+            _ if s.eq_ignore_ascii_case(consts::CORNER) => Some(Self::Corner),
+            _ if s.eq_ignore_ascii_case(consts::CORNERS) => Some(Self::Corners),
+            _ if s.eq_ignore_ascii_case(consts::CENTER) => Some(Self::Center),
+            _ if s.eq_ignore_ascii_case(consts::RADIUS) => Some(Self::Radius),
+            _ => None,
         }
     }
 }
@@ -192,6 +238,22 @@ impl From<u8> for ShapeKind {
             6 => Self::Quads,
             7 => Self::QuadStrip,
             _ => Self::default(),
+        }
+    }
+}
+
+impl ShapeKind {
+    pub fn parse(s: &str) -> Option<Self> {
+        match () {
+            _ if s.eq_ignore_ascii_case(consts::POLYGON) => Some(Self::Polygon),
+            _ if s.eq_ignore_ascii_case(consts::POINTS) => Some(Self::Points),
+            _ if s.eq_ignore_ascii_case(consts::LINES) => Some(Self::Lines),
+            _ if s.eq_ignore_ascii_case(consts::TRIANGLES) => Some(Self::Triangles),
+            _ if s.eq_ignore_ascii_case(consts::TRIANGLE_FAN) => Some(Self::TriangleFan),
+            _ if s.eq_ignore_ascii_case(consts::TRIANGLE_STRIP) => Some(Self::TriangleStrip),
+            _ if s.eq_ignore_ascii_case(consts::QUADS) => Some(Self::Quads),
+            _ if s.eq_ignore_ascii_case(consts::QUAD_STRIP) => Some(Self::QuadStrip),
+            _ => None,
         }
     }
 }

@@ -38,10 +38,10 @@ pub fn mouse_button() -> PyResult<Option<String>> {
     processing::prelude::input_mouse_button()
         .map(|opt| {
             opt.map(|b| match b {
-                MouseButton::Left => "LEFT".to_string(),
-                MouseButton::Right => "RIGHT".to_string(),
-                MouseButton::Middle => "CENTER".to_string(),
-                _ => format!("{b:?}"),
+                MouseButton::Left => constants::LEFT.to_string(),
+                MouseButton::Right => constants::RIGHT.to_string(),
+                MouseButton::Middle => constants::CENTER.to_string(),
+                _ => format!("{b:?}").to_lowercase(),
             })
         })
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))

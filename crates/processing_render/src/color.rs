@@ -33,6 +33,23 @@ impl ColorSpace {
         }
     }
 
+    pub fn parse(s: &str) -> Option<Self> {
+        use processing_core::constants as consts;
+        match () {
+            _ if s.eq_ignore_ascii_case(consts::SRGB) => Some(Self::Srgb),
+            _ if s.eq_ignore_ascii_case(consts::LINEAR) => Some(Self::Linear),
+            _ if s.eq_ignore_ascii_case(consts::HSL) => Some(Self::Hsl),
+            _ if s.eq_ignore_ascii_case(consts::HSV) => Some(Self::Hsv),
+            _ if s.eq_ignore_ascii_case(consts::HWB) => Some(Self::Hwb),
+            _ if s.eq_ignore_ascii_case(consts::OKLAB) => Some(Self::Oklab),
+            _ if s.eq_ignore_ascii_case(consts::OKLCH) => Some(Self::Oklch),
+            _ if s.eq_ignore_ascii_case(consts::LAB) => Some(Self::Lab),
+            _ if s.eq_ignore_ascii_case(consts::LCH) => Some(Self::Lch),
+            _ if s.eq_ignore_ascii_case(consts::XYZ) => Some(Self::Xyz),
+            _ => None,
+        }
+    }
+
     pub fn default_maxes(&self) -> [f32; 4] {
         match self {
             Self::Srgb | Self::Linear | Self::Oklab | Self::Xyz => [1.0, 1.0, 1.0, 1.0],
