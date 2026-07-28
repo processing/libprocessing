@@ -83,10 +83,13 @@ fn sketch() -> error::Result<()> {
                 graphics_record_command(graphics, DrawCommand::PushMatrix)?;
                 graphics_record_command(
                     graphics,
-                    DrawCommand::Translate(Vec2::new(
-                        col as f32 * spacing - offset_x,
-                        row as f32 * spacing - offset_y,
-                    ).extend(0.0)),
+                    DrawCommand::Translate(
+                        Vec2::new(
+                            col as f32 * spacing - offset_x,
+                            row as f32 * spacing - offset_y,
+                        )
+                        .extend(0.0),
+                    ),
                 )?;
                 graphics_record_command(graphics, DrawCommand::Material(mat))?;
                 graphics_record_command(graphics, DrawCommand::Geometry(sphere))?;

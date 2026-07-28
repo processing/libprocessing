@@ -33,14 +33,19 @@ fn sketch() -> error::Result<()> {
 
                 graphics_record_command(
                     graphics,
-                    DrawCommand::Translate(Vec2::new(
-                        50.0 + j as f32 * 100.0,
-                        50.0 + i as f32 * 100.0,
-                    ).extend(0.0)),
+                    DrawCommand::Translate(
+                        Vec2::new(50.0 + j as f32 * 100.0, 50.0 + i as f32 * 100.0).extend(0.0),
+                    ),
                 )?;
 
                 let angle = t + (i + j) as f32 * PI / 8.0;
-                graphics_record_command(graphics, DrawCommand::Rotate { angle, axis: Vec3::Z })?;
+                graphics_record_command(
+                    graphics,
+                    DrawCommand::Rotate {
+                        angle,
+                        axis: Vec3::Z,
+                    },
+                )?;
 
                 let s = 0.8 + (t * 2.0 + (i * j) as f32).sin() * 0.2;
                 graphics_record_command(graphics, DrawCommand::Scale(Vec2::splat(s).extend(1.0)))?;
