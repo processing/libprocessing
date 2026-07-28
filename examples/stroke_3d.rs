@@ -35,8 +35,17 @@ fn sketch() -> error::Result<()> {
 
         // thin wireframe box
         graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(graphics, DrawCommand::Translate(Vec2::new(-80.0, 0.0)))?;
-        graphics_record_command(graphics, DrawCommand::Rotate { angle })?;
+        graphics_record_command(
+            graphics,
+            DrawCommand::Translate(Vec2::new(-80.0, 0.0).extend(0.0)),
+        )?;
+        graphics_record_command(
+            graphics,
+            DrawCommand::Rotate {
+                angle,
+                axis: Vec3::Z,
+            },
+        )?;
 
         graphics_record_command(
             graphics,
@@ -60,8 +69,14 @@ fn sketch() -> error::Result<()> {
 
         // thick wireframe box
         graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(graphics, DrawCommand::Translate(Vec2::ZERO))?;
-        graphics_record_command(graphics, DrawCommand::Rotate { angle: angle * 0.7 })?;
+        graphics_record_command(graphics, DrawCommand::Translate(Vec2::ZERO.extend(0.0)))?;
+        graphics_record_command(
+            graphics,
+            DrawCommand::Rotate {
+                angle: angle * 0.7,
+                axis: Vec3::Z,
+            },
+        )?;
 
         graphics_record_command(
             graphics,
@@ -85,8 +100,17 @@ fn sketch() -> error::Result<()> {
 
         // thick wireframe sphere
         graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(graphics, DrawCommand::Translate(Vec2::new(80.0, 0.0)))?;
-        graphics_record_command(graphics, DrawCommand::Rotate { angle: angle * 0.5 })?;
+        graphics_record_command(
+            graphics,
+            DrawCommand::Translate(Vec2::new(80.0, 0.0).extend(0.0)),
+        )?;
+        graphics_record_command(
+            graphics,
+            DrawCommand::Rotate {
+                angle: angle * 0.5,
+                axis: Vec3::Z,
+            },
+        )?;
 
         graphics_record_command(
             graphics,
@@ -110,11 +134,15 @@ fn sketch() -> error::Result<()> {
 
         // wireframe-only sphere (no fill)
         graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(graphics, DrawCommand::Translate(Vec2::new(160.0, 0.0)))?;
+        graphics_record_command(
+            graphics,
+            DrawCommand::Translate(Vec2::new(160.0, 0.0).extend(0.0)),
+        )?;
         graphics_record_command(
             graphics,
             DrawCommand::Rotate {
                 angle: -angle * 0.3,
+                axis: Vec3::Z,
             },
         )?;
 

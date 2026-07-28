@@ -314,7 +314,7 @@ pub fn js_translate(graphics_id: u64, x: f32, y: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
     check(graphics_record_command(
         graphics_entity,
-        DrawCommand::Translate(Vec2::new(x, y)),
+        DrawCommand::Translate(Vec3::new(x, y, 0.0)),
     ))
 }
 
@@ -323,7 +323,10 @@ pub fn js_rotate(graphics_id: u64, angle: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
     check(graphics_record_command(
         graphics_entity,
-        DrawCommand::Rotate { angle },
+        DrawCommand::Rotate {
+            angle,
+            axis: Vec3::Z,
+        },
     ))
 }
 
@@ -332,7 +335,7 @@ pub fn js_scale(graphics_id: u64, x: f32, y: f32) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
     check(graphics_record_command(
         graphics_entity,
-        DrawCommand::Scale(Vec2::new(x, y)),
+        DrawCommand::Scale(Vec3::new(x, y, 1.0)),
     ))
 }
 

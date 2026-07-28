@@ -59,6 +59,19 @@ impl Topology {
             _ => None,
         }
     }
+
+    /// Accepts the shape names (`triangles`, `lines`, ...), not the variant names.
+    pub fn parse(s: &str) -> Option<Self> {
+        use processing_core::constants as consts;
+        match () {
+            _ if s.eq_ignore_ascii_case(consts::POINTS) => Some(Self::PointList),
+            _ if s.eq_ignore_ascii_case(consts::LINES) => Some(Self::LineList),
+            _ if s.eq_ignore_ascii_case(consts::LINE_STRIP) => Some(Self::LineStrip),
+            _ if s.eq_ignore_ascii_case(consts::TRIANGLES) => Some(Self::TriangleList),
+            _ if s.eq_ignore_ascii_case(consts::TRIANGLE_STRIP) => Some(Self::TriangleStrip),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Component)]

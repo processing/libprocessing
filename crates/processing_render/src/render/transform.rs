@@ -1,4 +1,4 @@
-use bevy::math::{Affine3A, Mat3, Quat, Vec3};
+use bevy::math::{Affine3A, Mat3, Vec3};
 
 #[derive(Debug, Clone, Default)]
 pub struct TransformStack {
@@ -34,70 +34,6 @@ impl TransformStack {
         self.stack.clear();
     }
 
-    pub fn translate(&mut self, x: f32, y: f32) {
-        self.translate_3d(x, y, 0.0);
-    }
-
-    pub fn rotate(&mut self, angle: f32) {
-        self.rotate_z(angle);
-    }
-
-    pub fn scale_uniform(&mut self, s: f32) {
-        self.scale(s, s);
-    }
-
-    pub fn scale(&mut self, sx: f32, sy: f32) {
-        self.scale_3d(sx, sy, 1.0);
-    }
-
-    pub fn shear_x(&mut self, angle: f32) {
-        let shear = Affine3A::from_mat3(Mat3::from_cols(
-            Vec3::new(1.0, 0.0, 0.0),
-            Vec3::new(angle.tan(), 1.0, 0.0),
-            Vec3::new(0.0, 0.0, 1.0),
-        ));
-        self.current *= shear;
-    }
-
-    pub fn shear_y(&mut self, angle: f32) {
-        let shear = Affine3A::from_mat3(Mat3::from_cols(
-            Vec3::new(1.0, angle.tan(), 0.0),
-            Vec3::new(0.0, 1.0, 0.0),
-            Vec3::new(0.0, 0.0, 1.0),
-        ));
-        self.current *= shear;
-    }
-
-    pub fn translate_3d(&mut self, x: f32, y: f32, z: f32) {
-        let t = Affine3A::from_translation(Vec3::new(x, y, z));
-        self.current *= t;
-    }
-
-    pub fn rotate_x(&mut self, angle: f32) {
-        let r = Affine3A::from_quat(Quat::from_rotation_x(angle));
-        self.current *= r;
-    }
-
-    pub fn rotate_y(&mut self, angle: f32) {
-        let r = Affine3A::from_quat(Quat::from_rotation_y(angle));
-        self.current *= r;
-    }
-
-    pub fn rotate_z(&mut self, angle: f32) {
-        let r = Affine3A::from_quat(Quat::from_rotation_z(angle));
-        self.current *= r;
-    }
-
-    pub fn rotate_axis(&mut self, angle: f32, axis: Vec3) {
-        let r = Affine3A::from_quat(Quat::from_axis_angle(axis.normalize(), angle));
-        self.current *= r;
-    }
-
-    pub fn scale_3d(&mut self, sx: f32, sy: f32, sz: f32) {
-        let s = Affine3A::from_scale(Vec3::new(sx, sy, sz));
-        self.current *= s;
-    }
-
     pub fn apply(&mut self, transform: Affine3A) {
         self.current *= transform;
     }
@@ -119,6 +55,22 @@ impl TransformStack {
         let p = self.current.transform_point3(Vec3::new(x, y, 0.0));
         (p.x, p.y)
     }
+}
+
+pub fn shear_x(angle: f32) -> Affine3A {
+    Affine3A::from_mat3(Mat3::from_cols(
+        Vec3::new(1.0, 0.0, 0.0),
+        Vec3::new(angle.tan(), 1.0, 0.0),
+        Vec3::new(0.0, 0.0, 1.0),
+    ))
+}
+
+pub fn shear_y(angle: f32) -> Affine3A {
+    Affine3A::from_mat3(Mat3::from_cols(
+        Vec3::new(1.0, angle.tan(), 0.0),
+        Vec3::new(0.0, 1.0, 0.0),
+        Vec3::new(0.0, 0.0, 1.0),
+    ))
 }
 
 #[cfg(test)]
@@ -144,7 +96,7 @@ mod tests {
     #[test]
     fn test_translate() {
         let mut stack = TransformStack::new();
-        stack.translate(100.0, 50.0);
+        stack.apply(Affine3A::from_translation(Vec3::new(100.0, 50.0, 0.0)));
         let (x, y) = stack.transform_point_2d(10.0, 20.0);
         assert!(approx_eq(x, 110.0));
         assert!(approx_eq(y, 70.0));
@@ -153,7 +105,7 @@ mod tests {
     #[test]
     fn test_scale() {
         let mut stack = TransformStack::new();
-        stack.scale(2.0, 3.0);
+        stack.apply(Affine3A::from_scale(Vec3::new(2.0, 3.0, 1.0)));
         let (x, y) = stack.transform_point_2d(10.0, 10.0);
         assert!(approx_eq(x, 20.0));
         assert!(approx_eq(y, 30.0));
@@ -162,7 +114,7 @@ mod tests {
     #[test]
     fn test_rotate_90() {
         let mut stack = TransformStack::new();
-        stack.rotate(PI / 2.0);
+        stack.apply(Affine3A::from_rotation_z(PI / 2.0));
         let (x, y) = stack.transform_point_2d(10.0, 0.0);
         assert!(approx_eq(x, 0.0));
         assert!(approx_eq(y, 10.0));
@@ -171,9 +123,9 @@ mod tests {
     #[test]
     fn test_push_pop() {
         let mut stack = TransformStack::new();
-        stack.translate(100.0, 100.0);
+        stack.apply(Affine3A::from_translation(Vec3::new(100.0, 100.0, 0.0)));
         stack.push();
-        stack.translate(50.0, 50.0);
+        stack.apply(Affine3A::from_translation(Vec3::new(50.0, 50.0, 0.0)));
 
         let (x, y) = stack.transform_point_2d(0.0, 0.0);
         assert!(approx_eq(x, 150.0));
@@ -189,7 +141,7 @@ mod tests {
     #[test]
     fn test_pop_empty_is_noop() {
         let mut stack = TransformStack::new();
-        stack.translate(50.0, 50.0);
+        stack.apply(Affine3A::from_translation(Vec3::new(50.0, 50.0, 0.0)));
         stack.pop();
         let (x, y) = stack.transform_point_2d(0.0, 0.0);
         assert!(approx_eq(x, 50.0));

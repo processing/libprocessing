@@ -4,13 +4,13 @@ use crate::input;
 use crate::math::{extract_vec2, extract_vec3, extract_vec4};
 use bevy::{
     color::{ColorToPacked, Srgba},
-    math::Vec4,
+    math::{Vec3, Vec4},
     prelude::Entity,
     render::render_resource::{Extent3d, TextureFormat},
 };
 use processing::prelude::*;
 use pyo3::{
-    exceptions::PyRuntimeError,
+    exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
     types::{PyDict, PyTuple},
 };
@@ -136,8 +136,8 @@ impl PyBlendMode {
 ///
 /// Controls texture filtering and edge wrapping behavior.
 ///
-/// - `filter` — `Sampler.LINEAR` (smooth) or `Sampler.NEAREST` (pixelated).
-/// - `wrap` — `Sampler.CLAMP` (default), `Sampler.REPEAT`, or `Sampler.MIRROR`.
+/// - `filter` — `LINEAR` (smooth, default) or `NEAREST` (pixelated).
+/// - `wrap` — `CLAMP` (default), `REPEAT`, or `MIRROR`.
 ///   Use `wrap_x`/`wrap_y` to set each axis independently.
 #[pyclass(from_py_object)]
 #[derive(Clone)]
@@ -147,49 +147,78 @@ pub struct Sampler {
     pub(crate) wrap_y: u8,
 }
 
-#[pymethods]
 impl Sampler {
-    #[new]
-    #[pyo3(signature = (*, filter=0, wrap=0, wrap_x=None, wrap_y=None))]
-    fn new(filter: u8, wrap: u8, wrap_x: Option<u8>, wrap_y: Option<u8>) -> Self {
-        Self {
-            filter,
-            wrap_x: wrap_x.unwrap_or(wrap),
-            wrap_y: wrap_y.unwrap_or(wrap),
+    fn parse_filter(s: &str) -> PyResult<u8> {
+        match () {
+            _ if s.eq_ignore_ascii_case(constants::LINEAR) => Ok(0),
+            _ if s.eq_ignore_ascii_case(constants::NEAREST) => Ok(1),
+            _ => Err(PyValueError::new_err(format!(
+                "unknown filter: {s:?} (expected {:?} or {:?})",
+                constants::LINEAR,
+                constants::NEAREST
+            ))),
         }
     }
 
-    fn __repr__(&self) -> String {
-        let filter_name = match self.filter {
-            0 => "LINEAR",
-            1 => "NEAREST",
-            _ => "?",
-        };
-        let wrap_name = |v: u8| match v {
-            0 => "CLAMP",
-            1 => "REPEAT",
-            2 => "MIRROR",
-            _ => "?",
-        };
-        format!(
-            "Sampler(filter={}, wrap_x={}, wrap_y={})",
-            filter_name,
-            wrap_name(self.wrap_x),
-            wrap_name(self.wrap_y)
-        )
+    fn parse_wrap(s: &str) -> PyResult<u8> {
+        match () {
+            _ if s.eq_ignore_ascii_case(constants::CLAMP) => Ok(0),
+            _ if s.eq_ignore_ascii_case(constants::REPEAT) => Ok(1),
+            _ if s.eq_ignore_ascii_case(constants::MIRROR) => Ok(2),
+            _ => Err(PyValueError::new_err(format!(
+                "unknown wrap: {s:?} (expected {:?}, {:?}, or {:?})",
+                constants::CLAMP,
+                constants::REPEAT,
+                constants::MIRROR
+            ))),
+        }
     }
 
-    #[classattr]
-    const LINEAR: u8 = 0;
-    #[classattr]
-    const NEAREST: u8 = 1;
+    fn filter_name(filter: u8) -> &'static str {
+        match filter {
+            0 => constants::LINEAR,
+            1 => constants::NEAREST,
+            _ => "?",
+        }
+    }
 
-    #[classattr]
-    const CLAMP: u8 = 0;
-    #[classattr]
-    const REPEAT: u8 = 1;
-    #[classattr]
-    const MIRROR: u8 = 2;
+    fn wrap_name(wrap: u8) -> &'static str {
+        match wrap {
+            0 => constants::CLAMP,
+            1 => constants::REPEAT,
+            2 => constants::MIRROR,
+            _ => "?",
+        }
+    }
+}
+
+#[pymethods]
+impl Sampler {
+    #[new]
+    #[pyo3(signature = (*, filter=constants::LINEAR, wrap=constants::CLAMP, wrap_x=None, wrap_y=None))]
+    fn new(filter: &str, wrap: &str, wrap_x: Option<&str>, wrap_y: Option<&str>) -> PyResult<Self> {
+        let wrap_default = Self::parse_wrap(wrap)?;
+        Ok(Self {
+            filter: Self::parse_filter(filter)?,
+            wrap_x: wrap_x
+                .map(Self::parse_wrap)
+                .transpose()?
+                .unwrap_or(wrap_default),
+            wrap_y: wrap_y
+                .map(Self::parse_wrap)
+                .transpose()?
+                .unwrap_or(wrap_default),
+        })
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "Sampler(filter={:?}, wrap_x={:?}, wrap_y={:?})",
+            Self::filter_name(self.filter),
+            Self::wrap_name(self.wrap_x),
+            Self::wrap_name(self.wrap_y)
+        )
+    }
 }
 
 pub use crate::surface::Surface;
@@ -325,7 +354,7 @@ impl Image {
     /// Applies a `Sampler` to this image, controlling filtering and wrapping.
     ///
     /// ```python
-    /// s = Sampler(filter=Sampler.NEAREST, wrap=Sampler.REPEAT)
+    /// s = Sampler(filter=NEAREST, wrap=REPEAT)
     /// img.sampler(s)
     /// ```
     fn sampler(&self, sampler: &Sampler) -> PyResult<()> {
@@ -360,27 +389,6 @@ pub struct Geometry {
 }
 
 #[pyclass]
-pub enum Topology {
-    PointList = 0,
-    LineList = 1,
-    LineStrip = 2,
-    TriangleList = 3,
-    TriangleStrip = 4,
-}
-
-impl Topology {
-    pub fn as_u8(&self) -> u8 {
-        match self {
-            Self::PointList => 0,
-            Self::LineList => 1,
-            Self::LineStrip => 2,
-            Self::TriangleList => 3,
-            Self::TriangleStrip => 4,
-        }
-    }
-}
-
-#[pyclass]
 pub struct Sketch {
     pub source: String,
 }
@@ -390,11 +398,14 @@ impl Geometry {
     #[new]
     #[pyo3(signature = (**kwargs))]
     pub fn new(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
-        let topology = kwargs
-            .and_then(|k| k.get_item("topology").ok().flatten())
-            .and_then(|t| t.cast_into::<Topology>().ok())
-            .and_then(|t| geometry::Topology::from_u8(t.borrow().as_u8()))
-            .unwrap_or(geometry::Topology::TriangleList);
+        let topology = match kwargs.and_then(|k| k.get_item("topology").ok().flatten()) {
+            Some(t) => {
+                let s = t.extract::<String>()?;
+                geometry::Topology::parse(&s)
+                    .ok_or_else(|| PyValueError::new_err(format!("unknown topology: {s:?}")))?
+            }
+            None => geometry::Topology::TriangleList,
+        };
 
         let geometry =
             geometry_create(topology).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
@@ -454,7 +465,7 @@ impl Geometry {
         Ok(Self { entity })
     }
 
-    /// lattice centered at the origin; topology is `PointList`, intended as a
+    /// lattice centered at the origin; topology is `POINTS`, intended as a
     /// position source for `Particles(geometry=...)` rather than rasterized.
     #[staticmethod]
     #[pyo3(signature = (nx, ny, nz, spacing=1.0))]
@@ -696,36 +707,32 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn rect_mode(&self, mode: u8) -> PyResult<()> {
-        graphics_record_command(
-            self.entity,
-            DrawCommand::RectMode(processing::prelude::ShapeMode::from(mode)),
-        )
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    pub fn rect_mode(&self, mode: &str) -> PyResult<()> {
+        let mode = ShapeMode::parse(mode)
+            .ok_or_else(|| PyValueError::new_err(format!("unknown rect mode: {mode:?}")))?;
+        graphics_record_command(self.entity, DrawCommand::RectMode(mode))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn ellipse_mode(&self, mode: u8) -> PyResult<()> {
-        graphics_record_command(
-            self.entity,
-            DrawCommand::EllipseMode(processing::prelude::ShapeMode::from(mode)),
-        )
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    pub fn ellipse_mode(&self, mode: &str) -> PyResult<()> {
+        let mode = ShapeMode::parse(mode)
+            .ok_or_else(|| PyValueError::new_err(format!("unknown ellipse mode: {mode:?}")))?;
+        graphics_record_command(self.entity, DrawCommand::EllipseMode(mode))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn stroke_cap(&self, cap: u8) -> PyResult<()> {
-        graphics_record_command(
-            self.entity,
-            DrawCommand::StrokeCap(processing::prelude::StrokeCapMode::from(cap)),
-        )
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    pub fn stroke_cap(&self, cap: &str) -> PyResult<()> {
+        let cap = StrokeCapMode::parse(cap)
+            .ok_or_else(|| PyValueError::new_err(format!("unknown stroke cap: {cap:?}")))?;
+        graphics_record_command(self.entity, DrawCommand::StrokeCap(cap))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn stroke_join(&self, join: u8) -> PyResult<()> {
-        graphics_record_command(
-            self.entity,
-            DrawCommand::StrokeJoin(processing::prelude::StrokeJoinMode::from(join)),
-        )
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    pub fn stroke_join(&self, join: &str) -> PyResult<()> {
+        let join = StrokeJoinMode::parse(join)
+            .ok_or_else(|| PyValueError::new_err(format!("unknown stroke join: {join:?}")))?;
+        graphics_record_command(self.entity, DrawCommand::StrokeJoin(join))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn rect(
@@ -836,8 +843,10 @@ impl Graphics {
         h: f32,
         start: f32,
         stop: f32,
-        mode: u8,
+        mode: &str,
     ) -> PyResult<()> {
+        let mode = ArcMode::parse(mode)
+            .ok_or_else(|| PyValueError::new_err(format!("unknown arc mode: {mode:?}")))?;
         graphics_record_command(
             self.entity,
             DrawCommand::Arc {
@@ -847,7 +856,7 @@ impl Graphics {
                 h,
                 start,
                 stop,
-                mode: processing::prelude::ArcMode::from(mode),
+                mode,
             },
         )
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
@@ -909,14 +918,11 @@ impl Graphics {
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn begin_shape(&self, kind: u8) -> PyResult<()> {
-        graphics_record_command(
-            self.entity,
-            DrawCommand::BeginShape {
-                kind: processing::prelude::ShapeKind::from(kind),
-            },
-        )
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    pub fn begin_shape(&self, kind: &str) -> PyResult<()> {
+        let kind = ShapeKind::parse(kind)
+            .ok_or_else(|| PyValueError::new_err(format!("unknown shape kind: {kind:?}")))?;
+        graphics_record_command(self.entity, DrawCommand::BeginShape { kind })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn end_shape(&self, close: bool) -> PyResult<()> {
@@ -1331,12 +1337,11 @@ impl Graphics {
     /// - `CORNER` (default) — `dx`, `dy` is the top-left corner.
     /// - `CORNERS` — `dx`, `dy` and `d_width`, `d_height` are opposite corners.
     /// - `CENTER` — `dx`, `dy` is the center of the image.
-    pub fn image_mode(&self, mode: u8) -> PyResult<()> {
-        graphics_record_command(
-            self.entity,
-            DrawCommand::ImageMode(processing::prelude::ShapeMode::from(mode)),
-        )
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    pub fn image_mode(&self, mode: &str) -> PyResult<()> {
+        let mode = ShapeMode::parse(mode)
+            .ok_or_else(|| PyValueError::new_err(format!("unknown image mode: {mode:?}")))?;
+        graphics_record_command(self.entity, DrawCommand::ImageMode(mode))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn create_image(&self, width: u32, height: u32) -> PyResult<Image> {
@@ -1392,28 +1397,63 @@ impl Graphics {
 
     #[pyo3(signature = (*args))]
     pub fn translate(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let v = extract_vec2(args)?;
+        let v = if args.len() == 3 {
+            extract_vec3(args)?
+        } else {
+            extract_vec2(args)?.extend(0.0)
+        };
         graphics_record_command(self.entity, DrawCommand::Translate(v))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn rotate(&self, angle: f32) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::Rotate { angle })
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Rotate {
+                angle,
+                axis: Vec3::Z,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn rotate_x(&self, angle: f32) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::RotateX { angle })
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Rotate {
+                angle,
+                axis: Vec3::X,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn rotate_y(&self, angle: f32) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::RotateY { angle })
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Rotate {
+                angle,
+                axis: Vec3::Y,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn rotate_z(&self, angle: f32) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::RotateZ { angle })
+        graphics_record_command(
+            self.entity,
+            DrawCommand::Rotate {
+                angle,
+                axis: Vec3::Z,
+            },
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    #[pyo3(signature = (angle, *args))]
+    pub fn rotate_axis(&self, angle: f32, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let axis = extract_vec3(args)?;
+        graphics_record_command(self.entity, DrawCommand::Rotate { angle, axis })
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
@@ -1578,7 +1618,16 @@ impl Graphics {
 
     #[pyo3(signature = (*args))]
     pub fn scale(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let v = extract_vec2(args)?;
+        let v = if args.len() == 3 {
+            extract_vec3(args)?
+        } else if args.len() == 1 {
+            match args.get_item(0)?.extract::<f32>() {
+                Ok(s) => Vec3::splat(s),
+                Err(_) => extract_vec2(args)?.extend(1.0),
+            }
+        } else {
+            extract_vec2(args)?.extend(1.0)
+        };
         graphics_record_command(self.entity, DrawCommand::Scale(v))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
@@ -1606,14 +1655,14 @@ impl Graphics {
     #[pyo3(name = "color_mode", signature = (mode, max1=None, max2=None, max3=None, max_alpha=None))]
     pub fn set_color_mode<'py>(
         &self,
-        mode: u8,
+        mode: &str,
         max1: Option<&Bound<'py, PyAny>>,
         max2: Option<&Bound<'py, PyAny>>,
         max3: Option<&Bound<'py, PyAny>>,
         max_alpha: Option<&Bound<'py, PyAny>>,
     ) -> PyResult<()> {
-        let space = crate::color::ColorSpace::from_u8(mode)
-            .ok_or_else(|| PyRuntimeError::new_err(format!("unknown color space: {mode}")))?;
+        let space = crate::color::ColorSpace::parse(mode)
+            .ok_or_else(|| PyValueError::new_err(format!("unknown color space: {mode:?}")))?;
         let parse =
             |obj: &Bound<'py, PyAny>, ch: usize| crate::color::parse_numeric(&space, obj, ch);
         let new_mode = match (max1, max2, max3, max_alpha) {

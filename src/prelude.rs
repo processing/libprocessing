@@ -2,7 +2,7 @@ pub use bevy::input::keyboard::KeyCode;
 pub use bevy::input::mouse::MouseButton;
 pub use bevy::prelude::default;
 pub use bevy::render::render_resource::TextureFormat;
-pub use processing_core::{config::*, error};
+pub use processing_core::{config::*, constants, error};
 pub use processing_input::*;
 #[cfg(not(target_arch = "wasm32"))]
 pub use processing_midi::{

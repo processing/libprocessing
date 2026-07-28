@@ -70,6 +70,35 @@ impl GlfwContext {
             .unwrap();
 
         window.set_all_polling(true);
+
+        // Set _NET_WM_WINDOW_TYPE_DIALOG so tiling WMs (i3, sway) float the window
+        #[cfg(all(target_os = "linux", feature = "x11"))]
+        unsafe {
+            use std::ffi::CString;
+            let display = window.glfw.get_x11_display() as *mut x11::xlib::Display;
+            let xwindow = window.get_x11_window() as x11::xlib::Window;
+            let net_wm_window_type = x11::xlib::XInternAtom(
+                display,
+                CString::new("_NET_WM_WINDOW_TYPE").unwrap().as_ptr(),
+                0,
+            );
+            let net_wm_window_type_dialog = x11::xlib::XInternAtom(
+                display,
+                CString::new("_NET_WM_WINDOW_TYPE_DIALOG").unwrap().as_ptr(),
+                0,
+            );
+            x11::xlib::XChangeProperty(
+                display,
+                xwindow,
+                net_wm_window_type,
+                x11::xlib::XA_ATOM,
+                32,
+                x11::xlib::PropModeReplace,
+                &net_wm_window_type_dialog as *const _ as *const u8,
+                1,
+            );
+        }
+
         window.show();
 
         Ok(Self {

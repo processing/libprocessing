@@ -106,8 +106,17 @@ fn sketch() -> error::Result<()> {
 
         for (x_offset, make_cmd) in &shapes {
             graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-            graphics_record_command(graphics, DrawCommand::Translate(Vec2::new(*x_offset, 0.0)))?;
-            graphics_record_command(graphics, DrawCommand::Rotate { angle: t })?;
+            graphics_record_command(
+                graphics,
+                DrawCommand::Translate(Vec2::new(*x_offset, 0.0).extend(0.0)),
+            )?;
+            graphics_record_command(
+                graphics,
+                DrawCommand::Rotate {
+                    angle: t,
+                    axis: Vec3::Z,
+                },
+            )?;
             graphics_record_command(graphics, make_cmd(t))?;
             graphics_record_command(graphics, DrawCommand::PopMatrix)?;
         }
