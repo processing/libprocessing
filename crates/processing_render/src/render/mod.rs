@@ -16,10 +16,10 @@ use bevy::{
 use command::{CommandBuffer, DrawCommand, ShapeMode};
 use material::{MaterialKey, ProcessingExtendedMaterial};
 use primitive::{
-    ShapeBuilder, TessellationMode, VertexType, arc_fill, arc_stroke, bezier,
-    box_mesh, build_direct_fill, build_direct_stroke, build_polygon_fill, build_polygon_stroke,
-    capsule_mesh, cone_mesh, conical_frustum_mesh, curve, cylinder_mesh, ellipse, empty_mesh, line,
-    plane_mesh, quad, sphere_mesh, tetrahedron_mesh, torus_mesh, triangle,
+    ShapeBuilder, TessellationMode, VertexType, arc_fill, arc_stroke, bezier, box_mesh,
+    build_direct_fill, build_direct_stroke, build_polygon_fill, build_polygon_stroke, capsule_mesh,
+    cone_mesh, conical_frustum_mesh, curve, cylinder_mesh, ellipse, empty_mesh, line, plane_mesh,
+    quad, sphere_mesh, tetrahedron_mesh, torus_mesh, triangle,
 };
 use style::{Fill, StyleStack};
 use transform::TransformStack;
