@@ -1134,6 +1134,12 @@ mod mewnala {
     }
 
     #[pyfunction]
+    #[pyo3(pass_module)]
+    fn clear(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).clear()
+    }
+
+    #[pyfunction]
     #[pyo3(pass_module, signature = (mode, max1=None, max2=None, max3=None, max_alpha=None))]
     fn color_mode<'py>(
         module: &Bound<'py, PyModule>,

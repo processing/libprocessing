@@ -226,6 +226,23 @@ pub extern "C" fn processing_background_image(graphics_id: u64, image_id: u64) {
     });
 }
 
+/// Clear the graphics surface to transparent.
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_clear(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::BackgroundColor(bevy::prelude::Color::NONE),
+        )
+    });
+}
+
 /// Begins the draw for the given graphics context.
 ///
 /// SAFETY:
@@ -1579,6 +1596,47 @@ pub unsafe extern "C" fn processing_image_readback(
         let colors = image_readback(image_entity)?;
 
         // Validate buffer size
+        if colors.len() != buffer_len {
+            let error_msg = format!(
+                "Buffer size mismatch: expected {}, got {}",
+                colors.len(),
+                buffer_len
+            );
+            error::set_error(&error_msg);
+            return Err(error::ProcessingError::InvalidArgument(error_msg));
+        }
+
+        // SAFETY: Caller guarantees buffer is valid for buffer_len elements
+        unsafe {
+            let buffer_slice = std::slice::from_raw_parts_mut(buffer, buffer_len);
+            for (i, color) in colors.iter().enumerate() {
+                buffer_slice[i] = Color::from_linear(*color);
+            }
+        }
+
+        Ok(())
+    });
+}
+
+/// Load pixels from the graphics surface into a caller-provided buffer.
+///
+/// # Safety
+/// - Init and graphics_create have been called.
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - buffer is a valid pointer to at least buffer_len Color elements.
+/// - buffer_len must equal width * height of the graphics surface.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_graphics_readback(
+    graphics_id: u64,
+    buffer: *mut Color,
+    buffer_len: usize,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        let colors = graphics_readback(graphics_entity)?;
+
         if colors.len() != buffer_len {
             let error_msg = format!(
                 "Buffer size mismatch: expected {}, got {}",

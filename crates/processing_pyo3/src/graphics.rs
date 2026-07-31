@@ -664,6 +664,14 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    pub fn clear(&self) -> PyResult<()> {
+        graphics_record_command(
+            self.entity,
+            DrawCommand::BackgroundColor(bevy::prelude::Color::NONE),
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     #[pyo3(signature = (*args))]
     pub fn fill(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
         if args.len() == 1
