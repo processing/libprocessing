@@ -1659,6 +1659,74 @@ pub unsafe extern "C" fn processing_graphics_readback(
     });
 }
 
+/// Write a caller-provided pixel buffer back onto the graphics surface.
+///
+/// # Safety
+/// - Init and graphics_create have been called.
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - buffer is a valid pointer to at least buffer_len Color elements.
+/// - buffer_len must equal width * height of the graphics surface.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_graphics_update(
+    graphics_id: u64,
+    buffer: *const Color,
+    buffer_len: usize,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        // SAFETY: Caller guarantees buffer is valid for buffer_len elements
+        let pixels: Vec<_> = unsafe { std::slice::from_raw_parts(buffer, buffer_len) }
+            .iter()
+            .map(|color| color.to_linear())
+            .collect();
+        graphics_update(graphics_entity, &pixels)
+    });
+}
+
+/// Write a caller-provided pixel buffer onto a rectangular region of the surface.
+///
+/// # Safety
+/// - Init and graphics_create have been called.
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - buffer is a valid pointer to at least buffer_len Color elements.
+/// - buffer_len must equal width * height.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_graphics_update_region(
+    graphics_id: u64,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    buffer: *const Color,
+    buffer_len: usize,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        // SAFETY: Caller guarantees buffer is valid for buffer_len elements
+        let pixels: Vec<_> = unsafe { std::slice::from_raw_parts(buffer, buffer_len) }
+            .iter()
+            .map(|color| color.to_linear())
+            .collect();
+        graphics_update_region(graphics_entity, x, y, width, height, &pixels)
+    });
+}
+
+/// Set a single pixel on the graphics surface.
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_graphics_set(graphics_id: u64, x: u32, y: u32, color: Color) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_update_region(graphics_entity, x, y, 1, 1, &[color.to_linear()]));
+}
+
 /// Set the tint color applied to images.
 ///
 /// SAFETY:

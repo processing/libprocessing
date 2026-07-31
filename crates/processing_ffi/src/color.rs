@@ -30,4 +30,11 @@ impl Color {
             space: ColorSpace::Linear as u8,
         }
     }
+
+    pub fn to_linear(self) -> LinearRgba {
+        ColorSpace::from_u8(self.space)
+            .unwrap_or(ColorSpace::Linear)
+            .color(self.c1, self.c2, self.c3, self.a)
+            .to_linear()
+    }
 }
