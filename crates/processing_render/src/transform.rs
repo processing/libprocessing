@@ -112,6 +112,17 @@ pub fn look_at(
     Ok(())
 }
 
+pub fn camera(
+    In((entity, eye, center, up)): In<(Entity, Vec3, Vec3, Vec3)>,
+    mut transforms: Query<&mut Transform>,
+) -> Result<()> {
+    let mut transform = transforms
+        .get_mut(entity)
+        .map_err(|_| ProcessingError::TransformNotFound)?;
+    *transform = Transform::from_translation(eye).looking_at(center, up);
+    Ok(())
+}
+
 pub fn reset(In(entity): In<Entity>, mut transforms: Query<&mut Transform>) -> Result<()> {
     let mut transform = transforms
         .get_mut(entity)

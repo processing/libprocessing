@@ -1,5 +1,5 @@
 use bevy::{
-    math::{Vec2, Vec3, Vec4},
+    math::{Affine3A, Mat4, Vec2, Vec3, Vec4},
     prelude::Entity,
     render::render_resource::{Extent3d, TextureFormat},
 };
@@ -1885,6 +1885,202 @@ pub extern "C" fn processing_transform_reset(entity_id: u64) {
     error::clear_error();
     let entity = Entity::from_bits(entity_id);
     error::check(|| transform_reset(entity));
+}
+
+/// Attach an orbit camera controller.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_orbit_camera(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_orbit_camera(graphics_entity));
+}
+
+/// Attach a free-flight camera controller.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_free_camera(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_free_camera(graphics_entity));
+}
+
+/// Attach a pan/zoom camera controller.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_pan_camera(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_pan_camera(graphics_entity));
+}
+
+/// Remove the active camera controller.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_disable_camera_controller(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_disable_camera_controller(graphics_entity));
+}
+
+/// Set the camera distance from its center (zoom).
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_camera_set_distance(graphics_id: u64, distance: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| camera_set_distance(graphics_entity, distance));
+}
+
+/// Set the orbit camera's look-at center.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_camera_set_center(graphics_id: u64, x: f32, y: f32, z: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| camera_set_center(graphics_entity, Vec3::new(x, y, z)));
+}
+
+/// Set the minimum camera distance.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_camera_set_min_distance(graphics_id: u64, min: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| camera_set_min_distance(graphics_entity, min));
+}
+
+/// Set the maximum camera distance.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_camera_set_max_distance(graphics_id: u64, max: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| camera_set_max_distance(graphics_entity, max));
+}
+
+/// Set the camera controller's sensitivity.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_camera_set_speed(graphics_id: u64, speed: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| camera_set_speed(graphics_entity, speed));
+}
+
+/// Reset the camera controller to its initial pose.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_camera_reset(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| camera_reset(graphics_entity));
+}
+
+/// Position the camera at eye, looking at center with the given up.
+///
+/// An active camera controller overrides this each frame.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_camera(
+    graphics_id: u64,
+    eye_x: f32,
+    eye_y: f32,
+    eye_z: f32,
+    center_x: f32,
+    center_y: f32,
+    center_z: f32,
+    up_x: f32,
+    up_y: f32,
+    up_z: f32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_camera(
+            graphics_entity,
+            Vec3::new(eye_x, eye_y, eye_z),
+            Vec3::new(center_x, center_y, center_z),
+            Vec3::new(up_x, up_y, up_z),
+        )
+    });
+}
+
+/// A column-major 4x4 matrix.
+#[repr(C)]
+pub struct Matrix {
+    pub m: [f32; 16],
+}
+
+/// Right-multiply the model matrix by a column-major 4x4 matrix.
+///
+/// # Safety
+/// - matrix points to at least 16 f32.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_apply_matrix(graphics_id: u64, matrix: *const f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        // SAFETY: Caller guarantees matrix points to 16 valid f32 elements
+        let cols: [f32; 16] = unsafe { std::slice::from_raw_parts(matrix, 16) }
+            .try_into()
+            .unwrap();
+        let affine = Affine3A::from_mat4(Mat4::from_cols_array(&cols));
+        graphics_record_command(graphics_entity, DrawCommand::ApplyMatrix(affine))
+    });
+}
+
+/// The current model matrix, column-major. Flushes pending draws; identity on error.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_get_matrix(graphics_id: u64) -> Matrix {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    let m = error::check(|| graphics_get_matrix(graphics_entity).map(|mat| mat.to_cols_array()))
+        .unwrap_or_else(|| Mat4::IDENTITY.to_cols_array());
+    Matrix { m }
+}
+
+/// Model-space point to world-space X (modelX).
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_model_x(graphics_id: u64, x: f32, y: f32, z: f32) -> f32 {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_model_point(graphics_entity, Vec3::new(x, y, z)).map(|p| p.x))
+        .unwrap_or(0.0)
+}
+
+/// Model-space point to world-space Y (modelY).
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_model_y(graphics_id: u64, x: f32, y: f32, z: f32) -> f32 {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_model_point(graphics_entity, Vec3::new(x, y, z)).map(|p| p.y))
+        .unwrap_or(0.0)
+}
+
+/// Model-space point to world-space Z (modelZ).
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_model_z(graphics_id: u64, x: f32, y: f32, z: f32) -> f32 {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_model_point(graphics_entity, Vec3::new(x, y, z)).map(|p| p.z))
+        .unwrap_or(0.0)
+}
+
+/// Model-space point to screen X in pixels (screenX).
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_screen_x(graphics_id: u64, x: f32, y: f32, z: f32) -> f32 {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_screen_point(graphics_entity, Vec3::new(x, y, z)).map(|p| p.x))
+        .unwrap_or(0.0)
+}
+
+/// Model-space point to screen Y in pixels (screenY).
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_screen_y(graphics_id: u64, x: f32, y: f32, z: f32) -> f32 {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_screen_point(graphics_entity, Vec3::new(x, y, z)).map(|p| p.y))
+        .unwrap_or(0.0)
+}
+
+/// Model-space point to screen depth in [0,1] (screenZ).
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_screen_z(graphics_id: u64, x: f32, y: f32, z: f32) -> f32 {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_screen_point(graphics_entity, Vec3::new(x, y, z)).map(|p| p.z))
+        .unwrap_or(0.0)
 }
 
 pub const PROCESSING_ATTR_FORMAT_FLOAT: u8 = 1;

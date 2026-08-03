@@ -847,6 +847,50 @@ pub fn transform_look_at(entity: Entity, target: Vec3) -> error::Result<()> {
     })
 }
 
+/// Position the camera at `eye`, looking at `center` with the given `up`.
+pub fn graphics_camera(
+    entity: Entity,
+    eye: Vec3,
+    center: Vec3,
+    up: Vec3,
+) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(transform::camera, (entity, eye, center, up))
+            .unwrap()
+    })
+}
+
+/// The current model matrix. Flushes pending draws first.
+pub fn graphics_get_matrix(entity: Entity) -> error::Result<Mat4> {
+    app_mut(|app| {
+        graphics::flush(app, entity)?;
+        app.world_mut()
+            .run_system_cached_with(graphics::get_matrix, entity)
+            .unwrap()
+    })
+}
+
+/// Map a point from the current model space to world space (modelX/Y/Z).
+pub fn graphics_model_point(entity: Entity, point: Vec3) -> error::Result<Vec3> {
+    app_mut(|app| {
+        graphics::flush(app, entity)?;
+        app.world_mut()
+            .run_system_cached_with(graphics::model_point, (entity, point))
+            .unwrap()
+    })
+}
+
+/// Map a point from the current model space to screen space (screenX/Y/Z).
+pub fn graphics_screen_point(entity: Entity, point: Vec3) -> error::Result<Vec3> {
+    app_mut(|app| {
+        graphics::flush(app, entity)?;
+        app.world_mut()
+            .run_system_cached_with(graphics::screen_point, (entity, point))
+            .unwrap()
+    })
+}
+
 pub fn transform_reset(entity: Entity) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()

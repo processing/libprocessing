@@ -862,6 +862,7 @@ pub fn flush_draw_commands(
                 DrawCommand::PushMatrix => state.transform.push(),
                 DrawCommand::PopMatrix => state.transform.pop(),
                 DrawCommand::ResetMatrix => state.transform.reset(),
+                DrawCommand::ApplyMatrix(m) => state.transform.apply(m),
                 DrawCommand::PushStyle => state.style.push(),
                 DrawCommand::PopStyle => state.style.pop(),
                 DrawCommand::Translate(v) => state.transform.apply(Affine3A::from_translation(v)),

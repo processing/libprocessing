@@ -1,3 +1,4 @@
+use bevy::math::Affine3A;
 use bevy::prelude::*;
 use bevy::render::render_resource::{BlendComponent, BlendFactor, BlendOperation, BlendState};
 use processing_core::constants as consts;
@@ -573,6 +574,7 @@ pub enum DrawCommand {
     PushMatrix,
     PopMatrix,
     ResetMatrix,
+    ApplyMatrix(Affine3A),
     PushStyle,
     PopStyle,
     Translate(Vec3),
