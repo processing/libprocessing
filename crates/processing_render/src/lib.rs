@@ -848,12 +848,7 @@ pub fn transform_look_at(entity: Entity, target: Vec3) -> error::Result<()> {
 }
 
 /// Position the camera at `eye`, looking at `center` with the given `up`.
-pub fn graphics_camera(
-    entity: Entity,
-    eye: Vec3,
-    center: Vec3,
-    up: Vec3,
-) -> error::Result<()> {
+pub fn graphics_camera(entity: Entity, eye: Vec3, center: Vec3, up: Vec3) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(transform::camera, (entity, eye, center, up))
