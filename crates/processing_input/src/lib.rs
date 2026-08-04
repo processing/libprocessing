@@ -177,6 +177,27 @@ pub fn input_cursor_visible(surface: Entity) -> error::Result<bool> {
     })
 }
 
+pub fn input_set_cursor_visible(surface: Entity, visible: bool) -> error::Result<()> {
+    app_mut(|app| {
+        if let Some(mut cursor) = app.world_mut().get_mut::<bevy::window::CursorOptions>(surface) {
+            cursor.visible = visible;
+        }
+        Ok(())
+    })
+}
+
+pub fn input_set_cursor_icon(
+    surface: Entity,
+    icon: bevy::window::SystemCursorIcon,
+) -> error::Result<()> {
+    app_mut(|app| {
+        if let Ok(mut entity) = app.world_mut().get_entity_mut(surface) {
+            entity.insert(bevy::window::CursorIcon::System(icon));
+        }
+        Ok(())
+    })
+}
+
 /// Flushes the input state by running the relevant schedules. This is required to ensure that
 /// Bevy's bookkeeping of input state is up to date after manually sending input events.
 /// It should be called after sending any input events and before querying input state

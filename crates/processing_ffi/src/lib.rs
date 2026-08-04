@@ -2939,6 +2939,43 @@ pub extern "C" fn processing_input_focus(surface_id: u64, focused: bool) {
     error::check(|| input_set_focus(Entity::from_bits(surface_id), focused));
 }
 
+pub const PROCESSING_CURSOR_ARROW: u8 = 0;
+pub const PROCESSING_CURSOR_CROSS: u8 = 1;
+pub const PROCESSING_CURSOR_HAND: u8 = 2;
+pub const PROCESSING_CURSOR_MOVE: u8 = 3;
+pub const PROCESSING_CURSOR_TEXT: u8 = 4;
+pub const PROCESSING_CURSOR_WAIT: u8 = 5;
+
+fn cursor_icon(kind: u8) -> bevy::window::SystemCursorIcon {
+    use bevy::window::SystemCursorIcon;
+    match kind {
+        PROCESSING_CURSOR_CROSS => SystemCursorIcon::Crosshair,
+        PROCESSING_CURSOR_HAND => SystemCursorIcon::Pointer,
+        PROCESSING_CURSOR_MOVE => SystemCursorIcon::Move,
+        PROCESSING_CURSOR_TEXT => SystemCursorIcon::Text,
+        PROCESSING_CURSOR_WAIT => SystemCursorIcon::Wait,
+        _ => SystemCursorIcon::Default,
+    }
+}
+
+/// Show the mouse cursor with the given system type (PROCESSING_CURSOR_*).
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_cursor(surface_id: u64, kind: u8) {
+    error::clear_error();
+    let surface = Entity::from_bits(surface_id);
+    error::check(|| {
+        input_set_cursor_visible(surface, true)?;
+        input_set_cursor_icon(surface, cursor_icon(kind))
+    });
+}
+
+/// Hide the mouse cursor.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_no_cursor(surface_id: u64) {
+    error::clear_error();
+    error::check(|| input_set_cursor_visible(Entity::from_bits(surface_id), false));
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_input_flush() {
     error::clear_error();
