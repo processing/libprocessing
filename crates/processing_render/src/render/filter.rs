@@ -22,13 +22,11 @@ use bevy::{
     },
     shader::Shader as ShaderAsset,
 };
-use bevy_naga_reflect::dynamic_shader::DynamicShader;
+use bevy_naga_reflect::{dynamic_shader::DynamicShader, reflect::ParameterCategory};
 
 use crate::material::custom::{Shader, apply_reflect_field, find_param_containing_field};
 use processing_core::error::{ProcessingError, Result};
 
-const INPUT_TEXTURE: &str = "screen_texture";
-const INPUT_SAMPLER: &str = "texture_sampler";
 const F_RESOLUTION: &str = "resolution";
 const F_TEXEL_SIZE: &str = "texel_size";
 const F_PASS_INDEX: &str = "pass_index";
@@ -343,14 +341,35 @@ fn run_pass(
     fill_system(&mut shader, F_PASS_COUNT, &passes);
     let has_pass_index = find_param_containing_field(&shader, F_PASS_INDEX).is_some();
 
+    // wesl mangles the imported `processing::filter` bindings, so the screen
+    // texture and sampler are bound by their reflected (mangled) names, found by
+    // category in group 0.
+    let (input_texture, input_sampler) = {
+        let reflection = shader.reflection();
+        let mut texture = None;
+        let mut sampler = None;
+        for param in reflection.parameters().filter(|p| p.group() == 0) {
+            match param.category() {
+                ParameterCategory::Texture => texture = param.name().map(String::from),
+                ParameterCategory::Sampler => sampler = param.name().map(String::from),
+                _ => {}
+            }
+        }
+        (texture, sampler)
+    };
+
     for pass in 0..passes {
         if has_pass_index {
             let _ = apply_reflect_field(&mut shader, F_PASS_INDEX, &pass);
         }
 
         let post_process = view_target.post_process_write();
-        shader.insert_texture_view(INPUT_TEXTURE, post_process.source.clone());
-        shader.insert_sampler(INPUT_SAMPLER, filter_sampler.0.clone());
+        if let Some(name) = &input_texture {
+            shader.insert_texture_view(name, post_process.source.clone());
+        }
+        if let Some(name) = &input_sampler {
+            shader.insert_sampler(name, filter_sampler.0.clone());
+        }
 
         let reflection = shader.reflection();
         let mut bind_groups = Vec::new();

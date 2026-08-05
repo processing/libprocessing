@@ -35,12 +35,17 @@ fn sketch() -> error::Result<()> {
     filter_set(threshold, "cutoff", ShaderValue::Float(0.5))?;
     let posterize = filter_posterize()?;
     filter_set(posterize, "levels", ShaderValue::UInt(4))?;
+    let blur = filter_blur()?;
+    filter_set(blur, "radius", ShaderValue::Float(4.0))?;
     let filters = [
         filter_invert()?,
         filter_gray()?,
         threshold,
         posterize,
         filter_opaque()?,
+        filter_erode()?,
+        filter_dilate()?,
+        blur,
     ];
 
     let start = Instant::now();

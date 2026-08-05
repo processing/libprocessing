@@ -120,12 +120,12 @@ impl wesl::Resolver for ProcessingResolver<'_> {
 
         match &path.origin {
             PathOrigin::Package(pkg) => {
-                // self-referential package imports: within a package, imports to
-                // the same package stack the name (e.g. "lygia/lygia/lygia/...").
-                // collapse to the root package name before resolving.
-                let root = pkg.split('/').next().unwrap();
+                // wesl encodes a cross-package import as a synthetic "parent/child"
+                // origin (e.g. importing processing from the entry module yields
+                // "entry/processing"). The real package is the leaf.
+                let leaf = pkg.rsplit('/').next().unwrap();
                 let mut fixed = path.clone();
-                fixed.origin = PathOrigin::Package(root.to_string());
+                fixed.origin = PathOrigin::Package(leaf.to_string());
                 self.pkg_resolver.resolve_source(&fixed)
             }
             _ => Err(wesl::ResolveError::ModuleNotFound(
