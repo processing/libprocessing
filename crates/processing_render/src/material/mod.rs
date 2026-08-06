@@ -140,7 +140,6 @@ pub fn set_property(
     Err(ProcessingError::MaterialNotFound)
 }
 
-
 type PbrMaterial = ExtendedMaterial<StandardMaterial, ProcessingMaterial>;
 
 enum MaterialMut<'a> {
@@ -218,24 +217,31 @@ pub fn set_alpha_mode(
 ) -> error::Result<()> {
     let alpha_mode = resolve_alpha_mode(mode, cutoff)?;
     let opaque = matches!(alpha_mode, AlphaMode::Opaque);
-    edit_material(entity, &material_handles, &mut pbr, &mut particles, &mut custom, |m| {
-        match m {
-            MaterialMut::Pbr(mat) => {
-                mat.base.alpha_mode = alpha_mode;
-                if opaque {
-                    mat.extension.blend_state = None;
+    edit_material(
+        entity,
+        &material_handles,
+        &mut pbr,
+        &mut particles,
+        &mut custom,
+        |m| {
+            match m {
+                MaterialMut::Pbr(mat) => {
+                    mat.base.alpha_mode = alpha_mode;
+                    if opaque {
+                        mat.extension.blend_state = None;
+                    }
+                }
+                MaterialMut::Particles(mat) => mat.base.alpha_mode = alpha_mode,
+                MaterialMut::Custom(mat) => {
+                    mat.alpha_mode = alpha_mode;
+                    if opaque {
+                        mat.blend_state = None;
+                    }
                 }
             }
-            MaterialMut::Particles(mat) => mat.base.alpha_mode = alpha_mode,
-            MaterialMut::Custom(mat) => {
-                mat.alpha_mode = alpha_mode;
-                if opaque {
-                    mat.blend_state = None;
-                }
-            }
-        }
-        Ok(())
-    })
+            Ok(())
+        },
+    )
 }
 
 pub fn set_double_sided(
@@ -245,14 +251,21 @@ pub fn set_double_sided(
     mut particles: ResMut<Assets<crate::particles::material::ParticlesMaterial>>,
     mut custom: ResMut<Assets<custom::CustomMaterial>>,
 ) -> error::Result<()> {
-    edit_material(entity, &material_handles, &mut pbr, &mut particles, &mut custom, |m| {
-        match m {
-            MaterialMut::Pbr(mat) => set_base_double_sided(&mut mat.base, value),
-            MaterialMut::Particles(mat) => set_base_double_sided(&mut mat.base, value),
-            MaterialMut::Custom(mat) => mat.double_sided = Some(value),
-        }
-        Ok(())
-    })
+    edit_material(
+        entity,
+        &material_handles,
+        &mut pbr,
+        &mut particles,
+        &mut custom,
+        |m| {
+            match m {
+                MaterialMut::Pbr(mat) => set_base_double_sided(&mut mat.base, value),
+                MaterialMut::Particles(mat) => set_base_double_sided(&mut mat.base, value),
+                MaterialMut::Custom(mat) => mat.double_sided = Some(value),
+            }
+            Ok(())
+        },
+    )
 }
 
 pub fn set_unlit(
@@ -262,20 +275,27 @@ pub fn set_unlit(
     mut particles: ResMut<Assets<crate::particles::material::ParticlesMaterial>>,
     mut custom: ResMut<Assets<custom::CustomMaterial>>,
 ) -> error::Result<()> {
-    edit_material(entity, &material_handles, &mut pbr, &mut particles, &mut custom, |m| match m {
-        MaterialMut::Pbr(mat) => {
-            mat.base.unlit = value;
-            Ok(())
-        }
-        MaterialMut::Particles(mat) => {
-            mat.base.unlit = value;
-            Ok(())
-        }
-        MaterialMut::Custom(_) => Err(ProcessingError::InvalidArgument(
-            "unlit is not applicable to custom-shader materials; the shader defines lighting"
-                .to_string(),
-        )),
-    })
+    edit_material(
+        entity,
+        &material_handles,
+        &mut pbr,
+        &mut particles,
+        &mut custom,
+        |m| match m {
+            MaterialMut::Pbr(mat) => {
+                mat.base.unlit = value;
+                Ok(())
+            }
+            MaterialMut::Particles(mat) => {
+                mat.base.unlit = value;
+                Ok(())
+            }
+            MaterialMut::Custom(_) => Err(ProcessingError::InvalidArgument(
+                "unlit is not applicable to custom-shader materials; the shader defines lighting"
+                    .to_string(),
+            )),
+        },
+    )
 }
 
 pub fn set_depth_write(
@@ -285,19 +305,26 @@ pub fn set_depth_write(
     mut particles: ResMut<Assets<crate::particles::material::ParticlesMaterial>>,
     mut custom: ResMut<Assets<custom::CustomMaterial>>,
 ) -> error::Result<()> {
-    edit_material(entity, &material_handles, &mut pbr, &mut particles, &mut custom, |m| match m {
-        MaterialMut::Pbr(mat) => {
-            mat.extension.depth_write = Some(value);
-            Ok(())
-        }
-        MaterialMut::Particles(_) => Err(ProcessingError::InvalidArgument(
-            "depth-write is not yet configurable on particle materials".to_string(),
-        )),
-        MaterialMut::Custom(mat) => {
-            mat.depth_write = Some(value);
-            Ok(())
-        }
-    })
+    edit_material(
+        entity,
+        &material_handles,
+        &mut pbr,
+        &mut particles,
+        &mut custom,
+        |m| match m {
+            MaterialMut::Pbr(mat) => {
+                mat.extension.depth_write = Some(value);
+                Ok(())
+            }
+            MaterialMut::Particles(_) => Err(ProcessingError::InvalidArgument(
+                "depth-write is not yet configurable on particle materials".to_string(),
+            )),
+            MaterialMut::Custom(mat) => {
+                mat.depth_write = Some(value);
+                Ok(())
+            }
+        },
+    )
 }
 
 pub fn set_custom_blend(
@@ -307,21 +334,28 @@ pub fn set_custom_blend(
     mut particles: ResMut<Assets<crate::particles::material::ParticlesMaterial>>,
     mut custom: ResMut<Assets<custom::CustomMaterial>>,
 ) -> error::Result<()> {
-    edit_material(entity, &material_handles, &mut pbr, &mut particles, &mut custom, |m| match m {
-        MaterialMut::Pbr(mat) => {
-            mat.extension.blend_state = Some(blend);
-            mat.base.alpha_mode = AlphaMode::Blend;
-            Ok(())
-        }
-        MaterialMut::Particles(_) => Err(ProcessingError::InvalidArgument(
-            "custom blend is not yet configurable on particle materials".to_string(),
-        )),
-        MaterialMut::Custom(mat) => {
-            mat.blend_state = Some(blend);
-            mat.alpha_mode = AlphaMode::Blend;
-            Ok(())
-        }
-    })
+    edit_material(
+        entity,
+        &material_handles,
+        &mut pbr,
+        &mut particles,
+        &mut custom,
+        |m| match m {
+            MaterialMut::Pbr(mat) => {
+                mat.extension.blend_state = Some(blend);
+                mat.base.alpha_mode = AlphaMode::Blend;
+                Ok(())
+            }
+            MaterialMut::Particles(_) => Err(ProcessingError::InvalidArgument(
+                "custom blend is not yet configurable on particle materials".to_string(),
+            )),
+            MaterialMut::Custom(mat) => {
+                mat.blend_state = Some(blend);
+                mat.alpha_mode = AlphaMode::Blend;
+                Ok(())
+            }
+        },
+    )
 }
 
 pub fn destroy(
