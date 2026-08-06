@@ -292,10 +292,7 @@ fn sketch() -> error::Result<()> {
 
     let (cdf_bytes, indices_bytes, face_count) = processing_core::app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(
-                processing_render::particles::prepare_scatter_source,
-                source,
-            )
+            .run_system_cached_with(processing_render::particles::prepare_scatter_source, source)
             .unwrap()
     })?;
     let cdf_buf = buffer_create_with_data(cdf_bytes)?;
@@ -326,9 +323,17 @@ fn sketch() -> error::Result<()> {
         "source_position",
         shader_value::ShaderValue::MeshAttribute(source, geometry_attribute_position()),
     )?;
-    compute_set(sim, "source_indices", shader_value::ShaderValue::Buffer(idx_buf))?;
+    compute_set(
+        sim,
+        "source_indices",
+        shader_value::ShaderValue::Buffer(idx_buf),
+    )?;
     compute_set(sim, "cdf", shader_value::ShaderValue::Buffer(cdf_buf))?;
-    compute_set(sim, "head_pos", shader_value::ShaderValue::Buffer(head_pos_buf))?;
+    compute_set(
+        sim,
+        "head_pos",
+        shader_value::ShaderValue::Buffer(head_pos_buf),
+    )?;
     compute_set(
         sim,
         "anchor_normal",
@@ -344,10 +349,26 @@ fn sketch() -> error::Result<()> {
         "trail_head_buf",
         shader_value::ShaderValue::Buffer(trail_head_buf),
     )?;
-    compute_set(sim, "base_count", shader_value::ShaderValue::UInt(BASE_COUNT))?;
-    compute_set(sim, "trail_len_max", shader_value::ShaderValue::UInt(TRAIL_LEN_MAX))?;
-    compute_set(sim, "trail_len_min", shader_value::ShaderValue::UInt(TRAIL_LEN_MIN))?;
-    compute_set(sim, "face_count", shader_value::ShaderValue::UInt(face_count))?;
+    compute_set(
+        sim,
+        "base_count",
+        shader_value::ShaderValue::UInt(BASE_COUNT),
+    )?;
+    compute_set(
+        sim,
+        "trail_len_max",
+        shader_value::ShaderValue::UInt(TRAIL_LEN_MAX),
+    )?;
+    compute_set(
+        sim,
+        "trail_len_min",
+        shader_value::ShaderValue::UInt(TRAIL_LEN_MIN),
+    )?;
+    compute_set(
+        sim,
+        "face_count",
+        shader_value::ShaderValue::UInt(face_count),
+    )?;
     compute_set(sim, "seed", shader_value::ShaderValue::UInt(0xc0ffeeu32))?;
     compute_set(sim, "noise_scale", shader_value::ShaderValue::Float(0.005))?;
     compute_set(
@@ -367,7 +388,11 @@ fn sketch() -> error::Result<()> {
 
     let fade_shader_e = shader_create(COLOR_FADE)?;
     let fade = compute_create(fade_shader_e)?;
-    compute_set(fade, "base_count", shader_value::ShaderValue::UInt(BASE_COUNT))?;
+    compute_set(
+        fade,
+        "base_count",
+        shader_value::ShaderValue::UInt(BASE_COUNT),
+    )?;
     compute_set(
         fade,
         "trail_len_max",

@@ -334,12 +334,6 @@ mod mewnala {
     #[pymodule_export]
     use super::Compute;
     #[pymodule_export]
-    use super::particles::Attribute;
-    #[pymodule_export]
-    use super::particles::AttributeFormat;
-    #[pymodule_export]
-    use super::particles::Particles;
-    #[pymodule_export]
     use super::Font;
     #[pymodule_export]
     use super::Geometry;
@@ -374,6 +368,12 @@ mod mewnala {
     use super::math::PyVec4;
     #[pymodule_export]
     use super::monitor::Monitor;
+    #[pymodule_export]
+    use super::particles::Attribute;
+    #[pymodule_export]
+    use super::particles::AttributeFormat;
+    #[pymodule_export]
+    use super::particles::Particles;
     #[pymodule_export]
     use super::surface::Surface;
 

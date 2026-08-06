@@ -26,14 +26,14 @@ pub use particles::{
     FALLOFF_INVERSE, FALLOFF_LINEAR, FALLOFF_QUADRATIC, FALLOFF_SMOOTHSTEP, particles_apply,
     particles_attribute_add, particles_buffer, particles_capacity, particles_create,
     particles_create_from_geometry, particles_destroy, particles_emit, particles_emit_gpu,
-    particles_kernel_age,
-    particles_kernel_attr_combine, particles_kernel_attr_linear, particles_kernel_attr_lookup1d,
-    particles_kernel_attr_lookup2d, particles_kernel_attr_mix, particles_kernel_attract,
-    particles_kernel_bounds_box, particles_kernel_bounds_geometry, particles_kernel_bounds_sphere,
-    particles_kernel_drag, particles_kernel_field, particles_kernel_flock, particles_kernel_force,
-    particles_kernel_impulse, particles_kernel_integrate, particles_kernel_noise,
-    particles_kernel_orient, particles_kernel_transform, particles_kernel_vortex,
-    particles_scatter_create, particles_scatter_volume_create,
+    particles_kernel_age, particles_kernel_attr_combine, particles_kernel_attr_linear,
+    particles_kernel_attr_lookup1d, particles_kernel_attr_lookup2d, particles_kernel_attr_mix,
+    particles_kernel_attract, particles_kernel_bounds_box, particles_kernel_bounds_geometry,
+    particles_kernel_bounds_sphere, particles_kernel_drag, particles_kernel_field,
+    particles_kernel_flock, particles_kernel_force, particles_kernel_impulse,
+    particles_kernel_integrate, particles_kernel_noise, particles_kernel_orient,
+    particles_kernel_transform, particles_kernel_vortex, particles_scatter_create,
+    particles_scatter_volume_create,
 };
 
 use std::path::PathBuf;
@@ -875,7 +875,10 @@ pub fn graphics_world_from_screen(
 ) -> error::Result<Vec3> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(graphics::world_from_screen, (graphics_entity, sx, sy, depth))
+            .run_system_cached_with(
+                graphics::world_from_screen,
+                (graphics_entity, sx, sy, depth),
+            )
             .unwrap()
     })
 }
@@ -887,10 +890,7 @@ pub fn graphics_set_bloom(
 ) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
-            .run_system_cached_with(
-                graphics::set_bloom,
-                (graphics_entity, intensity, threshold),
-            )
+            .run_system_cached_with(graphics::set_bloom, (graphics_entity, intensity, threshold))
             .unwrap()
     })
 }
@@ -1874,7 +1874,11 @@ pub fn material_set_emissive_buffer(
     entity: Entity,
     emissive_buffer_entity: Entity,
 ) -> error::Result<()> {
-    material_set_particles_buffer(entity, emissive_buffer_entity, ParticlesBufferSlot::Emissive)
+    material_set_particles_buffer(
+        entity,
+        emissive_buffer_entity,
+        ParticlesBufferSlot::Emissive,
+    )
 }
 
 pub fn material_set(

@@ -128,8 +128,7 @@ pub fn particles_kernel_force() -> error::Result<Entity> {
 }
 
 pub fn particles_kernel_integrate() -> error::Result<Entity> {
-    let shader =
-        shader_load("embedded://processing_render/particles/kernels/integrate.wgsl")?;
+    let shader = shader_load("embedded://processing_render/particles/kernels/integrate.wgsl")?;
     let entity = compute_create(shader)?;
     set_requires(entity, &["position", "velocity"])?;
     compute_set(entity, "dt", ShaderValue::Float(1.0))?;
@@ -157,8 +156,7 @@ pub fn particles_kernel_vortex() -> error::Result<Entity> {
 }
 
 pub fn particles_kernel_bounds_sphere() -> error::Result<Entity> {
-    let shader =
-        shader_load("embedded://processing_render/particles/kernels/bounds_sphere.wgsl")?;
+    let shader = shader_load("embedded://processing_render/particles/kernels/bounds_sphere.wgsl")?;
     let entity = compute_create(shader)?;
     set_requires(entity, &["position", "velocity"])?;
     compute_set(entity, "center", ShaderValue::Float3([0.0; 3]))?;
@@ -170,8 +168,7 @@ pub fn particles_kernel_bounds_sphere() -> error::Result<Entity> {
 }
 
 pub fn particles_kernel_bounds_box() -> error::Result<Entity> {
-    let shader =
-        shader_load("embedded://processing_render/particles/kernels/bounds_box.wgsl")?;
+    let shader = shader_load("embedded://processing_render/particles/kernels/bounds_box.wgsl")?;
     let entity = compute_create(shader)?;
     set_requires(entity, &["position", "velocity"])?;
     compute_set(entity, "aabb_min", ShaderValue::Float3([-1.0, -1.0, -1.0]))?;
@@ -236,7 +233,11 @@ pub fn particles_kernel_impulse() -> error::Result<Entity> {
     compute_set(entity, "radius", ShaderValue::Float(1.0))?;
     compute_set(entity, "position_kick", ShaderValue::Float(0.0))?;
     compute_set(entity, "velocity_kick", ShaderValue::Float(0.0))?;
-    compute_set(entity, "falloff_mode", ShaderValue::UInt(FALLOFF_SMOOTHSTEP))?;
+    compute_set(
+        entity,
+        "falloff_mode",
+        ShaderValue::UInt(FALLOFF_SMOOTHSTEP),
+    )?;
     Ok(entity)
 }
 
@@ -270,13 +271,16 @@ pub fn particles_kernel_field() -> error::Result<Entity> {
     set_requires(entity, &["position"])?;
     compute_set(entity, "center", ShaderValue::Float3([0.0; 3]))?;
     compute_set(entity, "radius", ShaderValue::Float(1.0))?;
-    compute_set(entity, "falloff_mode", ShaderValue::UInt(FALLOFF_SMOOTHSTEP))?;
+    compute_set(
+        entity,
+        "falloff_mode",
+        ShaderValue::UInt(FALLOFF_SMOOTHSTEP),
+    )?;
     Ok(entity)
 }
 
 pub fn particles_kernel_attr_linear() -> error::Result<Entity> {
-    let shader =
-        shader_load("embedded://processing_render/particles/kernels/attr_linear.wgsl")?;
+    let shader = shader_load("embedded://processing_render/particles/kernels/attr_linear.wgsl")?;
     let entity = compute_create(shader)?;
     compute_set(entity, "scale", ShaderValue::Float(1.0))?;
     compute_set(entity, "offset", ShaderValue::Float(0.0))?;
@@ -284,8 +288,7 @@ pub fn particles_kernel_attr_linear() -> error::Result<Entity> {
 }
 
 pub fn particles_kernel_attr_combine() -> error::Result<Entity> {
-    let shader =
-        shader_load("embedded://processing_render/particles/kernels/attr_combine.wgsl")?;
+    let shader = shader_load("embedded://processing_render/particles/kernels/attr_combine.wgsl")?;
     let entity = compute_create(shader)?;
     compute_set(entity, "op", ShaderValue::UInt(COMBINE_ADD))?;
     compute_set(entity, "b_scale", ShaderValue::Float(1.0))?;
@@ -303,8 +306,7 @@ pub fn particles_kernel_attr_mix() -> error::Result<Entity> {
 }
 
 pub fn particles_kernel_attr_lookup1d() -> error::Result<Entity> {
-    let shader =
-        shader_load("embedded://processing_render/particles/kernels/attr_lookup1d.wgsl")?;
+    let shader = shader_load("embedded://processing_render/particles/kernels/attr_lookup1d.wgsl")?;
     let entity = compute_create(shader)?;
     compute_set(entity, "scale", ShaderValue::Float(1.0))?;
     compute_set(entity, "offset", ShaderValue::Float(0.0))?;
@@ -312,8 +314,7 @@ pub fn particles_kernel_attr_lookup1d() -> error::Result<Entity> {
 }
 
 pub fn particles_kernel_attr_lookup2d() -> error::Result<Entity> {
-    let shader =
-        shader_load("embedded://processing_render/particles/kernels/attr_lookup2d.wgsl")?;
+    let shader = shader_load("embedded://processing_render/particles/kernels/attr_lookup2d.wgsl")?;
     let entity = compute_create(shader)?;
     compute_set(entity, "u_scale", ShaderValue::Float(1.0))?;
     compute_set(entity, "u_offset", ShaderValue::Float(0.0))?;

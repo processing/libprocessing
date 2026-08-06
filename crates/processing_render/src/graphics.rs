@@ -9,9 +9,9 @@ use bevy::{
         ImageRenderTarget, MsaaWriteback, Projection, RenderTarget, visibility::RenderLayers,
     },
     core_pipeline::tonemapping::Tonemapping,
-    post_process::bloom::Bloom,
     ecs::query::QueryEntityError,
     math::{Mat4, Vec3A},
+    post_process::bloom::Bloom,
     prelude::*,
     render::{
         RenderApp,

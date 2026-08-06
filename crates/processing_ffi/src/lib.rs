@@ -3243,12 +3243,10 @@ pub extern "C" fn processing_particles_capacity(particles_id: u64) -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_buffer(particles_id: u64, attr_id: u64) -> u64 {
     error::clear_error();
-    error::check(|| {
-        particles_buffer(Entity::from_bits(particles_id), Entity::from_bits(attr_id))
-    })
-    .flatten()
-    .map(|e| e.to_bits())
-    .unwrap_or(0)
+    error::check(|| particles_buffer(Entity::from_bits(particles_id), Entity::from_bits(attr_id)))
+        .flatten()
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 /// # Safety
@@ -3284,11 +3282,7 @@ pub unsafe extern "C" fn processing_particles_emit(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_particles_emit_gpu(
-    particles_id: u64,
-    n: u32,
-    compute_id: u64,
-) {
+pub extern "C" fn processing_particles_emit_gpu(particles_id: u64, n: u32, compute_id: u64) {
     error::clear_error();
     error::check(|| {
         particles_emit_gpu(
@@ -3302,38 +3296,45 @@ pub extern "C" fn processing_particles_emit_gpu(
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_noise() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_noise).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_noise)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_transform() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_transform).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_transform)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_attract() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_attract).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_attract)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_drag() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_drag).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_drag)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_vortex() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_vortex).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_vortex)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_particles_attribute_add(
-    particles_id: u64,
-    attribute_id: u64,
-) -> i32 {
+pub extern "C" fn processing_particles_attribute_add(particles_id: u64, attribute_id: u64) -> i32 {
     error::clear_error();
     error::check(|| {
         particles_attribute_add(
@@ -3349,31 +3350,41 @@ pub extern "C" fn processing_particles_attribute_add(
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_force() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_force).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_force)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_integrate() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_integrate).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_integrate)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_age() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_age).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_age)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_bounds_sphere() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_bounds_sphere).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_bounds_sphere)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_bounds_box() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_bounds_box).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_bounds_box)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
@@ -3387,55 +3398,73 @@ pub extern "C" fn processing_particles_kernel_bounds_geometry(geometry_entity: u
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_impulse() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_impulse).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_impulse)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_flock() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_flock).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_flock)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_orient() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_orient).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_orient)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_field() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_field).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_field)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_attr_linear() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_attr_linear).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_attr_linear)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_attr_combine() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_attr_combine).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_attr_combine)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_attr_mix() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_attr_mix).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_attr_mix)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_attr_lookup1d() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_attr_lookup1d).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_attr_lookup1d)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_attr_lookup2d() -> u64 {
     error::clear_error();
-    error::check(particles_kernel_attr_lookup2d).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(particles_kernel_attr_lookup2d)
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
@@ -3528,11 +3557,7 @@ pub extern "C" fn processing_particles_apply(particles_id: u64, compute_id: u64)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_particles_draw(
-    graphics_id: u64,
-    particles_id: u64,
-    geometry_id: u64,
-) {
+pub extern "C" fn processing_particles_draw(graphics_id: u64, particles_id: u64, geometry_id: u64) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
     error::check(|| {
@@ -3599,9 +3624,9 @@ pub unsafe extern "C" fn processing_graphics_world_from_screen(
     out_z: *mut f32,
 ) {
     error::clear_error();
-    if let Some(world) = error::check(|| {
-        graphics_world_from_screen(Entity::from_bits(graphics_id), sx, sy, depth)
-    }) {
+    if let Some(world) =
+        error::check(|| graphics_world_from_screen(Entity::from_bits(graphics_id), sx, sy, depth))
+    {
         unsafe {
             *out_x = world.x;
             *out_y = world.y;
@@ -3611,11 +3636,7 @@ pub unsafe extern "C" fn processing_graphics_world_from_screen(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_graphics_set_bloom(
-    graphics_id: u64,
-    intensity: f32,
-    threshold: f32,
-) {
+pub extern "C" fn processing_graphics_set_bloom(graphics_id: u64, intensity: f32, threshold: f32) {
     error::clear_error();
     error::check(|| graphics_set_bloom(Entity::from_bits(graphics_id), intensity, threshold));
 }

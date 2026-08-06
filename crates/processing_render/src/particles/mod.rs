@@ -10,14 +10,13 @@ pub use emit::{particles_apply, particles_emit, particles_emit_gpu};
 pub use kernels::{
     BOUNDS_CLAMP, BOUNDS_REFLECT, BOUNDS_SOFT, BOUNDS_WRAP, COMBINE_ADD, COMBINE_DIV, COMBINE_MAX,
     COMBINE_MIN, COMBINE_MUL, COMBINE_POW, COMBINE_SUB, FALLOFF_CONST, FALLOFF_CUBIC,
-    FALLOFF_INVERSE, FALLOFF_LINEAR, FALLOFF_QUADRATIC, FALLOFF_SMOOTHSTEP,
-    particles_kernel_age, particles_kernel_attr_combine, particles_kernel_attr_linear,
-    particles_kernel_attr_lookup1d, particles_kernel_attr_lookup2d, particles_kernel_attr_mix,
-    particles_kernel_attract, particles_kernel_bounds_box, particles_kernel_bounds_geometry,
-    particles_kernel_bounds_sphere, particles_kernel_drag, particles_kernel_field,
-    particles_kernel_flock, particles_kernel_force, particles_kernel_impulse,
-    particles_kernel_integrate, particles_kernel_noise, particles_kernel_orient,
-    particles_kernel_transform, particles_kernel_vortex,
+    FALLOFF_INVERSE, FALLOFF_LINEAR, FALLOFF_QUADRATIC, FALLOFF_SMOOTHSTEP, particles_kernel_age,
+    particles_kernel_attr_combine, particles_kernel_attr_linear, particles_kernel_attr_lookup1d,
+    particles_kernel_attr_lookup2d, particles_kernel_attr_mix, particles_kernel_attract,
+    particles_kernel_bounds_box, particles_kernel_bounds_geometry, particles_kernel_bounds_sphere,
+    particles_kernel_drag, particles_kernel_field, particles_kernel_flock, particles_kernel_force,
+    particles_kernel_impulse, particles_kernel_integrate, particles_kernel_noise,
+    particles_kernel_orient, particles_kernel_transform, particles_kernel_vortex,
 };
 pub use scatter::{
     particles_scatter_create, particles_scatter_volume_create, prepare_scatter_source,
@@ -278,7 +277,9 @@ pub fn materialize_attribute(
             None => {
                 let mut hit = None;
                 for (&e, &buf) in &particles.buffers {
-                    let Ok(other) = attributes.get(e) else { continue };
+                    let Ok(other) = attributes.get(e) else {
+                        continue;
+                    };
                     if other.name == attr.name {
                         if other.format != attr.format {
                             return Err(ProcessingError::InvalidArgument(format!(
@@ -341,10 +342,7 @@ pub fn materialize_attribute(
     Ok(buffer_entity)
 }
 
-pub fn particles_create(
-    capacity: u32,
-    attribute_entities: Vec<Entity>,
-) -> error::Result<Entity> {
+pub fn particles_create(capacity: u32, attribute_entities: Vec<Entity>) -> error::Result<Entity> {
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(create, (capacity, attribute_entities))
@@ -381,10 +379,7 @@ pub fn particles_capacity(entity: Entity) -> error::Result<u32> {
     })
 }
 
-pub fn particles_buffer(
-    entity: Entity,
-    attribute_entity: Entity,
-) -> error::Result<Option<Entity>> {
+pub fn particles_buffer(entity: Entity, attribute_entity: Entity) -> error::Result<Option<Entity>> {
     app_mut(|app| {
         Ok(app
             .world()

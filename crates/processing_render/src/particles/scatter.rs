@@ -30,11 +30,7 @@ pub fn particles_scatter_create(source_geometry: Entity) -> error::Result<Entity
         "source_position",
         ShaderValue::MeshAttribute(source_geometry, position_attr),
     )?;
-    compute_set(
-        scatter,
-        "source_indices",
-        ShaderValue::Buffer(idx_buf),
-    )?;
+    compute_set(scatter, "source_indices", ShaderValue::Buffer(idx_buf))?;
     compute_set(scatter, "cdf", ShaderValue::Buffer(cdf_buf))?;
     compute_set(scatter, "face_count", ShaderValue::UInt(face_count))?;
     compute_set(scatter, "seed", ShaderValue::UInt(0xc0ffeeu32))?;
@@ -51,8 +47,7 @@ pub fn particles_scatter_volume_create(source_geometry: Entity) -> error::Result
 
     let idx_buf = buffer_create_with_data(indices_bytes)?;
 
-    let shader =
-        shader_load("embedded://processing_render/particles/kernels/scatter_volume.wgsl")?;
+    let shader = shader_load("embedded://processing_render/particles/kernels/scatter_volume.wgsl")?;
     let scatter = compute_create(shader)?;
 
     let position_attr = geometry_attribute_position();
@@ -61,11 +56,7 @@ pub fn particles_scatter_volume_create(source_geometry: Entity) -> error::Result
         "source_position",
         ShaderValue::MeshAttribute(source_geometry, position_attr),
     )?;
-    compute_set(
-        scatter,
-        "source_indices",
-        ShaderValue::Buffer(idx_buf),
-    )?;
+    compute_set(scatter, "source_indices", ShaderValue::Buffer(idx_buf))?;
     compute_set(
         scatter,
         "aabb_min",

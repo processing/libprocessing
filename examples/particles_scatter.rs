@@ -50,11 +50,8 @@ fn sketch() -> error::Result<()> {
     transform_set_position(graphics, Vec3::new(0.0, 0.4, 4.5))?;
     transform_look_at(graphics, Vec3::ZERO)?;
 
-    let _key = light_create_directional(
-        graphics,
-        bevy::color::Color::srgb(1.0, 0.95, 0.85),
-        4500.0,
-    )?;
+    let _key =
+        light_create_directional(graphics, bevy::color::Color::srgb(1.0, 0.95, 0.85), 4500.0)?;
 
     let source = geometry_sphere(1.2, 96, 48)?;
     let scatter = particles_scatter_create(source)?;
