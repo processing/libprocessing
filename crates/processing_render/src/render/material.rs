@@ -169,7 +169,7 @@ impl MaterialKey {
         let base = self.to_standard_material();
         let extended = ProcessingExtendedMaterial {
             base,
-            extension: ProcessingMaterial { blend_state },
+            extension: ProcessingMaterial { blend_state, depth_write: None },
         };
         materials.add(extended).untyped()
     }

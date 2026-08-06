@@ -60,20 +60,18 @@ fn apply_albedo(entity: Entity, value: &Bound<'_, PyAny>) -> PyResult<()> {
         return material_set_albedo_buffer(entity, buf.entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")));
     }
-    if let Ok(c) = value.extract::<PyRef<PyColor>>() {
+    let rgba = if let Ok(c) = value.extract::<PyRef<PyColor>>() {
         let srgba: bevy::color::Srgba = c.0.into();
-        return material_set_albedo_color(
-            entity,
-            [srgba.red, srgba.green, srgba.blue, srgba.alpha],
-        )
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")));
-    }
-    if let Ok(rgba) = value.extract::<[f32; 4]>() {
-        return material_set_albedo_color(entity, rgba)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")));
-    }
-    if let Ok(rgb) = value.extract::<[f32; 3]>() {
-        return material_set_albedo_color(entity, [rgb[0], rgb[1], rgb[2], 1.0])
+        Some([srgba.red, srgba.green, srgba.blue, srgba.alpha])
+    } else if let Ok(rgba) = value.extract::<[f32; 4]>() {
+        Some(rgba)
+    } else if let Ok(rgb) = value.extract::<[f32; 3]>() {
+        Some([rgb[0], rgb[1], rgb[2], 1.0])
+    } else {
+        None
+    };
+    if let Some(rgba) = rgba {
+        return material_set(entity, "color", shader_value::ShaderValue::Float4(rgba))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")));
     }
     Err(PyRuntimeError::new_err(format!(
@@ -82,15 +80,29 @@ fn apply_albedo(entity: Entity, value: &Bound<'_, PyAny>) -> PyResult<()> {
     )))
 }
 
+fn py_truthy(value: &Bound<'_, PyAny>) -> PyResult<bool> {
+    value
+        .extract::<bool>()
+        .or_else(|_| value.extract::<f64>().map(|f| f > 0.5))
+}
+
 fn apply_kwargs(entity: Entity, kwargs: &Bound<'_, PyDict>) -> PyResult<()> {
     for (key, value) in kwargs.iter() {
         let name: String = key.extract()?;
-        if name == "albedo" {
-            apply_albedo(entity, &value)?;
-            continue;
+        let rt = |e| PyRuntimeError::new_err(format!("{e}"));
+        match name.as_str() {
+            "albedo" => apply_albedo(entity, &value)?,
+            "unlit" => material_set_unlit(entity, py_truthy(&value)?).map_err(rt)?,
+            "double_sided" => material_set_double_sided(entity, py_truthy(&value)?).map_err(rt)?,
+            "depth_write" => material_set_depth_write(entity, py_truthy(&value)?).map_err(rt)?,
+            "alpha_mode" => {
+                material_set_alpha_mode(entity, value.extract::<u8>()?, 0.5).map_err(rt)?
+            }
+            _ => {
+                let v = py_to_shader_value(&value)?;
+                material_set(entity, &name, v).map_err(rt)?;
+            }
         }
-        let v = py_to_shader_value(&value)?;
-        material_set(entity, &name, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
     }
     Ok(())
 }
@@ -127,8 +139,7 @@ impl Material {
     #[pyo3(signature = (**kwargs))]
     pub fn unlit(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
         let entity = material_create_pbr().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        material_set(entity, "unlit", shader_value::ShaderValue::Float(1.0))
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        material_set_unlit(entity, true).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         if let Some(kwargs) = kwargs {
             apply_kwargs(entity, kwargs)?;
         }

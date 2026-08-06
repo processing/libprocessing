@@ -2908,6 +2908,51 @@ pub extern "C" fn processing_material(window_id: u64, mat_id: u64) {
     error::check(|| graphics_record_command(window_entity, DrawCommand::Material(mat_entity)));
 }
 
+/// Set the material's transparency mode: 0=opaque, 1=mask(cutoff), 2=blend,
+/// 3=premultiplied, 4=add, 5=multiply. `cutoff` is used only by mask.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_material_set_alpha_mode(mat_id: u64, mode: u8, cutoff: f32) {
+    error::clear_error();
+    error::check(|| material_set_alpha_mode(Entity::from_bits(mat_id), mode, cutoff));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_material_set_double_sided(mat_id: u64, value: bool) {
+    error::clear_error();
+    error::check(|| material_set_double_sided(Entity::from_bits(mat_id), value));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_material_set_unlit(mat_id: u64, value: bool) {
+    error::clear_error();
+    error::check(|| material_set_unlit(Entity::from_bits(mat_id), value));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_material_set_depth_write(mat_id: u64, value: bool) {
+    error::clear_error();
+    error::check(|| material_set_depth_write(Entity::from_bits(mat_id), value));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_material_set_custom_blend_mode(
+    mat_id: u64,
+    color_src: u8,
+    color_dst: u8,
+    color_op: u8,
+    alpha_src: u8,
+    alpha_dst: u8,
+    alpha_op: u8,
+) {
+    error::clear_error();
+    error::check(|| {
+        let blend_state = custom_blend_state(
+            color_src, color_dst, color_op, alpha_src, alpha_dst, alpha_op,
+        )?;
+        material_set_custom_blend(Entity::from_bits(mat_id), blend_state)
+    });
+}
+
 /// Create a shader from WGSL source.
 ///
 /// # Safety
@@ -3581,18 +3626,6 @@ pub extern "C" fn processing_fill_buffer(graphics_id: u64, buffer_id: u64) {
             DrawCommand::FillBuffer(Entity::from_bits(buffer_id)),
         )
     });
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn processing_material_set_albedo_color(
-    mat_id: u64,
-    r: f32,
-    g: f32,
-    b: f32,
-    a: f32,
-) {
-    error::clear_error();
-    error::check(|| material_set_albedo_color(Entity::from_bits(mat_id), [r, g, b, a]));
 }
 
 #[unsafe(no_mangle)]

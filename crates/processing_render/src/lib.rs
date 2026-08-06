@@ -1721,65 +1721,16 @@ pub fn material_create_pbr() -> error::Result<Entity> {
 /// `material_create_pbr` with `unlit = true` set on the base StandardMaterial.
 pub fn material_create_unlit() -> error::Result<Entity> {
     let entity = material_create_pbr()?;
-    material_set(entity, "unlit", shader_value::ShaderValue::Float(1.0))?;
+    material_set_unlit(entity, true)?;
     Ok(entity)
 }
 
 /// set the albedo source to a constant srgba color. If the material is
 /// currently buffer-backed, swaps the asset back to plain PBR while
 /// preserving every other `StandardMaterial` field.
-pub fn material_set_albedo_color(entity: Entity, color: [f32; 4]) -> error::Result<()> {
-    use crate::material::ProcessingMaterial;
-    use crate::particles::material::ParticlesMaterial;
-    use crate::render::material::UntypedMaterial;
-    use bevy::pbr::ExtendedMaterial;
-
-    type DefaultMat = ExtendedMaterial<StandardMaterial, ProcessingMaterial>;
-
-    app_mut(|app| {
-        let untyped = app
-            .world()
-            .get::<UntypedMaterial>(entity)
-            .ok_or(error::ProcessingError::MaterialNotFound)?
-            .0
-            .clone();
-        let new_color = Color::srgba(color[0], color[1], color[2], color[3]);
-
-        if let Ok(handle) = untyped.clone().try_typed::<DefaultMat>() {
-            let mut mats = app.world_mut().resource_mut::<Assets<DefaultMat>>();
-            let mat = mats
-                .get_mut(&handle)
-                .ok_or(error::ProcessingError::MaterialNotFound)?;
-            mat.into_inner().base.base_color = new_color;
-            return Ok(());
-        }
-
-        let Ok(handle) = untyped.try_typed::<ParticlesMaterial>() else {
-            return Err(error::ProcessingError::MaterialNotFound);
-        };
-        let world = app.world_mut();
-        let preserved = {
-            let mut mats = world.resource_mut::<Assets<ParticlesMaterial>>();
-            let mat = mats
-                .get(&handle)
-                .ok_or(error::ProcessingError::MaterialNotFound)?;
-            let mut base = mat.base.clone();
-            base.base_color = new_color;
-            mats.remove(&handle);
-            base
-        };
-        let new_handle = world
-            .resource_mut::<Assets<DefaultMat>>()
-            .add(ExtendedMaterial {
-                base: preserved,
-                extension: ProcessingMaterial { blend_state: None },
-            });
-        world
-            .entity_mut(entity)
-            .insert(UntypedMaterial(new_handle.untyped()));
-        Ok(())
-    })
-}
+// NOTE: constant albedo/emissive are plain PBR uniforms — set them via
+// `material_set(entity, "color" | "emissive", Float4(..))`. Only the
+// per-particle *buffer* variants are special (see material_set_*_buffer below).
 
 #[derive(Copy, Clone)]
 enum ParticlesBufferSlot {
@@ -1889,6 +1840,49 @@ pub fn material_set(
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(material::set_property, (entity, name.into(), value))
+            .unwrap()
+    })
+}
+
+pub fn material_set_alpha_mode(entity: Entity, mode: u8, cutoff: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::set_alpha_mode, (entity, mode, cutoff))
+            .unwrap()
+    })
+}
+
+pub fn material_set_double_sided(entity: Entity, value: bool) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::set_double_sided, (entity, value))
+            .unwrap()
+    })
+}
+
+pub fn material_set_unlit(entity: Entity, value: bool) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::set_unlit, (entity, value))
+            .unwrap()
+    })
+}
+
+pub fn material_set_depth_write(entity: Entity, value: bool) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::set_depth_write, (entity, value))
+            .unwrap()
+    })
+}
+
+pub fn material_set_custom_blend(
+    entity: Entity,
+    blend: bevy::render::render_resource::BlendState,
+) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::set_custom_blend, (entity, blend))
             .unwrap()
     })
 }

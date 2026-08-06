@@ -11,7 +11,7 @@ use bevy::pbr::{
     ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline,
 };
 use bevy::prelude::*;
-use bevy::render::render_resource::{AsBindGroup, BlendState};
+use bevy::render::render_resource::{AsBindGroup, BlendState, Face};
 use bevy::shader::ShaderRef;
 use bevy_naga_reflect::reflect::ParameterCategory;
 use processing_core::error::{self, ProcessingError};
@@ -51,7 +51,10 @@ pub fn create_pbr(
             cull_mode: None,
             ..default()
         },
-        extension: ProcessingMaterial { blend_state: None },
+        extension: ProcessingMaterial {
+            blend_state: None,
+            depth_write: None,
+        },
     });
     commands.spawn(UntypedMaterial(handle.untyped())).id()
 }
@@ -137,6 +140,190 @@ pub fn set_property(
     Err(ProcessingError::MaterialNotFound)
 }
 
+
+type PbrMaterial = ExtendedMaterial<StandardMaterial, ProcessingMaterial>;
+
+enum MaterialMut<'a> {
+    Pbr(&'a mut PbrMaterial),
+    Particles(&'a mut crate::particles::material::ParticlesMaterial),
+    Custom(&'a mut custom::CustomMaterial),
+}
+
+fn edit_material(
+    entity: Entity,
+    material_handles: &Query<&UntypedMaterial>,
+    pbr: &mut Assets<PbrMaterial>,
+    particles: &mut Assets<crate::particles::material::ParticlesMaterial>,
+    custom: &mut Assets<custom::CustomMaterial>,
+    f: impl FnOnce(MaterialMut) -> error::Result<()>,
+) -> error::Result<()> {
+    let untyped = material_handles
+        .get(entity)
+        .map_err(|_| ProcessingError::MaterialNotFound)?;
+    if let Ok(handle) = untyped.0.clone().try_typed::<PbrMaterial>() {
+        let mat = pbr
+            .get_mut(&handle)
+            .ok_or(ProcessingError::MaterialNotFound)?
+            .into_inner();
+        return f(MaterialMut::Pbr(mat));
+    }
+    if let Ok(handle) = untyped
+        .0
+        .clone()
+        .try_typed::<crate::particles::material::ParticlesMaterial>()
+    {
+        let mat = particles
+            .get_mut(&handle)
+            .ok_or(ProcessingError::MaterialNotFound)?
+            .into_inner();
+        return f(MaterialMut::Particles(mat));
+    }
+    if let Ok(handle) = untyped.0.clone().try_typed::<custom::CustomMaterial>() {
+        let mat = custom
+            .get_mut(&handle)
+            .ok_or(ProcessingError::MaterialNotFound)?
+            .into_inner();
+        return f(MaterialMut::Custom(mat));
+    }
+    Err(ProcessingError::MaterialNotFound)
+}
+
+fn resolve_alpha_mode(mode: u8, cutoff: f32) -> error::Result<AlphaMode> {
+    Ok(match mode {
+        0 => AlphaMode::Opaque,
+        1 => AlphaMode::Mask(cutoff),
+        2 => AlphaMode::Blend,
+        3 => AlphaMode::Premultiplied,
+        4 => AlphaMode::Add,
+        5 => AlphaMode::Multiply,
+        _ => {
+            return Err(ProcessingError::InvalidArgument(format!(
+                "unknown alpha_mode value: {mode}"
+            )));
+        }
+    })
+}
+
+fn set_base_double_sided(base: &mut StandardMaterial, value: bool) {
+    base.double_sided = value;
+    base.cull_mode = if value { None } else { Some(Face::Back) };
+}
+
+pub fn set_alpha_mode(
+    In((entity, mode, cutoff)): In<(Entity, u8, f32)>,
+    material_handles: Query<&UntypedMaterial>,
+    mut pbr: ResMut<Assets<PbrMaterial>>,
+    mut particles: ResMut<Assets<crate::particles::material::ParticlesMaterial>>,
+    mut custom: ResMut<Assets<custom::CustomMaterial>>,
+) -> error::Result<()> {
+    let alpha_mode = resolve_alpha_mode(mode, cutoff)?;
+    let opaque = matches!(alpha_mode, AlphaMode::Opaque);
+    edit_material(entity, &material_handles, &mut pbr, &mut particles, &mut custom, |m| {
+        match m {
+            MaterialMut::Pbr(mat) => {
+                mat.base.alpha_mode = alpha_mode;
+                if opaque {
+                    mat.extension.blend_state = None;
+                }
+            }
+            MaterialMut::Particles(mat) => mat.base.alpha_mode = alpha_mode,
+            MaterialMut::Custom(mat) => {
+                mat.alpha_mode = alpha_mode;
+                if opaque {
+                    mat.blend_state = None;
+                }
+            }
+        }
+        Ok(())
+    })
+}
+
+pub fn set_double_sided(
+    In((entity, value)): In<(Entity, bool)>,
+    material_handles: Query<&UntypedMaterial>,
+    mut pbr: ResMut<Assets<PbrMaterial>>,
+    mut particles: ResMut<Assets<crate::particles::material::ParticlesMaterial>>,
+    mut custom: ResMut<Assets<custom::CustomMaterial>>,
+) -> error::Result<()> {
+    edit_material(entity, &material_handles, &mut pbr, &mut particles, &mut custom, |m| {
+        match m {
+            MaterialMut::Pbr(mat) => set_base_double_sided(&mut mat.base, value),
+            MaterialMut::Particles(mat) => set_base_double_sided(&mut mat.base, value),
+            MaterialMut::Custom(mat) => mat.double_sided = Some(value),
+        }
+        Ok(())
+    })
+}
+
+pub fn set_unlit(
+    In((entity, value)): In<(Entity, bool)>,
+    material_handles: Query<&UntypedMaterial>,
+    mut pbr: ResMut<Assets<PbrMaterial>>,
+    mut particles: ResMut<Assets<crate::particles::material::ParticlesMaterial>>,
+    mut custom: ResMut<Assets<custom::CustomMaterial>>,
+) -> error::Result<()> {
+    edit_material(entity, &material_handles, &mut pbr, &mut particles, &mut custom, |m| match m {
+        MaterialMut::Pbr(mat) => {
+            mat.base.unlit = value;
+            Ok(())
+        }
+        MaterialMut::Particles(mat) => {
+            mat.base.unlit = value;
+            Ok(())
+        }
+        MaterialMut::Custom(_) => Err(ProcessingError::InvalidArgument(
+            "unlit is not applicable to custom-shader materials; the shader defines lighting"
+                .to_string(),
+        )),
+    })
+}
+
+pub fn set_depth_write(
+    In((entity, value)): In<(Entity, bool)>,
+    material_handles: Query<&UntypedMaterial>,
+    mut pbr: ResMut<Assets<PbrMaterial>>,
+    mut particles: ResMut<Assets<crate::particles::material::ParticlesMaterial>>,
+    mut custom: ResMut<Assets<custom::CustomMaterial>>,
+) -> error::Result<()> {
+    edit_material(entity, &material_handles, &mut pbr, &mut particles, &mut custom, |m| match m {
+        MaterialMut::Pbr(mat) => {
+            mat.extension.depth_write = Some(value);
+            Ok(())
+        }
+        MaterialMut::Particles(_) => Err(ProcessingError::InvalidArgument(
+            "depth-write is not yet configurable on particle materials".to_string(),
+        )),
+        MaterialMut::Custom(mat) => {
+            mat.depth_write = Some(value);
+            Ok(())
+        }
+    })
+}
+
+pub fn set_custom_blend(
+    In((entity, blend)): In<(Entity, BlendState)>,
+    material_handles: Query<&UntypedMaterial>,
+    mut pbr: ResMut<Assets<PbrMaterial>>,
+    mut particles: ResMut<Assets<crate::particles::material::ParticlesMaterial>>,
+    mut custom: ResMut<Assets<custom::CustomMaterial>>,
+) -> error::Result<()> {
+    edit_material(entity, &material_handles, &mut pbr, &mut particles, &mut custom, |m| match m {
+        MaterialMut::Pbr(mat) => {
+            mat.extension.blend_state = Some(blend);
+            mat.base.alpha_mode = AlphaMode::Blend;
+            Ok(())
+        }
+        MaterialMut::Particles(_) => Err(ProcessingError::InvalidArgument(
+            "custom blend is not yet configurable on particle materials".to_string(),
+        )),
+        MaterialMut::Custom(mat) => {
+            mat.blend_state = Some(blend);
+            mat.alpha_mode = AlphaMode::Blend;
+            Ok(())
+        }
+    })
+}
+
 pub fn destroy(
     In(entity): In<Entity>,
     mut commands: Commands,
@@ -165,18 +352,21 @@ pub fn destroy(
 #[bind_group_data(ProcessingMaterialKey)]
 pub struct ProcessingMaterial {
     pub blend_state: Option<BlendState>,
+    pub depth_write: Option<bool>,
 }
 
 #[repr(C)]
 #[derive(Eq, PartialEq, Hash, Copy, Clone)]
 pub struct ProcessingMaterialKey {
     blend_state: Option<BlendState>,
+    depth_write: Option<bool>,
 }
 
 impl From<&ProcessingMaterial> for ProcessingMaterialKey {
     fn from(mat: &ProcessingMaterial) -> Self {
         ProcessingMaterialKey {
             blend_state: mat.blend_state,
+            depth_write: mat.depth_write,
         }
     }
 }
@@ -196,15 +386,30 @@ impl MaterialExtension for ProcessingMaterial {
         _layout: &MeshVertexBufferLayoutRef,
         key: MaterialExtensionKey<Self>,
     ) -> std::result::Result<(), SpecializedMeshPipelineError> {
-        if let Some(blend_state) = key.bind_group_data.blend_state
-            && let Some(fragment_state) = &mut descriptor.fragment
-        {
-            fragment_state.targets.iter_mut().for_each(|target| {
-                if let Some(target) = target {
-                    target.blend = Some(blend_state);
-                }
-            });
-        }
+        apply_pipeline_state(
+            descriptor,
+            key.bind_group_data.blend_state,
+            key.bind_group_data.depth_write,
+        );
         Ok(())
+    }
+}
+
+pub(crate) fn apply_pipeline_state(
+    descriptor: &mut RenderPipelineDescriptor,
+    blend_state: Option<BlendState>,
+    depth_write: Option<bool>,
+) {
+    if let Some(blend_state) = blend_state
+        && let Some(fragment_state) = &mut descriptor.fragment
+    {
+        for target in fragment_state.targets.iter_mut().flatten() {
+            target.blend = Some(blend_state);
+        }
+    }
+    if let Some(depth_write) = depth_write
+        && let Some(depth_stencil) = &mut descriptor.depth_stencil
+    {
+        depth_stencil.depth_write_enabled = Some(depth_write);
     }
 }

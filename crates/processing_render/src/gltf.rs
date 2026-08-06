@@ -243,7 +243,7 @@ pub fn material(
         .resource_mut::<Assets<ProcessingExtendedMaterial>>()
         .add(ExtendedMaterial {
             base: standard,
-            extension: ProcessingMaterial { blend_state: None },
+            extension: ProcessingMaterial { blend_state: None, depth_write: None },
         });
     let entity = world.spawn(UntypedMaterial(handle.untyped())).id();
     Ok(entity)
