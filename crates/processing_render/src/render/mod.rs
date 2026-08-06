@@ -1533,6 +1533,7 @@ fn add_shape3d(
                 base,
                 extension: ProcessingMaterial {
                     blend_state: state.style.blend_state,
+                    depth_write: None,
                 },
             };
             res.materials.add(extended).untyped()

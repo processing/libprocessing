@@ -73,7 +73,7 @@ fn sketch() -> error::Result<()> {
     let aging = compute_create(age_shader)?;
 
     let mat = material_create_pbr()?;
-    material_set_albedo_color(mat, [0.9, 0.85, 1.0, 1.0])?;
+    material_set(mat, "color", shader_value::ShaderValue::Float4([0.9, 0.85, 1.0, 1.0]))?;
 
     let burst: u32 = 600;
     let dt: f32 = 1.0 / 60.0;

@@ -38,7 +38,7 @@ use bevy::{
         render_asset::RenderAssets,
         render_phase::DrawFunctions,
         render_resource::{
-            BindGroupLayoutDescriptor, BindingResources, BlendState, UnpreparedBindGroup,
+            BindGroupLayoutDescriptor, BindingResources, BlendState, Face, UnpreparedBindGroup,
         },
         renderer::RenderDevice,
         storage::GpuShaderBuffer,
@@ -59,6 +59,8 @@ use processing_core::error::{ProcessingError, Result};
 #[derive(Clone, Hash, PartialEq)]
 struct CustomMaterialKey {
     blend_state: Option<BlendState>,
+    double_sided: Option<bool>,
+    depth_write: Option<bool>,
 }
 
 fn specialize(
@@ -67,12 +69,10 @@ fn specialize(
     _layout: &MeshVertexBufferLayoutRef,
     _pipeline_key: ErasedMaterialPipelineKey,
 ) -> std::result::Result<(), SpecializedMeshPipelineError> {
-    if let Some(key) = key.downcast_ref::<CustomMaterialKey>()
-        && let Some(blend_state) = key.blend_state
-        && let Some(fragment_state) = &mut descriptor.fragment
-    {
-        for target in fragment_state.targets.iter_mut().flatten() {
-            target.blend = Some(blend_state);
+    if let Some(key) = key.downcast_ref::<CustomMaterialKey>() {
+        crate::material::apply_pipeline_state(descriptor, key.blend_state, key.depth_write);
+        if let Some(double_sided) = key.double_sided {
+            descriptor.primitive.cull_mode = if double_sided { None } else { Some(Face::Back) };
         }
     }
     Ok(())
@@ -85,6 +85,9 @@ pub struct CustomMaterial {
     pub has_vertex: bool,
     pub has_fragment: bool,
     pub blend_state: Option<BlendState>,
+    pub alpha_mode: AlphaMode,
+    pub double_sided: Option<bool>,
+    pub depth_write: Option<bool>,
 }
 
 #[derive(Component)]
@@ -267,6 +270,9 @@ pub fn create_custom(
         has_vertex,
         has_fragment,
         blend_state: None,
+        alpha_mode: AlphaMode::Opaque,
+        double_sided: None,
+        depth_write: None,
     };
     let handle = custom_materials.add(material);
     Ok(commands.spawn(UntypedMaterial(handle.untyped())).id())
@@ -455,12 +461,19 @@ impl ErasedRenderAsset for CustomMaterial {
             mesh_pipeline_key_bits: ErasedMeshPipelineKey::new(MeshPipelineKey::empty()),
             base_specialize: Some(base_specialize),
             material_layout: Some(bind_group_layout),
-            material_key: ErasedMaterialKey::new(CustomMaterialKey { blend_state }),
+            material_key: ErasedMaterialKey::new(CustomMaterialKey {
+                blend_state,
+                double_sided: source_asset.double_sided,
+                depth_write: source_asset.depth_write,
+            }),
             user_specialize: Some(specialize),
+            // A custom blend forces the sorted transparent phase (an arbitrary
+            // blend equation can't be assumed commutative); otherwise honor the
+            // explicitly-set alpha mode.
             alpha_mode: if blend_state.is_some() {
                 AlphaMode::Blend
             } else {
-                AlphaMode::Opaque
+                source_asset.alpha_mode
             },
             ..Default::default()
         };

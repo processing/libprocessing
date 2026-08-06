@@ -50,43 +50,6 @@ pub fn set_property(
             };
             material.emissive = LinearRgba::new(c[0], c[1], c[2], c[3]);
         }
-        "unlit" => {
-            let ShaderValue::Float(v) = value else {
-                return Err(ProcessingError::InvalidArgument(format!(
-                    "'{name}' expects Float, got {value:?}"
-                )));
-            };
-            material.unlit = *v > 0.5;
-        }
-        "double_sided" => {
-            let ShaderValue::Float(v) = value else {
-                return Err(ProcessingError::InvalidArgument(format!(
-                    "'{name}' expects Float, got {value:?}"
-                )));
-            };
-            material.double_sided = *v > 0.5;
-        }
-        "alpha_mode" => {
-            let ShaderValue::Int(v) = value else {
-                return Err(ProcessingError::InvalidArgument(format!(
-                    "'{name}' expects Int, got {value:?}"
-                )));
-            };
-            material.alpha_mode = match v {
-                0 => AlphaMode::Opaque,
-                // TODO: allow configuring the alpha cutoff value
-                1 => AlphaMode::Mask(0.5),
-                2 => AlphaMode::Blend,
-                3 => AlphaMode::Premultiplied,
-                4 => AlphaMode::Add,
-                5 => AlphaMode::Multiply,
-                _ => {
-                    return Err(ProcessingError::InvalidArgument(format!(
-                        "unknown alpha_mode value: {v}"
-                    )));
-                }
-            };
-        }
         "base_color_texture" | "texture" => {
             let Some(handle) = texture_handle else {
                 return Err(ProcessingError::InvalidArgument(format!(

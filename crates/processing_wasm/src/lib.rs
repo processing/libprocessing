@@ -2376,9 +2376,10 @@ pub fn js_material_set_albedo_color(
     b: f32,
     a: f32,
 ) -> Result<(), JsValue> {
-    check(material_set_albedo_color(
+    check(material_set(
         Entity::from_bits(entity),
-        [r, g, b, a],
+        "color",
+        shader_value::ShaderValue::Float4([r, g, b, a]),
     ))
 }
 
