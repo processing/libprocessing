@@ -21,7 +21,6 @@ def setup():
         attributes=[Attribute.position(), Attribute.color()],
     )
 
-    # park unemitted slots far off-screen until the ring buffer fills.
     pos_buf = p.buffer(Attribute.position())
     pos_buf.write([1.0e6] * (capacity * 3))
 

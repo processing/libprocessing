@@ -8,7 +8,7 @@ aging = None
 position_attr = None
 color_attr = None
 scale_attr = None
-dead_attr = None
+life_attr = None
 age_attr = None
 frame = 0
 
@@ -18,7 +18,7 @@ TTL = 1.0
 
 AGING_SHADER = """
 @group(0) @binding(0) var<storage, read_write> age: array<f32>;
-@group(0) @binding(1) var<storage, read_write> dead: array<f32>;
+@group(0) @binding(1) var<storage, read_write> life: array<f32>;
 @group(0) @binding(2) var<storage, read_write> position: array<f32>;
 @group(0) @binding(3) var<storage, read_write> scale: array<f32>;
 @group(0) @binding(4) var<uniform> params: vec4<f32>;  // x = dt, y = ttl
@@ -33,21 +33,21 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let dt = params.x;
     let ttl = params.y;
 
-    if dead[i] != 0.0 {
+    if life[i] <= 0.0 {
         return;
     }
 
     age[i] = age[i] + dt;
     position[i * 3u + 1u] = position[i * 3u + 1u] - dt * 1.5;
 
-    let life = clamp(1.0 - age[i] / ttl, 0.0, 1.0);
-    let s = life * life;
+    let remaining = clamp(1.0 - age[i] / ttl, 0.0, 1.0);
+    let s = remaining * remaining;
     scale[i * 3u + 0u] = s;
     scale[i * 3u + 1u] = s;
     scale[i * 3u + 2u] = s;
 
     if age[i] > ttl {
-        dead[i] = 1.0;
+        life[i] = 0.0;
     }
 }
 """
@@ -55,7 +55,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
 def setup():
     global p, sphere, mat, aging
-    global position_attr, color_attr, scale_attr, dead_attr, age_attr
+    global position_attr, color_attr, scale_attr, life_attr, age_attr
 
     size(900, 700)
     mode_3d()
@@ -66,18 +66,13 @@ def setup():
     position_attr = Attribute.position()
     color_attr = Attribute.color()
     scale_attr = Attribute.scale()
-    dead_attr = Attribute.dead()
+    life_attr = Attribute.life()
     age_attr = Attribute("age", AttributeFormat.Float)
 
     p = Particles(
         capacity=capacity,
-        attributes=[position_attr, color_attr, scale_attr, dead_attr, age_attr],
+        attributes=[position_attr, color_attr, scale_attr, life_attr, age_attr],
     )
-
-    # park unemitted slots until the spawn loop fills them.
-    dead_buf = p.buffer(dead_attr)
-    dead_buf.write([1.0] * capacity)
-
     color_buf = p.buffer(color_attr)
     mat = Material.unlit(albedo=color_buf)
     aging = Compute(Shader(AGING_SHADER))
@@ -105,6 +100,7 @@ def draw():
         colors.extend([c.r, c.g, c.b, 1.0])
 
     zeros = [0.0] * BURST
+    ones = [1.0] * BURST
     ones_scale = [1.0] * (BURST * 3)
     p.emit(
         BURST,
@@ -112,7 +108,7 @@ def draw():
         color=colors,
         scale=ones_scale,
         age=zeros,
-        dead=zeros,
+        life=ones,
     )
 
     aging.set(params=[DT, TTL, 0.0, 0.0])

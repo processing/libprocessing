@@ -16,13 +16,10 @@ pub struct Buffer {
     pub(crate) entity: Entity,
     element_type: Option<ShaderValue>,
     size: u64,
-    /// `true` for borrowed wrappers (e.g. `Particles.buffer()`) where the
-    /// underlying entity belongs elsewhere; `Drop` skips destroy in that case.
     borrowed: bool,
 }
 
 impl Buffer {
-    /// borrowed wrapper: `Drop` will not destroy the underlying entity.
     pub(crate) fn from_entity(entity: Entity, element_type: Option<ShaderValue>) -> Self {
         let size = buffer_size(entity).unwrap_or(0);
         Self {
@@ -258,8 +255,11 @@ fn shader_value_to_py<'py>(py: Python<'py>, sv: &ShaderValue) -> PyResult<Bound<
         ShaderValue::Int3(v) => list(py, v),
         ShaderValue::Int4(v) => list(py, v),
         ShaderValue::Mat4(v) => list(py, v),
-        ShaderValue::Texture(_) | ShaderValue::Buffer(_) => Err(PyRuntimeError::new_err(
-            "cannot convert Texture/Buffer to Python value",
+        ShaderValue::Texture(_)
+        | ShaderValue::Buffer(_)
+        | ShaderValue::MeshAttribute(..)
+        | ShaderValue::MeshIndex(_) => Err(PyRuntimeError::new_err(
+            "cannot convert Texture/Buffer/Mesh* to Python value",
         )),
     }
 }

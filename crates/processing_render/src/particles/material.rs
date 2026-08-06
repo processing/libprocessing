@@ -1,13 +1,17 @@
-//! per-particle albedo on top of `StandardMaterial`. the `unlit` flag on the
-//! base material toggles between lit and unlit; `apply_pbr_lighting`
-//! short-circuits when set.
-
 use std::ops::Deref;
 
 use bevy::asset::embedded_asset;
-use bevy::pbr::{ExtendedMaterial, MaterialExtension, MaterialPlugin};
+use bevy::material::specialize::SpecializedMeshPipelineError;
+use bevy::pbr::{
+    ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline,
+    MaterialPlugin,
+};
 use bevy::prelude::*;
-use bevy::render::{render_resource::AsBindGroup, storage::ShaderBuffer};
+use bevy::render::{
+    mesh::MeshVertexBufferLayoutRef,
+    render_resource::{AsBindGroup, RenderPipelineDescriptor},
+    storage::ShaderBuffer,
+};
 use bevy::shader::ShaderRef;
 
 use crate::render::material::UntypedMaterial;
@@ -23,10 +27,28 @@ impl Plugin for ParticlesMaterialPlugin {
 
 pub type ParticlesMaterial = ExtendedMaterial<StandardMaterial, ParticlesExtension>;
 
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct ParticlesExtensionKey {
+    pub has_albedo: bool,
+    pub has_emissive: bool,
+}
+
+impl From<&ParticlesExtension> for ParticlesExtensionKey {
+    fn from(ext: &ParticlesExtension) -> Self {
+        Self {
+            has_albedo: ext.colors.is_some(),
+            has_emissive: ext.emissive_colors.is_some(),
+        }
+    }
+}
+
 #[derive(Asset, AsBindGroup, Reflect, Debug, Clone)]
+#[bind_group_data(ParticlesExtensionKey)]
 pub struct ParticlesExtension {
     #[storage(100, read_only)]
-    pub colors: Handle<ShaderBuffer>,
+    pub colors: Option<Handle<ShaderBuffer>>,
+    #[storage(101, read_only)]
+    pub emissive_colors: Option<Handle<ShaderBuffer>>,
 }
 
 impl MaterialExtension for ParticlesExtension {
@@ -37,10 +59,25 @@ impl MaterialExtension for ParticlesExtension {
     fn deferred_fragment_shader() -> ShaderRef {
         "embedded://processing_render/particles/particles.wgsl".into()
     }
+
+    fn specialize(
+        _pipeline: &MaterialExtensionPipeline,
+        descriptor: &mut RenderPipelineDescriptor,
+        _layout: &MeshVertexBufferLayoutRef,
+        key: MaterialExtensionKey<Self>,
+    ) -> Result<(), SpecializedMeshPipelineError> {
+        if let Some(ref mut fragment) = descriptor.fragment {
+            if key.bind_group_data.has_albedo {
+                fragment.shader_defs.push("HAS_COLORS".into());
+            }
+            if key.bind_group_data.has_emissive {
+                fragment.shader_defs.push("HAS_EMISSIVE_COLORS".into());
+            }
+        }
+        Ok(())
+    }
 }
 
-/// promote `UntypedMaterial(handle)` to `MeshMaterial3d<ParticlesMaterial>`
-/// where the handle's type matches.
 pub fn add_particles_materials(mut commands: Commands, meshes: Query<(Entity, &UntypedMaterial)>) {
     for (entity, handle) in meshes.iter() {
         let handle = handle.deref().clone();

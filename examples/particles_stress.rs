@@ -1,12 +1,10 @@
-//! stress test with `GRID^3` pbr-lit cubes rotating. tune `GRID` to scale.
-
 use processing_glfw::GlfwContext;
 
 use bevy::math::Vec3;
 use processing::prelude::*;
 use processing_render::render::command::DrawCommand;
 
-const GRID: u32 = 100;
+const GRID: u32 = 100; // GRID^3 particles
 const SPACING: f32 = 1.0;
 
 const SPIN_SHADER: &str = r#"
@@ -118,7 +116,7 @@ fn sketch() -> error::Result<()> {
     let spin_shader = shader_create(SPIN_SHADER)?;
     let spin = compute_create(spin_shader)?;
 
-    eprintln!("field_stress: {capacity} particles");
+    eprintln!("{capacity} particles");
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;

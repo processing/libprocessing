@@ -181,7 +181,8 @@ pub fn load_shader(In(path): In<String>, world: &mut World) -> Result<Entity> {
     };
     use bevy::ecs::system::RunSystemOnce;
 
-    // url-scheme paths parse as-is; others go through the configured asset dir
+    // url-scheme paths (e.g. `embedded://crate/foo.wgsl`) carry their own
+    // source; relative paths route through the configured asset directory
     let asset_path: AssetPath = if path.contains("://") {
         AssetPath::parse(&path).into_owned()
     } else {
@@ -311,9 +312,13 @@ pub(crate) fn shader_value_to_reflect(value: &ShaderValue) -> Result<Box<dyn Par
         ShaderValue::Int4(v) => Box::new(IVec4::from_array(*v)),
         ShaderValue::UInt(v) => Box::new(*v),
         ShaderValue::Mat4(v) => Box::new(Mat4::from_cols_array(v)),
-        ShaderValue::Texture(_) | ShaderValue::Buffer(_) => {
+        ShaderValue::Texture(_)
+        | ShaderValue::Buffer(_)
+        | ShaderValue::MeshAttribute(..)
+        | ShaderValue::MeshIndex(_) => {
             return Err(ProcessingError::InvalidArgument(
-                "Texture/Buffer must be bound via set_property, not as a uniform value".to_string(),
+                "Texture/Buffer/Mesh* must be bound via set_property, not as a uniform value"
+                    .to_string(),
             ));
         }
     })

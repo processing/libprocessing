@@ -7,7 +7,7 @@ use processing_render::render::command::DrawCommand;
 
 const AGING_SHADER: &str = r#"
 @group(0) @binding(0) var<storage, read_write> age: array<f32>;
-@group(0) @binding(1) var<storage, read_write> dead: array<f32>;
+@group(0) @binding(1) var<storage, read_write> life: array<f32>;
 @group(0) @binding(2) var<storage, read_write> position: array<f32>;
 @group(0) @binding(3) var<storage, read_write> scale: array<f32>;
 @group(0) @binding(4) var<uniform> params: vec4<f32>;  // x = dt, y = ttl
@@ -22,22 +22,21 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let dt = params.x;
     let ttl = params.y;
 
-    if dead[i] != 0.0 {
+    if life[i] <= 0.0 {
         return;
     }
 
     age[i] = age[i] + dt;
     position[i * 3u + 1u] = position[i * 3u + 1u] - dt * 1.5;
 
-    // shrink toward zero as age approaches ttl so dying is visible.
-    let life = clamp(1.0 - age[i] / ttl, 0.0, 1.0);
-    let s = life * life;  // ease out
+    let remaining = clamp(1.0 - age[i] / ttl, 0.0, 1.0);
+    let s = remaining * remaining;
     scale[i * 3u + 0u] = s;
     scale[i * 3u + 1u] = s;
     scale[i * 3u + 2u] = s;
 
     if age[i] > ttl {
-        dead[i] = 1.0;
+        life[i] = 0.0;
     }
 }
 "#;
@@ -64,21 +63,15 @@ fn sketch() -> error::Result<()> {
     let position_attr = geometry_attribute_position();
     let color_attr = geometry_attribute_color();
     let scale_attr = geometry_attribute_scale();
-    let dead_attr = geometry_attribute_dead();
+    let life_attr = geometry_attribute_life();
     let age_attr = geometry_attribute_create("age", AttributeFormat::Float)?;
 
     let p = particles_create(
         capacity,
-        vec![position_attr, color_attr, scale_attr, dead_attr, age_attr],
+        vec![position_attr, color_attr, scale_attr, life_attr, age_attr],
     )?;
-    let dead_buf =
-        particles_buffer(p, dead_attr)?.ok_or(error::ProcessingError::ParticlesNotFound)?;
     let color_buf =
         particles_buffer(p, color_attr)?.ok_or(error::ProcessingError::ParticlesNotFound)?;
-
-    // mark all slots dead initially so the unemitted ring slots don't render.
-    let init_dead: Vec<u8> = (0..capacity).flat_map(|_| 1.0_f32.to_le_bytes()).collect();
-    buffer_write(dead_buf, init_dead)?;
 
     let mat = {
         let m = material_create_unlit()?;
@@ -130,7 +123,7 @@ fn sketch() -> error::Result<()> {
         let position_bytes: Vec<u8> = positions.iter().flat_map(|f| f.to_le_bytes()).collect();
         let color_bytes: Vec<u8> = colors.iter().flat_map(|f| f.to_le_bytes()).collect();
         let zero_floats: Vec<u8> = (0..burst).flat_map(|_| 0.0_f32.to_le_bytes()).collect();
-        // init scale to 1; the aging shader shrinks it over time
+        let one_floats: Vec<u8> = (0..burst).flat_map(|_| 1.0_f32.to_le_bytes()).collect();
         let one_scale: Vec<u8> = (0..burst)
             .flat_map(|_| {
                 [1.0_f32, 1.0, 1.0]
@@ -146,8 +139,8 @@ fn sketch() -> error::Result<()> {
                 (position_attr, position_bytes),
                 (color_attr, color_bytes),
                 (scale_attr, one_scale),
-                (age_attr, zero_floats.clone()),
-                (dead_attr, zero_floats),
+                (age_attr, zero_floats),
+                (life_attr, one_floats),
             ],
         )?;
 

@@ -16,8 +16,15 @@
 }
 #endif
 
+#ifdef HAS_COLORS
 @group(#{MATERIAL_BIND_GROUP}) @binding(100)
 var<storage, read> particle_colors: array<vec4<f32>>;
+#endif
+
+#ifdef HAS_EMISSIVE_COLORS
+@group(#{MATERIAL_BIND_GROUP}) @binding(101)
+var<storage, read> particle_emissive_colors: array<vec4<f32>>;
+#endif
 
 @fragment
 fn fragment(
@@ -27,7 +34,17 @@ fn fragment(
     var pbr_input = pbr_input_from_standard_material(in, is_front);
 
     let tag = mesh_functions::get_tag(in.instance_index);
+
+#ifdef HAS_COLORS
     pbr_input.material.base_color = pbr_input.material.base_color * particle_colors[tag];
+#endif
+
+#ifdef HAS_EMISSIVE_COLORS
+    pbr_input.material.emissive = vec4<f32>(
+        pbr_input.material.emissive.rgb + particle_emissive_colors[tag].rgb,
+        pbr_input.material.emissive.a
+    );
+#endif
 
     pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);
 

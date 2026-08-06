@@ -25,7 +25,7 @@ struct Spawn {
 @group(0) @binding(2) var<storage, read_write> color: array<f32>;
 @group(0) @binding(3) var<storage, read_write> scale: array<f32>;
 @group(0) @binding(4) var<storage, read_write> age: array<f32>;
-@group(0) @binding(5) var<storage, read_write> dead: array<f32>;
+@group(0) @binding(5) var<storage, read_write> life: array<f32>;
 @group(0) @binding(6) var<uniform> spawn: Spawn;
 @group(0) @binding(7) var<uniform> emit_range: vec4<f32>;
 
@@ -78,7 +78,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     scale[slot * 3u + 2u] = 1.0;
 
     age[slot]  = 0.0;
-    dead[slot] = 0.0;
+    life[slot] = 1.0;
 }
 """
 
@@ -94,7 +94,7 @@ struct Params {
 @group(0) @binding(1) var<storage, read_write> velocity: array<f32>;
 @group(0) @binding(2) var<storage, read_write> scale: array<f32>;
 @group(0) @binding(3) var<storage, read_write> age: array<f32>;
-@group(0) @binding(4) var<storage, read_write> dead: array<f32>;
+@group(0) @binding(4) var<storage, read_write> life: array<f32>;
 @group(0) @binding(5) var<uniform> params: Params;
 
 @compute @workgroup_size(64)
@@ -102,7 +102,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let i = gid.x;
     let count = arrayLength(&age);
     if i >= count { return; }
-    if dead[i] != 0.0 { return; }
+    if life[i] <= 0.0 { return; }
 
     age[i] = age[i] + params.dt;
 
@@ -118,7 +118,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     scale[i * 3u + 1u] = s;
     scale[i * 3u + 2u] = s;
 
-    if age[i] > params.ttl { dead[i] = 1.0; }
+    if age[i] > params.ttl { life[i] = 0.0; }
 }
 """
 
@@ -142,15 +142,11 @@ def setup():
             Attribute.position(),
             Attribute.color(),
             Attribute.scale(),
-            Attribute.dead(),
+            Attribute.life(),
             velocity_attr,
             age_attr,
         ],
     )
-
-    # park unemitted slots until the spawn kernel fills them.
-    dead_buf = p.buffer(Attribute.dead())
-    dead_buf.write([1.0] * CAPACITY)
 
     color_buf = p.buffer(Attribute.color())
     mat = Material.pbr(albedo=color_buf)

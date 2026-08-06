@@ -46,8 +46,6 @@ impl AttributeFormat {
     }
 }
 
-/// named typed attribute. use the `position()`/`color()`/etc. classmethods for
-/// builtins or `Attribute(name, format)` for custom ones.
 #[pyclass(unsendable, frozen, hash, eq, from_py_object)]
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Attribute {
@@ -100,9 +98,9 @@ impl Attribute {
         }
     }
     #[staticmethod]
-    pub fn dead() -> Self {
+    pub fn life() -> Self {
         Self {
-            entity: geometry_attribute_dead(),
+            entity: geometry_attribute_life(),
         }
     }
 
@@ -124,7 +122,6 @@ impl Attribute {
 #[pyclass(unsendable)]
 pub struct Particles {
     pub(crate) entity: Entity,
-    // name → (entity, format); used by `emit(**kwargs)` to route kwargs and pack bytes
     name_to_attr: HashMap<String, (Entity, AttributeFormat)>,
 }
 
@@ -187,7 +184,24 @@ impl Particles {
         particles_capacity(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    /// backing `Buffer` for a registered attribute, or `None` if not registered.
+    #[pyo3(signature = (attribute, default=None))]
+    pub fn add_attribute(
+        &mut self,
+        attribute: PyRef<Attribute>,
+        default: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let default_value = default
+            .map(crate::material::py_to_shader_value)
+            .transpose()?;
+        particles_attribute_add(self.entity, attribute.entity, default_value)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let (name, fmt) = geometry_attribute_info(attribute.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        self.name_to_attr
+            .insert(name, (attribute.entity, AttributeFormat::from_inner(fmt)));
+        Ok(())
+    }
+
     pub fn buffer(&self, attribute: &Attribute) -> PyResult<Option<Buffer>> {
         let buf = particles_buffer(self.entity, attribute.entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
@@ -202,8 +216,6 @@ impl Particles {
         Ok(buf.map(|e| Buffer::from_entity(e, Some(element_type))))
     }
 
-    /// dispatch a compute kernel against these particles' buffers. buffers are
-    /// auto-bound by attribute name; kwargs are forwarded to `compute.set(...)`.
     #[pyo3(signature = (compute, **kwargs))]
     pub fn apply(&self, compute: &Compute, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<()> {
         if let Some(kwargs) = kwargs {
@@ -213,9 +225,6 @@ impl Particles {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    /// emit `n` particles into the next ring-buffer slots. per-attribute data
-    /// is a kwarg keyed by attribute name; each value is a flat list of
-    /// `n * format.float_count()` floats.
     #[pyo3(signature = (n, **kwargs))]
     pub fn emit(&self, n: u32, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<()> {
         let Some(kwargs) = kwargs else {
@@ -246,11 +255,163 @@ impl Particles {
         particles_emit(self.entity, n, data).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    /// emit `n` particles via a GPU kernel. auto-binds buffers and an
-    /// `emit_range: vec4<f32> = (base_slot, n, capacity, 0)` uniform.
     pub fn emit_gpu(&self, n: u32, compute: &Compute) -> PyResult<()> {
         particles_emit_gpu(self.entity, n, compute.entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    #[staticmethod]
+    pub fn noise() -> PyResult<Compute> {
+        let entity = particles_kernel_noise()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn transform() -> PyResult<Compute> {
+        let entity = particles_kernel_transform()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn attract() -> PyResult<Compute> {
+        let entity = particles_kernel_attract()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn drag() -> PyResult<Compute> {
+        let entity = particles_kernel_drag()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn vortex() -> PyResult<Compute> {
+        let entity = particles_kernel_vortex()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn force() -> PyResult<Compute> {
+        let entity = particles_kernel_force()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn integrate() -> PyResult<Compute> {
+        let entity = particles_kernel_integrate()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn age() -> PyResult<Compute> {
+        let entity = particles_kernel_age()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn bounds_sphere() -> PyResult<Compute> {
+        let entity = particles_kernel_bounds_sphere()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn bounds_box() -> PyResult<Compute> {
+        let entity = particles_kernel_bounds_box()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn bounds_geometry(geometry: &Geometry) -> PyResult<Compute> {
+        let entity = particles_kernel_bounds_geometry(geometry.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn impulse() -> PyResult<Compute> {
+        let entity = particles_kernel_impulse()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn flock() -> PyResult<Compute> {
+        let entity = particles_kernel_flock()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn orient() -> PyResult<Compute> {
+        let entity = particles_kernel_orient()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn field() -> PyResult<Compute> {
+        let entity = particles_kernel_field()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn attr_linear() -> PyResult<Compute> {
+        let entity = particles_kernel_attr_linear()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn attr_combine() -> PyResult<Compute> {
+        let entity = particles_kernel_attr_combine()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn attr_mix() -> PyResult<Compute> {
+        let entity = particles_kernel_attr_mix()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn attr_lookup1d() -> PyResult<Compute> {
+        let entity = particles_kernel_attr_lookup1d()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn attr_lookup2d() -> PyResult<Compute> {
+        let entity = particles_kernel_attr_lookup2d()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn scatter_surface(geometry: &Geometry) -> PyResult<Compute> {
+        let entity = particles_scatter_create(geometry.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
+    }
+
+    #[staticmethod]
+    pub fn scatter_volume(geometry: &Geometry) -> PyResult<Compute> {
+        let entity = particles_scatter_volume_create(geometry.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Compute::from_entity(entity))
     }
 }
 
@@ -258,18 +419,4 @@ impl Drop for Particles {
     fn drop(&mut self) {
         let _ = particles_destroy(self.entity);
     }
-}
-
-/// built-in noise kernel. uniforms: `scale`, `strength`, `time`.
-pub fn kernel_noise() -> PyResult<Compute> {
-    let entity = particles_kernel_noise().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-    Ok(Compute::from_entity(entity))
-}
-
-/// built-in transform kernel: scale → axis-angle rotate → translate. uniforms:
-/// `translate: vec3`, `rotation_axis: vec3`, `rotation_angle: f32`, `scale: vec3`.
-pub fn kernel_transform() -> PyResult<Compute> {
-    let entity =
-        particles_kernel_transform().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-    Ok(Compute::from_entity(entity))
 }

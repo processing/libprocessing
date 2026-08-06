@@ -31,7 +31,6 @@ fn sketch() -> error::Result<()> {
     let color_buf =
         particles_buffer(p, color_attr)?.ok_or(error::ProcessingError::ParticlesNotFound)?;
 
-    // push unemitted slots off-screen so they don't render at the origin
     let init_positions: Vec<f32> = (0..capacity * 3).map(|_| 1.0e6).collect();
     buffer_write(
         position_buf,

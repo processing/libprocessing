@@ -17,7 +17,6 @@ struct MeshCullingData {
     aabb_center: vec3<f32>,
     _pad: f32,
     aabb_half_extents: vec3<f32>,
-    // > 0.0 = render, <= 0.0 = skip in preprocessing.
     life: f32,
 }
 
@@ -37,8 +36,8 @@ struct PackParams {
 #ifdef HAS_SCALE
 @group(0) @binding(4) var<storage, read> scale: array<f32>;
 #endif
-#ifdef HAS_DEAD
-@group(0) @binding(5) var<storage, read> dead: array<f32>;
+#ifdef HAS_LIFE
+@group(0) @binding(5) var<storage, read> life: array<f32>;
 #endif
 @group(0) @binding(6) var<uniform> params: PackParams;
 
@@ -106,9 +105,8 @@ fn pack(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     mesh_culling_buffer[slot].aabb_center = vec3<f32>(0.0, 0.0, 0.0);
     mesh_culling_buffer[slot].aabb_half_extents = vec3<f32>(1.0, 1.0, 1.0);
-#ifdef HAS_DEAD
-    // dead[i]: 0.0 = alive, nonzero = dead -> life > 0.0 renders.
-    mesh_culling_buffer[slot].life = select(1.0, 0.0, dead[i] != 0.0);
+#ifdef HAS_LIFE
+    mesh_culling_buffer[slot].life = life[i];
 #else
     mesh_culling_buffer[slot].life = 1.0;
 #endif

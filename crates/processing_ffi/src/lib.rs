@@ -1536,6 +1536,35 @@ pub unsafe extern "C" fn processing_image_create(
     .unwrap_or(0)
 }
 
+/// # Safety
+/// - `init` has been called.
+/// - `floats` is valid for `floats_len` f32 reads.
+/// - Called from the same thread as `init`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_image_create_hdr(
+    width: u32,
+    height: u32,
+    floats: *const f32,
+    floats_len: usize,
+) -> u64 {
+    error::clear_error();
+    let src = unsafe { std::slice::from_raw_parts(floats, floats_len) };
+    error::check(|| {
+        let mut packed = Vec::with_capacity(src.len() * 2);
+        for &f in src {
+            packed.extend_from_slice(&half::f16::from_f32(f).to_le_bytes());
+        }
+        let size = Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+        image_create(size, packed, TextureFormat::Rgba16Float)
+    })
+    .map(|entity| entity.to_bits())
+    .unwrap_or(0)
+}
+
 /// Load an image from a file path.
 ///
 /// # Safety
@@ -2413,6 +2442,70 @@ pub extern "C" fn processing_geometry_attribute_uv() -> u64 {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_attribute_rotation() -> u64 {
+    geometry_attribute_rotation().to_bits()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_attribute_scale() -> u64 {
+    geometry_attribute_scale().to_bits()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_attribute_life() -> u64 {
+    geometry_attribute_life().to_bits()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_attribute_velocity() -> u64 {
+    geometry_attribute_velocity().to_bits()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_attribute_age() -> u64 {
+    geometry_attribute_age().to_bits()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_geometry_attribute_format(attr_id: u64) -> u8 {
+    error::clear_error();
+    error::check(|| {
+        let (_name, fmt) = geometry_attribute_info(Entity::from_bits(attr_id))?;
+        Ok(match fmt {
+            geometry::AttributeFormat::Float => 1,
+            geometry::AttributeFormat::Float2 => 2,
+            geometry::AttributeFormat::Float3 => 3,
+            geometry::AttributeFormat::Float4 => 4,
+        })
+    })
+    .unwrap_or(0)
+}
+
+/// # Safety
+/// - `out` is valid for `out_cap` byte writes (may be null when `out_cap == 0`
+///   for a length query).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_geometry_attribute_name(
+    attr_id: u64,
+    out: *mut u8,
+    out_cap: u64,
+) -> u64 {
+    error::clear_error();
+    let Some((name, _)) = error::check(|| geometry_attribute_info(Entity::from_bits(attr_id)))
+    else {
+        return 0;
+    };
+    let name_bytes = name.as_bytes();
+    let name_len = name_bytes.len();
+    if out_cap > 0 && !out.is_null() {
+        let copy_len = name_len.min((out_cap - 1) as usize);
+        unsafe { std::ptr::copy_nonoverlapping(name_bytes.as_ptr(), out, copy_len) };
+        unsafe { *out.add(copy_len) = 0 };
+    }
+    name_len as u64
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn processing_geometry_attribute_float(geo_id: u64, attr_id: u64, v: f32) {
     error::clear_error();
     let geo_entity = Entity::from_bits(geo_id);
@@ -2748,10 +2841,18 @@ pub extern "C" fn processing_material_create_pbr() -> u64 {
         .unwrap_or(0)
 }
 
-/// Set float value for `name` field on Material.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_material_create_custom(shader_id: u64) -> u64 {
+    error::clear_error();
+    error::check(|| material_create_custom(Entity::from_bits(shader_id)))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+/// Set a float field on a material.
 ///
 /// # Safety
-/// - `name` must be non-null
+/// - `name` is a valid null-terminated C string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_material_set_float(
     mat_id: u64,
@@ -2769,10 +2870,10 @@ pub unsafe extern "C" fn processing_material_set_float(
     });
 }
 
-/// Set float4 value for `name` field on Material.
+/// Set a float4 field on a material.
 ///
 /// # Safety
-/// - `name` must be non-null
+/// - `name` is a valid null-terminated C string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_material_set_float4(
     mat_id: u64,
@@ -2807,8 +2908,10 @@ pub extern "C" fn processing_material(window_id: u64, mat_id: u64) {
     error::check(|| graphics_record_command(window_entity, DrawCommand::Material(mat_entity)));
 }
 
+/// Create a shader from WGSL source.
+///
 /// # Safety
-/// - `source` must be non-null
+/// - `source` is a valid null-terminated C string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_shader_create(source: *const std::ffi::c_char) -> u64 {
     error::clear_error();
@@ -2821,7 +2924,7 @@ pub unsafe extern "C" fn processing_shader_create(source: *const std::ffi::c_cha
 }
 
 /// # Safety
-/// - `path` must be non-null
+/// - `path` is a valid null-terminated C string.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_shader_load(path: *const std::ffi::c_char) -> u64 {
     error::clear_error();
@@ -2848,7 +2951,7 @@ pub extern "C" fn processing_buffer_create(size: u64) -> u64 {
 }
 
 /// # Safety
-/// - `data` must point to `len` valid bytes
+/// - `data` is valid for `len` byte reads.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_buffer_create_with_data(data: *const u8, len: u64) -> u64 {
     error::clear_error();
@@ -2859,7 +2962,7 @@ pub unsafe extern "C" fn processing_buffer_create_with_data(data: *const u8, len
 }
 
 /// # Safety
-/// - `data` must point to `len` valid bytes
+/// - `data` is valid for `len` byte reads.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_buffer_write(buf_id: u64, data: *const u8, len: u64) {
     error::clear_error();
@@ -2867,16 +2970,19 @@ pub unsafe extern "C" fn processing_buffer_write(buf_id: u64, data: *const u8, l
     error::check(|| buffer_write(Entity::from_bits(buf_id), bytes));
 }
 
-/// returns the byte length of a buffer, or 0 if not found.
+/// Returns the byte length of a buffer, or 0 if not found (error is set).
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_buffer_size(buf_id: u64) -> u64 {
     error::clear_error();
     error::check(|| buffer_size(Entity::from_bits(buf_id))).unwrap_or(0)
 }
 
+/// Read buffer contents into `out`. Returns the buffer's byte length;
+/// `out` is only written when it fits in `out_len`. Pass `out_len == 0` for a
+/// size query.
+///
 /// # Safety
-/// - `out` must be valid for writes of `out_len` bytes (may be null if
-///   `out_len == 0`, in which case this acts as a size query).
+/// - `out` is valid for `out_len` byte writes (may be null when `out_len == 0`).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn processing_buffer_read(buf_id: u64, out: *mut u8, out_len: u64) -> u64 {
     error::clear_error();
@@ -3078,94 +3184,446 @@ pub extern "C" fn processing_compute_destroy(compute_id: u64) {
     error::check(|| compute_destroy(Entity::from_bits(compute_id)));
 }
 
-/// Create a filter from a shader entity.
+/// # Safety
+/// - `attr_ids` is valid for `attr_count` u64 reads.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_filter_create(shader_id: u64) -> u64 {
+pub unsafe extern "C" fn processing_particles_create(
+    capacity: u32,
+    attr_ids: *const u64,
+    attr_count: u32,
+) -> u64 {
     error::clear_error();
-    error::check(|| filter_create(Entity::from_bits(shader_id)))
+    let attrs = if attr_count > 0 && !attr_ids.is_null() {
+        unsafe { std::slice::from_raw_parts(attr_ids, attr_count as usize) }
+            .iter()
+            .map(|&id| Entity::from_bits(id))
+            .collect()
+    } else {
+        vec![]
+    };
+    error::check(|| particles_create(capacity, attrs))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+/// # Safety
+/// - `attr_ids` is valid for `attr_count` u64 reads.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_particles_create_from_geometry(
+    geo_id: u64,
+    attr_ids: *const u64,
+    attr_count: u32,
+) -> u64 {
+    error::clear_error();
+    let attrs = if attr_count > 0 && !attr_ids.is_null() {
+        unsafe { std::slice::from_raw_parts(attr_ids, attr_count as usize) }
+            .iter()
+            .map(|&id| Entity::from_bits(id))
+            .collect()
+    } else {
+        vec![]
+    };
+    error::check(|| particles_create_from_geometry(Entity::from_bits(geo_id), attrs))
         .map(|e| e.to_bits())
         .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_filter_invert() -> u64 {
+pub extern "C" fn processing_particles_destroy(particles_id: u64) {
     error::clear_error();
-    error::check(filter_invert)
-        .map(|e| e.to_bits())
-        .unwrap_or(0)
+    error::check(|| particles_destroy(Entity::from_bits(particles_id)));
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_filter_gray() -> u64 {
+pub extern "C" fn processing_particles_capacity(particles_id: u64) -> u32 {
     error::clear_error();
-    error::check(filter_gray).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(|| particles_capacity(Entity::from_bits(particles_id))).unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_filter_threshold() -> u64 {
-    error::clear_error();
-    error::check(filter_threshold)
-        .map(|e| e.to_bits())
-        .unwrap_or(0)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn processing_filter_posterize() -> u64 {
-    error::clear_error();
-    error::check(filter_posterize)
-        .map(|e| e.to_bits())
-        .unwrap_or(0)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn processing_filter_blur() -> u64 {
-    error::clear_error();
-    error::check(filter_blur).map(|e| e.to_bits()).unwrap_or(0)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn processing_filter_opaque() -> u64 {
-    error::clear_error();
-    error::check(filter_opaque)
-        .map(|e| e.to_bits())
-        .unwrap_or(0)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn processing_filter_erode() -> u64 {
-    error::clear_error();
-    error::check(filter_erode).map(|e| e.to_bits()).unwrap_or(0)
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn processing_filter_dilate() -> u64 {
-    error::clear_error();
-    error::check(filter_dilate)
-        .map(|e| e.to_bits())
-        .unwrap_or(0)
-}
-
-/// Set the number of fullscreen passes a filter runs.
-#[unsafe(no_mangle)]
-pub extern "C" fn processing_filter_set_passes(filter_id: u64, passes: u32) {
-    error::clear_error();
-    error::check(|| filter_set_passes(Entity::from_bits(filter_id), passes));
-}
-
-/// Apply a filter to a graphics canvas.
-#[unsafe(no_mangle)]
-pub extern "C" fn processing_graphics_apply_filter(graphics_id: u64, filter_id: u64) {
+pub extern "C" fn processing_particles_buffer(particles_id: u64, attr_id: u64) -> u64 {
     error::clear_error();
     error::check(|| {
-        graphics_apply_filter(Entity::from_bits(graphics_id), Entity::from_bits(filter_id))
+        particles_buffer(Entity::from_bits(particles_id), Entity::from_bits(attr_id))
+    })
+    .flatten()
+    .map(|e| e.to_bits())
+    .unwrap_or(0)
+}
+
+/// # Safety
+/// - `attr_ids` is valid for `attr_count` u64 reads.
+/// - `attr_byte_lengths` is valid for `attr_count` u64 reads.
+/// - `data` is valid for `sum(attr_byte_lengths)` byte reads.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_particles_emit(
+    particles_id: u64,
+    n: u32,
+    attr_ids: *const u64,
+    data: *const u8,
+    attr_byte_lengths: *const u64,
+    attr_count: u32,
+) {
+    error::clear_error();
+    error::check(|| {
+        if attr_count == 0 {
+            return particles_emit(Entity::from_bits(particles_id), n, vec![]);
+        }
+        let ids = unsafe { std::slice::from_raw_parts(attr_ids, attr_count as usize) };
+        let lens = unsafe { std::slice::from_raw_parts(attr_byte_lengths, attr_count as usize) };
+        let mut offset: usize = 0;
+        let mut attribute_data = Vec::with_capacity(attr_count as usize);
+        for i in 0..attr_count as usize {
+            let len = lens[i] as usize;
+            let bytes = unsafe { std::slice::from_raw_parts(data.add(offset), len) }.to_vec();
+            attribute_data.push((Entity::from_bits(ids[i]), bytes));
+            offset += len;
+        }
+        particles_emit(Entity::from_bits(particles_id), n, attribute_data)
     });
 }
 
-/// Destroy a filter entity.
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_filter_destroy(filter_id: u64) {
+pub extern "C" fn processing_particles_emit_gpu(
+    particles_id: u64,
+    n: u32,
+    compute_id: u64,
+) {
     error::clear_error();
-    error::check(|| filter_destroy(Entity::from_bits(filter_id)));
+    error::check(|| {
+        particles_emit_gpu(
+            Entity::from_bits(particles_id),
+            n,
+            Entity::from_bits(compute_id),
+        )
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_noise() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_noise).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_transform() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_transform).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_attract() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_attract).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_drag() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_drag).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_vortex() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_vortex).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_attribute_add(
+    particles_id: u64,
+    attribute_id: u64,
+) -> i32 {
+    error::clear_error();
+    error::check(|| {
+        particles_attribute_add(
+            Entity::from_bits(particles_id),
+            Entity::from_bits(attribute_id),
+            None,
+        )
+    })
+    .map(|_| 0)
+    .unwrap_or(-1)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_force() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_force).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_integrate() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_integrate).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_age() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_age).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_bounds_sphere() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_bounds_sphere).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_bounds_box() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_bounds_box).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_bounds_geometry(geometry_entity: u64) -> u64 {
+    error::clear_error();
+    error::check(|| particles_kernel_bounds_geometry(Entity::from_bits(geometry_entity)))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_impulse() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_impulse).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_flock() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_flock).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_orient() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_orient).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_field() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_field).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_attr_linear() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_attr_linear).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_attr_combine() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_attr_combine).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_attr_mix() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_attr_mix).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_attr_lookup1d() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_attr_lookup1d).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_kernel_attr_lookup2d() -> u64 {
+    error::clear_error();
+    error::check(particles_kernel_attr_lookup2d).map(|e| e.to_bits()).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_scatter_create(geometry_id: u64) -> u64 {
+    error::clear_error();
+    error::check(|| particles_scatter_create(Entity::from_bits(geometry_id)))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_scatter_volume_create(geometry_id: u64) -> u64 {
+    error::clear_error();
+    error::check(|| particles_scatter_volume_create(Entity::from_bits(geometry_id)))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+/// # Safety
+/// - `path` is a valid null-terminated C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_gltf_load(
+    graphics_id: u64,
+    path: *const std::ffi::c_char,
+) -> u64 {
+    error::clear_error();
+    error::check(|| {
+        let path = unsafe { cstr_to_str(path) }?;
+        gltf_load(Entity::from_bits(graphics_id), path)
+    })
+    .map(|e| e.to_bits())
+    .unwrap_or(0)
+}
+
+/// # Safety
+/// - `name` is a valid null-terminated C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_gltf_geometry(
+    gltf_id: u64,
+    name: *const std::ffi::c_char,
+) -> u64 {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        gltf_geometry(Entity::from_bits(gltf_id), name)
+    })
+    .map(|e| e.to_bits())
+    .unwrap_or(0)
+}
+
+/// # Safety
+/// - `name` is a valid null-terminated C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_gltf_material(
+    gltf_id: u64,
+    name: *const std::ffi::c_char,
+) -> u64 {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        gltf_material(Entity::from_bits(gltf_id), name)
+    })
+    .map(|e| e.to_bits())
+    .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_gltf_camera(gltf_id: u64, index: u32) {
+    error::clear_error();
+    error::check(|| gltf_camera(Entity::from_bits(gltf_id), index as usize));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_gltf_light(gltf_id: u64, index: u32) -> u64 {
+    error::clear_error();
+    error::check(|| gltf_light(Entity::from_bits(gltf_id), index as usize))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_apply(particles_id: u64, compute_id: u64) {
+    error::clear_error();
+    error::check(|| {
+        particles_apply(
+            Entity::from_bits(particles_id),
+            Entity::from_bits(compute_id),
+        )
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_draw(
+    graphics_id: u64,
+    particles_id: u64,
+    geometry_id: u64,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Particles {
+                particles: Entity::from_bits(particles_id),
+                geometry: Entity::from_bits(geometry_id),
+            },
+        )
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_fill_buffer(graphics_id: u64, buffer_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::FillBuffer(Entity::from_bits(buffer_id)),
+        )
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_material_set_albedo_color(
+    mat_id: u64,
+    r: f32,
+    g: f32,
+    b: f32,
+    a: f32,
+) {
+    error::clear_error();
+    error::check(|| material_set_albedo_color(Entity::from_bits(mat_id), [r, g, b, a]));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_material_set_albedo_buffer(mat_id: u64, buffer_id: u64) {
+    error::clear_error();
+    error::check(|| {
+        material_set_albedo_buffer(Entity::from_bits(mat_id), Entity::from_bits(buffer_id))
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_material_set_emissive_buffer(mat_id: u64, buffer_id: u64) {
+    error::clear_error();
+    error::check(|| {
+        material_set_emissive_buffer(Entity::from_bits(mat_id), Entity::from_bits(buffer_id))
+    });
+}
+
+/// # Safety
+/// - `out_x`, `out_y`, `out_z` are each valid for one f32 write.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_graphics_world_from_screen(
+    graphics_id: u64,
+    sx: f32,
+    sy: f32,
+    depth: f32,
+    out_x: *mut f32,
+    out_y: *mut f32,
+    out_z: *mut f32,
+) {
+    error::clear_error();
+    if let Some(world) = error::check(|| {
+        graphics_world_from_screen(Entity::from_bits(graphics_id), sx, sy, depth)
+    }) {
+        unsafe {
+            *out_x = world.x;
+            *out_y = world.y;
+            *out_z = world.z;
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_graphics_set_bloom(
+    graphics_id: u64,
+    intensity: f32,
+    threshold: f32,
+) {
+    error::clear_error();
+    error::check(|| graphics_set_bloom(Entity::from_bits(graphics_id), intensity, threshold));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_graphics_remove_bloom(graphics_id: u64) {
+    error::clear_error();
+    error::check(|| graphics_remove_bloom(Entity::from_bits(graphics_id)));
 }
 
 // Mouse buttons

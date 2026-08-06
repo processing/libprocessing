@@ -2,12 +2,9 @@ use processing::prelude::*;
 
 fn main() {
     match run() {
-        Ok(_) => {
-            eprintln!("Compute readback test passed!");
-            exit(0).unwrap();
-        }
+        Ok(_) => exit(0).unwrap(),
         Err(e) => {
-            eprintln!("Compute readback error: {:?}", e);
+            eprintln!("{e:?}");
             exit(1).unwrap();
         }
     }
@@ -45,8 +42,7 @@ fn main() {
         .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
         .collect();
 
-    assert_eq!(values, vec![1, 2, 3, 4], "Compute readback mismatch!");
-    eprintln!("PASS");
+    assert_eq!(values, vec![1, 2, 3, 4]);
 
     let double_src = r#"
 @group(0) @binding(0)
@@ -72,12 +68,7 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
         .chunks_exact(4)
         .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
         .collect();
-    assert_eq!(
-        floats,
-        vec![2.0, 4.0, 6.0, 8.0],
-        "In-place double mismatch!"
-    );
-    eprintln!("PASS");
+    assert_eq!(floats, vec![2.0, 4.0, 6.0, 8.0]);
 
     compute_destroy(compute)?;
     compute_destroy(compute2)?;

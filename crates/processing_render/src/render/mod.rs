@@ -1419,7 +1419,8 @@ fn particles_fill_material(
             ..Default::default()
         },
         extension: ParticlesExtension {
-            colors: buf.handle.clone(),
+            colors: Some(buf.handle.clone()),
+            emissive_colors: None,
         },
     });
     Some(handle.untyped())

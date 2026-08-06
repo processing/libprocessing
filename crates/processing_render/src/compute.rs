@@ -1,15 +1,19 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
-use bevy::asset::RenderAssetUsages;
+use bevy::asset::{AssetId, RenderAssetUsages};
+use bevy::mesh::MeshVertexAttribute;
+use bevy::reflect::PartialReflect;
 use bevy::{
     prelude::*,
     render::{
         RenderApp,
+        mesh::{RenderMesh, allocator::MeshAllocator},
         render_asset::RenderAssets,
         render_resource::{
             BindGroupLayoutDescriptor, Buffer as WgpuBuffer, BufferDescriptor, BufferUsages,
             CachedComputePipelineId, CachedPipelineState, CommandEncoderDescriptor,
-            ComputePassDescriptor, ComputePipelineDescriptor, MapMode, PipelineCache, PollType,
+            ComputePassDescriptor, ComputePipelineDescriptor, MapMode, OwnedBindingResource,
+            PipelineCache, PollType,
         },
         renderer::{RenderDevice, RenderQueue},
         storage::{GpuShaderBuffer, ShaderBuffer},
@@ -19,7 +23,10 @@ use bevy::{
 
 use bevy_naga_reflect::dynamic_shader::DynamicShader;
 
-use crate::material::custom::Shader;
+use crate::geometry::{Attribute, Geometry};
+use crate::image::Image as PImage;
+use crate::material::custom::{Shader, apply_reflect_field, shader_value_to_reflect};
+use crate::shader_value::ShaderValue;
 use processing_core::error::{ProcessingError, Result};
 
 pub struct ComputePlugin;
@@ -149,12 +156,30 @@ pub fn destroy_buffer(In(entity): In<Entity>, mut commands: Commands) -> Result<
     Ok(())
 }
 
+#[derive(Clone, Copy)]
+pub enum MeshBindingRef {
+    Attribute { geom: Entity, attribute: Entity },
+    Index { geom: Entity },
+}
+
+#[derive(Clone)]
+pub enum ResolvedMeshBinding {
+    Attribute {
+        mesh_id: AssetId<Mesh>,
+        attribute: MeshVertexAttribute,
+    },
+    Index {
+        mesh_id: AssetId<Mesh>,
+    },
+}
+
 #[derive(Component)]
 pub struct Compute {
     pub shader: DynamicShader,
     pub entry_point: String,
     pub pipeline_id: CachedComputePipelineId,
     pub bind_group_layout_descriptors: Vec<(u32, BindGroupLayoutDescriptor)>,
+    pub mesh_bindings: HashMap<String, MeshBindingRef>,
 }
 
 fn queue_pipeline(
@@ -196,8 +221,15 @@ pub fn create_compute(app: &mut App, shader_entity: Entity) -> Result<Entity> {
         })?;
     let entry_point = compute_ep.name.clone();
 
-    let mut shader = DynamicShader::new(module)
-        .map_err(|e| ProcessingError::ShaderCompilationError(e.to_string()))?;
+    let mut shader = DynamicShader::new(module).map_err(|e| {
+        let mut msg = e.to_string();
+        let mut src: &dyn std::error::Error = &e;
+        while let Some(s) = src.source() {
+            msg.push_str(&format!("\n  caused by: {s}"));
+            src = s;
+        }
+        ProcessingError::ShaderCompilationError(msg)
+    })?;
     shader.init();
 
     let reflection = shader.reflection();
@@ -255,6 +287,7 @@ pub fn create_compute(app: &mut App, shader_entity: Entity) -> Result<Entity> {
                     entry_point,
                     pipeline_id,
                     bind_group_layout_descriptors,
+                    mesh_bindings: HashMap::new(),
                 })
                 .id());
         }
@@ -262,11 +295,124 @@ pub fn create_compute(app: &mut App, shader_entity: Entity) -> Result<Entity> {
     Err(ProcessingError::PipelineNotReady(MAX_WAIT))
 }
 
+pub fn set_compute_property(
+    In((entity, name, value)): In<(Entity, String, ShaderValue)>,
+    mut computes: Query<&mut Compute>,
+    mut p_buffers: Query<&mut Buffer>,
+    p_images: Query<&PImage>,
+) -> Result<()> {
+    use bevy_naga_reflect::reflect::ParameterCategory;
+
+    let mut compute = computes
+        .get_mut(entity)
+        .map_err(|_| ProcessingError::ComputeNotFound)?;
+
+    match value {
+        ShaderValue::Buffer(buf_entity) => {
+            let category = compute
+                .shader
+                .reflection()
+                .parameter(&name)
+                .map(|p| p.category())
+                .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.clone()))?;
+            let ParameterCategory::Storage { read_only } = category else {
+                return Err(ProcessingError::InvalidArgument(format!(
+                    "property `{name}` expects {category:?}, got Buffer",
+                )));
+            };
+            let mut buffer = p_buffers
+                .get_mut(buf_entity)
+                .map_err(|_| ProcessingError::BufferNotFound)?;
+            compute.shader.insert(&name, buffer.handle.clone());
+            if !read_only {
+                buffer.bound_rw = true;
+            }
+            Ok(())
+        }
+        ShaderValue::MeshAttribute(geom_entity, attribute_entity) => {
+            let category = compute
+                .shader
+                .reflection()
+                .parameter(&name)
+                .map(|p| p.category())
+                .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.clone()))?;
+            let ParameterCategory::Storage { read_only } = category else {
+                return Err(ProcessingError::InvalidArgument(format!(
+                    "property `{name}` expects {category:?}, got MeshAttribute",
+                )));
+            };
+            if !read_only {
+                return Err(ProcessingError::InvalidArgument(format!(
+                    "property `{name}` is read-write; mesh attribute buffers can only bind as read-only",
+                )));
+            }
+            compute.mesh_bindings.insert(
+                name,
+                MeshBindingRef::Attribute {
+                    geom: geom_entity,
+                    attribute: attribute_entity,
+                },
+            );
+            Ok(())
+        }
+        ShaderValue::MeshIndex(geom_entity) => {
+            let category = compute
+                .shader
+                .reflection()
+                .parameter(&name)
+                .map(|p| p.category())
+                .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.clone()))?;
+            let ParameterCategory::Storage { read_only } = category else {
+                return Err(ProcessingError::InvalidArgument(format!(
+                    "property `{name}` expects {category:?}, got MeshIndex",
+                )));
+            };
+            if !read_only {
+                return Err(ProcessingError::InvalidArgument(format!(
+                    "property `{name}` is read-write; mesh index buffer can only bind as read-only",
+                )));
+            }
+            compute
+                .mesh_bindings
+                .insert(name, MeshBindingRef::Index { geom: geom_entity });
+            Ok(())
+        }
+        ShaderValue::Texture(img_entity) => {
+            let category = compute
+                .shader
+                .reflection()
+                .parameter(&name)
+                .map(|p| p.category())
+                .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.clone()))?;
+            if !matches!(
+                category,
+                ParameterCategory::Texture
+                    | ParameterCategory::StorageTexture
+                    | ParameterCategory::Sampler
+            ) {
+                return Err(ProcessingError::InvalidArgument(format!(
+                    "property `{name}` expects {category:?}, got Texture",
+                )));
+            }
+            let image = p_images
+                .get(img_entity)
+                .map_err(|_| ProcessingError::ImageNotFound)?;
+            compute.shader.insert(&name, image.handle.clone());
+            Ok(())
+        }
+        v => {
+            let reflect_value: Box<dyn PartialReflect> = shader_value_to_reflect(&v)?;
+            apply_reflect_field(&mut compute.shader, &name, &*reflect_value)
+        }
+    }
+}
+
 pub fn dispatch(
-    In((pipeline_id, layout_descriptors, shader, x, y, z)): In<(
+    In((pipeline_id, layout_descriptors, shader, mesh_bindings, x, y, z)): In<(
         CachedComputePipelineId,
         Vec<(u32, BindGroupLayoutDescriptor)>,
         DynamicShader,
+        Vec<(String, ResolvedMeshBinding)>,
         u32,
         u32,
         u32,
@@ -276,6 +422,8 @@ pub fn dispatch(
     render_queue: Res<RenderQueue>,
     gpu_images: Res<RenderAssets<GpuImage>>,
     gpu_buffers: Res<RenderAssets<GpuShaderBuffer>>,
+    render_meshes: Res<RenderAssets<RenderMesh>>,
+    mesh_allocator: Res<MeshAllocator>,
 ) -> Result<()> {
     let pipeline = pipeline_cache
         .get_compute_pipeline(pipeline_id)
@@ -287,8 +435,24 @@ pub fn dispatch(
     let mut bind_groups = Vec::new();
     for (group, desc) in &layout_descriptors {
         let layout = pipeline_cache.get_bind_group_layout(desc);
-        let bindings =
+        let mut bindings =
             reflection.create_bindings(*group, &shader, &render_device, &gpu_images, &gpu_buffers);
+
+        for (name, resolved) in &mesh_bindings {
+            let Some(param) = reflection.parameter(name) else {
+                return Err(ProcessingError::UnknownShaderProperty(name.clone()));
+            };
+            if param.group() != *group {
+                continue;
+            }
+            let buffer = resolve_mesh_binding(resolved, &render_meshes, &mesh_allocator)?;
+            let binding_idx = param.binding();
+            if let Some(slot) = bindings.iter_mut().find(|(b, _)| *b == binding_idx) {
+                slot.1 = OwnedBindingResource::Buffer(buffer);
+            } else {
+                bindings.push((binding_idx, OwnedBindingResource::Buffer(buffer)));
+            }
+        }
 
         let bind_group_entries: Vec<_> = bindings
             .iter()
@@ -328,4 +492,78 @@ pub fn dispatch(
 pub fn destroy_compute(In(entity): In<Entity>, mut commands: Commands) -> Result<()> {
     commands.entity(entity).despawn();
     Ok(())
+}
+
+fn resolve_mesh_binding(
+    resolved: &ResolvedMeshBinding,
+    render_meshes: &RenderAssets<RenderMesh>,
+    mesh_allocator: &MeshAllocator,
+) -> Result<bevy::render::render_resource::Buffer> {
+    match resolved {
+        ResolvedMeshBinding::Attribute { mesh_id, attribute } => {
+            let render_mesh = render_meshes
+                .get(*mesh_id)
+                .ok_or(ProcessingError::GeometryNotFound)?;
+            let binding_idx = render_mesh
+                .layout
+                .0
+                .binding_index_for_attribute(attribute.id)
+                .ok_or_else(|| {
+                    ProcessingError::InvalidArgument(format!(
+                        "mesh has no `{}` attribute (deinterleave required?)",
+                        attribute.name
+                    ))
+                })?;
+            let slice = mesh_allocator
+                .mesh_vertex_slice(mesh_id, binding_idx as u8)
+                .ok_or_else(|| {
+                    ProcessingError::InvalidArgument(format!(
+                        "mesh attribute `{}` not yet allocated",
+                        attribute.name
+                    ))
+                })?;
+            Ok(slice.buffer.clone())
+        }
+        ResolvedMeshBinding::Index { mesh_id } => {
+            let slice = mesh_allocator.mesh_index_slice(mesh_id).ok_or_else(|| {
+                ProcessingError::InvalidArgument(
+                    "mesh has no index buffer or it is not yet allocated".to_string(),
+                )
+            })?;
+            Ok(slice.buffer.clone())
+        }
+    }
+}
+
+pub fn resolve_mesh_bindings(
+    world: &World,
+    compute: &Compute,
+) -> Result<Vec<(String, ResolvedMeshBinding)>> {
+    let mut out = Vec::with_capacity(compute.mesh_bindings.len());
+    for (name, mesh_ref) in &compute.mesh_bindings {
+        let resolved = match mesh_ref {
+            MeshBindingRef::Attribute { geom, attribute } => {
+                let g = world
+                    .get::<Geometry>(*geom)
+                    .ok_or(ProcessingError::GeometryNotFound)?;
+                let a = world
+                    .get::<Attribute>(*attribute)
+                    .ok_or(ProcessingError::InvalidEntity)?;
+                ResolvedMeshBinding::Attribute {
+                    mesh_id: g.handle.id(),
+                    attribute: a.inner,
+                }
+            }
+            MeshBindingRef::Index { geom } => {
+                let g = world
+                    .get::<Geometry>(*geom)
+                    .ok_or(ProcessingError::GeometryNotFound)?;
+                ResolvedMeshBinding::Index {
+                    mesh_id: g.handle.id(),
+                }
+            }
+        };
+        out.push((name.clone(), resolved));
+    }
+    Ok(out)
 }

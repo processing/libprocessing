@@ -29,7 +29,7 @@ def setup():
         attributes=[Attribute.position(), Attribute.uv(), Attribute.color()],
     )
 
-    p.apply(kernel_noise(), scale=1.0 / SPACING, strength=SPACING * 0.6)
+    p.apply(Particles.noise(), scale=1.0 / SPACING, strength=SPACING * 0.6)
 
     color_buf = p.buffer(Attribute.color())
     color_buf.write([
@@ -40,7 +40,7 @@ def setup():
 
     fill(color_buf)
     cube = Geometry.box(0.35, 0.35, 0.35)
-    spin = kernel_transform()
+    spin = Particles.transform()
 
 
 def draw():

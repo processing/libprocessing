@@ -31,7 +31,7 @@ def setup():
 
     particle = Geometry.sphere(0.18, 10, 8)
     mat = Material.pbr(albedo=color_buf)
-    noise = kernel_noise()
+    noise = Particles.noise()
 
 
 def draw():

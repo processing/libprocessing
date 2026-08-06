@@ -157,6 +157,10 @@ impl AttributeFormat {
         }
     }
 
+    pub fn components(self) -> usize {
+        self.byte_size() / 4
+    }
+
     pub fn from_u8(value: u8) -> Option<Self> {
         match value {
             1 => Some(Self::Float),
@@ -177,9 +181,7 @@ pub struct Attribute {
 
 impl Attribute {
     pub fn new(name: impl Into<String>, format: AttributeFormat) -> Self {
-        // we leak here to get a 'static str for the attribute name, but this is okay because
-        // we never expect to unload attributes during the lifetime of the application
-        // and attribute names are generally small in number
+        // leaked for a 'static name; attributes are never unloaded and are few.
         let name: &'static str = Box::leak(name.into().into_boxed_str());
         let id = hash_attr_name(name);
         let inner = MeshVertexAttribute::new(name, id, format.to_vertex_format());
@@ -198,8 +200,6 @@ impl Attribute {
         }
     }
 
-    /// like [`Self::from_builtin`], but with a user-facing `name` distinct
-    /// from `inner.name`. shaders bind by `name`.
     pub fn from_builtin_with_name(
         name: &'static str,
         inner: MeshVertexAttribute,
@@ -223,12 +223,11 @@ pub struct BuiltinAttributes {
     pub normal: Entity,
     pub color: Entity,
     pub uv: Entity,
-    /// per-instance rotation as a quaternion `(x, y, z, w)`.
     pub rotation: Entity,
-    /// per-instance scale `(x, y, z)`.
     pub scale: Entity,
-    /// per-particle lifecycle flag: `0.0` = alive, non-zero = dead.
-    pub dead: Entity,
+    pub life: Entity,
+    pub velocity: Entity,
+    pub age: Entity,
 }
 
 impl FromWorld for BuiltinAttributes {
@@ -267,8 +266,14 @@ impl FromWorld for BuiltinAttributes {
         let scale = world
             .spawn(Attribute::new("scale", AttributeFormat::Float3))
             .id();
-        let dead = world
-            .spawn(Attribute::new("dead", AttributeFormat::Float))
+        let life = world
+            .spawn(Attribute::new("life", AttributeFormat::Float))
+            .id();
+        let velocity = world
+            .spawn(Attribute::new("velocity", AttributeFormat::Float3))
+            .id();
+        let age = world
+            .spawn(Attribute::new("age", AttributeFormat::Float))
             .id();
 
         Self {
@@ -278,8 +283,37 @@ impl FromWorld for BuiltinAttributes {
             uv,
             rotation,
             scale,
-            dead,
+            life,
+            velocity,
+            age,
         }
+    }
+}
+
+impl BuiltinAttributes {
+    pub fn by_name(&self, name: &str) -> Option<Entity> {
+        Some(match name {
+            "position" => self.position,
+            "normal" => self.normal,
+            "color" => self.color,
+            "uv" => self.uv,
+            "rotation" => self.rotation,
+            "scale" => self.scale,
+            "life" => self.life,
+            "velocity" => self.velocity,
+            "age" => self.age,
+            _ => return None,
+        })
+    }
+}
+
+pub fn default_attribute_init(name: &str, format: AttributeFormat) -> Vec<f32> {
+    match name {
+        "life" => vec![1.0],
+        "scale" => vec![1.0, 1.0, 1.0],
+        "color" => vec![1.0, 1.0, 1.0, 1.0],
+        "rotation" => vec![0.0, 0.0, 0.0, 1.0],
+        _ => vec![0.0; format.components()],
     }
 }
 
@@ -421,5 +455,47 @@ pub fn set_attribute(
         _ => Err(ProcessingError::InvalidArgument(
             "Attribute value type does not match attribute format".into(),
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builtin_defaults_match_format() {
+        use AttributeFormat::*;
+        let builtins = [
+            ("position", Float3),
+            ("normal", Float3),
+            ("color", Float4),
+            ("uv", Float2),
+            ("rotation", Float4),
+            ("scale", Float3),
+            ("life", Float),
+            ("velocity", Float3),
+            ("age", Float),
+        ];
+        for (name, format) in builtins {
+            assert_eq!(
+                default_attribute_init(name, format).len(),
+                format.components(),
+                "default_attribute_init({name:?}) does not match {format:?} component count",
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_name_seeds_zero_for_its_format() {
+        for format in [
+            AttributeFormat::Float,
+            AttributeFormat::Float2,
+            AttributeFormat::Float3,
+            AttributeFormat::Float4,
+        ] {
+            let seed = default_attribute_init("custom_thing", format);
+            assert_eq!(seed.len(), format.components());
+            assert!(seed.iter().all(|&f| f == 0.0));
+        }
     }
 }

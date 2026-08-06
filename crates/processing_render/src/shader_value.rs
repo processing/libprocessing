@@ -14,6 +14,8 @@ pub enum ShaderValue {
     Mat4([f32; 16]),
     Texture(Entity),
     Buffer(Entity),
+    MeshAttribute(Entity, Entity),
+    MeshIndex(Entity),
 }
 
 impl ShaderValue {
@@ -29,7 +31,10 @@ impl ShaderValue {
             ShaderValue::Int4(v) => Some(v.iter().flat_map(|i| i.to_le_bytes()).collect()),
             ShaderValue::UInt(v) => Some(v.to_le_bytes().to_vec()),
             ShaderValue::Mat4(v) => Some(v.iter().flat_map(|f| f.to_le_bytes()).collect()),
-            ShaderValue::Texture(_) | ShaderValue::Buffer(_) => None,
+            ShaderValue::Texture(_)
+            | ShaderValue::Buffer(_)
+            | ShaderValue::MeshAttribute(..)
+            | ShaderValue::MeshIndex(_) => None,
         }
     }
 
@@ -40,7 +45,10 @@ impl ShaderValue {
             ShaderValue::Float3(_) | ShaderValue::Int3(_) => Some(12),
             ShaderValue::Float4(_) | ShaderValue::Int4(_) => Some(16),
             ShaderValue::Mat4(_) => Some(64),
-            ShaderValue::Texture(_) | ShaderValue::Buffer(_) => None,
+            ShaderValue::Texture(_)
+            | ShaderValue::Buffer(_)
+            | ShaderValue::MeshAttribute(..)
+            | ShaderValue::MeshIndex(_) => None,
         }
     }
 
@@ -76,7 +84,10 @@ impl ShaderValue {
                 bytes[..4].try_into().ok()?,
             ))),
             ShaderValue::Mat4(_) => Some(ShaderValue::Mat4(f32s::<16>(bytes)?)),
-            ShaderValue::Texture(_) | ShaderValue::Buffer(_) => None,
+            ShaderValue::Texture(_)
+            | ShaderValue::Buffer(_)
+            | ShaderValue::MeshAttribute(..)
+            | ShaderValue::MeshIndex(_) => None,
         }
     }
 }

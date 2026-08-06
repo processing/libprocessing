@@ -9,6 +9,7 @@ use bevy::{
         ImageRenderTarget, MsaaWriteback, Projection, RenderTarget, visibility::RenderLayers,
     },
     core_pipeline::tonemapping::Tonemapping,
+    post_process::bloom::Bloom,
     ecs::query::QueryEntityError,
     math::{Mat4, Vec3A},
     prelude::*,
@@ -209,7 +210,7 @@ pub fn create(
             ..default()
         },
         target,
-        // tonemapping prevents color accurate readback, so we disable it
+        // overridden below for hdr targets
         Tonemapping::None,
         // we need to be able to write to the texture
         CameraMainTextureUsages::default().with(TextureUsages::COPY_DST),
@@ -227,9 +228,8 @@ pub fn create(
         },
     ));
 
-    // only enable Hdr for floating-point texture formats
     if is_hdr {
-        entity_commands.insert(Hdr);
+        entity_commands.insert((Hdr, Bloom::NATURAL, Tonemapping::TonyMcMapface));
     }
 
     let entity = entity_commands.id();
@@ -422,6 +422,68 @@ pub fn ortho(
         near,
         far,
     });
+
+    Ok(())
+}
+
+pub fn world_from_screen(
+    In((entity, sx, sy, depth)): In<(Entity, f32, f32, f32)>,
+    cameras: Query<(&bevy::camera::Camera, &GlobalTransform)>,
+) -> Result<Vec3> {
+    let (camera, transform) = cameras
+        .get(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    let ndc_xy = camera
+        .viewport_to_ndc(Vec2::new(sx, sy))
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+    let ndc_z = (1.0 - depth).max(f32::EPSILON);
+    let world: Vec3 = camera
+        .ndc_to_world(transform, ndc_xy.extend(ndc_z))
+        .ok_or(ProcessingError::GraphicsNotFound)?;
+    Ok(world)
+}
+
+pub fn set_bloom(
+    In((entity, intensity, threshold)): In<(Entity, f32, f32)>,
+    mut commands: Commands,
+    mut tonemapping_query: Query<&mut Tonemapping>,
+) -> Result<()> {
+    use bevy::post_process::bloom::{Bloom, BloomCompositeMode, BloomPrefilter};
+
+    let mut bloom = Bloom::NATURAL;
+    bloom.intensity = intensity;
+    if threshold > 0.0 {
+        bloom.composite_mode = BloomCompositeMode::Additive;
+        bloom.prefilter = BloomPrefilter {
+            threshold,
+            threshold_softness: 0.5,
+        };
+    }
+
+    commands.entity(entity).insert((bloom, Hdr));
+
+    if let Ok(mut tm) = tonemapping_query.get_mut(entity) {
+        if *tm == Tonemapping::None {
+            *tm = Tonemapping::TonyMcMapface;
+        }
+    }
+
+    Ok(())
+}
+
+pub fn remove_bloom(
+    In(entity): In<Entity>,
+    mut commands: Commands,
+    mut tonemapping_query: Query<&mut Tonemapping>,
+) -> Result<()> {
+    use bevy::post_process::bloom::Bloom;
+
+    commands.entity(entity).remove::<Bloom>();
+
+    if let Ok(mut tm) = tonemapping_query.get_mut(entity) {
+        *tm = Tonemapping::None;
+    }
 
     Ok(())
 }

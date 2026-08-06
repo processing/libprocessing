@@ -90,7 +90,6 @@ pub fn tetrahedron_mesh(radius: f32) -> Mesh {
     mesh
 }
 
-/// 3d lattice of `nx * ny * nz` points, centered at the origin with `spacing` between them.
 pub fn grid_mesh(nx: u32, ny: u32, nz: u32, spacing: f32) -> Mesh {
     let count = (nx as usize) * (ny as usize) * (nz as usize);
     let mut positions = Vec::with_capacity(count);

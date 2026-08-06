@@ -257,6 +257,18 @@ name = "particles_stress"
 path = "examples/particles_stress.rs"
 
 [[example]]
+name = "particles_scatter"
+path = "examples/particles_scatter.rs"
+
+[[example]]
+name = "particles_scatter_volume"
+path = "examples/particles_scatter_volume.rs"
+
+[[example]]
+name = "particles_text_whirl"
+path = "examples/particles_text_whirl.rs"
+
+[[example]]
 name = "text"
 path = "examples/text.rs"
 
@@ -267,7 +279,6 @@ path = "examples/text_3d.rs"
 [[example]]
 name = "filter"
 path = "examples/filter.rs"
-
 [profile.wasm-release]
 inherits = "release"
 opt-level = "z"

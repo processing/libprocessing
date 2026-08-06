@@ -1,7 +1,3 @@
-//! compute pass that writes [`Particles`] position/rotation/scale/dead into
-//! the per-instance slots reserved by [`GpuBatchedMesh3d`]. pipelines are
-//! cached per `(HAS_ROTATION, HAS_SCALE, HAS_DEAD)` shader_def combination.
-
 use std::num::NonZeroU64;
 
 use bevy::core_pipeline::Core3d;
@@ -66,13 +62,11 @@ impl Plugin for ParticlesPackPlugin {
 #[derive(Resource, Clone)]
 pub struct ParticlesPackShader(pub Handle<Shader>);
 
-/// specialization key — controls which `#ifdef`s are set when compiling the pack shader,
-/// and which bindings are present in the bind-group layout.
 #[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
 pub struct PackPipelineKey {
     pub has_rotation: bool,
     pub has_scale: bool,
-    pub has_dead: bool,
+    pub has_life: bool,
 }
 
 pub struct CachedPackPipeline {
@@ -98,7 +92,7 @@ pub struct ExtractedParticlesData {
     pub position: Handle<ShaderBuffer>,
     pub rotation: Option<Handle<ShaderBuffer>>,
     pub scale: Option<Handle<ShaderBuffer>>,
-    pub dead: Option<Handle<ShaderBuffer>>,
+    pub life: Option<Handle<ShaderBuffer>>,
 }
 
 #[derive(Resource, Default)]
@@ -145,7 +139,7 @@ fn pack_layout_entries(key: PackPipelineKey) -> Vec<BindGroupLayoutEntry> {
     if key.has_scale {
         entries.push(layout_entry(4, storage_r));
     }
-    if key.has_dead {
+    if key.has_life {
         entries.push(layout_entry(5, storage_r));
     }
     entries.push(layout_entry(6, uniform));
@@ -169,8 +163,8 @@ fn shader_defs_for(key: PackPipelineKey) -> Vec<ShaderDefVal> {
     if key.has_scale {
         defs.push("HAS_SCALE".into());
     }
-    if key.has_dead {
-        defs.push("HAS_DEAD".into());
+    if key.has_life {
+        defs.push("HAS_LIFE".into());
     }
     defs
 }
@@ -186,16 +180,16 @@ fn get_or_create_pipeline(
     }
     let bind_group_layout = BindGroupLayoutDescriptor::new(
         format!(
-            "ParticlesPackBindGroupLayout(rot={},scale={},dead={})",
-            key.has_rotation, key.has_scale, key.has_dead
+            "ParticlesPackBindGroupLayout(rot={},scale={},life={})",
+            key.has_rotation, key.has_scale, key.has_life
         ),
         &pack_layout_entries(key),
     );
     let pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
         label: Some(
             format!(
-                "particles_pack_pipeline(rot={},scale={},dead={})",
-                key.has_rotation, key.has_scale, key.has_dead
+                "particles_pack_pipeline(rot={},scale={},life={})",
+                key.has_rotation, key.has_scale, key.has_life
             )
             .into(),
         ),
@@ -241,15 +235,15 @@ fn extract_particles_draws(
             .buffer(builtins.scale)
             .and_then(|e| buffers.get(e).ok())
             .map(|b| b.handle.clone());
-        let dead = p
-            .buffer(builtins.dead)
+        let life = p
+            .buffer(builtins.life)
             .and_then(|e| buffers.get(e).ok())
             .map(|b| b.handle.clone());
 
         let key = PackPipelineKey {
             has_rotation: rotation.is_some(),
             has_scale: scale.is_some(),
-            has_dead: dead.is_some(),
+            has_life: life.is_some(),
         };
         extracted.by_main.insert(
             MainEntity::from(entity),
@@ -258,7 +252,7 @@ fn extract_particles_draws(
                 position: pos_buf.handle.clone(),
                 rotation,
                 scale,
-                dead,
+                life,
             },
         );
     }
@@ -305,8 +299,8 @@ fn prepare_pack_bind_groups(
         if data.key.has_scale && gpu_scale.is_none() {
             continue;
         }
-        let gpu_dead = data.dead.as_ref().and_then(|h| gpu_buffers.get(h));
-        if data.key.has_dead && gpu_dead.is_none() {
+        let gpu_life = data.life.as_ref().and_then(|h| gpu_buffers.get(h));
+        if data.key.has_life && gpu_life.is_none() {
             continue;
         }
 
@@ -354,10 +348,10 @@ fn prepare_pack_bind_groups(
                 resource: gpu_scale.buffer.as_entire_binding(),
             });
         }
-        if let Some(gpu_dead) = gpu_dead {
+        if let Some(gpu_life) = gpu_life {
             entries.push(BindGroupEntry {
                 binding: 5,
-                resource: gpu_dead.buffer.as_entire_binding(),
+                resource: gpu_life.buffer.as_entire_binding(),
             });
         }
         entries.push(BindGroupEntry {

@@ -20,6 +20,22 @@ pub mod text;
 pub mod time;
 pub mod transform;
 
+pub use particles::{
+    BOUNDS_CLAMP, BOUNDS_REFLECT, BOUNDS_SOFT, BOUNDS_WRAP, COMBINE_ADD, COMBINE_DIV, COMBINE_MAX,
+    COMBINE_MIN, COMBINE_MUL, COMBINE_POW, COMBINE_SUB, FALLOFF_CONST, FALLOFF_CUBIC,
+    FALLOFF_INVERSE, FALLOFF_LINEAR, FALLOFF_QUADRATIC, FALLOFF_SMOOTHSTEP, particles_apply,
+    particles_attribute_add, particles_buffer, particles_capacity, particles_create,
+    particles_create_from_geometry, particles_destroy, particles_emit, particles_emit_gpu,
+    particles_kernel_age,
+    particles_kernel_attr_combine, particles_kernel_attr_linear, particles_kernel_attr_lookup1d,
+    particles_kernel_attr_lookup2d, particles_kernel_attr_mix, particles_kernel_attract,
+    particles_kernel_bounds_box, particles_kernel_bounds_geometry, particles_kernel_bounds_sphere,
+    particles_kernel_drag, particles_kernel_field, particles_kernel_flock, particles_kernel_force,
+    particles_kernel_impulse, particles_kernel_integrate, particles_kernel_noise,
+    particles_kernel_orient, particles_kernel_transform, particles_kernel_vortex,
+    particles_scatter_create, particles_scatter_volume_create,
+};
+
 use std::path::PathBuf;
 
 use bevy::{
@@ -851,6 +867,42 @@ pub fn graphics_ortho(
     })
 }
 
+pub fn graphics_world_from_screen(
+    graphics_entity: Entity,
+    sx: f32,
+    sy: f32,
+    depth: f32,
+) -> error::Result<Vec3> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(graphics::world_from_screen, (graphics_entity, sx, sy, depth))
+            .unwrap()
+    })
+}
+
+pub fn graphics_set_bloom(
+    graphics_entity: Entity,
+    intensity: f32,
+    threshold: f32,
+) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(
+                graphics::set_bloom,
+                (graphics_entity, intensity, threshold),
+            )
+            .unwrap()
+    })
+}
+
+pub fn graphics_remove_bloom(graphics_entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(graphics::remove_bloom, graphics_entity)
+            .unwrap()
+    })
+}
+
 pub fn transform_set_position(entity: Entity, position: Vec3) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
@@ -1277,8 +1329,22 @@ pub fn geometry_attribute_scale() -> Entity {
     app_mut(|app| Ok(app.world().resource::<geometry::BuiltinAttributes>().scale)).unwrap()
 }
 
-pub fn geometry_attribute_dead() -> Entity {
-    app_mut(|app| Ok(app.world().resource::<geometry::BuiltinAttributes>().dead)).unwrap()
+pub fn geometry_attribute_life() -> Entity {
+    app_mut(|app| Ok(app.world().resource::<geometry::BuiltinAttributes>().life)).unwrap()
+}
+
+pub fn geometry_attribute_velocity() -> Entity {
+    app_mut(|app| {
+        Ok(app
+            .world()
+            .resource::<geometry::BuiltinAttributes>()
+            .velocity)
+    })
+    .unwrap()
+}
+
+pub fn geometry_attribute_age() -> Entity {
+    app_mut(|app| Ok(app.world().resource::<geometry::BuiltinAttributes>().age)).unwrap()
 }
 
 pub fn geometry_attribute_destroy(entity: Entity) -> error::Result<()> {
@@ -1715,12 +1781,16 @@ pub fn material_set_albedo_color(entity: Entity, color: [f32; 4]) -> error::Resu
     })
 }
 
-/// set the albedo source to a per-particle color buffer (`Float4` per slot,
-/// indexed by `mesh.tag`). Preserves all other `StandardMaterial` fields;
-/// `base_color` modulates the buffer color.
-pub fn material_set_albedo_buffer(
+#[derive(Copy, Clone)]
+enum ParticlesBufferSlot {
+    Albedo,
+    Emissive,
+}
+
+fn material_set_particles_buffer(
     entity: Entity,
-    color_buffer_entity: Entity,
+    buffer_entity: Entity,
+    slot: ParticlesBufferSlot,
 ) -> error::Result<()> {
     use crate::material::ProcessingMaterial;
     use crate::particles::material::{ParticlesExtension, ParticlesMaterial};
@@ -1732,7 +1802,7 @@ pub fn material_set_albedo_buffer(
     app_mut(|app| {
         let buffer_handle = app
             .world()
-            .get::<compute::Buffer>(color_buffer_entity)
+            .get::<compute::Buffer>(buffer_entity)
             .ok_or(error::ProcessingError::BufferNotFound)?
             .handle
             .clone();
@@ -1748,7 +1818,11 @@ pub fn material_set_albedo_buffer(
             let mat = mats
                 .get_mut(&handle)
                 .ok_or(error::ProcessingError::MaterialNotFound)?;
-            mat.into_inner().extension.colors = buffer_handle;
+            let ext = &mut mat.into_inner().extension;
+            match slot {
+                ParticlesBufferSlot::Albedo => ext.colors = Some(buffer_handle),
+                ParticlesBufferSlot::Emissive => ext.emissive_colors = Some(buffer_handle),
+            }
             return Ok(());
         }
 
@@ -1766,19 +1840,41 @@ pub fn material_set_albedo_buffer(
             mats.remove(&handle);
             base
         };
+        let extension = match slot {
+            ParticlesBufferSlot::Albedo => ParticlesExtension {
+                colors: Some(buffer_handle),
+                emissive_colors: None,
+            },
+            ParticlesBufferSlot::Emissive => ParticlesExtension {
+                colors: None,
+                emissive_colors: Some(buffer_handle),
+            },
+        };
         let new_handle = world
             .resource_mut::<Assets<ParticlesMaterial>>()
             .add(ExtendedMaterial {
                 base: preserved,
-                extension: ParticlesExtension {
-                    colors: buffer_handle,
-                },
+                extension,
             });
         world
             .entity_mut(entity)
             .insert(UntypedMaterial(new_handle.untyped()));
         Ok(())
     })
+}
+
+pub fn material_set_albedo_buffer(
+    entity: Entity,
+    color_buffer_entity: Entity,
+) -> error::Result<()> {
+    material_set_particles_buffer(entity, color_buffer_entity, ParticlesBufferSlot::Albedo)
+}
+
+pub fn material_set_emissive_buffer(
+    entity: Entity,
+    emissive_buffer_entity: Entity,
+) -> error::Result<()> {
+    material_set_particles_buffer(entity, emissive_buffer_entity, ParticlesBufferSlot::Emissive)
 }
 
 pub fn material_set(
@@ -2228,14 +2324,16 @@ pub fn compute_dispatch(entity: Entity, x: u32, y: u32, z: u32) -> error::Result
         app.update();
 
         let args = {
-            let c = app
-                .world()
+            let world = app.world();
+            let c = world
                 .get::<compute::Compute>(entity)
                 .ok_or(error::ProcessingError::ComputeNotFound)?;
+            let mesh_bindings = compute::resolve_mesh_bindings(world, c)?;
             (
                 c.pipeline_id,
                 c.bind_group_layout_descriptors.clone(),
                 c.shader.clone(),
+                mesh_bindings,
                 x,
                 y,
                 z,
@@ -2254,270 +2352,6 @@ pub fn compute_destroy(entity: Entity) -> error::Result<()> {
             .run_system_cached_with(compute::destroy_compute, entity)
             .unwrap()
     })
-}
-
-pub fn particles_create(capacity: u32, attribute_entities: Vec<Entity>) -> error::Result<Entity> {
-    app_mut(|app| {
-        app.world_mut()
-            .run_system_cached_with(particles::create, (capacity, attribute_entities))
-            .unwrap()
-    })
-}
-
-/// capacity = `geometry`'s vertex count. Builtin attributes (`position`,
-/// `normal`, `color`, `uv`) are seeded from the matching mesh attribute when
-/// formats line up; everything else is zero-initialized.
-pub fn particles_create_from_geometry(
-    geometry_entity: Entity,
-    attribute_entities: Vec<Entity>,
-) -> error::Result<Entity> {
-    app_mut(|app| {
-        app.world_mut()
-            .run_system_cached_with(
-                particles::create_from_geometry,
-                (geometry_entity, attribute_entities),
-            )
-            .unwrap()
-    })
-}
-
-pub fn particles_destroy(entity: Entity) -> error::Result<()> {
-    app_mut(|app| {
-        app.world_mut()
-            .run_system_cached_with(particles::destroy, entity)
-            .unwrap()
-    })
-}
-
-pub fn particles_capacity(entity: Entity) -> error::Result<u32> {
-    app_mut(|app| {
-        Ok(app
-            .world()
-            .get::<particles::Particles>(entity)
-            .ok_or(error::ProcessingError::ParticlesNotFound)?
-            .capacity)
-    })
-}
-
-pub fn particles_buffer(entity: Entity, attribute_entity: Entity) -> error::Result<Option<Entity>> {
-    app_mut(|app| {
-        Ok(app
-            .world()
-            .get::<particles::Particles>(entity)
-            .ok_or(error::ProcessingError::ParticlesNotFound)?
-            .buffer(attribute_entity))
-    })
-}
-
-/// GPU-driven emission into the next `count` ring-buffer slots. Auto-binds
-/// attribute buffers (same convention as [`particles_apply`]) and an
-/// `emit_range: vec4<f32> = (base_slot, count, capacity, 0)` uniform.
-pub fn particles_emit_gpu(
-    particles_entity: Entity,
-    count: u32,
-    compute_entity: Entity,
-) -> error::Result<()> {
-    if count == 0 {
-        return Ok(());
-    }
-    const WORKGROUP_SIZE: u32 = 64;
-
-    let (capacity, head, buffers) = app_mut(|app| {
-        let world = app.world();
-        let field = world
-            .get::<particles::Particles>(particles_entity)
-            .ok_or(error::ProcessingError::ParticlesNotFound)?;
-        if count > field.capacity {
-            return Err(error::ProcessingError::InvalidArgument(format!(
-                "particles_emit_gpu count={} exceeds field capacity {}",
-                count, field.capacity
-            )));
-        }
-        let mut buffers: Vec<(String, Entity)> = Vec::with_capacity(field.buffers.len());
-        for (&attr_entity, &buf_entity) in &field.buffers {
-            let attr = world
-                .get::<geometry::Attribute>(attr_entity)
-                .ok_or(error::ProcessingError::InvalidEntity)?;
-            buffers.push((attr.name.to_string(), buf_entity));
-        }
-        Ok((field.capacity, field.emit_head, buffers))
-    })?;
-
-    for (name, buf_entity) in buffers {
-        match compute_set(
-            compute_entity,
-            name,
-            shader_value::ShaderValue::Buffer(buf_entity),
-        ) {
-            Ok(()) => {}
-            Err(error::ProcessingError::UnknownShaderProperty(_)) => {}
-            Err(e) => return Err(e),
-        }
-    }
-
-    match compute_set(
-        compute_entity,
-        "emit_range",
-        shader_value::ShaderValue::Float4([head as f32, count as f32, capacity as f32, 0.0]),
-    ) {
-        Ok(()) => {}
-        Err(error::ProcessingError::UnknownShaderProperty(_)) => {}
-        Err(e) => return Err(e),
-    }
-
-    let workgroup_count = count.div_ceil(WORKGROUP_SIZE);
-    compute_dispatch(compute_entity, workgroup_count, 1, 1)?;
-
-    app_mut(|app| {
-        let mut field = app
-            .world_mut()
-            .get_mut::<particles::Particles>(particles_entity)
-            .ok_or(error::ProcessingError::ParticlesNotFound)?;
-        field.emit_head = (field.emit_head + count) % field.capacity;
-        Ok(())
-    })
-}
-
-/// CPU-driven emission. Writes per-attribute byte payloads into the next `n`
-/// ring-buffer slots. Each entry in `attribute_data` must be exactly
-/// `attr.byte_size * n` bytes. On wrap, oldest slots are overwritten.
-pub fn particles_emit(
-    particles_entity: Entity,
-    n: u32,
-    attribute_data: Vec<(Entity, Vec<u8>)>,
-) -> error::Result<()> {
-    if n == 0 {
-        return Ok(());
-    }
-
-    let (capacity, head, attr_specs) = app_mut(|app| {
-        let world = app.world();
-        let field = world
-            .get::<particles::Particles>(particles_entity)
-            .ok_or(error::ProcessingError::ParticlesNotFound)?;
-        if n > field.capacity {
-            return Err(error::ProcessingError::InvalidArgument(format!(
-                "particles_emit n={} exceeds field capacity {}",
-                n, field.capacity
-            )));
-        }
-        let mut specs: Vec<(Entity, u32, Entity)> = Vec::with_capacity(attribute_data.len());
-        for (attr_entity, _) in &attribute_data {
-            let attr = world
-                .get::<geometry::Attribute>(*attr_entity)
-                .ok_or(error::ProcessingError::InvalidEntity)?;
-            let buf = field.buffer(*attr_entity).ok_or_else(|| {
-                error::ProcessingError::InvalidArgument(format!(
-                    "particles have no buffer for attribute {:?}",
-                    attr_entity
-                ))
-            })?;
-            specs.push((*attr_entity, attr.format.byte_size() as u32, buf));
-        }
-        Ok((field.capacity, field.emit_head, specs))
-    })?;
-
-    for ((_, bytes), &(_, byte_size, buf)) in attribute_data.iter().zip(attr_specs.iter()) {
-        let expected = (n as usize) * (byte_size as usize);
-        if bytes.len() != expected {
-            return Err(error::ProcessingError::InvalidArgument(format!(
-                "expected {} bytes ({} particles * {} bytes), got {}",
-                expected,
-                n,
-                byte_size,
-                bytes.len()
-            )));
-        }
-        let first_chunk_n = (capacity - head).min(n);
-        let split = (first_chunk_n as usize) * (byte_size as usize);
-        let first_offset = (head as u64) * (byte_size as u64);
-        buffer_write_element(buf, first_offset, bytes[..split].to_vec())?;
-        if first_chunk_n < n {
-            buffer_write_element(buf, 0, bytes[split..].to_vec())?;
-        }
-    }
-
-    app_mut(|app| {
-        let mut field = app
-            .world_mut()
-            .get_mut::<particles::Particles>(particles_entity)
-            .ok_or(error::ProcessingError::ParticlesNotFound)?;
-        field.emit_head = (field.emit_head + n) % field.capacity;
-        Ok(())
-    })
-}
-
-/// built-in noise kernel: displaces `position` by 3d value noise. Uniforms:
-/// `scale: f32`, `strength: f32`, `time: f32`.
-pub fn particles_kernel_noise() -> error::Result<Entity> {
-    let shader = shader_load(particles::kernels::NOISE_PATH)?;
-    compute_create(shader)
-}
-
-/// built-in transform kernel: scale → axis-angle rotate → translate on
-/// `position`. Uniforms: `translate: vec3`, `rotation_axis: vec3`,
-/// `rotation_angle: f32`, `scale: vec3`. Identity defaults are seeded.
-pub fn particles_kernel_transform() -> error::Result<Entity> {
-    let shader = shader_load(particles::kernels::TRANSFORM_PATH)?;
-    let entity = compute_create(shader)?;
-    compute_set(
-        entity,
-        "translate",
-        shader_value::ShaderValue::Float3([0.0; 3]),
-    )?;
-    compute_set(
-        entity,
-        "rotation_axis",
-        shader_value::ShaderValue::Float3([0.0, 1.0, 0.0]),
-    )?;
-    compute_set(
-        entity,
-        "rotation_angle",
-        shader_value::ShaderValue::Float(0.0),
-    )?;
-    compute_set(
-        entity,
-        "scale",
-        shader_value::ShaderValue::Float3([1.0, 1.0, 1.0]),
-    )?;
-    Ok(entity)
-}
-
-/// dispatch `compute_entity` against the [`Particles`]'s buffers. Each buffer
-/// is auto-bound by attribute name; undeclared bindings are skipped. Kernels
-/// must declare `@workgroup_size(64)`. Set uniforms via `compute_set` first.
-pub fn particles_apply(particles_entity: Entity, compute_entity: Entity) -> error::Result<()> {
-    const WORKGROUP_SIZE: u32 = 64;
-
-    let (capacity, buffers) = app_mut(|app| {
-        let world = app.world();
-        let field = world
-            .get::<particles::Particles>(particles_entity)
-            .ok_or(error::ProcessingError::ParticlesNotFound)?;
-        let mut buffers: Vec<(String, Entity)> = Vec::with_capacity(field.buffers.len());
-        for (&attr_entity, &buf_entity) in &field.buffers {
-            let attr = world
-                .get::<geometry::Attribute>(attr_entity)
-                .ok_or(error::ProcessingError::InvalidEntity)?;
-            buffers.push((attr.name.to_string(), buf_entity));
-        }
-        Ok((field.capacity, buffers))
-    })?;
-
-    for (name, buf_entity) in buffers {
-        match compute_set(
-            compute_entity,
-            name,
-            shader_value::ShaderValue::Buffer(buf_entity),
-        ) {
-            Ok(()) => {}
-            Err(error::ProcessingError::UnknownShaderProperty(_)) => {}
-            Err(e) => return Err(e),
-        }
-    }
-
-    let workgroup_count = capacity.div_ceil(WORKGROUP_SIZE);
-    compute_dispatch(compute_entity, workgroup_count, 1, 1)
 }
 
 // --- Font API ---

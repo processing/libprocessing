@@ -17,7 +17,7 @@ struct Spawn {
 @group(0) @binding(2) var<storage, read_write> color: array<f32>;
 @group(0) @binding(3) var<storage, read_write> scale: array<f32>;
 @group(0) @binding(4) var<storage, read_write> age: array<f32>;
-@group(0) @binding(5) var<storage, read_write> dead: array<f32>;
+@group(0) @binding(5) var<storage, read_write> life: array<f32>;
 @group(0) @binding(6) var<uniform> spawn: Spawn;
 @group(0) @binding(7) var<uniform> emit_range: vec4<f32>;
 
@@ -70,7 +70,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     scale[slot * 3u + 2u] = 1.0;
 
     age[slot]  = 0.0;
-    dead[slot] = 0.0;
+    life[slot] = 1.0;
 }
 "#;
 
@@ -86,7 +86,7 @@ struct Params {
 @group(0) @binding(1) var<storage, read_write> velocity: array<f32>;
 @group(0) @binding(2) var<storage, read_write> scale: array<f32>;
 @group(0) @binding(3) var<storage, read_write> age: array<f32>;
-@group(0) @binding(4) var<storage, read_write> dead: array<f32>;
+@group(0) @binding(4) var<storage, read_write> life: array<f32>;
 @group(0) @binding(5) var<uniform> params: Params;
 
 @compute @workgroup_size(64)
@@ -94,7 +94,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let i = gid.x;
     let count = arrayLength(&age);
     if i >= count { return; }
-    if dead[i] != 0.0 { return; }
+    if life[i] <= 0.0 { return; }
 
     age[i] = age[i] + params.dt;
 
@@ -110,7 +110,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     scale[i * 3u + 1u] = s;
     scale[i * 3u + 2u] = s;
 
-    if age[i] > params.ttl { dead[i] = 1.0; }
+    if age[i] > params.ttl { life[i] = 0.0; }
 }
 "#;
 
@@ -139,7 +139,7 @@ fn sketch() -> error::Result<()> {
     let position_attr = geometry_attribute_position();
     let color_attr = geometry_attribute_color();
     let scale_attr = geometry_attribute_scale();
-    let dead_attr = geometry_attribute_dead();
+    let life_attr = geometry_attribute_life();
     let velocity_attr = geometry_attribute_create("velocity", AttributeFormat::Float3)?;
     let age_attr = geometry_attribute_create("age", AttributeFormat::Float)?;
 
@@ -149,17 +149,11 @@ fn sketch() -> error::Result<()> {
             position_attr,
             color_attr,
             scale_attr,
-            dead_attr,
+            life_attr,
             velocity_attr,
             age_attr,
         ],
     )?;
-
-    // mark all unemitted slots dead so they don't render at origin.
-    let dead_buf =
-        particles_buffer(p, dead_attr)?.ok_or(error::ProcessingError::ParticlesNotFound)?;
-    let init_dead: Vec<u8> = (0..capacity).flat_map(|_| 1.0_f32.to_le_bytes()).collect();
-    buffer_write(dead_buf, init_dead)?;
 
     let color_buf =
         particles_buffer(p, color_attr)?.ok_or(error::ProcessingError::ParticlesNotFound)?;

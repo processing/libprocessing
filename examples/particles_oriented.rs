@@ -70,7 +70,6 @@ fn sketch() -> error::Result<()> {
                 positions.push((x as f32 - 2.0) * 1.6);
                 positions.push((y as f32 - 2.0) * 1.6);
                 positions.push((z as f32 - 2.0) * 1.6);
-                // identity quat
                 rotations.push(0.0);
                 rotations.push(0.0);
                 rotations.push(0.0);
