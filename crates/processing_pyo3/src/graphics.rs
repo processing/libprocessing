@@ -3,8 +3,8 @@ use crate::glfw::GlfwContext;
 use crate::input;
 use crate::math::{extract_vec2, extract_vec3, extract_vec4};
 use bevy::{
-    color::{ColorToPacked, Srgba},
-    math::{Vec3, Vec4},
+    color::{ColorToPacked, LinearRgba, Srgba},
+    math::{Affine3A, Mat4, Vec3, Vec4},
     prelude::Entity,
     render::render_resource::{Extent3d, TextureFormat},
 };
@@ -12,11 +12,193 @@ use processing::prelude::*;
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
-    types::{PyDict, PyTuple},
+    types::{PyDict, PyList, PyTuple},
 };
+use std::sync::Mutex;
 
 #[cfg(feature = "cuda")]
 use crate::cuda::CudaImage;
+
+/// Flatten `*args` of numbers (or a single list/tuple of numbers) into a `Vec<f32>`.
+fn flatten_floats(args: &Bound<'_, PyTuple>) -> PyResult<Vec<f32>> {
+    if args.len() == 1 {
+        if let Ok(seq) = args.get_item(0)?.extract::<Vec<f32>>() {
+            return Ok(seq);
+        }
+    }
+    let mut out = Vec::with_capacity(args.len());
+    for item in args.iter() {
+        out.push(item.extract::<f32>()?);
+    }
+    Ok(out)
+}
+
+/// Build a Python list of `Color` objects from linear-RGBA pixels.
+fn pixels_to_pylist(py: Python<'_>, pixels: &[LinearRgba]) -> PyResult<Py<PyList>> {
+    let colors = pixels
+        .iter()
+        .map(|p| crate::color::PyColor(bevy::prelude::Color::LinearRgba(*p)));
+    Ok(PyList::new(py, colors)?.unbind())
+}
+
+/// Convert a Python sequence of colors (as returned by `load_pixels()`, or
+/// individual `Color`/`[r,g,b,a]` values) into linear-RGBA pixels.
+fn pyseq_to_pixels(seq: &Bound<'_, PyAny>) -> PyResult<Vec<LinearRgba>> {
+    let mut out = Vec::with_capacity(seq.len().unwrap_or(0));
+    for item in seq.try_iter()? {
+        let item = item?;
+        let color = if let Ok(c) = item.extract::<crate::color::PyColor>() {
+            c.0
+        } else if let Ok(rgba) = item.extract::<[f32; 4]>() {
+            bevy::prelude::Color::LinearRgba(LinearRgba::new(rgba[0], rgba[1], rgba[2], rgba[3]))
+        } else if let Ok(rgb) = item.extract::<[f32; 3]>() {
+            bevy::prelude::Color::LinearRgba(LinearRgba::new(rgb[0], rgb[1], rgb[2], 1.0))
+        } else {
+            return Err(PyValueError::new_err(
+                "pixels must contain Color values or [r, g, b, (a)] sequences",
+            ));
+        };
+        out.push(LinearRgba::from(color));
+    }
+    Ok(out)
+}
+
+/// Resolve the sequence `update_pixels()` should write: an explicit argument if
+/// given, otherwise the buffer cached by `load_pixels()`.
+fn resolve_pixels_arg<'py>(
+    py: Python<'py>,
+    pixels: Option<&Bound<'py, PyAny>>,
+    cache: &Mutex<Option<Py<PyList>>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    match pixels {
+        Some(p) => Ok(p.clone()),
+        None => {
+            let cached = cache.lock().unwrap().as_ref().map(|l| l.clone_ref(py));
+            match cached {
+                Some(list) => Ok(list.into_bound(py).into_any()),
+                None => Err(PyRuntimeError::new_err(
+                    "update_pixels() called before load_pixels()",
+                )),
+            }
+        }
+    }
+}
+
+fn rt_err(e: impl std::fmt::Display) -> PyErr {
+    PyRuntimeError::new_err(format!("{e}"))
+}
+
+/// Composite mode code for `mask()` (see `filters/composite.wgsl`).
+const COMPOSITE_MODE_MASK: u32 = 10;
+/// Composite mode code for `copy()` — REPLACE (matches `BlendMode::Replace`).
+const COMPOSITE_MODE_REPLACE: u32 = 9;
+
+/// Normalize a pixel rect `(x, y, w, h)` to uv-space `(x0, y0, x1, y1)`; `None`
+/// means the full `(0, 0, 1, 1)` extent.
+fn normalize_rect(rect: Option<[f32; 4]>, w: f32, h: f32) -> [f32; 4] {
+    match rect {
+        None => [0.0, 0.0, 1.0, 1.0],
+        Some([x, y, rw, rh]) => [x / w, y / h, (x + rw) / w, (y + rh) / h],
+    }
+}
+
+/// Normalize a source pixel rect against the source image's own dimensions.
+fn normalize_src_rect(entity: Entity, rect: Option<[f32; 4]>) -> PyResult<[f32; 4]> {
+    match rect {
+        None => Ok([0.0, 0.0, 1.0, 1.0]),
+        Some(r) => {
+            let (w, h) = image_size(entity).map_err(rt_err)?;
+            Ok(normalize_rect(Some(r), w as f32, h as f32))
+        }
+    }
+}
+
+/// Resolve a composite source (`Image`, `Webcam`, or `Graphics`) to a
+/// texture-bearing entity, plus the graphics entity that must be flushed first
+/// when the source is a graphics (so its latest content is what gets sampled).
+/// A `Graphics` source uses its render-target surface entity, which carries an
+/// `Image` component for offscreen graphics.
+fn resolve_composite_source(src: &Bound<'_, PyAny>) -> PyResult<(Entity, Option<Entity>)> {
+    if let Ok(img) = src.extract::<ImageRef>() {
+        return Ok((img.entity, None));
+    }
+    if let Ok(g) = src.extract::<PyRef<Graphics>>() {
+        return Ok((g.surface.entity, Some(g.entity)));
+    }
+    Err(PyValueError::new_err(
+        "composite source must be an Image, Webcam, or Graphics",
+    ))
+}
+
+/// Run the built-in composite filter: blend the `src` texture into the `dst`
+/// graphics target using `mode`, with normalized src/dst rects. This is the
+/// shader-based composite pass shared by `copy`/`blend`/`mask`.
+fn composite_apply(
+    dst: Entity,
+    src: Entity,
+    mode: u32,
+    src_rect: [f32; 4],
+    dst_rect: [f32; 4],
+    opacity: f32,
+) -> PyResult<()> {
+    use shader_value::ShaderValue;
+    let filter = filter_composite().map_err(rt_err)?;
+    filter_set(filter, "src", ShaderValue::Texture(src)).map_err(rt_err)?;
+    filter_set(filter, "mode", ShaderValue::UInt(mode)).map_err(rt_err)?;
+    filter_set(filter, "opacity", ShaderValue::Float(opacity)).map_err(rt_err)?;
+    filter_set(filter, "src_rect", ShaderValue::Float4(src_rect)).map_err(rt_err)?;
+    filter_set(filter, "dst_rect", ShaderValue::Float4(dst_rect)).map_err(rt_err)?;
+    graphics_apply_filter(dst, filter).map_err(rt_err)
+}
+
+/// Write raw sRGB RGBA bytes to a PNG file on disk.
+fn write_png_file(path: &str, width: u32, height: u32, rgba: &[u8]) -> PyResult<()> {
+    let lower = path.to_lowercase();
+    if !lower.ends_with(".png") {
+        return Err(PyValueError::new_err(format!(
+            "save() currently supports only .png files, got {path:?}"
+        )));
+    }
+    let file = std::fs::File::create(path)
+        .map_err(|e| PyRuntimeError::new_err(format!("create {path}: {e}")))?;
+    let writer = std::io::BufWriter::new(file);
+    let mut encoder = png::Encoder::new(writer, width, height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder.set_source_srgb(png::SrgbRenderingIntent::Perceptual);
+    let mut writer = encoder
+        .write_header()
+        .map_err(|e| PyRuntimeError::new_err(format!("PNG header: {e}")))?;
+    writer
+        .write_image_data(rgba)
+        .map_err(|e| PyRuntimeError::new_err(format!("PNG write: {e}")))
+}
+
+/// Parse Processing-style `applyMatrix`/`setMatrix` arguments into an `Affine3A`:
+/// 6 values for a 2D affine (`n00 n01 n02 n10 n11 n12`) or 16 values for a full
+/// 3D matrix in row-major order (matching Processing; glam is column-major).
+fn affine_from_matrix_args(args: &Bound<'_, PyTuple>) -> PyResult<Affine3A> {
+    let v = flatten_floats(args)?;
+    let mat = match v.len() {
+        6 => Mat4::from_cols_array(&[
+            v[0], v[3], 0.0, 0.0, //
+            v[1], v[4], 0.0, 0.0, //
+            0.0, 0.0, 1.0, 0.0, //
+            v[2], v[5], 0.0, 1.0,
+        ]),
+        16 => {
+            let mut arr = [0.0f32; 16];
+            arr.copy_from_slice(&v);
+            Mat4::from_cols_array(&arr).transpose()
+        }
+        n => {
+            return Err(PyValueError::new_err(format!(
+                "matrix expects 6 (2D) or 16 (3D) values, got {n}"
+            )));
+        }
+    };
+    Ok(Affine3A::from_mat4(mat))
+}
 
 #[cfg(feature = "cuda")]
 fn cuda_import_from_interface(
@@ -65,6 +247,12 @@ impl PyBlendMode {
             blend_state: mode.to_blend_state(),
             name: Some(mode.name()),
         }
+    }
+
+    /// The composite-shader mode code (the `BlendMode` discriminant) for this
+    /// blend mode, or `None` for custom modes with no named preset.
+    pub(crate) fn composite_mode(&self) -> Option<u32> {
+        self.name.and_then(BlendMode::from_name).map(|m| m as u32)
     }
 }
 
@@ -324,6 +512,18 @@ fn path_commands_to_py(
 #[derive(Debug)]
 pub struct Image {
     pub(crate) entity: Entity,
+    /// Cached `pixels` list populated by `load_pixels()` and written back by
+    /// `update_pixels()`, mirroring Processing's `PImage.pixels[]`.
+    pixel_cache: Mutex<Option<Py<PyList>>>,
+}
+
+impl Image {
+    pub(crate) fn wrap(entity: Entity) -> Self {
+        Self {
+            entity,
+            pixel_cache: Mutex::new(None),
+        }
+    }
 }
 
 pub(crate) struct ImageRef {
@@ -360,6 +560,107 @@ impl Image {
     fn sampler(&self, sampler: &Sampler) -> PyResult<()> {
         image_set_sampler(self.entity, sampler.filter, sampler.wrap_x, sampler.wrap_y)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Image width in pixels.
+    #[getter]
+    fn width(&self) -> PyResult<u32> {
+        image_size(self.entity)
+            .map(|(w, _)| w)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Image height in pixels.
+    #[getter]
+    fn height(&self) -> PyResult<u32> {
+        image_size(self.entity)
+            .map(|(_, h)| h)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Read a single pixel as a `Color` (Processing `get`).
+    fn get(&self, x: u32, y: u32) -> PyResult<crate::color::PyColor> {
+        let (w, h) = image_size(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        if x >= w || y >= h {
+            return Err(PyValueError::new_err(format!(
+                "pixel ({x}, {y}) out of bounds for {w}x{h} image"
+            )));
+        }
+        let pixels =
+            image_readback(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let p = pixels[(y * w + x) as usize];
+        Ok(crate::color::PyColor(bevy::prelude::Color::LinearRgba(p)))
+    }
+
+    /// Write a single pixel (Processing `set`). Accepts a `Color`, hex string,
+    /// or color components in the default (sRGB) color mode.
+    #[pyo3(signature = (x, y, *args))]
+    fn set(&self, x: u32, y: u32, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let color = extract_color_with_mode(args, &ColorMode::default())?;
+        image_update_region(self.entity, x, y, 1, 1, &[LinearRgba::from(color)])
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Read all pixels into the `pixels` list (Processing `loadPixels`).
+    fn load_pixels(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
+        let pixels =
+            image_readback(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let list = pixels_to_pylist(py, &pixels)?;
+        *self.pixel_cache.lock().unwrap() = Some(list.clone_ref(py));
+        Ok(list)
+    }
+
+    /// The pixel buffer as a list of `Color` (Processing `pixels[]`). Auto-loads
+    /// on first access if `load_pixels()` has not been called.
+    #[getter]
+    fn pixels(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
+        let cached = self
+            .pixel_cache
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|list| list.clone_ref(py));
+        match cached {
+            Some(list) => Ok(list),
+            None => self.load_pixels(py),
+        }
+    }
+
+    /// Write the `pixels` list back to the image (Processing `updatePixels`). If
+    /// `pixels` is omitted, the cached buffer from `load_pixels()` is used.
+    #[pyo3(signature = (pixels=None))]
+    fn update_pixels(&self, py: Python<'_>, pixels: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let seq = resolve_pixels_arg(py, pixels, &self.pixel_cache)?;
+        let data = pyseq_to_pixels(&seq)?;
+        image_update(self.entity, &data).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Copies a source into this image via a GPU blit (a sampling copy that
+    /// handles differing size and format). `src` may be another `Image` or a
+    /// `Graphics` render target — e.g. render into an offscreen graphics, then
+    /// `img.copy_from(g)` to pull the result into a plain, sampleable image.
+    fn copy_from(&self, src: &Bound<'_, PyAny>) -> PyResult<()> {
+        if let Ok(img) = src.extract::<PyRef<Image>>() {
+            image_copy_from(self.entity, img.entity, false).map_err(rt_err)
+        } else if let Ok(g) = src.extract::<PyRef<Graphics>>() {
+            image_copy_from(self.entity, g.entity, true).map_err(rt_err)
+        } else {
+            Err(PyValueError::new_err(
+                "copy_from() expects an Image or Graphics source",
+            ))
+        }
+    }
+
+    /// Save the image to a PNG file (Processing `save`).
+    fn save(&self, filename: &str) -> PyResult<()> {
+        let (w, h) = image_size(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let pixels =
+            image_readback(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let rgba: Vec<u8> = pixels
+            .iter()
+            .flat_map(|p| Srgba::from(*p).to_u8_array())
+            .collect();
+        write_png_file(filename, w, h, &rgba)
     }
 }
 
@@ -484,6 +785,9 @@ pub struct Graphics {
     pub width: u32,
     #[pyo3(get)]
     pub height: u32,
+    /// Cached `pixels` list populated by `load_pixels()` and written back by
+    /// `update_pixels()`, mirroring Processing's `pixels[]`.
+    pixel_cache: Mutex<Option<Py<PyList>>>,
 }
 
 impl Drop for Graphics {
@@ -492,9 +796,60 @@ impl Drop for Graphics {
     }
 }
 
+impl Graphics {
+    /// Create an offscreen graphics buffer in the already-running app (no window,
+    /// no `init`). Backs `create_graphics()` / `new_offscreen()`. The caller must
+    /// ensure the app exists (i.e. `size()` was called first).
+    pub(crate) fn wrap_offscreen(width: u32, height: u32) -> PyResult<Self> {
+        // sRGB by default: it plays well with PNG export and blits.
+        let texture_format = TextureFormat::Rgba8UnormSrgb;
+        let surface_entity = surface_create_offscreen(width, height, 1.0, texture_format)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Self::from_surface(surface_entity, width, height, texture_format, None)
+    }
+
+    /// Wrap an existing surface entity in a `Graphics` (camera + draw state). The
+    /// `glfw_ctx` is `None` for offscreen and secondary windows — the main
+    /// surface owns the shared `GlfwContext` that drives every window.
+    pub(crate) fn from_surface(
+        surface_entity: Entity,
+        width: u32,
+        height: u32,
+        texture_format: TextureFormat,
+        glfw_ctx: Option<GlfwContext>,
+    ) -> PyResult<Self> {
+        let graphics = graphics_create(surface_entity, width, height, texture_format)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Self {
+            entity: graphics,
+            surface: Surface {
+                entity: surface_entity,
+                glfw_ctx,
+            },
+            width,
+            height,
+            pixel_cache: Mutex::new(None),
+        })
+    }
+
+    /// Wrap a secondary window's surface in a `Graphics` (HDR window target). The
+    /// window lives on the main surface's shared `GlfwContext`, so this holds no
+    /// `glfw_ctx` of its own.
+    pub(crate) fn wrap_window(surface_entity: Entity, width: u32, height: u32) -> PyResult<Self> {
+        Self::from_surface(
+            surface_entity,
+            width,
+            height,
+            TextureFormat::Rgba16Float,
+            None,
+        )
+    }
+}
+
 #[pymethods]
 impl Graphics {
     #[new]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         width: u32,
         height: u32,
@@ -502,9 +857,10 @@ impl Graphics {
         sketch_root_path: &str,
         sketch_file_name: &str,
         log_level: Option<&str>,
+        transparent: bool,
     ) -> PyResult<Self> {
-        let mut glfw_ctx =
-            GlfwContext::new(width, height).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let mut glfw_ctx = GlfwContext::new(width, height, transparent)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let mut config = Config::new();
         config.set(ConfigKey::AssetRootPath, asset_path.to_string());
@@ -516,7 +872,7 @@ impl Graphics {
         init(config).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let surface = glfw_ctx
-            .create_surface(width, height)
+            .create_surface(width, height, transparent)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let surface = Surface {
@@ -527,11 +883,17 @@ impl Graphics {
         let graphics = graphics_create(surface.entity, width, height, TextureFormat::Rgba16Float)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
+        // The Window component (applied each frame by the sync loop) otherwise
+        // defaults its title; match the GLFW create-time title.
+        surface_set_title(surface.entity, "Processing".to_string())
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+
         Ok(Self {
             entity: graphics,
             surface,
             width,
             height,
+            pixel_cache: Mutex::new(None),
         })
     }
 
@@ -548,28 +910,7 @@ impl Graphics {
             config.set(ConfigKey::LogLevel, level.to_string());
         }
         init(config).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-
-        // todo: allow caller to specify texture format? we use an sRGB format by default since
-        // it plays well with converting to PNG
-        let texture_format = TextureFormat::Rgba8UnormSrgb;
-
-        let surface_entity = surface_create_offscreen(width, height, 1.0, texture_format)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-
-        let surface = Surface {
-            entity: surface_entity,
-            glfw_ctx: None,
-        };
-
-        let graphics = graphics_create(surface.entity, width, height, texture_format)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-
-        Ok(Self {
-            entity: graphics,
-            surface,
-            width,
-            height,
-        })
+        Self::wrap_offscreen(width, height)
     }
 
     #[getter]
@@ -625,6 +966,86 @@ impl Graphics {
         }
 
         Ok(png_buf)
+    }
+
+    /// Save the current canvas to a PNG file (Processing `save`).
+    pub fn save(&self, filename: &str) -> PyResult<()> {
+        let raw = graphics_readback_raw(self.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let rgba = match raw.format {
+            TextureFormat::Rgba8UnormSrgb => raw.bytes,
+            _ => {
+                let pixels = graphics_readback(self.entity)
+                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+                pixels
+                    .iter()
+                    .flat_map(|pixel| Srgba::from(*pixel).to_u8_array())
+                    .collect()
+            }
+        };
+        write_png_file(filename, raw.width, raw.height, &rgba)
+    }
+
+    /// Read a single pixel as a `Color` (Processing `get`).
+    pub fn get(&self, x: u32, y: u32) -> PyResult<crate::color::PyColor> {
+        if x >= self.width || y >= self.height {
+            return Err(PyValueError::new_err(format!(
+                "pixel ({x}, {y}) out of bounds for {}x{} canvas",
+                self.width, self.height
+            )));
+        }
+        let pixels = graphics_readback(self.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let p = pixels
+            .get((y * self.width + x) as usize)
+            .ok_or_else(|| PyValueError::new_err("pixel out of bounds"))?;
+        Ok(crate::color::PyColor(bevy::prelude::Color::LinearRgba(*p)))
+    }
+
+    /// Write a single pixel (Processing `set`).
+    #[pyo3(signature = (x, y, *args))]
+    pub fn set(&self, x: u32, y: u32, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let color = extract_color_with_mode(
+            args,
+            &graphics_get_color_mode(self.entity)
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
+        )?;
+        graphics_update_region(self.entity, x, y, 1, 1, &[LinearRgba::from(color)])
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Read all pixels into the `pixels` list (Processing `loadPixels`).
+    pub fn load_pixels(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
+        let pixels = graphics_readback(self.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let list = pixels_to_pylist(py, &pixels)?;
+        *self.pixel_cache.lock().unwrap() = Some(list.clone_ref(py));
+        Ok(list)
+    }
+
+    /// The pixel buffer as a list of `Color` (Processing `pixels[]`). Auto-loads
+    /// on first access if `load_pixels()` has not been called.
+    #[getter]
+    pub fn pixels(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
+        let cached = self
+            .pixel_cache
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|list| list.clone_ref(py));
+        match cached {
+            Some(list) => Ok(list),
+            None => self.load_pixels(py),
+        }
+    }
+
+    /// Write the `pixels` list back to the canvas (Processing `updatePixels`).
+    /// If `pixels` is omitted, the cached buffer from `load_pixels()` is used.
+    #[pyo3(signature = (pixels=None))]
+    pub fn update_pixels(&self, py: Python<'_>, pixels: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let seq = resolve_pixels_arg(py, pixels, &self.pixel_cache)?;
+        let data = pyseq_to_pixels(&seq)?;
+        graphics_update(self.entity, &data).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn poll_for_sketch_update(&self) -> PyResult<Sketch> {
@@ -755,17 +1176,44 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn rect(
-        &self,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-        tl: f32,
-        tr: f32,
-        br: f32,
-        bl: f32,
-    ) -> PyResult<()> {
+    /// Draws a rectangle. Accepts `(x, y, w, h)`, `(x, y, w, h, radius)` for a
+    /// uniform corner radius, or `(x, y, w, h, tl, tr, br, bl)` for per-corner
+    /// radii — matching Processing's `rect()` overloads.
+    #[pyo3(signature = (*args))]
+    pub fn rect(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let (x, y, w, h, tl, tr, br, bl) = match args.len() {
+            4 => {
+                let x = args.get_item(0)?.extract()?;
+                let y = args.get_item(1)?.extract()?;
+                let w = args.get_item(2)?.extract()?;
+                let h = args.get_item(3)?.extract()?;
+                (x, y, w, h, 0.0, 0.0, 0.0, 0.0)
+            }
+            5 => {
+                let x = args.get_item(0)?.extract()?;
+                let y = args.get_item(1)?.extract()?;
+                let w = args.get_item(2)?.extract()?;
+                let h = args.get_item(3)?.extract()?;
+                let r = args.get_item(4)?.extract()?;
+                (x, y, w, h, r, r, r, r)
+            }
+            8 => {
+                let x = args.get_item(0)?.extract()?;
+                let y = args.get_item(1)?.extract()?;
+                let w = args.get_item(2)?.extract()?;
+                let h = args.get_item(3)?.extract()?;
+                let tl = args.get_item(4)?.extract()?;
+                let tr = args.get_item(5)?.extract()?;
+                let br = args.get_item(6)?.extract()?;
+                let bl = args.get_item(7)?.extract()?;
+                (x, y, w, h, tl, tr, br, bl)
+            }
+            n => {
+                return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                    "rect() takes 4, 5, or 8 arguments ({n} given)"
+                )));
+            }
+        };
         graphics_record_command(
             self.entity,
             DrawCommand::Rect {
@@ -1075,8 +1523,12 @@ impl Graphics {
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn text_style(&self, style: u8) -> PyResult<()> {
-        graphics_text_style(self.entity, style).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    pub fn text_style(&self, style: &str) -> PyResult<()> {
+        use processing::prelude::TextStyle;
+        let style = TextStyle::parse(style)
+            .ok_or_else(|| PyValueError::new_err(format!("unknown text style: {style:?}")))?;
+        graphics_text_style(self.entity, style as u8)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     #[pyo3(signature = (content, x, y, max_w=None, max_h=None))]
@@ -1200,16 +1652,18 @@ impl Graphics {
     }
 
     #[pyo3(signature = (h, v=None))]
-    pub fn text_align(&self, h: u8, v: Option<u8>) -> PyResult<()> {
+    pub fn text_align(&self, h: &str, v: Option<&str>) -> PyResult<()> {
         use processing::prelude::{TextAlignH, TextAlignV};
-        graphics_record_command(
-            self.entity,
-            DrawCommand::TextAlign {
-                h: TextAlignH::from(h),
-                v: TextAlignV::from(v.unwrap_or(0)),
-            },
-        )
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        let h = TextAlignH::parse(h)
+            .ok_or_else(|| PyValueError::new_err(format!("unknown horizontal text align: {h:?}")))?;
+        let v = match v {
+            Some(v) => TextAlignV::parse(v).ok_or_else(|| {
+                PyValueError::new_err(format!("unknown vertical text align: {v:?}"))
+            })?,
+            None => TextAlignV::default(),
+        };
+        graphics_record_command(self.entity, DrawCommand::TextAlign { h, v })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn text_leading(&self, leading: f32) -> PyResult<()> {
@@ -1217,9 +1671,11 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn text_wrap(&self, mode: u8) -> PyResult<()> {
+    pub fn text_wrap(&self, mode: &str) -> PyResult<()> {
         use processing::prelude::TextWrapMode;
-        graphics_record_command(self.entity, DrawCommand::TextWrap(TextWrapMode::from(mode)))
+        let mode = TextWrapMode::parse(mode)
+            .ok_or_else(|| PyValueError::new_err(format!("unknown text wrap mode: {mode:?}")))?;
+        graphics_record_command(self.entity, DrawCommand::TextWrap(mode))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
@@ -1287,7 +1743,7 @@ impl Graphics {
     /// The path is relative to the sketch's assets directory.
     pub fn load_image(&self, file: &str) -> PyResult<Image> {
         match image_load(file) {
-            Ok(image) => Ok(Image { entity: image }),
+            Ok(image) => Ok(Image::wrap(image)),
             Err(e) => Err(PyRuntimeError::new_err(format!("{e}"))),
         }
     }
@@ -1373,7 +1829,7 @@ impl Graphics {
         let data = vec![0u8; (width * height * 4) as usize];
         let entity = image_create(size, data, TextureFormat::Rgba8UnormSrgb)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        Ok(Image { entity })
+        Ok(Image::wrap(entity))
     }
 
     pub fn push_matrix(&self) -> PyResult<()> {
@@ -1474,6 +1930,105 @@ impl Graphics {
     pub fn rotate_axis(&self, angle: f32, args: &Bound<'_, PyTuple>) -> PyResult<()> {
         let axis = extract_vec3(args)?;
         graphics_record_command(self.entity, DrawCommand::Rotate { angle, axis })
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Multiply the current matrix by another (Processing `applyMatrix`).
+    /// Accepts 6 values (2D affine) or 16 values (3D, row-major).
+    #[pyo3(signature = (*args))]
+    pub fn apply_matrix(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let affine = affine_from_matrix_args(args)?;
+        graphics_record_command(self.entity, DrawCommand::ApplyMatrix(affine))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Replace the current matrix (Processing `setMatrix`).
+    /// Accepts 6 values (2D affine) or 16 values (3D, row-major).
+    #[pyo3(signature = (*args))]
+    pub fn set_matrix(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let affine = affine_from_matrix_args(args)?;
+        graphics_record_command(self.entity, DrawCommand::ResetMatrix)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        graphics_record_command(self.entity, DrawCommand::ApplyMatrix(affine))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Return the current transformation matrix as 16 floats in row-major order.
+    pub fn get_matrix(&self) -> PyResult<[f32; 16]> {
+        let m = graphics_get_matrix(self.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(m.transpose().to_cols_array())
+    }
+
+    /// Screen-space x of a model-space coordinate (Processing `screenX`).
+    #[pyo3(signature = (x, y, z=0.0))]
+    pub fn screen_x(&self, x: f32, y: f32, z: f32) -> PyResult<f32> {
+        graphics_screen_point(self.entity, Vec3::new(x, y, z))
+            .map(|p| p.x)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Screen-space y of a model-space coordinate (Processing `screenY`).
+    #[pyo3(signature = (x, y, z=0.0))]
+    pub fn screen_y(&self, x: f32, y: f32, z: f32) -> PyResult<f32> {
+        graphics_screen_point(self.entity, Vec3::new(x, y, z))
+            .map(|p| p.y)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Screen-space depth of a model-space coordinate (Processing `screenZ`).
+    #[pyo3(signature = (x, y, z=0.0))]
+    pub fn screen_z(&self, x: f32, y: f32, z: f32) -> PyResult<f32> {
+        graphics_screen_point(self.entity, Vec3::new(x, y, z))
+            .map(|p| p.z)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// World-space x of a model-space coordinate (Processing `modelX`).
+    #[pyo3(signature = (x, y, z=0.0))]
+    pub fn model_x(&self, x: f32, y: f32, z: f32) -> PyResult<f32> {
+        graphics_model_point(self.entity, Vec3::new(x, y, z))
+            .map(|p| p.x)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// World-space y of a model-space coordinate (Processing `modelY`).
+    #[pyo3(signature = (x, y, z=0.0))]
+    pub fn model_y(&self, x: f32, y: f32, z: f32) -> PyResult<f32> {
+        graphics_model_point(self.entity, Vec3::new(x, y, z))
+            .map(|p| p.y)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// World-space z of a model-space coordinate (Processing `modelZ`).
+    #[pyo3(signature = (x, y, z=0.0))]
+    pub fn model_z(&self, x: f32, y: f32, z: f32) -> PyResult<f32> {
+        graphics_model_point(self.entity, Vec3::new(x, y, z))
+            .map(|p| p.z)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// World-space x of a screen coordinate at the given depth (Processing `worldX`).
+    #[pyo3(signature = (sx, sy, depth=0.0))]
+    pub fn world_x(&self, sx: f32, sy: f32, depth: f32) -> PyResult<f32> {
+        graphics_world_from_screen(self.entity, sx, sy, depth)
+            .map(|p| p.x)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// World-space y of a screen coordinate at the given depth (Processing `worldY`).
+    #[pyo3(signature = (sx, sy, depth=0.0))]
+    pub fn world_y(&self, sx: f32, sy: f32, depth: f32) -> PyResult<f32> {
+        graphics_world_from_screen(self.entity, sx, sy, depth)
+            .map(|p| p.y)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// World-space z of a screen coordinate at the given depth (Processing `worldZ`).
+    #[pyo3(signature = (sx, sy, depth=0.0))]
+    pub fn world_z(&self, sx: f32, sy: f32, depth: f32) -> PyResult<f32> {
+        graphics_world_from_screen(self.entity, sx, sy, depth)
+            .map(|p| p.z)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
@@ -1631,7 +2186,7 @@ impl Graphics {
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn use_material(&self, material: &crate::material::Material) -> PyResult<()> {
+    pub fn material(&self, material: &crate::material::Material) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::Material(material.entity))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
@@ -1667,9 +2222,91 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn set_material(&self, material: &crate::material::Material) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::Material(material.entity))
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    /// Composites a source onto this graphics with a blend mode (Processing
+    /// `blend`). `src` is any sampleable input — an `Image`, webcam, or another
+    /// `Graphics` (which is flushed first). Optional `src_rect`/`dst_rect` are
+    /// `(x, y, w, h)` pixel regions (default full extent); the source is scaled
+    /// into the dst region.
+    #[pyo3(signature = (src, mode, *, src_rect=None, dst_rect=None, opacity=1.0))]
+    pub fn blend(
+        &self,
+        src: &Bound<'_, PyAny>,
+        mode: &PyBlendMode,
+        src_rect: Option<[f32; 4]>,
+        dst_rect: Option<[f32; 4]>,
+        opacity: f32,
+    ) -> PyResult<()> {
+        let code = mode.composite_mode().ok_or_else(|| {
+            PyValueError::new_err(
+                "blend(): custom blend modes are unsupported here; use a named mode \
+                 (BLEND, ADD, SUBTRACT, DARKEST, LIGHTEST, DIFFERENCE, EXCLUSION, \
+                 MULTIPLY, SCREEN, REPLACE)",
+            )
+        })?;
+        let (src_entity, flush) = resolve_composite_source(src)?;
+        if let Some(g) = flush {
+            graphics_flush(g).map_err(rt_err)?;
+        }
+        let sr = normalize_src_rect(src_entity, src_rect)?;
+        let dr = normalize_rect(dst_rect, self.width as f32, self.height as f32);
+        composite_apply(self.entity, src_entity, code, sr, dr, opacity)
+    }
+
+    /// Copies a source onto this graphics, replacing pixels (Processing `copy`).
+    /// `src` may be an `Image`, webcam, or `Graphics`. See `blend` for the
+    /// `src_rect`/`dst_rect` semantics.
+    #[pyo3(signature = (src, *, src_rect=None, dst_rect=None))]
+    pub fn copy(
+        &self,
+        src: &Bound<'_, PyAny>,
+        src_rect: Option<[f32; 4]>,
+        dst_rect: Option<[f32; 4]>,
+    ) -> PyResult<()> {
+        let (src_entity, flush) = resolve_composite_source(src)?;
+        if let Some(g) = flush {
+            graphics_flush(g).map_err(rt_err)?;
+        }
+        let sr = normalize_src_rect(src_entity, src_rect)?;
+        let dr = normalize_rect(dst_rect, self.width as f32, self.height as f32);
+        composite_apply(self.entity, src_entity, COMPOSITE_MODE_REPLACE, sr, dr, 1.0)
+    }
+
+    /// Feedback pass: re-samples this graphics' previous frame with a
+    /// zoom/rotate/offset transform and a per-frame `decay`, writing it back.
+    /// On a context you don't clear each frame, call this at the start of
+    /// `draw()` and then draw new content on top to get feedback trails.
+    #[pyo3(signature = (*, decay=0.95, zoom=1.0, angle=0.0, offset=(0.0, 0.0)))]
+    pub fn feedback(
+        &self,
+        decay: f32,
+        zoom: f32,
+        angle: f32,
+        offset: (f32, f32),
+    ) -> PyResult<()> {
+        use shader_value::ShaderValue;
+        let filter = filter_feedback().map_err(rt_err)?;
+        filter_set(filter, "decay", ShaderValue::Float(decay)).map_err(rt_err)?;
+        filter_set(filter, "zoom", ShaderValue::Float(zoom)).map_err(rt_err)?;
+        filter_set(filter, "angle", ShaderValue::Float(angle)).map_err(rt_err)?;
+        filter_set(filter, "offset", ShaderValue::Float2([offset.0, offset.1])).map_err(rt_err)?;
+        graphics_apply_filter(self.entity, filter).map_err(rt_err)
+    }
+
+    /// Applies a mask source's brightness as this graphics' alpha channel
+    /// (Processing `mask`). `mask` may be an `Image`, webcam, or `Graphics`.
+    pub fn mask(&self, mask: &Bound<'_, PyAny>) -> PyResult<()> {
+        let (src_entity, flush) = resolve_composite_source(mask)?;
+        if let Some(g) = flush {
+            graphics_flush(g).map_err(rt_err)?;
+        }
+        composite_apply(
+            self.entity,
+            src_entity,
+            COMPOSITE_MODE_MASK,
+            [0.0, 0.0, 1.0, 1.0],
+            [0.0, 0.0, 1.0, 1.0],
+            1.0,
+        )
     }
 
     #[pyo3(name = "color_mode", signature = (mode, max1=None, max2=None, max3=None, max_alpha=None))]

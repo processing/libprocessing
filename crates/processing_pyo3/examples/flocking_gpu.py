@@ -244,7 +244,7 @@ def draw():
     camera_look_at(0.0, 0.0, 0.0)
     background(10, 12, 18)
 
-    use_material(mat)
+    material(mat)
     particles(p, boid)
 
     flock_pass.set(

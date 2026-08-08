@@ -21,7 +21,7 @@ def draw():
     camera_look_at(0.0, 0.0, 0.0)
     background(12, 12, 18)
 
-    use_material(mat)
+    material(mat)
     sphere(50.0)
 
 run()

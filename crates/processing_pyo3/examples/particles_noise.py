@@ -39,7 +39,7 @@ def draw():
     camera_look_at(0.0, 0.0, 0.0)
     background(15, 15, 20)
 
-    use_material(mat)
+    material(mat)
     particles(p, particle)
 
     noise.set(scale=0.25, strength=0.02, time=elapsed_time * 0.5)

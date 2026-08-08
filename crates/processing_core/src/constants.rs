@@ -27,6 +27,18 @@ pub const CLOSE: bool = true;
 pub const LEFT: &str = "left";
 pub const RIGHT: &str = "right";
 
+pub const TOP: &str = "top"; // vertical text align
+pub const BOTTOM: &str = "bottom";
+pub const BASELINE: &str = "baseline";
+
+pub const NORMAL: &str = "normal"; // text style
+pub const ITALIC: &str = "italic";
+pub const BOLD: &str = "bold";
+pub const BOLD_ITALIC: &str = "bold_italic";
+
+pub const WORD: &str = "word"; // text wrap mode
+pub const CHAR: &str = "char";
+
 pub const NEAREST: &str = "nearest";
 pub const CLAMP: &str = "clamp";
 pub const REPEAT: &str = "repeat";

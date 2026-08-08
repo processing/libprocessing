@@ -160,7 +160,7 @@ def draw():
     camera_look_at(0.0, 2.0, 0.0)
     background(10, 10, 18)
 
-    use_material(mat)
+    material(mat)
     particles(p, particle)
 
     t = elapsed_time

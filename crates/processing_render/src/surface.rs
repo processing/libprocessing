@@ -106,6 +106,7 @@ fn spawn_surface(
     width: u32,
     height: u32,
     scale_factor: f32,
+    transparent: bool,
 ) -> Result<Entity> {
     let glfw_window = GlfwWindow {
         window_handle: raw_window_handle,
@@ -118,13 +119,17 @@ fn spawn_surface(
     let physical_width = (width as f32 * scale_factor) as u32;
     let physical_height = (height as f32 * scale_factor) as u32;
 
-    // only enable swapchain level transparency on platforms we know support it
-    // in theory all platforms should support it, but in practice some have weird issues
+    // Window transparency is an explicit opt-in (default opaque). When requested,
+    // pick the swapchain composite mode the platform expects.
     // TODO: dxgi swapchain for windows https://github.com/gfx-rs/wgpu/issues/3486
-    let (transparent, composite_alpha_mode) = match &raw_window_handle {
-        RawWindowHandle::AppKit(_) => (true, CompositeAlphaMode::PostMultiplied),
-        RawWindowHandle::Wayland(_) => (true, CompositeAlphaMode::PreMultiplied),
-        _ => (false, CompositeAlphaMode::Opaque),
+    let (transparent, composite_alpha_mode) = if transparent {
+        match &raw_window_handle {
+            RawWindowHandle::AppKit(_) => (true, CompositeAlphaMode::PostMultiplied),
+            RawWindowHandle::Wayland(_) => (true, CompositeAlphaMode::PreMultiplied),
+            _ => (true, CompositeAlphaMode::Auto),
+        }
+    } else {
+        (false, CompositeAlphaMode::Opaque)
     };
 
     Ok(commands
@@ -149,7 +154,7 @@ fn spawn_surface(
 /// * `window_handle` - A pointer to the NSWindow (from GLFW's `get_cocoa_window()`)
 #[cfg(target_os = "macos")]
 pub fn create_surface_macos(
-    In((window_handle, width, height, scale_factor)): In<(u64, u32, u32, f32)>,
+    In((window_handle, width, height, scale_factor, transparent)): In<(u64, u32, u32, f32, bool)>,
     mut commands: Commands,
 ) -> Result<Entity> {
     use raw_window_handle::{AppKitDisplayHandle, AppKitWindowHandle};
@@ -190,6 +195,7 @@ pub fn create_surface_macos(
         width,
         height,
         scale_factor,
+        transparent,
     )
 }
 
@@ -199,7 +205,7 @@ pub fn create_surface_macos(
 /// * `window_handle` - The HWND value (from GLFW's `get_win32_window()`)
 #[cfg(target_os = "windows")]
 pub fn create_surface_windows(
-    In((window_handle, width, height, scale_factor)): In<(u64, u32, u32, f32)>,
+    In((window_handle, width, height, scale_factor, transparent)): In<(u64, u32, u32, f32, bool)>,
     mut commands: Commands,
 ) -> Result<Entity> {
     use std::num::NonZeroIsize;
@@ -238,6 +244,7 @@ pub fn create_surface_windows(
         width,
         height,
         scale_factor,
+        transparent,
     )
 }
 
@@ -248,7 +255,7 @@ pub fn create_surface_windows(
 /// * `display_handle` - The wl_display pointer (from GLFW's `get_wayland_display()`)
 #[cfg(all(target_os = "linux", feature = "wayland"))]
 pub fn create_surface_wayland(
-    In((window_handle, display_handle, width, height, scale_factor)): In<(u64, u64, u32, u32, f32)>,
+    In((window_handle, display_handle, width, height, scale_factor, transparent)): In<(u64, u64, u32, u32, f32, bool)>,
     mut commands: Commands,
 ) -> Result<Entity> {
     use raw_window_handle::{WaylandDisplayHandle, WaylandWindowHandle};
@@ -276,6 +283,7 @@ pub fn create_surface_wayland(
         width,
         height,
         scale_factor,
+        transparent,
     )
 }
 
@@ -286,7 +294,7 @@ pub fn create_surface_wayland(
 /// * `display_handle` - The X11 Display pointer (from GLFW's `get_x11_display()`)
 #[cfg(all(target_os = "linux", feature = "x11"))]
 pub fn create_surface_x11(
-    In((window_handle, display_handle, width, height, scale_factor)): In<(u64, u64, u32, u32, f32)>,
+    In((window_handle, display_handle, width, height, scale_factor, transparent)): In<(u64, u64, u32, u32, f32, bool)>,
     mut commands: Commands,
 ) -> Result<Entity> {
     use raw_window_handle::{XlibDisplayHandle, XlibWindowHandle};
@@ -314,6 +322,7 @@ pub fn create_surface_x11(
         width,
         height,
         scale_factor,
+        transparent,
     )
 }
 
@@ -323,7 +332,7 @@ pub fn create_surface_x11(
 /// * `window_handle` - A pointer to the HtmlCanvasElement
 #[cfg(target_arch = "wasm32")]
 pub fn create_surface_web(
-    In((window_handle, width, height, scale_factor)): In<(u64, u32, u32, f32)>,
+    In((window_handle, width, height, scale_factor, transparent)): In<(u64, u32, u32, f32, bool)>,
     mut commands: Commands,
 ) -> Result<Entity> {
     use raw_window_handle::{WebCanvasWindowHandle, WebDisplayHandle};
@@ -343,6 +352,7 @@ pub fn create_surface_web(
         width,
         height,
         scale_factor,
+        transparent,
     )
 }
 

@@ -17,8 +17,15 @@ use processing_input::{
 };
 use processing_render::surface::{MonitorWorkarea, WindowControls};
 
+/// A single GLFW instance drives every window (GLFW's event pump is global). The
+/// main window is `windows[0]`; `create_window` appends more.
 pub struct GlfwContext {
     glfw: Glfw,
+    windows: Vec<ManagedWindow>,
+}
+
+/// Per-window state. One `GlfwContext` owns many of these on the shared instance.
+struct ManagedWindow {
     window: PWindow,
     events: GlfwReceiver<(f64, WindowEvent)>,
     surface: Option<Entity>,
@@ -58,15 +65,31 @@ impl Default for AppliedWindow {
 }
 
 impl GlfwContext {
-    pub fn new(width: u32, height: u32) -> Result<Self> {
+    pub fn new(width: u32, height: u32, transparent: bool) -> Result<Self> {
         let mut glfw = glfw::init(glfw::fail_on_errors).unwrap();
+        let main = Self::spawn_window(&mut glfw, width, height, transparent, "Processing");
+        Ok(Self {
+            glfw,
+            windows: vec![main],
+        })
+    }
 
+    /// Create a GLFW window on the shared instance and return its per-window state.
+    fn spawn_window(
+        glfw: &mut Glfw,
+        width: u32,
+        height: u32,
+        transparent: bool,
+        title: &str,
+    ) -> ManagedWindow {
         glfw.window_hint(glfw::WindowHint::ClientApi(glfw::ClientApiHint::NoApi));
         glfw.window_hint(glfw::WindowHint::Visible(false));
-        glfw.window_hint(glfw::WindowHint::TransparentFramebuffer(true));
+        // Window transparency is an explicit opt-in; an opaque framebuffer is the
+        // default (a transparent-by-default window is surprising and platform-flaky).
+        glfw.window_hint(glfw::WindowHint::TransparentFramebuffer(transparent));
 
         let (mut window, events) = glfw
-            .create_window(width, height, "Processing", WindowMode::Windowed)
+            .create_window(width, height, title, WindowMode::Windowed)
             .unwrap();
 
         window.set_all_polling(true);
@@ -101,14 +124,13 @@ impl GlfwContext {
 
         window.show();
 
-        Ok(Self {
-            glfw,
+        ManagedWindow {
             window,
             events,
             surface: None,
             last_applied: AppliedWindow::default(),
             windowed_geometry: None,
-        })
+        }
     }
 
     fn sync_monitors(&mut self) {
@@ -207,67 +229,112 @@ impl GlfwContext {
         });
     }
 
-    #[cfg(target_os = "macos")]
-    pub fn create_surface(&mut self, width: u32, height: u32) -> Result<Entity> {
-        use processing_render::surface_create_macos;
-        let (scale_factor, _) = self.window.get_content_scale();
-        let entity = surface_create_macos(
-            self.window.get_cocoa_window() as u64,
-            width,
-            height,
-            scale_factor,
-        )?;
-        self.surface = Some(entity);
-        Ok(entity)
+    /// Create the render surface for the main window (index 0).
+    pub fn create_surface(&mut self, width: u32, height: u32, transparent: bool) -> Result<Entity> {
+        self.create_surface_for(0, width, height, transparent)
     }
 
-    #[cfg(target_os = "windows")]
-    pub fn create_surface(&mut self, width: u32, height: u32) -> Result<Entity> {
-        use processing_render::surface_create_windows;
-        let (scale_factor, _) = self.window.get_content_scale();
-        let entity = surface_create_windows(
-            self.window.get_win32_window() as u64,
-            width,
-            height,
-            scale_factor,
-        )?;
-        self.surface = Some(entity);
-        Ok(entity)
+    /// Create an additional window on the shared GLFW instance plus its render
+    /// surface, and return the new window's surface entity.
+    pub fn add_window(
+        &mut self,
+        width: u32,
+        height: u32,
+        transparent: bool,
+        title: &str,
+    ) -> Result<Entity> {
+        let mw = Self::spawn_window(&mut self.glfw, width, height, transparent, title);
+        self.windows.push(mw);
+        let idx = self.windows.len() - 1;
+        self.create_surface_for(idx, width, height, transparent)
     }
 
-    #[cfg(all(target_os = "linux", feature = "wayland"))]
-    pub fn create_surface(&mut self, width: u32, height: u32) -> Result<Entity> {
-        use processing_render::surface_create_wayland;
-        let (scale_factor, _) = self.window.get_content_scale();
-        let entity = surface_create_wayland(
-            self.window.get_wayland_window() as u64,
-            self.glfw.get_wayland_display() as u64,
-            width,
-            height,
-            scale_factor,
-        )?;
-        self.surface = Some(entity);
-        Ok(entity)
+    /// The surface entity of the main window, if created.
+    pub fn main_surface(&self) -> Option<Entity> {
+        self.windows.first().and_then(|w| w.surface)
     }
 
-    #[cfg(all(target_os = "linux", feature = "x11"))]
-    pub fn create_surface(&mut self, width: u32, height: u32) -> Result<Entity> {
-        use processing_render::surface_create_x11;
-        let (scale_factor, _) = self.window.get_content_scale();
-        let entity = surface_create_x11(
-            self.window.get_x11_window() as u64,
-            self.glfw.get_x11_display() as u64,
-            width,
-            height,
-            scale_factor,
-        )?;
-        self.surface = Some(entity);
+    fn create_surface_for(
+        &mut self,
+        idx: usize,
+        width: u32,
+        height: u32,
+        transparent: bool,
+    ) -> Result<Entity> {
+        let (scale_factor, _) = self.windows[idx].window.get_content_scale();
+
+        #[cfg(target_os = "macos")]
+        let entity = {
+            use processing_render::surface_create_macos;
+            let handle = self.windows[idx].window.get_cocoa_window() as u64;
+            surface_create_macos(handle, width, height, scale_factor, transparent)?
+        };
+        #[cfg(target_os = "windows")]
+        let entity = {
+            use processing_render::surface_create_windows;
+            let handle = self.windows[idx].window.get_win32_window() as u64;
+            surface_create_windows(handle, width, height, scale_factor, transparent)?
+        };
+        #[cfg(all(target_os = "linux", feature = "wayland"))]
+        let entity = {
+            use processing_render::surface_create_wayland;
+            let wh = self.windows[idx].window.get_wayland_window() as u64;
+            let dh = self.glfw.get_wayland_display() as u64;
+            surface_create_wayland(wh, dh, width, height, scale_factor, transparent)?
+        };
+        #[cfg(all(target_os = "linux", feature = "x11", not(feature = "wayland")))]
+        let entity = {
+            use processing_render::surface_create_x11;
+            let wh = self.windows[idx].window.get_x11_window() as u64;
+            let dh = self.glfw.get_x11_display() as u64;
+            surface_create_x11(wh, dh, width, height, scale_factor, transparent)?
+        };
+
+        self.windows[idx].surface = Some(entity);
         Ok(entity)
     }
 
     pub fn poll_events(&mut self) -> bool {
         self.glfw.poll_events();
+        self.sync_monitors();
 
+        // GLFW's pump is global; flush + sync each window on the shared instance.
+        // A closed secondary window is dropped; a closed main window ends the loop.
+        let GlfwContext { glfw, windows } = self;
+        let mut main_open = true;
+        let mut i = 0;
+        while i < windows.len() {
+            if windows[i].poll(glfw) {
+                i += 1;
+            } else if i == 0 {
+                main_open = false;
+                i += 1;
+            } else {
+                windows[i].window.hide();
+                windows.remove(i);
+            }
+        }
+
+        // Input is accumulated per-window above; commit it once for the frame.
+        if input_flush().is_err() {
+            return false;
+        }
+        main_open
+    }
+
+    /// Content scale (DPI) of the main window.
+    pub fn content_scale(&self) -> f32 {
+        self.windows
+            .first()
+            .map(|w| w.window.get_content_scale().0)
+            .unwrap_or(1.0)
+    }
+}
+
+impl ManagedWindow {
+    /// Flush this window's events and sync its OS state; returns whether it's
+    /// still open. Input is committed once per frame by the caller.
+    fn poll(&mut self, glfw: &mut Glfw) -> bool {
         let surface = match self.surface {
             Some(s) => s,
             None => {
@@ -349,22 +416,18 @@ impl GlfwContext {
             processing_render::surface_resize(surface, width as u32, height as u32).unwrap();
         }
 
-        let Ok(_) = input_flush() else {
-            return false;
-        };
         self.sync_cursor(surface);
-        self.sync_monitors();
-        self.sync_window(surface);
+        self.sync_window(glfw, surface);
 
         true
     }
 
-    fn sync_window(&mut self, surface: Entity) {
+    fn sync_window(&mut self, glfw: &mut Glfw, surface: Entity) {
         let Some(desired) = read_desired_window(surface) else {
             return;
         };
 
-        self.apply_window(&desired);
+        self.apply_window(glfw, &desired);
 
         if desired.iconify {
             self.window.iconify();
@@ -412,7 +475,7 @@ impl GlfwContext {
         self.last_applied.position
     }
 
-    fn apply_window(&mut self, desired: &DesiredWindow) {
+    fn apply_window(&mut self, glfw: &mut Glfw, desired: &DesiredWindow) {
         let last = &mut self.last_applied;
 
         if desired.title != last.title {
@@ -462,11 +525,11 @@ impl GlfwContext {
             last.opacity = opacity;
         }
         if desired.fullscreen_on != last.fullscreen_on {
-            self.apply_fullscreen(desired.fullscreen_on);
+            self.apply_fullscreen(glfw, desired.fullscreen_on);
         }
     }
 
-    fn apply_fullscreen(&mut self, target: Option<Entity>) {
+    fn apply_fullscreen(&mut self, glfw: &mut Glfw, target: Option<Entity>) {
         match target {
             Some(monitor_entity) => {
                 if self.last_applied.fullscreen_on.is_none() {
@@ -476,7 +539,7 @@ impl GlfwContext {
                 }
                 let target_name = monitor_name(monitor_entity);
                 let window = &mut self.window;
-                let applied = self.glfw.with_connected_monitors(|_, monitors| {
+                let applied = glfw.with_connected_monitors(|_, monitors| {
                     let Some(monitor) = monitors
                         .iter()
                         .find(|m| m.get_name() == target_name)
@@ -504,11 +567,6 @@ impl GlfwContext {
                 self.last_applied.fullscreen_on = None;
             }
         }
-    }
-
-    pub fn content_scale(&self) -> f32 {
-        let (s, _) = self.window.get_content_scale();
-        s
     }
 
     fn sync_cursor(&mut self, surface: Entity) {

@@ -34,7 +34,7 @@ def draw():
     camera_look_at(0.0, 0.0, 0.0)
     background(15, 15, 20)
 
-    use_material(mat)
+    material(mat)
     particles(p, sphere)
 
     burst = 4

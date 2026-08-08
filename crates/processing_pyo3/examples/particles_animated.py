@@ -61,7 +61,7 @@ def draw():
     background(15, 15, 20)
     fill(230, 128, 75)
 
-    use_material(mat)
+    material(mat)
     particles(p, sphere)
 
     spin.set(dt=0.01)

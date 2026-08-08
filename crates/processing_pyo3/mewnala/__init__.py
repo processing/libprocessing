@@ -1,5 +1,10 @@
 from .mewnala import *
 
+# `from .mewnala import *` above binds Processing globals that shadow Python
+# builtins (e.g. `set`, `filter`, `get`), so this module reaches builtins it needs
+# through an explicit alias rather than the shadowed names.
+import builtins as _builtins
+
 # re-export the native submodules as submodules of this module, if they exist
 # this allows users to import from `mewnala.math` without needing to know about
 # the internal structure of the native module
@@ -112,10 +117,10 @@ def __getattr__(name):
 
 
 def __dir__():
-    return sorted(set(list(globals().keys()) + list(_DYNAMIC)))
+    return sorted(_builtins.set(list(globals().keys()) + list(_DYNAMIC)))
 
 __all__ = sorted(
-    {n for n in dir(_native) if not n.startswith("_")} | set(_DYNAMIC)
+    {n for n in dir(_native) if not n.startswith("_")} | _builtins.set(_DYNAMIC)
 )
 
 del _sys, _name, _sub

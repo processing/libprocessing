@@ -13,6 +13,27 @@ pub struct Surface {
     pub(crate) glfw_ctx: Option<GlfwContext>,
 }
 
+impl Surface {
+    /// Add a window on the shared GLFW instance (valid only on the main surface,
+    /// which owns the `GlfwContext`). Returns the new window's surface entity.
+    pub(crate) fn add_window(
+        &mut self,
+        width: u32,
+        height: u32,
+        transparent: bool,
+        title: &str,
+    ) -> PyResult<Entity> {
+        match &mut self.glfw_ctx {
+            Some(ctx) => ctx
+                .add_window(width, height, transparent, title)
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}"))),
+            None => Err(PyRuntimeError::new_err(
+                "create_window() requires a windowed sketch (call size() first)",
+            )),
+        }
+    }
+}
+
 #[pymethods]
 impl Surface {
     pub fn poll_events(&mut self) -> bool {

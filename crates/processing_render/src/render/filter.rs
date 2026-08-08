@@ -41,6 +41,8 @@ pub mod builtin {
     pub const ERODE: &str = include_str!("filters/erode.wgsl");
     pub const DILATE: &str = include_str!("filters/dilate.wgsl");
     pub const BLUR: &str = include_str!("filters/blur.wgsl");
+    pub const COMPOSITE: &str = include_str!("filters/composite.wgsl");
+    pub const FEEDBACK: &str = include_str!("filters/feedback.wgsl");
 }
 
 #[derive(Component)]

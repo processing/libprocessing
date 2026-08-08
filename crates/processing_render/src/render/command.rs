@@ -24,6 +24,17 @@ impl From<u8> for TextAlignH {
     }
 }
 
+impl TextAlignH {
+    pub fn parse(s: &str) -> Option<Self> {
+        match () {
+            _ if s.eq_ignore_ascii_case(consts::LEFT) => Some(Self::Left),
+            _ if s.eq_ignore_ascii_case(consts::CENTER) => Some(Self::Center),
+            _ if s.eq_ignore_ascii_case(consts::RIGHT) => Some(Self::Right),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TextAlignV {
@@ -46,6 +57,18 @@ impl From<u8> for TextAlignV {
     }
 }
 
+impl TextAlignV {
+    pub fn parse(s: &str) -> Option<Self> {
+        match () {
+            _ if s.eq_ignore_ascii_case(consts::BASELINE) => Some(Self::Baseline),
+            _ if s.eq_ignore_ascii_case(consts::TOP) => Some(Self::Top),
+            _ if s.eq_ignore_ascii_case(consts::CENTER) => Some(Self::Center),
+            _ if s.eq_ignore_ascii_case(consts::BOTTOM) => Some(Self::Bottom),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TextWrapMode {
@@ -60,6 +83,16 @@ impl From<u8> for TextWrapMode {
             0 => Self::Word,
             1 => Self::Char,
             _ => Self::default(),
+        }
+    }
+}
+
+impl TextWrapMode {
+    pub fn parse(s: &str) -> Option<Self> {
+        match () {
+            _ if s.eq_ignore_ascii_case(consts::WORD) => Some(Self::Word),
+            _ if s.eq_ignore_ascii_case(consts::CHAR) => Some(Self::Char),
+            _ => None,
         }
     }
 }
@@ -82,6 +115,18 @@ impl From<u8> for TextStyle {
             2 => Self::Bold,
             3 => Self::BoldItalic,
             _ => Self::default(),
+        }
+    }
+}
+
+impl TextStyle {
+    pub fn parse(s: &str) -> Option<Self> {
+        match () {
+            _ if s.eq_ignore_ascii_case(consts::NORMAL) => Some(Self::Normal),
+            _ if s.eq_ignore_ascii_case(consts::ITALIC) => Some(Self::Italic),
+            _ if s.eq_ignore_ascii_case(consts::BOLD) => Some(Self::Bold),
+            _ if s.eq_ignore_ascii_case(consts::BOLD_ITALIC) => Some(Self::BoldItalic),
+            _ => None,
         }
     }
 }
@@ -370,6 +415,22 @@ impl BlendMode {
             Self::Multiply => "MULTIPLY",
             Self::Screen => "SCREEN",
             Self::Replace => "REPLACE",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "BLEND" => Some(Self::Blend),
+            "ADD" => Some(Self::Add),
+            "SUBTRACT" => Some(Self::Subtract),
+            "DARKEST" => Some(Self::Darkest),
+            "LIGHTEST" => Some(Self::Lightest),
+            "DIFFERENCE" => Some(Self::Difference),
+            "EXCLUSION" => Some(Self::Exclusion),
+            "MULTIPLY" => Some(Self::Multiply),
+            "SCREEN" => Some(Self::Screen),
+            "REPLACE" => Some(Self::Replace),
+            _ => None,
         }
     }
 

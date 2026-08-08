@@ -39,10 +39,72 @@ use pyo3::{
     BoundObject,
     exceptions::PyRuntimeError,
     prelude::*,
-    types::{PyDict, PyTuple},
+    types::{PyDict, PyList, PyTuple},
 };
 use shader::Shader;
 use std::ffi::{CStr, CString};
+
+/// Register a window `Graphics` in the module's `_windows` list so the run loop
+/// draws + presents it each frame.
+fn register_window(module: &Bound<'_, PyModule>, window: &Py<Graphics>) -> PyResult<()> {
+    let list = match module.getattr("_windows") {
+        Ok(existing) if !existing.is_none() => existing
+            .cast_into::<PyList>()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
+        _ => {
+            let list = PyList::empty(module.py());
+            module.setattr("_windows", &list)?;
+            list
+        }
+    };
+    list.append(window)?;
+    Ok(())
+}
+
+/// All window `Graphics` the run loop should drive: the main canvas (`_graphics`)
+/// followed by any `create_window` results (`_windows`).
+fn collect_windows(module: &Bound<'_, PyModule>) -> PyResult<Vec<Py<Graphics>>> {
+    let mut out = Vec::new();
+    if let Ok(main) = module.getattr("_graphics")
+        && !main.is_none()
+    {
+        out.push(
+            main.cast_into::<Graphics>()
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?
+                .unbind(),
+        );
+    }
+    if let Ok(windows) = module.getattr("_windows")
+        && let Ok(list) = windows.cast_into::<PyList>()
+    {
+        for item in list.iter() {
+            out.push(
+                item.cast_into::<Graphics>()
+                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?
+                    .unbind(),
+            );
+        }
+    }
+    Ok(out)
+}
+
+/// Replace the first run of `#` characters in `pattern` with a zero-padded frame
+/// number (Processing `saveFrame` semantics, e.g. `frame-####.png`).
+fn substitute_frame_number(pattern: &str, n: u32) -> String {
+    match pattern.find('#') {
+        Some(start) => {
+            let hashes = pattern[start..].chars().take_while(|c| *c == '#').count();
+            format!(
+                "{}{:0width$}{}",
+                &pattern[..start],
+                n,
+                &pattern[start + hashes..],
+                width = hashes
+            )
+        }
+        None => pattern.to_string(),
+    }
+}
 
 use bevy::log::warn;
 use gltf::Gltf;
@@ -171,7 +233,12 @@ fn dispatch_event_callbacks(locals: &Bound<'_, PyAny>) -> PyResult<()> {
     Ok(())
 }
 
-fn create_graphics_context(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<()> {
+fn create_graphics_context(
+    module: &Bound<'_, PyModule>,
+    width: u32,
+    height: u32,
+    transparent: bool,
+) -> PyResult<()> {
     let py = module.py();
     let env = detect_environment(py)?;
 
@@ -210,6 +277,7 @@ fn create_graphics_context(module: &Bound<'_, PyModule>, width: u32, height: u32
                 sketch_root.as_str(),
                 sketch_file.as_str(),
                 log_level,
+                transparent,
             )?;
             module.setattr("_graphics", graphics)?;
 
@@ -235,6 +303,7 @@ fn create_graphics_context(module: &Bound<'_, PyModule>, width: u32, height: u32
                 sketch_root.as_str(),
                 sketch_file.as_str(),
                 log_level,
+                transparent,
             )?;
             module.setattr("_graphics", graphics)?;
         }
@@ -250,7 +319,7 @@ fn ensure_graphics(module: &Bound<'_, PyModule>) -> PyResult<()> {
     if get_graphics(module)?.is_some() {
         return Ok(());
     }
-    create_graphics_context(module, DEFAULT_WIDTH, DEFAULT_HEIGHT)
+    create_graphics_context(module, DEFAULT_WIDTH, DEFAULT_HEIGHT, false)
 }
 
 macro_rules! graphics {
@@ -742,9 +811,14 @@ mod mewnala {
     }
 
     #[pyfunction]
-    #[pyo3(pass_module)]
-    fn size(module: &Bound<'_, PyModule>, width: u32, height: u32) -> PyResult<()> {
-        create_graphics_context(module, width, height)?;
+    #[pyo3(pass_module, signature = (width, height, *, transparent=false))]
+    fn size(
+        module: &Bound<'_, PyModule>,
+        width: u32,
+        height: u32,
+        transparent: bool,
+    ) -> PyResult<()> {
+        create_graphics_context(module, width, height, transparent)?;
 
         let py = module.py();
         let sys = PyModule::import(py, "sys")?;
@@ -866,22 +940,24 @@ mod mewnala {
                 }
                 first_frame = false;
 
-                get_graphics_mut(module)?
-                    .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?
-                    .begin_draw()?;
-
                 processing::prelude::advance_frame_count()
                     .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
+                // One draw() per frame drives every window. Globals target the
+                // primary window; any additional window is drawn via its own
+                // Graphics methods, exactly like an offscreen buffer. Each window
+                // is begun before draw() and presented after.
+                let windows = collect_windows(module)?;
+                for wg in &windows {
+                    wg.bind(py).borrow().begin_draw()?;
+                }
                 sync_globals(module, &globals)?;
-
                 draw_fn_ref
                     .call0()
                     .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-
-                get_graphics(module)?
-                    .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?
-                    .end_draw()?;
+                for wg in &windows {
+                    wg.bind(py).borrow().end_draw()?;
+                }
 
                 update_loop_state(|s| s.redraw_requested = false);
             }
@@ -1197,40 +1273,7 @@ mod mewnala {
     #[pyfunction]
     #[pyo3(pass_module, signature = (*args))]
     fn rect(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let (x, y, w, h, tl, tr, br, bl) = match args.len() {
-            4 => {
-                let x = args.get_item(0)?.extract()?;
-                let y = args.get_item(1)?.extract()?;
-                let w = args.get_item(2)?.extract()?;
-                let h = args.get_item(3)?.extract()?;
-                (x, y, w, h, 0.0, 0.0, 0.0, 0.0)
-            }
-            5 => {
-                let x = args.get_item(0)?.extract()?;
-                let y = args.get_item(1)?.extract()?;
-                let w = args.get_item(2)?.extract()?;
-                let h = args.get_item(3)?.extract()?;
-                let r = args.get_item(4)?.extract()?;
-                (x, y, w, h, r, r, r, r)
-            }
-            8 => {
-                let x = args.get_item(0)?.extract()?;
-                let y = args.get_item(1)?.extract()?;
-                let w = args.get_item(2)?.extract()?;
-                let h = args.get_item(3)?.extract()?;
-                let tl = args.get_item(4)?.extract()?;
-                let tr = args.get_item(5)?.extract()?;
-                let br = args.get_item(6)?.extract()?;
-                let bl = args.get_item(7)?.extract()?;
-                (x, y, w, h, tl, tr, br, bl)
-            }
-            n => {
-                return Err(pyo3::exceptions::PyTypeError::new_err(format!(
-                    "rect() takes 4, 5, or 8 arguments ({n} given)"
-                )));
-            }
-        };
-        graphics!(module).rect(x, y, w, h, tl, tr, br, bl)
+        graphics!(module).rect(args)
     }
 
     /// Loads an image from a file and returns an Image object.
@@ -1296,6 +1339,50 @@ mod mewnala {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
         graphics.create_image(width, height)
+    }
+
+    /// Creates an offscreen graphics buffer (Processing `createGraphics`). The
+    /// returned `Graphics` renders in the current app — draw into it, use it as a
+    /// composite source (`blend`/`copy`), blit it into an image (`copy_from`), or
+    /// display it with `image()`. Call `size()` first.
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn create_graphics(
+        module: &Bound<'_, PyModule>,
+        width: u32,
+        height: u32,
+    ) -> PyResult<Graphics> {
+        get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        Graphics::wrap_offscreen(width, height)
+    }
+
+    /// Opens an additional window (libprocessing extension; not in Processing).
+    /// Returns a window-backed `Graphics` — draw to it with its own methods
+    /// inside your normal `draw()`, exactly like an offscreen `create_graphics`
+    /// buffer (globals target the primary window). The run loop presents every
+    /// window each frame. Call `size()` first.
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (width, height, title="Processing", *, transparent=false))]
+    fn create_window(
+        module: &Bound<'_, PyModule>,
+        width: u32,
+        height: u32,
+        title: &str,
+        transparent: bool,
+    ) -> PyResult<Py<Graphics>> {
+        // The main surface owns the shared GLFW instance; add a window to it.
+        let surface_entity = {
+            let mut main = get_graphics_mut(module)?
+                .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+            main.surface.add_window(width, height, transparent, title)?
+        };
+        // The GLFW window is created with the title, but the Window component
+        // (which the per-frame sync applies) defaults otherwise — set it too.
+        ::processing::prelude::surface_set_title(surface_entity, title.to_string())
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let window = Py::new(module.py(), Graphics::wrap_window(surface_entity, width, height)?)?;
+        register_window(module, &window)?;
+        Ok(window)
     }
 
     fn apply_light_transform(
@@ -1382,8 +1469,277 @@ mod mewnala {
 
     #[pyfunction]
     #[pyo3(pass_module, signature = (material))]
-    fn use_material(module: &Bound<'_, PyModule>, material: &Bound<'_, Material>) -> PyResult<()> {
-        graphics!(module).use_material(&*material.extract::<PyRef<Material>>()?)
+    fn material(module: &Bound<'_, PyModule>, material: &Bound<'_, Material>) -> PyResult<()> {
+        graphics!(module).material(&*material.extract::<PyRef<Material>>()?)
+    }
+
+    /// Creates a new material, mirroring Processing's `createMaterial()`.
+    ///
+    /// With no arguments a PBR material is created; pass a `Shader` for a custom
+    /// material. Any additional keyword arguments (albedo, roughness, metallic,
+    /// emissive, unlit, ...) are applied immediately.
+    #[pyfunction]
+    #[pyo3(signature = (shader=None, **kwargs))]
+    fn create_material(
+        shader: Option<&Shader>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Material> {
+        Material::new(shader, kwargs)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (kind, *args, **kwargs))]
+    fn filter(
+        module: &Bound<'_, PyModule>,
+        kind: Bound<'_, PyAny>,
+        args: &Bound<'_, PyTuple>,
+        kwargs: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<()> {
+        graphics!(module).filter(kind, args, kwargs)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (src, mode, *, src_rect=None, dst_rect=None, opacity=1.0))]
+    fn blend(
+        module: &Bound<'_, PyModule>,
+        src: &Bound<'_, PyAny>,
+        mode: &graphics::PyBlendMode,
+        src_rect: Option<[f32; 4]>,
+        dst_rect: Option<[f32; 4]>,
+        opacity: f32,
+    ) -> PyResult<()> {
+        graphics!(module).blend(src, mode, src_rect, dst_rect, opacity)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (src, *, src_rect=None, dst_rect=None))]
+    fn copy(
+        module: &Bound<'_, PyModule>,
+        src: &Bound<'_, PyAny>,
+        src_rect: Option<[f32; 4]>,
+        dst_rect: Option<[f32; 4]>,
+    ) -> PyResult<()> {
+        graphics!(module).copy(src, src_rect, dst_rect)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn mask(module: &Bound<'_, PyModule>, mask: &Bound<'_, PyAny>) -> PyResult<()> {
+        graphics!(module).mask(mask)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (*, decay=0.95, zoom=1.0, angle=0.0, offset=(0.0, 0.0)))]
+    fn feedback(
+        module: &Bound<'_, PyModule>,
+        decay: f32,
+        zoom: f32,
+        angle: f32,
+        offset: (f32, f32),
+    ) -> PyResult<()> {
+        graphics!(module).feedback(decay, zoom, angle, offset)
+    }
+
+    // --- Text ---
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (content, x, y, *args, max_w=None, max_h=None))]
+    fn text(
+        module: &Bound<'_, PyModule>,
+        content: &str,
+        x: f32,
+        y: f32,
+        args: &Bound<'_, PyTuple>,
+        max_w: Option<f32>,
+        max_h: Option<f32>,
+    ) -> PyResult<()> {
+        graphics!(module).text(content, x, y, args, max_w, max_h)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn text_size(module: &Bound<'_, PyModule>, size: f32) -> PyResult<()> {
+        graphics!(module).text_size(size)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (h, v=None))]
+    fn text_align(module: &Bound<'_, PyModule>, h: &str, v: Option<&str>) -> PyResult<()> {
+        graphics!(module).text_align(h, v)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn text_leading(module: &Bound<'_, PyModule>, leading: f32) -> PyResult<()> {
+        graphics!(module).text_leading(leading)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (font=None))]
+    fn text_font(module: &Bound<'_, PyModule>, font: Option<&Font>) -> PyResult<()> {
+        graphics!(module).text_font(font)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn text_style(module: &Bound<'_, PyModule>, style: &str) -> PyResult<()> {
+        graphics!(module).text_style(style)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn text_wrap(module: &Bound<'_, PyModule>, mode: &str) -> PyResult<()> {
+        graphics!(module).text_wrap(mode)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn text_width(module: &Bound<'_, PyModule>, content: &str) -> PyResult<f32> {
+        graphics!(module).text_width(content)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn text_ascent(module: &Bound<'_, PyModule>) -> PyResult<f32> {
+        graphics!(module).text_ascent()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn text_descent(module: &Bound<'_, PyModule>) -> PyResult<f32> {
+        graphics!(module).text_descent()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (content, x, y, max_w=None, max_h=None))]
+    fn text_bounds(
+        module: &Bound<'_, PyModule>,
+        content: &str,
+        x: f32,
+        y: f32,
+        max_w: Option<f32>,
+        max_h: Option<f32>,
+    ) -> PyResult<(f32, f32, f32, f32)> {
+        graphics!(module).text_bounds(content, x, y, max_w, max_h)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn text_line_count(module: &Bound<'_, PyModule>, content: &str) -> PyResult<usize> {
+        graphics!(module).text_line_count(content)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn text_weight(module: &Bound<'_, PyModule>, weight: f32) -> PyResult<()> {
+        graphics!(module).text_weight(weight)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn text_variation(module: &Bound<'_, PyModule>, tag: &str, value: f32) -> PyResult<()> {
+        graphics!(module).text_variation(tag, value)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn clear_text_variations(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).clear_text_variations()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (tag, value=None))]
+    fn text_feature(
+        module: &Bound<'_, PyModule>,
+        tag: &str,
+        value: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        graphics!(module).text_feature(tag, value)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn no_text_feature(module: &Bound<'_, PyModule>, tag: &str) -> PyResult<()> {
+        graphics!(module).no_text_feature(tag)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn clear_text_features(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).clear_text_features()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn text_glyph_colors(
+        module: &Bound<'_, PyModule>,
+        colors: Vec<PyRef<'_, PyColor>>,
+    ) -> PyResult<()> {
+        graphics!(module).text_glyph_colors(colors)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn load_font(module: &Bound<'_, PyModule>, path: &str) -> PyResult<Font> {
+        graphics!(module).load_font(path)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn create_font(module: &Bound<'_, PyModule>, name: &str) -> PyResult<Font> {
+        graphics!(module).create_font(name)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn list_fonts(module: &Bound<'_, PyModule>) -> PyResult<Vec<String>> {
+        graphics!(module).list_fonts()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn text_to_paths(
+        module: &Bound<'_, PyModule>,
+        content: &str,
+        x: f32,
+        y: f32,
+    ) -> PyResult<Vec<Vec<Py<PyAny>>>> {
+        graphics!(module).text_to_paths(content, x, y)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn text_to_contours(
+        module: &Bound<'_, PyModule>,
+        content: &str,
+        x: f32,
+        y: f32,
+    ) -> PyResult<Vec<Vec<Py<PyAny>>>> {
+        graphics!(module).text_to_contours(content, x, y)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (content, x, y, sample_factor=None))]
+    fn text_to_points(
+        module: &Bound<'_, PyModule>,
+        content: &str,
+        x: f32,
+        y: f32,
+        sample_factor: Option<f32>,
+    ) -> PyResult<Vec<[f32; 2]>> {
+        graphics!(module).text_to_points(content, x, y, sample_factor)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn text_to_model(
+        module: &Bound<'_, PyModule>,
+        content: &str,
+        x: f32,
+        y: f32,
+        depth: f32,
+    ) -> PyResult<Geometry> {
+        graphics!(module).text_to_model(content, x, y, depth)
     }
 
     #[pyfunction]
@@ -1583,6 +1939,129 @@ mod mewnala {
     #[pyo3(pass_module)]
     fn reset_matrix(module: &Bound<'_, PyModule>) -> PyResult<()> {
         graphics!(module).reset_matrix()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (*args))]
+    fn apply_matrix(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        graphics!(module).apply_matrix(args)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (*args))]
+    fn set_matrix(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        graphics!(module).set_matrix(args)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn get_matrix(module: &Bound<'_, PyModule>) -> PyResult<[f32; 16]> {
+        graphics!(module).get_matrix()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (x, y, z=0.0))]
+    fn screen_x(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<f32> {
+        graphics!(module).screen_x(x, y, z)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (x, y, z=0.0))]
+    fn screen_y(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<f32> {
+        graphics!(module).screen_y(x, y, z)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (x, y, z=0.0))]
+    fn screen_z(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<f32> {
+        graphics!(module).screen_z(x, y, z)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (x, y, z=0.0))]
+    fn model_x(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<f32> {
+        graphics!(module).model_x(x, y, z)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (x, y, z=0.0))]
+    fn model_y(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<f32> {
+        graphics!(module).model_y(x, y, z)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (x, y, z=0.0))]
+    fn model_z(module: &Bound<'_, PyModule>, x: f32, y: f32, z: f32) -> PyResult<f32> {
+        graphics!(module).model_z(x, y, z)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (sx, sy, depth=0.0))]
+    fn world_x(module: &Bound<'_, PyModule>, sx: f32, sy: f32, depth: f32) -> PyResult<f32> {
+        graphics!(module).world_x(sx, sy, depth)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (sx, sy, depth=0.0))]
+    fn world_y(module: &Bound<'_, PyModule>, sx: f32, sy: f32, depth: f32) -> PyResult<f32> {
+        graphics!(module).world_y(sx, sy, depth)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (sx, sy, depth=0.0))]
+    fn world_z(module: &Bound<'_, PyModule>, sx: f32, sy: f32, depth: f32) -> PyResult<f32> {
+        graphics!(module).world_z(sx, sy, depth)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn get(module: &Bound<'_, PyModule>, x: u32, y: u32) -> PyResult<PyColor> {
+        graphics!(module).get(x, y)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (x, y, *args))]
+    fn set(
+        module: &Bound<'_, PyModule>,
+        x: u32,
+        y: u32,
+        args: &Bound<'_, PyTuple>,
+    ) -> PyResult<()> {
+        graphics!(module).set(x, y, args)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn load_pixels(module: &Bound<'_, PyModule>, py: Python<'_>) -> PyResult<Py<PyList>> {
+        graphics!(module).load_pixels(py)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (pixels=None))]
+    fn update_pixels(
+        module: &Bound<'_, PyModule>,
+        py: Python<'_>,
+        pixels: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        graphics!(module).update_pixels(py, pixels)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn save(module: &Bound<'_, PyModule>, filename: &str) -> PyResult<()> {
+        graphics!(module).save(filename)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (filename=None))]
+    fn save_frame(module: &Bound<'_, PyModule>, filename: Option<&str>) -> PyResult<()> {
+        let count = ::processing::prelude::frame_count()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let name = match filename {
+            Some(f) => substitute_frame_number(f, count),
+            None => format!("screen-{count:04}.png"),
+        };
+        graphics!(module).save(&name)
     }
 
     #[pyfunction]

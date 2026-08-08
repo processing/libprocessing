@@ -20,6 +20,12 @@ fn sample(uv: vec2<f32>) -> vec4<f32> {
     return textureSample(screen_texture, texture_sampler, uv);
 }
 
+// Sample an arbitrary input texture (e.g. a composite's source operand) with the
+// shared engine sampler, so composite/multi-input filters need not bind their own.
+fn sample_texture(tex: texture_2d<f32>, uv: vec2<f32>) -> vec4<f32> {
+    return textureSample(tex, texture_sampler, uv);
+}
+
 fn resolution() -> vec2<f32> { return params.resolution; }
 fn texel_size() -> vec2<f32> { return params.texel_size; }
 fn pass_index() -> u32 { return params.pass_index; }

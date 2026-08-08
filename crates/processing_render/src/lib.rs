@@ -113,12 +113,13 @@ pub fn surface_create_macos(
     width: u32,
     height: u32,
     scale_factor: f32,
+    transparent: bool,
 ) -> error::Result<Entity> {
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(
                 surface::create_surface_macos,
-                (window_handle, width, height, scale_factor),
+                (window_handle, width, height, scale_factor, transparent),
             )
             .unwrap()
     })
@@ -131,12 +132,13 @@ pub fn surface_create_windows(
     width: u32,
     height: u32,
     scale_factor: f32,
+    transparent: bool,
 ) -> error::Result<Entity> {
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(
                 surface::create_surface_windows,
-                (window_handle, width, height, scale_factor),
+                (window_handle, width, height, scale_factor, transparent),
             )
             .unwrap()
     })
@@ -150,12 +152,13 @@ pub fn surface_create_wayland(
     width: u32,
     height: u32,
     scale_factor: f32,
+    transparent: bool,
 ) -> error::Result<Entity> {
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(
                 surface::create_surface_wayland,
-                (window_handle, display_handle, width, height, scale_factor),
+                (window_handle, display_handle, width, height, scale_factor, transparent),
             )
             .unwrap()
     })
@@ -169,12 +172,13 @@ pub fn surface_create_x11(
     width: u32,
     height: u32,
     scale_factor: f32,
+    transparent: bool,
 ) -> error::Result<Entity> {
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(
                 surface::create_surface_x11,
-                (window_handle, display_handle, width, height, scale_factor),
+                (window_handle, display_handle, width, height, scale_factor, transparent),
             )
             .unwrap()
     })
@@ -189,6 +193,7 @@ pub fn surface_create_linux(
     width: u32,
     height: u32,
     scale_factor: f32,
+    transparent: bool,
 ) -> error::Result<Entity> {
     // prefer wayland, since x11 may also be available under xwayland
     let nonempty = |name| std::env::var_os(name).is_some_and(|v| !v.is_empty());
@@ -197,20 +202,48 @@ pub fn surface_create_linux(
     #[cfg(all(feature = "wayland", feature = "x11"))]
     {
         if is_wayland {
-            surface_create_wayland(window_handle, display_handle, width, height, scale_factor)
+            surface_create_wayland(
+                window_handle,
+                display_handle,
+                width,
+                height,
+                scale_factor,
+                transparent,
+            )
         } else {
-            surface_create_x11(window_handle, display_handle, width, height, scale_factor)
+            surface_create_x11(
+                window_handle,
+                display_handle,
+                width,
+                height,
+                scale_factor,
+                transparent,
+            )
         }
     }
     #[cfg(all(feature = "wayland", not(feature = "x11")))]
     {
         let _ = is_wayland;
-        surface_create_wayland(window_handle, display_handle, width, height, scale_factor)
+        surface_create_wayland(
+            window_handle,
+            display_handle,
+            width,
+            height,
+            scale_factor,
+            transparent,
+        )
     }
     #[cfg(all(not(feature = "wayland"), feature = "x11"))]
     {
         let _ = is_wayland;
-        surface_create_x11(window_handle, display_handle, width, height, scale_factor)
+        surface_create_x11(
+            window_handle,
+            display_handle,
+            width,
+            height,
+            scale_factor,
+            transparent,
+        )
     }
     #[cfg(not(any(feature = "wayland", feature = "x11")))]
     {
@@ -220,6 +253,7 @@ pub fn surface_create_linux(
             width,
             height,
             scale_factor,
+            transparent,
             is_wayland,
         );
         Err(processing_core::error::ProcessingError::InvalidArgument(
@@ -235,12 +269,13 @@ pub fn surface_create_web(
     width: u32,
     height: u32,
     scale_factor: f32,
+    transparent: bool,
 ) -> error::Result<Entity> {
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(
                 surface::create_surface_web,
-                (window_handle, width, height, scale_factor),
+                (window_handle, width, height, scale_factor, transparent),
             )
             .unwrap()
     })
@@ -293,7 +328,7 @@ pub fn surface_create_from_canvas(
     // TODO: not sure if this is right to force here
     let scale_factor = 1.0;
 
-    surface_create_web(canvas_ptr, width, height, scale_factor)
+    surface_create_web(canvas_ptr, width, height, scale_factor, false)
 }
 
 pub fn surface_destroy(graphics_entity: Entity) -> error::Result<()> {
@@ -567,6 +602,8 @@ builtin_filter!(filter_posterize, POSTERIZE);
 builtin_filter!(filter_opaque, OPAQUE);
 builtin_filter!(filter_erode, ERODE);
 builtin_filter!(filter_dilate, DILATE);
+builtin_filter!(filter_composite, COMPOSITE);
+builtin_filter!(filter_feedback, FEEDBACK);
 
 pub fn filter_set_passes(entity: Entity, passes: u32) -> error::Result<()> {
     app_mut(|app| {
@@ -1099,6 +1136,48 @@ pub fn image_resize(entity: Entity, new_size: Extent3d) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(image::resize, (entity, new_size))
+            .unwrap()
+    })
+}
+
+/// Get the pixel dimensions `(width, height)` of an image.
+pub fn image_size(entity: Entity) -> error::Result<(u32, u32)> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(image::dimensions, entity)
+            .unwrap()
+    })
+}
+
+/// Blit a source into a destination image (a sampling copy that handles differing
+/// size/format). `src` is either an image or, when `src_is_graphics`, a graphics
+/// render target (which is flushed first so its latest content is copied).
+pub fn image_copy_from(dst: Entity, src: Entity, src_is_graphics: bool) -> error::Result<()> {
+    app_mut(|app| {
+        let source = if src_is_graphics {
+            crate::graphics::flush(app, src)?;
+            image::BlitSource::Graphics(src)
+        } else {
+            // Ensure both images are extracted to the render world (a graphics
+            // source is covered by its flush above; a bare image source is not).
+            app.update();
+            let handle = app
+                .world()
+                .get::<image::Image>(src)
+                .ok_or(error::ProcessingError::ImageNotFound)?
+                .handle
+                .clone();
+            image::BlitSource::Image(handle)
+        };
+        let dst_handle = app
+            .world()
+            .get::<image::Image>(dst)
+            .ok_or(error::ProcessingError::ImageNotFound)?
+            .handle
+            .clone();
+        app.sub_app_mut(bevy::render::RenderApp)
+            .world_mut()
+            .run_system_cached_with(image::blit, (dst_handle, source))
             .unwrap()
     })
 }

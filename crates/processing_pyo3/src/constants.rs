@@ -38,6 +38,10 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("DILATE", crate::filter::DILATE_U8)?;
 
     add!(m, LEFT, RIGHT);
+    // text align (LEFT/RIGHT/CENTER above), style, and wrap constants
+    add!(m, TOP, BOTTOM, BASELINE);
+    add!(m, NORMAL, ITALIC, BOLD, BOLD_ITALIC);
+    add!(m, WORD, CHAR);
     add!(m, NEAREST, CLAMP, REPEAT, MIRROR);
     add!(m, SRGB, LINEAR, HSL, HSV, HWB, OKLAB, OKLCH, LAB, LCH, XYZ);
     add!(

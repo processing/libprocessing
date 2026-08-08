@@ -44,7 +44,7 @@ def setup():
 
 def draw():
     background(8, 8, 13)
-    use_material(mat)
+    material(mat)
     particles(p, particle)
 
     seed = (int(elapsed_time * 1000.0) ^ 0xC0FFEE) & 0xFFFFFFFF

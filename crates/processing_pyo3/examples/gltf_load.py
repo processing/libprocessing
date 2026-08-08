@@ -36,7 +36,7 @@ def draw():
     duck_mat.set(base_color=[r, g, b, 1.0])
 
     background(25)
-    use_material(duck_mat)
+    material(duck_mat)
     draw_geometry(duck_geo)
 
     frame += 1

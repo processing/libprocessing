@@ -31,7 +31,70 @@ use processing_core::error::{ProcessingError, Result};
 pub struct ImagePlugin;
 
 impl Plugin for ImagePlugin {
-    fn build(&self, _app: &mut App) {}
+    fn build(&self, app: &mut App) {
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
+            render_app.init_resource::<BlitterCache>();
+        }
+    }
+}
+
+/// Where a blit reads its source pixels: another image, or a graphics render
+/// target (via its render-world `ViewTarget`).
+pub enum BlitSource {
+    Image(Handle<bevy::image::Image>),
+    Graphics(Entity),
+}
+
+/// Caches one `wgpu::util::TextureBlitter` per destination texture format. Lives
+/// in the render world; blitters are cheap to reuse and expensive to rebuild.
+#[derive(Resource, Default)]
+pub struct BlitterCache {
+    blitters: std::collections::HashMap<TextureFormat, wgpu::util::TextureBlitter>,
+}
+
+/// Blit `source` into the destination image (a sampling copy: handles differing
+/// size and format, unlike a raw `copy_texture_to_texture`). Runs in the render
+/// world; the destination image's texture is used as the render target.
+pub fn blit(
+    In((dst_handle, source)): In<(Handle<bevy::image::Image>, BlitSource)>,
+    render_device: Res<RenderDevice>,
+    render_queue: Res<RenderQueue>,
+    gpu_images: Res<RenderAssets<GpuImage>>,
+    view_targets: Query<(&bevy::render::sync_world::MainEntity, &bevy::render::view::ViewTarget)>,
+    mut cache: ResMut<BlitterCache>,
+) -> Result<()> {
+    let dst = gpu_images
+        .get(&dst_handle)
+        .ok_or(ProcessingError::ImageNotFound)?;
+    let dst_view: &wgpu::TextureView = &dst.texture_view;
+    let format = dst.texture_descriptor.format;
+
+    let src_view: &wgpu::TextureView = match &source {
+        BlitSource::Image(handle) => {
+            &gpu_images
+                .get(handle)
+                .ok_or(ProcessingError::ImageNotFound)?
+                .texture_view
+        }
+        BlitSource::Graphics(entity) => view_targets
+            .iter()
+            .find(|(main, _)| ***main == *entity)
+            .map(|(_, vt)| vt.main_texture_view())
+            .ok_or(ProcessingError::GraphicsNotFound)?,
+    };
+
+    let device = render_device.wgpu_device();
+    let blitter = cache
+        .blitters
+        .entry(format)
+        .or_insert_with(|| wgpu::util::TextureBlitter::new(device, format));
+
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("processing_blit"),
+    });
+    blitter.copy(device, &mut encoder, src_view, dst_view);
+    render_queue.submit(std::iter::once(encoder.finish()));
+    Ok(())
 }
 
 #[derive(Component)]
@@ -329,6 +392,14 @@ pub fn prepare_update_region(
     let data = pixels_to_bytes(pixels, p_image.texture_format)?;
 
     Ok((data, px_size))
+}
+
+/// Get the pixel dimensions `(width, height)` of an image.
+pub fn dimensions(In(entity): In<Entity>, p_images: Query<&Image>) -> Result<(u32, u32)> {
+    let p_image = p_images
+        .get(entity)
+        .map_err(|_| ProcessingError::ImageNotFound)?;
+    Ok((p_image.size.width, p_image.size.height))
 }
 
 pub fn destroy(

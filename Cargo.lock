@@ -6196,6 +6196,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "wesl",
+ "wgpu",
  "windows 0.58.0",
 ]
 
