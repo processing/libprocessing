@@ -289,7 +289,7 @@ pub(crate) fn apply_reflect_field(
     value: &dyn PartialReflect,
 ) -> Result<()> {
     if let Some(field) = shader.field_mut(name) {
-        field.apply(value);
+        apply_field_coerced(field, value);
         return Ok(());
     }
 
@@ -299,11 +299,39 @@ pub(crate) fn apply_reflect_field(
         && let ReflectMut::Struct(s) = param.reflect_mut()
         && let Some(field) = s.field_mut(name)
     {
-        field.apply(value);
+        apply_field_coerced(field, value);
         return Ok(());
     }
 
     Err(ProcessingError::UnknownShaderProperty(name.to_string()))
+}
+
+fn reflect_scalar_as_f64(value: &dyn PartialReflect) -> Option<f64> {
+    if let Some(v) = value.try_downcast_ref::<f32>() {
+        Some(*v as f64)
+    } else if let Some(v) = value.try_downcast_ref::<i32>() {
+        Some(*v as f64)
+    } else if let Some(v) = value.try_downcast_ref::<u32>() {
+        Some(*v as f64)
+    } else {
+        None
+    }
+}
+
+fn apply_field_coerced(field: &mut dyn PartialReflect, value: &dyn PartialReflect) {
+    if let Some(n) = reflect_scalar_as_f64(value) {
+        if field.try_downcast_ref::<f32>().is_some() {
+            field.apply((n as f32).as_partial_reflect());
+            return;
+        } else if field.try_downcast_ref::<u32>().is_some() {
+            field.apply((n as u32).as_partial_reflect());
+            return;
+        } else if field.try_downcast_ref::<i32>().is_some() {
+            field.apply((n as i32).as_partial_reflect());
+            return;
+        }
+    }
+    field.apply(value);
 }
 
 pub(crate) fn shader_value_to_reflect(value: &ShaderValue) -> Result<Box<dyn PartialReflect>> {

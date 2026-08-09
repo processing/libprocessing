@@ -694,11 +694,8 @@ pub struct Sketch {
     pub source: String,
 }
 
-#[pymethods]
 impl Geometry {
-    #[new]
-    #[pyo3(signature = (**kwargs))]
-    pub fn new(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
+    pub(crate) fn create(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
         let topology = match kwargs.and_then(|k| k.get_item("topology").ok().flatten()) {
             Some(t) => {
                 let s = t.extract::<String>()?;
@@ -712,7 +709,10 @@ impl Geometry {
             geometry_create(topology).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(Self { entity: geometry })
     }
+}
 
+#[pymethods]
+impl Geometry {
     #[pyo3(signature = (*args))]
     pub fn color(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
         let v = extract_vec4(args)?;

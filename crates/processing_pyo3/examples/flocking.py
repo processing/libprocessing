@@ -30,7 +30,7 @@ def draw():
     title_elapsed = elapsed_time - title_last_time
     if title_elapsed >= 0.5:
         fps = (frame_count - title_last_frame) / title_elapsed
-        window_title(f"GPU Flocking Duck — {boid_count:,} boids — {fps:.0f} FPS")
+        window_title(f"Flocking — {boid_count:,} boids — {fps:.0f} FPS")
         title_last_time = elapsed_time
         title_last_frame = frame_count
 

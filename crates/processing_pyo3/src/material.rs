@@ -1,6 +1,6 @@
 use bevy::prelude::Entity;
 use processing::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyInt};
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
 use crate::color::PyColor;
@@ -18,11 +18,16 @@ pub(crate) fn py_to_shader_value(value: &Bound<'_, PyAny>) -> PyResult<shader_va
     if let Ok(img_ref) = value.extract::<ImageRef>() {
         return Ok(shader_value::ShaderValue::Texture(img_ref.entity));
     }
+    if let Ok(int_val) = value.cast::<PyInt>() {
+        if let Ok(v) = int_val.extract::<i32>() {
+            return Ok(shader_value::ShaderValue::Int(v));
+        }
+        if let Ok(v) = int_val.extract::<u32>() {
+            return Ok(shader_value::ShaderValue::UInt(v));
+        }
+    }
     if let Ok(v) = value.extract::<f32>() {
         return Ok(shader_value::ShaderValue::Float(v));
-    }
-    if let Ok(v) = value.extract::<i32>() {
-        return Ok(shader_value::ShaderValue::Int(v));
     }
 
     if let Ok(v) = value.extract::<PyRef<PyVec4>>() {

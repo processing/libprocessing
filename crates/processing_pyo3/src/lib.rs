@@ -1385,6 +1385,52 @@ mod mewnala {
         Ok(window)
     }
 
+    /// Creates a GPU particle system (Processing `createParticles`). `attributes`
+    /// defaults to `position`; other built-in attributes (`velocity`, `color`,
+    /// `scale`, `life`, `age`, ...) and declared custom ones materialize on
+    /// demand when you call `buffer("name")`.
+    #[pyfunction]
+    #[pyo3(signature = (capacity=None, attributes=None, geometry=None))]
+    fn create_particles(
+        capacity: Option<u32>,
+        attributes: Option<Vec<PyRef<'_, super::particles::Attribute>>>,
+        geometry: Option<&Geometry>,
+    ) -> PyResult<super::particles::Particles> {
+        super::particles::Particles::create(capacity, attributes, geometry)
+    }
+
+    /// Creates a compute pass from a shader (Processing-style `createCompute`).
+    #[pyfunction]
+    fn create_compute(shader: &Shader) -> PyResult<Compute> {
+        Compute::create(shader)
+    }
+
+    /// Creates a GPU storage buffer, empty (`size` bytes) or from initial `data`.
+    #[pyfunction]
+    #[pyo3(signature = (size=None, data=None))]
+    fn create_buffer(size: Option<u64>, data: Option<&Bound<'_, PyAny>>) -> PyResult<Buffer> {
+        Buffer::create(size, data)
+    }
+
+    /// Creates a mesh builder (Processing `createShape`-style).
+    #[pyfunction]
+    #[pyo3(signature = (**kwargs))]
+    fn create_geometry(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Geometry> {
+        Geometry::create(kwargs)
+    }
+
+    /// Creates a shader from WGSL/WESL source.
+    #[pyfunction]
+    fn create_shader(source: &str) -> PyResult<Shader> {
+        Shader::from_source(source)
+    }
+
+    /// Loads a shader from a file (Processing `loadShader`).
+    #[pyfunction]
+    fn load_shader(path: &str) -> PyResult<Shader> {
+        Shader::from_path(path)
+    }
+
     fn apply_light_transform(
         light: &Light,
         position: Option<super::math::Vec3Like>,

@@ -7,8 +7,8 @@ def setup():
     size(800, 600)
     mode_3d()
 
-    shader = Shader.load("shaders/custom_material.wesl")
-    mat = Material(shader, color=[1.0, 0.2, 0.4, 1.0])
+    shader = load_shader("shaders/custom_material.wesl")
+    mat = create_material(shader, color=[1.0, 0.2, 0.4, 1.0])
 
 def draw():
     camera_position(0.0, 0.0, 200.0)

@@ -16,16 +16,16 @@ def setup():
     sphere = Geometry.sphere(0.08, 8, 6)
 
     capacity = 2000
-    p = Particles(
+    p = create_particles(
         capacity=capacity,
         attributes=[Attribute.position(), Attribute.color()],
     )
 
-    pos_buf = p.buffer(Attribute.position())
+    pos_buf = p.buffer("position")
     pos_buf.write([1.0e6] * (capacity * 3))
 
-    color_buf = p.buffer(Attribute.color())
-    mat = Material.unlit(albedo=color_buf)
+    color_buf = p.buffer("color")
+    mat = create_material(unlit=True, albedo=color_buf)
 
 
 def draw():

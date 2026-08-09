@@ -8,7 +8,7 @@ def setup():
     size(640, 480)
     mode_3d()
 
-    geometry = Geometry()
+    geometry = create_geometry()
 
     geometry.normal(0.0, 0.0, 1.0)
 

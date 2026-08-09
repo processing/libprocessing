@@ -26,6 +26,7 @@ pub use particles::{
     FALLOFF_INVERSE, FALLOFF_LINEAR, FALLOFF_QUADRATIC, FALLOFF_SMOOTHSTEP, particles_apply,
     particles_attribute_add, particles_buffer, particles_capacity, particles_create,
     particles_create_from_geometry, particles_destroy, particles_emit, particles_emit_gpu,
+    particles_ensure_attribute,
     particles_kernel_age, particles_kernel_attr_combine, particles_kernel_attr_linear,
     particles_kernel_attr_lookup1d, particles_kernel_attr_lookup2d, particles_kernel_attr_mix,
     particles_kernel_attract, particles_kernel_bounds_box, particles_kernel_bounds_geometry,

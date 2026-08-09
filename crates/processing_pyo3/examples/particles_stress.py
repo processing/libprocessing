@@ -24,17 +24,17 @@ def setup():
     directional_light((0.0, 1.0, 0.0), 1000.0, position=Vec3.Y, look_at=Vec3.ZERO)
     directional_light((0.0, 0.0, 1.0), 1000.0, position=Vec3.Z, look_at=Vec3.ZERO)
 
-    p = Particles(
+    p = create_particles(
         geometry=Geometry.grid(GRID, GRID, GRID, SPACING),
         attributes=[Attribute.position(), Attribute.uv(), Attribute.color()],
     )
 
     p.apply(Particles.noise(), scale=1.0 / SPACING, strength=SPACING * 0.6)
 
-    color_buf = p.buffer(Attribute.color())
+    color_buf = p.buffer("color")
     color_buf.write([
         [c.r, c.g, c.b, 1.0]
-        for uv in p.buffer(Attribute.uv()).read()
+        for uv in p.buffer("uv").read()
         for c in [hsva(uv[0] * 360.0, 0.85, 1.0)]
     ])
 

@@ -11,10 +11,11 @@ def setup():
     p_light = point_light((1.0, 1.0, 1.0), 100000.0, 800.0, 0.0)
     p_light.position(200.0, 200.0, 400.0)
 
-    mat = Material()
-    mat.set(roughness=0.3)
-    mat.set(metallic=0.8)
-    mat.set(base_color=[1.0, 0.85, 0.57, 1.0])
+    mat = create_material(
+        roughness=0.3,
+        metallic=0.8,
+        base_color=[1.0, 0.85, 0.57, 1.0],
+    )
 
 def draw():
     camera_position(0.0, 0.0, 200.0)

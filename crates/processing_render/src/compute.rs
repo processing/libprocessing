@@ -2,7 +2,6 @@ use std::collections::{BTreeSet, HashMap};
 
 use bevy::asset::{AssetId, RenderAssetUsages};
 use bevy::mesh::MeshVertexAttribute;
-use bevy::reflect::PartialReflect;
 use bevy::{
     prelude::*,
     render::{
@@ -24,9 +23,7 @@ use bevy::{
 use bevy_naga_reflect::dynamic_shader::DynamicShader;
 
 use crate::geometry::{Attribute, Geometry};
-use crate::image::Image as PImage;
-use crate::material::custom::{Shader, apply_reflect_field, shader_value_to_reflect};
-use crate::shader_value::ShaderValue;
+use crate::material::custom::Shader;
 use processing_core::error::{ProcessingError, Result};
 
 pub struct ComputePlugin;
@@ -293,118 +290,6 @@ pub fn create_compute(app: &mut App, shader_entity: Entity) -> Result<Entity> {
         }
     }
     Err(ProcessingError::PipelineNotReady(MAX_WAIT))
-}
-
-pub fn set_compute_property(
-    In((entity, name, value)): In<(Entity, String, ShaderValue)>,
-    mut computes: Query<&mut Compute>,
-    mut p_buffers: Query<&mut Buffer>,
-    p_images: Query<&PImage>,
-) -> Result<()> {
-    use bevy_naga_reflect::reflect::ParameterCategory;
-
-    let mut compute = computes
-        .get_mut(entity)
-        .map_err(|_| ProcessingError::ComputeNotFound)?;
-
-    match value {
-        ShaderValue::Buffer(buf_entity) => {
-            let category = compute
-                .shader
-                .reflection()
-                .parameter(&name)
-                .map(|p| p.category())
-                .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.clone()))?;
-            let ParameterCategory::Storage { read_only } = category else {
-                return Err(ProcessingError::InvalidArgument(format!(
-                    "property `{name}` expects {category:?}, got Buffer",
-                )));
-            };
-            let mut buffer = p_buffers
-                .get_mut(buf_entity)
-                .map_err(|_| ProcessingError::BufferNotFound)?;
-            compute.shader.insert(&name, buffer.handle.clone());
-            if !read_only {
-                buffer.bound_rw = true;
-            }
-            Ok(())
-        }
-        ShaderValue::MeshAttribute(geom_entity, attribute_entity) => {
-            let category = compute
-                .shader
-                .reflection()
-                .parameter(&name)
-                .map(|p| p.category())
-                .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.clone()))?;
-            let ParameterCategory::Storage { read_only } = category else {
-                return Err(ProcessingError::InvalidArgument(format!(
-                    "property `{name}` expects {category:?}, got MeshAttribute",
-                )));
-            };
-            if !read_only {
-                return Err(ProcessingError::InvalidArgument(format!(
-                    "property `{name}` is read-write; mesh attribute buffers can only bind as read-only",
-                )));
-            }
-            compute.mesh_bindings.insert(
-                name,
-                MeshBindingRef::Attribute {
-                    geom: geom_entity,
-                    attribute: attribute_entity,
-                },
-            );
-            Ok(())
-        }
-        ShaderValue::MeshIndex(geom_entity) => {
-            let category = compute
-                .shader
-                .reflection()
-                .parameter(&name)
-                .map(|p| p.category())
-                .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.clone()))?;
-            let ParameterCategory::Storage { read_only } = category else {
-                return Err(ProcessingError::InvalidArgument(format!(
-                    "property `{name}` expects {category:?}, got MeshIndex",
-                )));
-            };
-            if !read_only {
-                return Err(ProcessingError::InvalidArgument(format!(
-                    "property `{name}` is read-write; mesh index buffer can only bind as read-only",
-                )));
-            }
-            compute
-                .mesh_bindings
-                .insert(name, MeshBindingRef::Index { geom: geom_entity });
-            Ok(())
-        }
-        ShaderValue::Texture(img_entity) => {
-            let category = compute
-                .shader
-                .reflection()
-                .parameter(&name)
-                .map(|p| p.category())
-                .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.clone()))?;
-            if !matches!(
-                category,
-                ParameterCategory::Texture
-                    | ParameterCategory::StorageTexture
-                    | ParameterCategory::Sampler
-            ) {
-                return Err(ProcessingError::InvalidArgument(format!(
-                    "property `{name}` expects {category:?}, got Texture",
-                )));
-            }
-            let image = p_images
-                .get(img_entity)
-                .map_err(|_| ProcessingError::ImageNotFound)?;
-            compute.shader.insert(&name, image.handle.clone());
-            Ok(())
-        }
-        v => {
-            let reflect_value: Box<dyn PartialReflect> = shader_value_to_reflect(&v)?;
-            apply_reflect_field(&mut compute.shader, &name, &*reflect_value)
-        }
-    }
 }
 
 pub fn dispatch(

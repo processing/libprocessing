@@ -15,13 +15,13 @@ def setup():
     directional_light((0.95, 0.9, 0.85), 200.0)
 
     source = Geometry.sphere(5.0, 32, 24)
-    p = Particles(
+    p = create_particles(
         geometry=source,
         attributes=[Attribute.position(), Attribute.uv(), Attribute.color()],
     )
 
-    uv_buf = p.buffer(Attribute.uv())
-    color_buf = p.buffer(Attribute.color())
+    uv_buf = p.buffer("uv")
+    color_buf = p.buffer("color")
 
     colors = []
     for uv in uv_buf.read():
@@ -30,7 +30,7 @@ def setup():
     color_buf.write(colors)
 
     particle = Geometry.sphere(0.18, 10, 8)
-    mat = Material.pbr(albedo=color_buf)
+    mat = create_material(albedo=color_buf)
     noise = Particles.noise()
 
 

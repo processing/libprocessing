@@ -2,7 +2,10 @@ use bevy::prelude::Entity;
 use processing::prelude::*;
 use processing_render::geometry;
 use pyo3::types::PyDict;
-use pyo3::{exceptions::PyRuntimeError, prelude::*};
+use pyo3::{
+    exceptions::{PyRuntimeError, PyTypeError, PyValueError},
+    prelude::*,
+};
 use std::collections::HashMap;
 
 use crate::compute::{Buffer, Compute};
@@ -103,6 +106,18 @@ impl Attribute {
             entity: geometry_attribute_life(),
         }
     }
+    #[staticmethod]
+    pub fn velocity() -> Self {
+        Self {
+            entity: geometry_attribute_velocity(),
+        }
+    }
+    #[staticmethod]
+    pub fn age() -> Self {
+        Self {
+            entity: geometry_attribute_age(),
+        }
+    }
 
     #[getter]
     pub fn name(&self) -> PyResult<String> {
@@ -137,23 +152,57 @@ impl Particles {
         }
         Ok(map)
     }
-}
 
-#[pymethods]
-impl Particles {
-    /// pass `capacity` for empty buffers, or `geometry` to seed from a source mesh.
-    #[new]
-    #[pyo3(signature = (capacity=None, attributes=None, geometry=None))]
-    pub fn new(
+    /// Resolve a built-in attribute name to its `Attribute`.
+    fn builtin_attribute(name: &str) -> Option<Attribute> {
+        Some(match name {
+            "position" => Attribute::position(),
+            "velocity" => Attribute::velocity(),
+            "normal" => Attribute::normal(),
+            "color" => Attribute::color(),
+            "uv" => Attribute::uv(),
+            "rotation" => Attribute::rotation(),
+            "scale" => Attribute::scale(),
+            "life" => Attribute::life(),
+            "age" => Attribute::age(),
+            _ => return None,
+        })
+    }
+
+    /// Resolve a `buffer()` argument (an attribute name string or an `Attribute`)
+    /// to its attribute entity. Built-in names map to their factory; other names
+    /// must have been declared as custom attributes at construction.
+    fn resolve_attribute(&self, attribute: &Bound<'_, PyAny>) -> PyResult<Entity> {
+        if let Ok(attr) = attribute.extract::<Attribute>() {
+            return Ok(attr.entity);
+        }
+        if let Ok(name) = attribute.extract::<String>() {
+            if let Some(attr) = Self::builtin_attribute(&name) {
+                return Ok(attr.entity);
+            }
+            if let Some((entity, _)) = self.name_to_attr.get(&name) {
+                return Ok(*entity);
+            }
+            return Err(PyValueError::new_err(format!(
+                "\"{name}\" is not a built-in attribute; pass its Attribute to buffer()"
+            )));
+        }
+        Err(PyTypeError::new_err(
+            "buffer() expects an attribute name or an Attribute",
+        ))
+    }
+
+    /// Build a particle system (backs `create_particles`). Attributes default to
+    /// `position`; the rest (built-in or declared custom) materialize on demand.
+    pub(crate) fn create(
         capacity: Option<u32>,
         attributes: Option<Vec<PyRef<Attribute>>>,
         geometry: Option<&Geometry>,
     ) -> PyResult<Self> {
-        let attrs: Vec<Attribute> = attributes
-            .unwrap_or_default()
-            .iter()
-            .map(|a| (**a).clone())
-            .collect();
+        let attrs: Vec<Attribute> = match attributes {
+            Some(list) => list.iter().map(|a| (**a).clone()).collect(),
+            None => vec![Attribute::position()],
+        };
         let attr_entities: Vec<Entity> = attrs.iter().map(|a| a.entity).collect();
 
         let entity = match (capacity, geometry) {
@@ -163,12 +212,12 @@ impl Particles {
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
             (None, None) => {
                 return Err(PyRuntimeError::new_err(
-                    "Particles requires either capacity or geometry",
+                    "create_particles() requires either capacity or geometry",
                 ));
             }
             (Some(_), Some(_)) => {
                 return Err(PyRuntimeError::new_err(
-                    "Particles accepts capacity or geometry, not both",
+                    "create_particles() accepts capacity or geometry, not both",
                 ));
             }
         };
@@ -178,7 +227,10 @@ impl Particles {
             name_to_attr: Particles::build_name_index(&attrs)?,
         })
     }
+}
 
+#[pymethods]
+impl Particles {
     #[getter]
     pub fn capacity(&self) -> PyResult<u32> {
         particles_capacity(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
@@ -202,10 +254,15 @@ impl Particles {
         Ok(())
     }
 
-    pub fn buffer(&self, attribute: &Attribute) -> PyResult<Option<Buffer>> {
-        let buf = particles_buffer(self.entity, attribute.entity)
+    /// The GPU buffer for an attribute, materialized on demand. `attribute` is a
+    /// built-in name (`"position"`, `"velocity"`, `"color"`, `"scale"`, `"life"`,
+    /// `"age"`, `"normal"`, `"uv"`, `"rotation"`), a declared custom attribute's
+    /// name, or an `Attribute`.
+    pub fn buffer(&self, attribute: &Bound<'_, PyAny>) -> PyResult<Buffer> {
+        let attr_entity = self.resolve_attribute(attribute)?;
+        let buf = particles_ensure_attribute(self.entity, attr_entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        let (_, fmt) = geometry_attribute_info(attribute.entity)
+        let (_, fmt) = geometry_attribute_info(attr_entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         let element_type = match AttributeFormat::from_inner(fmt) {
             AttributeFormat::Float => shader_value::ShaderValue::Float(0.0),
@@ -213,7 +270,7 @@ impl Particles {
             AttributeFormat::Float3 => shader_value::ShaderValue::Float3([0.0; 3]),
             AttributeFormat::Float4 => shader_value::ShaderValue::Float4([0.0; 4]),
         };
-        Ok(buf.map(|e| Buffer::from_entity(e, Some(element_type))))
+        Ok(Buffer::from_entity(buf, Some(element_type)))
     }
 
     #[pyo3(signature = (compute, **kwargs))]

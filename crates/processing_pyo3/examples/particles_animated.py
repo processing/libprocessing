@@ -5,30 +5,6 @@ sphere = None
 mat = None
 spin = None
 
-SPIN_SHADER = """
-struct Params {
-    dt: f32,
-}
-
-@group(0) @binding(0) var<storage, read_write> position: array<f32>;
-@group(0) @binding(1) var<uniform> params: Params;
-
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    let i = gid.x;
-    let count = arrayLength(&position) / 3u;
-    if i >= count {
-        return;
-    }
-    let cs = cos(params.dt);
-    let sn = sin(params.dt);
-    let x = position[i * 3u + 0u];
-    let z = position[i * 3u + 2u];
-    position[i * 3u + 0u] = x * cs - z * sn;
-    position[i * 3u + 2u] = x * sn + z * cs;
-}
-"""
-
 
 def setup():
     global p, sphere, mat, spin
@@ -47,12 +23,12 @@ def setup():
             for z in range(10):
                 positions.extend([x - 4.5, y - 4.5, z - 4.5])
 
-    p = Particles(capacity=capacity, attributes=[Attribute.position()])
-    pos_buf = p.buffer(Attribute.position())
+    p = create_particles(capacity=capacity, attributes=[Attribute.position()])
+    pos_buf = p.buffer("position")
     pos_buf.write(positions)
 
-    mat = Material(roughness=0.4)
-    spin = Compute(Shader(SPIN_SHADER))
+    mat = create_material(roughness=0.4)
+    spin = create_compute(load_shader("shaders/particles_animated_spin.wesl"))
 
 
 def draw():

@@ -5,57 +5,15 @@ p = None
 sphere = None
 mat = None
 aging = None
-position_attr = None
-color_attr = None
-scale_attr = None
-life_attr = None
-age_attr = None
 frame = 0
 
 BURST = 6
 DT = 1.0 / 60.0
 TTL = 1.0
 
-AGING_SHADER = """
-@group(0) @binding(0) var<storage, read_write> age: array<f32>;
-@group(0) @binding(1) var<storage, read_write> life: array<f32>;
-@group(0) @binding(2) var<storage, read_write> position: array<f32>;
-@group(0) @binding(3) var<storage, read_write> scale: array<f32>;
-@group(0) @binding(4) var<uniform> params: vec4<f32>;  // x = dt, y = ttl
-
-@compute @workgroup_size(64)
-fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
-    let i = gid.x;
-    let count = arrayLength(&age);
-    if i >= count {
-        return;
-    }
-    let dt = params.x;
-    let ttl = params.y;
-
-    if life[i] <= 0.0 {
-        return;
-    }
-
-    age[i] = age[i] + dt;
-    position[i * 3u + 1u] = position[i * 3u + 1u] - dt * 1.5;
-
-    let remaining = clamp(1.0 - age[i] / ttl, 0.0, 1.0);
-    let s = remaining * remaining;
-    scale[i * 3u + 0u] = s;
-    scale[i * 3u + 1u] = s;
-    scale[i * 3u + 2u] = s;
-
-    if age[i] > ttl {
-        life[i] = 0.0;
-    }
-}
-"""
-
 
 def setup():
     global p, sphere, mat, aging
-    global position_attr, color_attr, scale_attr, life_attr, age_attr
 
     size(900, 700)
     mode_3d()
@@ -63,19 +21,19 @@ def setup():
     sphere = Geometry.sphere(0.1, 8, 6)
 
     capacity = 800
-    position_attr = Attribute.position()
-    color_attr = Attribute.color()
-    scale_attr = Attribute.scale()
-    life_attr = Attribute.life()
-    age_attr = Attribute("age", AttributeFormat.Float)
-
-    p = Particles(
+    p = create_particles(
         capacity=capacity,
-        attributes=[position_attr, color_attr, scale_attr, life_attr, age_attr],
+        attributes=[
+            Attribute.position(),
+            Attribute.color(),
+            Attribute.scale(),
+            Attribute.life(),
+            Attribute.age(),
+        ],
     )
-    color_buf = p.buffer(color_attr)
-    mat = Material.unlit(albedo=color_buf)
-    aging = Compute(Shader(AGING_SHADER))
+    color_buf = p.buffer("color")
+    mat = create_material(unlit=True, albedo=color_buf)
+    aging = create_compute(load_shader("shaders/particles_lifecycle_aging.wesl"))
 
 
 def draw():

@@ -31,11 +31,8 @@ impl Buffer {
     }
 }
 
-#[pymethods]
 impl Buffer {
-    #[new]
-    #[pyo3(signature = (size=None, data=None))]
-    pub fn new(size: Option<u64>, data: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
+    pub(crate) fn create(size: Option<u64>, data: Option<&Bound<'_, PyAny>>) -> PyResult<Self> {
         let (entity, size, element_type) = if let Some(data) = data {
             let (bytes, element_type) = shader_values_to_bytes(data)?;
             let size = bytes.len() as u64;
@@ -55,7 +52,10 @@ impl Buffer {
             borrowed: false,
         })
     }
+}
 
+#[pymethods]
+impl Buffer {
     pub fn __len__(&self) -> usize {
         match &self.element_type {
             Some(et) => et
@@ -275,15 +275,16 @@ impl Compute {
     }
 }
 
-#[pymethods]
 impl Compute {
-    #[new]
-    pub fn new(shader: &Shader) -> PyResult<Self> {
+    pub(crate) fn create(shader: &Shader) -> PyResult<Self> {
         let entity =
             compute_create(shader.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(Self { entity })
     }
+}
 
+#[pymethods]
+impl Compute {
     #[pyo3(signature = (**kwargs))]
     pub fn set(&self, kwargs: Option<&Bound<'_, pyo3::types::PyDict>>) -> PyResult<()> {
         let Some(kwargs) = kwargs else {

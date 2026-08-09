@@ -11,7 +11,7 @@ def setup():
     global geometry
     size(800, 600)
     mode_3d()
-    geometry = Geometry()
+    geometry = create_geometry()
     for z in range(grid_size):
         for x in range(grid_size):
             px = x * spacing - offset

@@ -26,20 +26,19 @@ def setup():
 
     particle = Geometry.sphere(0.15, 4, 3)
 
-    age_attr = Attribute("age", AttributeFormat.Float)
-    p = Particles(
+    p = create_particles(
         capacity=CAPACITY,
         attributes=[
             Attribute.position(),
             Attribute.scale(),
             Attribute.life(),
-            age_attr,
+            Attribute.age(),
         ],
     )
-    mat = Material.unlit(albedo=[1.0, 1.0, 1.0, 1.0])
+    mat = create_material(unlit=True, albedo=[1.0, 1.0, 1.0, 1.0])
 
     decay = Particles.attr_linear()
-    decay.set(op=p.buffer(Attribute.scale()), scale=0.985, offset=0.0)
+    decay.set(op=p.buffer("scale"), scale=0.985, offset=0.0)
 
 
 def draw():
