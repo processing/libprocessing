@@ -7,7 +7,10 @@ pub mod style;
 pub mod transform;
 
 use bevy::{
-    camera::{primitives::Aabb, visibility::RenderLayers},
+    camera::{
+        primitives::Aabb,
+        visibility::{NoFrustumCulling, RenderLayers},
+    },
     ecs::system::SystemParam,
     math::{Affine2, Affine3A, Mat4, Vec3A, Vec4},
     pbr::gpu_instance_batch::GpuBatchedMesh3d,
@@ -146,12 +149,29 @@ pub fn flush_draw_commands(
     p_geometries: Query<(&Geometry, Option<&GltfNodeTransform>)>,
     p_material_handles: Query<&UntypedMaterial>,
     mut p_particles: Query<&mut Particles>,
+    p_particle_buffers: Query<&crate::compute::Buffer>,
+    builtin_attributes: Res<crate::geometry::attribute::BuiltinAttributes>,
     p_fonts: Query<&crate::text::font::Font>,
     text_cx: Res<TextContext>,
+    p_raster_draws: Query<
+        (Entity, &RenderLayers),
+        Or<(
+            With<crate::particles::point_render::ParticleRasterDraw>,
+            With<ParticlesDraw>,
+        )>,
+    >,
 ) {
     for (graphics_entity, mut cmd_buffer, mut state, render_layers, projection, camera_transform) in
         graphics.iter_mut()
     {
+        for (raster_entity, raster_layers) in p_raster_draws.iter() {
+            if raster_layers.intersects(render_layers) {
+                res.commands
+                    .entity(raster_entity)
+                    .insert(Visibility::Hidden);
+            }
+        }
+
         let clip_from_view = projection.get_clip_from_view();
         let view_from_world = camera_transform.to_matrix().inverse();
         let world_from_clip = (clip_from_view * view_from_world).inverse();
@@ -924,7 +944,98 @@ pub fn flush_draw_commands(
                 }
                 DrawCommand::Particles {
                     particles,
-                    geometry,
+                    geometry: None,
+                    topology,
+                } => {
+                    let Ok(mut particles_data) = p_particles.get_mut(particles) else {
+                        warn!("Could not find Particles for entity {:?}", particles);
+                        continue;
+                    };
+
+                    let position_attr = builtin_attributes.position;
+                    let Some(&buffer_entity) = particles_data.buffers.get(&position_attr) else {
+                        warn!(
+                            "particles(p) with no geometry needs a materialized `position` buffer"
+                        );
+                        continue;
+                    };
+                    let Ok(buffer) = p_particle_buffers.get(buffer_entity) else {
+                        warn!("position buffer {:?} has no compute::Buffer", buffer_entity);
+                        continue;
+                    };
+                    let position = buffer.handle.clone();
+                    let count = particles_data.capacity;
+
+                    let (index, indirect) = match particles_data.connectivity {
+                        Some(connectivity) => {
+                            let (Ok(index_buf), Ok(indirect_buf)) = (
+                                p_particle_buffers.get(connectivity.index_buffer),
+                                p_particle_buffers.get(connectivity.indirect_buffer),
+                            ) else {
+                                warn!("connectivity buffers for {:?} not found", particles);
+                                continue;
+                            };
+                            (
+                                Some(index_buf.handle.clone()),
+                                Some(indirect_buf.handle.clone()),
+                            )
+                        }
+                        None => (None, None),
+                    };
+
+                    let color = particles_data
+                        .buffers
+                        .get(&builtin_attributes.color)
+                        .and_then(|&e| p_particle_buffers.get(e).ok())
+                        .map(|b| b.handle.clone());
+                    let normal = particles_data
+                        .buffers
+                        .get(&builtin_attributes.normal)
+                        .and_then(|&e| p_particle_buffers.get(e).ok())
+                        .map(|b| b.handle.clone());
+                    let render_layers = batch.render_layers.clone();
+
+                    flush_batch(&mut res, &mut batch, &p_material_handles);
+
+                    let raster_draw = crate::particles::point_render::ParticleRasterDraw {
+                        position,
+                        count,
+                        topology,
+                        index,
+                        indirect,
+                        color,
+                        normal,
+                        blend: state.style.blend_state,
+                    };
+                    match particles_data.raster_draw_entity {
+                        Some(e) => {
+                            res.commands.entity(e).insert((
+                                raster_draw,
+                                render_layers,
+                                Visibility::Visible,
+                            ));
+                        }
+                        None => {
+                            let e = res
+                                .commands
+                                .spawn((
+                                    raster_draw,
+                                    Visibility::Visible,
+                                    Transform::default(),
+                                    NoFrustumCulling,
+                                    render_layers,
+                                ))
+                                .id();
+                            particles_data.raster_draw_entity = Some(e);
+                        }
+                    }
+
+                    batch.draw_index += 1;
+                }
+                DrawCommand::Particles {
+                    particles,
+                    geometry: Some(geometry),
+                    topology: _,
                 } => {
                     let Some((geometry_data, _)) = p_geometries.get(geometry).ok() else {
                         warn!("Could not find Geometry for entity {:?}", geometry);
@@ -978,6 +1089,7 @@ pub fn flush_draw_commands(
                                 },
                                 UntypedMaterial(material_handle),
                                 render_layers,
+                                Visibility::Visible,
                             ));
                         }
                         None => {
@@ -995,6 +1107,7 @@ pub fn flush_draw_commands(
                                     },
                                     ParticlesDraw { particles },
                                     render_layers,
+                                    Visibility::Visible,
                                 ))
                                 .id();
                             particles_data.draw_entity = Some(e);

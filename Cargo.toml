@@ -213,6 +213,10 @@ name = "compute_readback"
 path = "examples/compute_readback.rs"
 
 [[example]]
+name = "alias_spike"
+path = "examples/alias_spike.rs"
+
+[[example]]
 name = "particles_basic"
 path = "examples/particles_basic.rs"
 

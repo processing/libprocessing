@@ -25,8 +25,7 @@ DT = 1.0 / 60.0
 p = None
 boid = None
 mat = None
-flock_pass = None
-integrate_pass = None
+grid = None
 title_last_time = 0.0
 title_last_frame = 0
 
@@ -53,7 +52,7 @@ def boid_geometry(half_width, length, droop):
 
 
 def setup():
-    global p, boid, mat, flock_pass, integrate_pass
+    global p, boid, mat, grid
 
     size(900, 700)
     window_title(f"GPU Flocking — {BOID_COUNT:,} boids")
@@ -68,7 +67,6 @@ def setup():
             Attribute.rotation(),
             Attribute.color(),
             Attribute.velocity(),
-            Attribute("steer", AttributeFormat.Float3),
         ],
     )
 
@@ -92,8 +90,12 @@ def setup():
     boid = boid_geometry(0.4, 1.3, 0.15)
     mat = create_material(albedo=color_buf)
 
-    flock_pass = create_compute(load_shader("shaders/flocking_gpu_flock.wesl"))
-    integrate_pass = create_compute(load_shader("shaders/flocking_gpu_integrate.wesl"))
+    cells = int((2.0 * BOUND) / NEIGHBOR_DIST) + 1
+    grid = p.create_grid(
+        min=[-BOUND, -BOUND, -BOUND],
+        cell_size=NEIGHBOR_DIST,
+        dims=[cells, cells, cells],
+    )
 
 
 def draw():
@@ -115,16 +117,20 @@ def draw():
     material(mat)
     particles(p, boid)
 
-    flock_pass.set(
-        neighbor_dist=NEIGHBOR_DIST,
-        separation_dist=SEPARATION_DIST,
+    p.flock(
+        grid,
+        sep_distance=SEPARATION_DIST,
+        neighbor_distance=NEIGHBOR_DIST,
+        weight_separation=1.5,
+        weight_alignment=1.0,
+        weight_cohesion=1.0,
         max_speed=MAX_SPEED,
-        max_force=MAX_FORCE,
+        max_force=MAX_FORCE * DT,
+        min_speed=MAX_SPEED * 0.25,
     )
-    p.apply(flock_pass)
-
-    integrate_pass.set(dt=DT, max_speed=MAX_SPEED, bound=BOUND)
-    p.apply(integrate_pass)
+    p.apply(INTEGRATE, dt=DT)
+    p.apply(BOUNDS_BOX, aabb_min=[-BOUND] * 3, aabb_max=[BOUND] * 3, mode=2)
+    p.apply(ORIENT, forward=[0.0, 0.0, 1.0], up=[0.0, 1.0, 0.0])
 
 
 run()

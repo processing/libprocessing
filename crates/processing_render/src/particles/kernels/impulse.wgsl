@@ -1,3 +1,5 @@
+import processing::particles::falloff;
+
 struct Params {
     center: vec3<f32>,
     radius: f32,
@@ -27,19 +29,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let d = sqrt(d2);
     let dir = diff / d;
 
-    var fall: f32 = 1.0;
-    let n = 1.0 - d / params.radius;
-    if params.falloff_mode == 1u {
-        fall = n;
-    } else if params.falloff_mode == 2u {
-        fall = n * n * (3.0 - 2.0 * n);
-    } else if params.falloff_mode == 3u {
-        fall = n * n;
-    } else if params.falloff_mode == 4u {
-        fall = n * n * n;
-    } else if params.falloff_mode == 5u {
-        fall = params.radius / (d + params.radius);
-    }
+    let fall = falloff(d, params.radius, params.falloff_mode);
 
     let pos_push = dir * (params.position_kick * fall);
     let vel_push = dir * (params.velocity_kick * fall);

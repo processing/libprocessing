@@ -653,7 +653,8 @@ pub enum DrawCommand {
     Geometry(Entity),
     Particles {
         particles: Entity,
-        geometry: Entity,
+        geometry: Option<Entity>,
+        topology: crate::geometry::Topology,
     },
     BlendMode(Option<BlendState>),
     Material(Entity),

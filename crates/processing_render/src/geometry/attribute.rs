@@ -317,12 +317,33 @@ pub fn default_attribute_init(name: &str, format: AttributeFormat) -> Vec<f32> {
     }
 }
 
+#[derive(Resource, Default)]
+pub struct AttributeRegistry {
+    by_name: std::collections::HashMap<u64, (Entity, AttributeFormat)>,
+}
+
 pub fn create(
     In((name, format)): In<(String, AttributeFormat)>,
     mut commands: Commands,
+    builtins: Res<BuiltinAttributes>,
+    mut registry: ResMut<AttributeRegistry>,
 ) -> Result<Entity> {
-    // TODO: validation?
-    Ok(commands.spawn(Attribute::new(name, format)).id())
+    if let Some(entity) = builtins.by_name(&name) {
+        return Ok(entity);
+    }
+    let id = hash_attr_name(&name);
+    if let Some(&(entity, existing)) = registry.by_name.get(&id) {
+        if existing != format {
+            return Err(ProcessingError::InvalidArgument(format!(
+                "attribute '{name}' was already declared as {existing:?}, cannot \
+                 redeclare it as {format:?}"
+            )));
+        }
+        return Ok(entity);
+    }
+    let entity = commands.spawn(Attribute::new(name, format)).id();
+    registry.by_name.insert(id, (entity, format));
+    Ok(entity)
 }
 
 pub fn destroy(In(entity): In<Entity>, mut commands: Commands) -> Result<()> {

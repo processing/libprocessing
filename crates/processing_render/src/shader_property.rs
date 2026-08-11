@@ -83,7 +83,9 @@ pub(crate) fn apply_shader_value(
                 .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.to_string()))?;
             if !matches!(
                 category,
-                ParameterCategory::Texture | ParameterCategory::StorageTexture
+                ParameterCategory::Texture
+                    | ParameterCategory::StorageTexture
+                    | ParameterCategory::Sampler
             ) {
                 return Err(ProcessingError::InvalidArgument(format!(
                     "property `{name}` expects {category:?}, got Texture",

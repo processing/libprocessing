@@ -580,7 +580,8 @@ impl Image {
 
     /// Read a single pixel as a `Color` (Processing `get`).
     fn get(&self, x: u32, y: u32) -> PyResult<crate::color::PyColor> {
-        let (w, h) = image_size(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let (w, h) =
+            image_size(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         if x >= w || y >= h {
             return Err(PyValueError::new_err(format!(
                 "pixel ({x}, {y}) out of bounds for {w}x{h} image"
@@ -653,7 +654,8 @@ impl Image {
 
     /// Save the image to a PNG file (Processing `save`).
     fn save(&self, filename: &str) -> PyResult<()> {
-        let (w, h) = image_size(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let (w, h) =
+            image_size(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         let pixels =
             image_readback(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         let rgba: Vec<u8> = pixels
@@ -800,9 +802,12 @@ impl Graphics {
     /// Create an offscreen graphics buffer in the already-running app (no window,
     /// no `init`). Backs `create_graphics()` / `new_offscreen()`. The caller must
     /// ensure the app exists (i.e. `size()` was called first).
-    pub(crate) fn wrap_offscreen(width: u32, height: u32) -> PyResult<Self> {
-        // sRGB by default: it plays well with PNG export and blits.
-        let texture_format = TextureFormat::Rgba8UnormSrgb;
+    pub(crate) fn wrap_offscreen(width: u32, height: u32, hdr: bool) -> PyResult<Self> {
+        let texture_format = if hdr {
+            TextureFormat::Rgba16Float
+        } else {
+            TextureFormat::Rgba8UnormSrgb
+        };
         let surface_entity = surface_create_offscreen(width, height, 1.0, texture_format)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Self::from_surface(surface_entity, width, height, texture_format, None)
@@ -898,11 +903,13 @@ impl Graphics {
     }
 
     #[staticmethod]
+    #[pyo3(signature = (width, height, asset_path, log_level, hdr=false))]
     pub fn new_offscreen(
         width: u32,
         height: u32,
         asset_path: &str,
         log_level: Option<&str>,
+        hdr: bool,
     ) -> PyResult<Self> {
         let mut config = Config::new();
         config.set(ConfigKey::AssetRootPath, asset_path.to_string());
@@ -910,7 +917,7 @@ impl Graphics {
             config.set(ConfigKey::LogLevel, level.to_string());
         }
         init(config).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        Self::wrap_offscreen(width, height)
+        Self::wrap_offscreen(width, height, hdr)
     }
 
     #[getter]
@@ -994,8 +1001,8 @@ impl Graphics {
                 self.width, self.height
             )));
         }
-        let pixels = graphics_readback(self.entity)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let pixels =
+            graphics_readback(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         let p = pixels
             .get((y * self.width + x) as usize)
             .ok_or_else(|| PyValueError::new_err("pixel out of bounds"))?;
@@ -1016,8 +1023,8 @@ impl Graphics {
 
     /// Read all pixels into the `pixels` list (Processing `loadPixels`).
     pub fn load_pixels(&self, py: Python<'_>) -> PyResult<Py<PyList>> {
-        let pixels = graphics_readback(self.entity)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let pixels =
+            graphics_readback(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         let list = pixels_to_pylist(py, &pixels)?;
         *self.pixel_cache.lock().unwrap() = Some(list.clone_ref(py));
         Ok(list)
@@ -1654,8 +1661,9 @@ impl Graphics {
     #[pyo3(signature = (h, v=None))]
     pub fn text_align(&self, h: &str, v: Option<&str>) -> PyResult<()> {
         use processing::prelude::{TextAlignH, TextAlignV};
-        let h = TextAlignH::parse(h)
-            .ok_or_else(|| PyValueError::new_err(format!("unknown horizontal text align: {h:?}")))?;
+        let h = TextAlignH::parse(h).ok_or_else(|| {
+            PyValueError::new_err(format!("unknown horizontal text align: {h:?}"))
+        })?;
         let v = match v {
             Some(v) => TextAlignV::parse(v).ok_or_else(|| {
                 PyValueError::new_err(format!("unknown vertical text align: {v:?}"))
@@ -2171,16 +2179,25 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    #[pyo3(signature = (particles, geometry = None, topology = None))]
     pub fn particles(
         &self,
         particles: &crate::particles::Particles,
-        geometry: &Geometry,
+        geometry: Option<&Geometry>,
+        topology: Option<&str>,
     ) -> PyResult<()> {
+        let topology = match topology {
+            Some(s) => geometry::Topology::parse(s).ok_or_else(|| {
+                PyValueError::new_err(format!("particles(): unknown topology {s:?}"))
+            })?,
+            None => geometry::Topology::PointList,
+        };
         graphics_record_command(
             self.entity,
             DrawCommand::Particles {
                 particles: particles.entity,
-                geometry: geometry.entity,
+                geometry: geometry.map(|g| g.entity),
+                topology,
             },
         )
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
@@ -2220,6 +2237,16 @@ impl Graphics {
     pub fn blend_mode(&self, mode: &PyBlendMode) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::BlendMode(mode.blend_state))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    #[pyo3(signature = (intensity, threshold=0.0))]
+    pub fn bloom(&self, intensity: f32, threshold: f32) -> PyResult<()> {
+        if intensity <= 0.0 {
+            graphics_remove_bloom(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        } else {
+            graphics_set_bloom(self.entity, intensity, threshold)
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        }
     }
 
     /// Composites a source onto this graphics with a blend mode (Processing
@@ -2276,13 +2303,7 @@ impl Graphics {
     /// On a context you don't clear each frame, call this at the start of
     /// `draw()` and then draw new content on top to get feedback trails.
     #[pyo3(signature = (*, decay=0.95, zoom=1.0, angle=0.0, offset=(0.0, 0.0)))]
-    pub fn feedback(
-        &self,
-        decay: f32,
-        zoom: f32,
-        angle: f32,
-        offset: (f32, f32),
-    ) -> PyResult<()> {
+    pub fn feedback(&self, decay: f32, zoom: f32, angle: f32, offset: (f32, f32)) -> PyResult<()> {
         use shader_value::ShaderValue;
         let filter = filter_feedback().map_err(rt_err)?;
         filter_set(filter, "decay", ShaderValue::Float(decay)).map_err(rt_err)?;

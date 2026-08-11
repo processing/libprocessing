@@ -257,7 +257,8 @@ fn create_graphics_context(
     match env.as_str() {
         "jupyter" => {
             let asset_path = get_asset_root()?;
-            let graphics = Graphics::new_offscreen(width, height, asset_path.as_str(), log_level)?;
+            let graphics =
+                Graphics::new_offscreen(width, height, asset_path.as_str(), log_level, false)?;
             module.setattr("_graphics", graphics)?;
 
             if !has_existing {
@@ -441,6 +442,8 @@ mod mewnala {
     use super::particles::Attribute;
     #[pymodule_export]
     use super::particles::AttributeFormat;
+    #[pymodule_export]
+    use super::particles::Grid;
     #[pymodule_export]
     use super::particles::Particles;
     #[pymodule_export]
@@ -1162,15 +1165,21 @@ mod mewnala {
     }
 
     #[pyfunction]
-    #[pyo3(pass_module, signature = (particles, geometry))]
+    #[pyo3(pass_module, signature = (particles, geometry = None, topology = None))]
     fn particles(
         module: &Bound<'_, PyModule>,
         particles: &Bound<'_, super::particles::Particles>,
-        geometry: &Bound<'_, Geometry>,
+        geometry: Option<&Bound<'_, Geometry>>,
+        topology: Option<&str>,
     ) -> PyResult<()> {
+        let geometry = match geometry {
+            Some(g) => Some(g.extract::<PyRef<Geometry>>()?),
+            None => None,
+        };
         graphics!(module).particles(
             &*particles.extract::<PyRef<super::particles::Particles>>()?,
-            &*geometry.extract::<PyRef<Geometry>>()?,
+            geometry.as_deref(),
+            topology,
         )
     }
 
@@ -1271,6 +1280,12 @@ mod mewnala {
     }
 
     #[pyfunction]
+    #[pyo3(pass_module, signature = (intensity, threshold=0.0))]
+    fn bloom(module: &Bound<'_, PyModule>, intensity: f32, threshold: f32) -> PyResult<()> {
+        graphics!(module).bloom(intensity, threshold)
+    }
+
+    #[pyfunction]
     #[pyo3(pass_module, signature = (*args))]
     fn rect(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
         graphics!(module).rect(args)
@@ -1353,7 +1368,7 @@ mod mewnala {
         height: u32,
     ) -> PyResult<Graphics> {
         get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        Graphics::wrap_offscreen(width, height)
+        Graphics::wrap_offscreen(width, height, false)
     }
 
     /// Opens an additional window (libprocessing extension; not in Processing).
@@ -1380,7 +1395,10 @@ mod mewnala {
         // (which the per-frame sync applies) defaults otherwise — set it too.
         ::processing::prelude::surface_set_title(surface_entity, title.to_string())
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        let window = Py::new(module.py(), Graphics::wrap_window(surface_entity, width, height)?)?;
+        let window = Py::new(
+            module.py(),
+            Graphics::wrap_window(surface_entity, width, height)?,
+        )?;
         register_window(module, &window)?;
         Ok(window)
     }

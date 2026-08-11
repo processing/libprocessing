@@ -24,6 +24,7 @@ pub struct GeometryPlugin;
 impl Plugin for GeometryPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<BuiltinAttributes>();
+        app.init_resource::<attribute::AttributeRegistry>();
     }
 }
 

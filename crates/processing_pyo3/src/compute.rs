@@ -29,6 +29,13 @@ impl Buffer {
             borrowed: true,
         }
     }
+
+    pub(crate) fn components(&self) -> Option<u32> {
+        self.element_type
+            .as_ref()
+            .and_then(|et| et.byte_size())
+            .map(|s| (s / 4) as u32)
+    }
 }
 
 impl Buffer {
@@ -169,6 +176,24 @@ impl Buffer {
 
         Ok(PyList::new(py, values)?.into_any())
     }
+
+    #[pyo3(signature = (op = "sum"))]
+    pub fn reduce(&self, op: &str) -> PyResult<f32> {
+        use processing::prelude::constants as c;
+        use processing_render::particles::reduce::{
+            REDUCE_OP_MAX, REDUCE_OP_MIN, REDUCE_OP_SUM, reduce as reduce_buffer,
+        };
+        let mode = if op.eq_ignore_ascii_case(c::SUM) {
+            REDUCE_OP_SUM
+        } else if op.eq_ignore_ascii_case(c::MIN) {
+            REDUCE_OP_MIN
+        } else if op.eq_ignore_ascii_case(c::MAX) {
+            REDUCE_OP_MAX
+        } else {
+            return Err(PyValueError::new_err(format!("reduce: unknown op {op:?}")));
+        };
+        reduce_buffer(self.entity, mode).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
 }
 
 impl Buffer {
@@ -254,6 +279,9 @@ fn shader_value_to_py<'py>(py: Python<'py>, sv: &ShaderValue) -> PyResult<Bound<
         ShaderValue::Int2(v) => list(py, v),
         ShaderValue::Int3(v) => list(py, v),
         ShaderValue::Int4(v) => list(py, v),
+        ShaderValue::UInt2(v) => list(py, v),
+        ShaderValue::UInt3(v) => list(py, v),
+        ShaderValue::UInt4(v) => list(py, v),
         ShaderValue::Mat4(v) => list(py, v),
         ShaderValue::Texture(_)
         | ShaderValue::Buffer(_)
@@ -283,20 +311,26 @@ impl Compute {
     }
 }
 
+pub(crate) fn set_compute_kwargs(
+    entity: Entity,
+    kwargs: &Bound<'_, pyo3::types::PyDict>,
+) -> PyResult<()> {
+    for (key, value) in kwargs.iter() {
+        let name: String = key.extract()?;
+        let value = py_to_shader_value(&value)?;
+        compute_set(entity, &name, value).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    }
+    Ok(())
+}
+
 #[pymethods]
 impl Compute {
     #[pyo3(signature = (**kwargs))]
     pub fn set(&self, kwargs: Option<&Bound<'_, pyo3::types::PyDict>>) -> PyResult<()> {
-        let Some(kwargs) = kwargs else {
-            return Ok(());
-        };
-        for (key, value) in kwargs.iter() {
-            let name: String = key.extract()?;
-            let value = py_to_shader_value(&value)?;
-            compute_set(self.entity, &name, value)
-                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        match kwargs {
+            Some(kwargs) => set_compute_kwargs(self.entity, kwargs),
+            None => Ok(()),
         }
-        Ok(())
     }
 
     pub fn dispatch(&self, x: u32, y: u32, z: u32) -> PyResult<()> {

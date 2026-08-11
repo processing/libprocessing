@@ -2363,7 +2363,8 @@ pub fn js_particles(graphics_id: u64, particles: u64, geometry: u64) -> Result<(
         Entity::from_bits(graphics_id),
         DrawCommand::Particles {
             particles: Entity::from_bits(particles),
-            geometry: Entity::from_bits(geometry),
+            geometry: Some(Entity::from_bits(geometry)),
+            topology: geometry::Topology::PointList,
         },
     ))
 }

@@ -255,7 +255,14 @@ pub fn create_surface_windows(
 /// * `display_handle` - The wl_display pointer (from GLFW's `get_wayland_display()`)
 #[cfg(all(target_os = "linux", feature = "wayland"))]
 pub fn create_surface_wayland(
-    In((window_handle, display_handle, width, height, scale_factor, transparent)): In<(u64, u64, u32, u32, f32, bool)>,
+    In((window_handle, display_handle, width, height, scale_factor, transparent)): In<(
+        u64,
+        u64,
+        u32,
+        u32,
+        f32,
+        bool,
+    )>,
     mut commands: Commands,
 ) -> Result<Entity> {
     use raw_window_handle::{WaylandDisplayHandle, WaylandWindowHandle};
@@ -294,7 +301,14 @@ pub fn create_surface_wayland(
 /// * `display_handle` - The X11 Display pointer (from GLFW's `get_x11_display()`)
 #[cfg(all(target_os = "linux", feature = "x11"))]
 pub fn create_surface_x11(
-    In((window_handle, display_handle, width, height, scale_factor, transparent)): In<(u64, u64, u32, u32, f32, bool)>,
+    In((window_handle, display_handle, width, height, scale_factor, transparent)): In<(
+        u64,
+        u64,
+        u32,
+        u32,
+        f32,
+        bool,
+    )>,
     mut commands: Commands,
 ) -> Result<Entity> {
     use raw_window_handle::{XlibDisplayHandle, XlibWindowHandle};
@@ -370,11 +384,9 @@ pub fn prepare_offscreen(
     let pixel_size = match texture_format {
         TextureFormat::R8Unorm => 1,
         TextureFormat::Rg8Unorm => 2,
-        TextureFormat::Rgba8Unorm
-        | TextureFormat::Rgba8UnormSrgb
-        | TextureFormat::Bgra8Unorm
-        | TextureFormat::Rgba16Float
-        | TextureFormat::Rgba32Float => 4,
+        TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb | TextureFormat::Bgra8Unorm => 4,
+        TextureFormat::Rgba16Float => 8,
+        TextureFormat::Rgba32Float => 16,
         _ => return Err(ProcessingError::UnsupportedTextureFormat),
     };
 

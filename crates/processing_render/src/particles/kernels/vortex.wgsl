@@ -1,3 +1,5 @@
+import processing::particles::falloff;
+
 struct Params {
     center: vec3<f32>,
     _pad0: f32,
@@ -36,19 +38,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let r = sqrt(r2);
     let tangent = cross(axis, radial / r);
 
-    var fall: f32 = 1.0;
-    let n = 1.0 - r / params.radius;
-    if params.falloff_mode == 1u {
-        fall = n;
-    } else if params.falloff_mode == 2u {
-        fall = n * n * (3.0 - 2.0 * n);
-    } else if params.falloff_mode == 3u {
-        fall = n * n;
-    } else if params.falloff_mode == 4u {
-        fall = n * n * n;
-    } else if params.falloff_mode == 5u {
-        fall = params.radius / (r + params.radius);
-    }
+    let fall = falloff(r, params.radius, params.falloff_mode);
 
     let kick = tangent * (params.strength * fall);
     velocity[pi]      = velocity[pi]      + kick.x;

@@ -43,7 +43,7 @@ pub extern "C" fn processing_surface_create(
     scale_factor: f32,
 ) -> u64 {
     error::clear_error();
-    error::check(|| surface_create_macos(window_handle, width, height, scale_factor))
+    error::check(|| surface_create_macos(window_handle, width, height, scale_factor, false))
         .map(|e| e.to_bits())
         .unwrap_or(0)
 }
@@ -2982,49 +2982,65 @@ pub extern "C" fn processing_filter_set_passes(filter_id: u64, passes: u32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_filter_blur() -> u64 {
     error::clear_error();
-    error::check(|| filter_blur()).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(|| filter_blur())
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_filter_invert() -> u64 {
     error::clear_error();
-    error::check(|| filter_invert()).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(|| filter_invert())
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_filter_gray() -> u64 {
     error::clear_error();
-    error::check(|| filter_gray()).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(|| filter_gray())
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_filter_threshold() -> u64 {
     error::clear_error();
-    error::check(|| filter_threshold()).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(|| filter_threshold())
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_filter_posterize() -> u64 {
     error::clear_error();
-    error::check(|| filter_posterize()).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(|| filter_posterize())
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_filter_opaque() -> u64 {
     error::clear_error();
-    error::check(|| filter_opaque()).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(|| filter_opaque())
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_filter_erode() -> u64 {
     error::clear_error();
-    error::check(|| filter_erode()).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(|| filter_erode())
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_filter_dilate() -> u64 {
     error::clear_error();
-    error::check(|| filter_dilate()).map(|e| e.to_bits()).unwrap_or(0)
+    error::check(|| filter_dilate())
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
 }
 
 /// Create a shader from WGSL source.
@@ -3229,6 +3245,124 @@ pub unsafe extern "C" fn processing_shader_set_vec4(
             Entity::from_bits(entity),
             name,
             ShaderValue::Float4([x, y, z, w]),
+        )
+    });
+}
+
+/// # Safety
+/// - `name` must be non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_shader_set_ivec2(
+    entity: u64,
+    name: *const std::ffi::c_char,
+    x: i32,
+    y: i32,
+) {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        shader_set(Entity::from_bits(entity), name, ShaderValue::Int2([x, y]))
+    });
+}
+
+/// # Safety
+/// - `name` must be non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_shader_set_ivec3(
+    entity: u64,
+    name: *const std::ffi::c_char,
+    x: i32,
+    y: i32,
+    z: i32,
+) {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        shader_set(
+            Entity::from_bits(entity),
+            name,
+            ShaderValue::Int3([x, y, z]),
+        )
+    });
+}
+
+/// # Safety
+/// - `name` must be non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_shader_set_ivec4(
+    entity: u64,
+    name: *const std::ffi::c_char,
+    x: i32,
+    y: i32,
+    z: i32,
+    w: i32,
+) {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        shader_set(
+            Entity::from_bits(entity),
+            name,
+            ShaderValue::Int4([x, y, z, w]),
+        )
+    });
+}
+
+/// # Safety
+/// - `name` must be non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_shader_set_uvec2(
+    entity: u64,
+    name: *const std::ffi::c_char,
+    x: u32,
+    y: u32,
+) {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        shader_set(Entity::from_bits(entity), name, ShaderValue::UInt2([x, y]))
+    });
+}
+
+/// # Safety
+/// - `name` must be non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_shader_set_uvec3(
+    entity: u64,
+    name: *const std::ffi::c_char,
+    x: u32,
+    y: u32,
+    z: u32,
+) {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        shader_set(
+            Entity::from_bits(entity),
+            name,
+            ShaderValue::UInt3([x, y, z]),
+        )
+    });
+}
+
+/// # Safety
+/// - `name` must be non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_shader_set_uvec4(
+    entity: u64,
+    name: *const std::ffi::c_char,
+    x: u32,
+    y: u32,
+    z: u32,
+    w: u32,
+) {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        shader_set(
+            Entity::from_bits(entity),
+            name,
+            ShaderValue::UInt4([x, y, z, w]),
         )
     });
 }
@@ -3684,7 +3818,8 @@ pub extern "C" fn processing_particles_draw(graphics_id: u64, particles_id: u64,
             graphics_entity,
             DrawCommand::Particles {
                 particles: Entity::from_bits(particles_id),
-                geometry: Entity::from_bits(geometry_id),
+                geometry: Some(Entity::from_bits(geometry_id)),
+                topology: geometry::Topology::PointList,
             },
         )
     });

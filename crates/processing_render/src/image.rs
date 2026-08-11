@@ -60,7 +60,10 @@ pub fn blit(
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
     gpu_images: Res<RenderAssets<GpuImage>>,
-    view_targets: Query<(&bevy::render::sync_world::MainEntity, &bevy::render::view::ViewTarget)>,
+    view_targets: Query<(
+        &bevy::render::sync_world::MainEntity,
+        &bevy::render::view::ViewTarget,
+    )>,
     mut cache: ResMut<BlitterCache>,
 ) -> Result<()> {
     let dst = gpu_images

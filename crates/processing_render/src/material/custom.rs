@@ -140,6 +140,13 @@ impl wesl::Resolver for ProcessingResolver<'_> {
 }
 
 pub(crate) fn compile_shader(source: &str) -> Result<(String, naga::Module)> {
+    compile_shader_with_features(source, &[])
+}
+
+pub(crate) fn compile_shader_with_features(
+    source: &str,
+    features: &[(&str, bool)],
+) -> Result<(String, naga::Module)> {
     let mut pkg_resolver = PkgResolver::new();
     pkg_resolver.add_package(&processing::PACKAGE);
     pkg_resolver.add_package(&lygia::PACKAGE);
@@ -149,11 +156,17 @@ pub(crate) fn compile_shader(source: &str) -> Result<(String, naga::Module)> {
         pkg_resolver,
     };
     let module_path: ModulePath = "entry".parse().unwrap();
-    let options = wesl::CompileOptions {
+    let mut options = wesl::CompileOptions {
         imports: true,
         strip: false,
         ..Default::default()
     };
+    for (name, enabled) in features {
+        options
+            .features
+            .flags
+            .insert((*name).to_string(), (*enabled).into());
+    }
     let compiled = wesl::compile(&module_path, &resolver, &wesl::EscapeMangler, &options)
         .map_err(|e| ProcessingError::ShaderCompilationError(e.to_string()))?;
     let wgsl = compiled.to_string();
@@ -168,6 +181,22 @@ pub fn create_shader(
     mut shaders: ResMut<Assets<ShaderAsset>>,
 ) -> Result<Entity> {
     let (compiled_wgsl, module) = compile_shader(&source)?;
+    let shader_handle = shaders.add(ShaderAsset::from_wgsl(compiled_wgsl, "custom_material"));
+    Ok(commands
+        .spawn(Shader {
+            module,
+            shader_handle,
+        })
+        .id())
+}
+
+pub fn create_shader_with_features(
+    In((source, features)): In<(String, Vec<(String, bool)>)>,
+    mut commands: Commands,
+    mut shaders: ResMut<Assets<ShaderAsset>>,
+) -> Result<Entity> {
+    let feats: Vec<(&str, bool)> = features.iter().map(|(k, v)| (k.as_str(), *v)).collect();
+    let (compiled_wgsl, module) = compile_shader_with_features(&source, &feats)?;
     let shader_handle = shaders.add(ShaderAsset::from_wgsl(compiled_wgsl, "custom_material"));
     Ok(commands
         .spawn(Shader {
@@ -306,32 +335,146 @@ pub(crate) fn apply_reflect_field(
     Err(ProcessingError::UnknownShaderProperty(name.to_string()))
 }
 
-fn reflect_scalar_as_f64(value: &dyn PartialReflect) -> Option<f64> {
-    if let Some(v) = value.try_downcast_ref::<f32>() {
-        Some(*v as f64)
-    } else if let Some(v) = value.try_downcast_ref::<i32>() {
-        Some(*v as f64)
-    } else if let Some(v) = value.try_downcast_ref::<u32>() {
-        Some(*v as f64)
+fn apply_field_coerced(field: &mut dyn PartialReflect, value: &dyn PartialReflect) {
+    if let Some(coerced) = coerce_numeric(field, value) {
+        field.apply(coerced.as_ref());
     } else {
-        None
+        field.apply(value);
     }
 }
 
-fn apply_field_coerced(field: &mut dyn PartialReflect, value: &dyn PartialReflect) {
-    if let Some(n) = reflect_scalar_as_f64(value) {
-        if field.try_downcast_ref::<f32>().is_some() {
-            field.apply((n as f32).as_partial_reflect());
-            return;
-        } else if field.try_downcast_ref::<u32>().is_some() {
-            field.apply((n as u32).as_partial_reflect());
-            return;
-        } else if field.try_downcast_ref::<i32>().is_some() {
-            field.apply((n as i32).as_partial_reflect());
-            return;
+fn coerce_numeric(
+    target: &dyn PartialReflect,
+    value: &dyn PartialReflect,
+) -> Option<Box<dyn PartialReflect>> {
+    fn scalar_f32(v: &dyn PartialReflect) -> Option<f32> {
+        if let Some(x) = v.try_downcast_ref::<f32>() {
+            Some(*x)
+        } else if let Some(x) = v.try_downcast_ref::<i32>() {
+            Some(*x as f32)
+        } else {
+            v.try_downcast_ref::<u32>().map(|x| *x as f32)
         }
     }
-    field.apply(value);
+    fn scalar_i32(v: &dyn PartialReflect) -> Option<i32> {
+        if let Some(x) = v.try_downcast_ref::<i32>() {
+            Some(*x)
+        } else if let Some(x) = v.try_downcast_ref::<u32>() {
+            Some(*x as i32)
+        } else {
+            v.try_downcast_ref::<f32>().map(|x| *x as i32)
+        }
+    }
+    fn scalar_u32(v: &dyn PartialReflect) -> Option<u32> {
+        if let Some(x) = v.try_downcast_ref::<u32>() {
+            Some(*x)
+        } else if let Some(x) = v.try_downcast_ref::<i32>() {
+            Some(*x as u32)
+        } else {
+            v.try_downcast_ref::<f32>().map(|x| *x as u32)
+        }
+    }
+    fn comps<const N: usize>(v: &dyn PartialReflect) -> Option<[f64; N]> {
+        macro_rules! from {
+            ($ty:ty) => {
+                if let Some(x) = v.try_downcast_ref::<$ty>() {
+                    let a = x.to_array();
+                    let mut out = [0f64; N];
+                    for i in 0..N {
+                        out[i] = a[i] as f64;
+                    }
+                    return Some(out);
+                }
+            };
+        }
+        match N {
+            2 => {
+                from!(Vec2);
+                from!(IVec2);
+                from!(UVec2);
+            }
+            3 => {
+                from!(Vec3);
+                from!(IVec3);
+                from!(UVec3);
+            }
+            4 => {
+                from!(Vec4);
+                from!(IVec4);
+                from!(UVec4);
+            }
+            _ => {}
+        }
+        None
+    }
+
+    if target.try_downcast_ref::<f32>().is_some() {
+        return scalar_f32(value).map(|x| Box::new(x) as Box<dyn PartialReflect>);
+    }
+    if target.try_downcast_ref::<i32>().is_some() {
+        return scalar_i32(value).map(|x| Box::new(x) as Box<dyn PartialReflect>);
+    }
+    if target.try_downcast_ref::<u32>().is_some() {
+        return scalar_u32(value).map(|x| Box::new(x) as Box<dyn PartialReflect>);
+    }
+    if target.try_downcast_ref::<Vec2>().is_some() {
+        return comps::<2>(value)
+            .map(|c| Box::new(Vec2::new(c[0] as f32, c[1] as f32)) as Box<dyn PartialReflect>);
+    }
+    if target.try_downcast_ref::<IVec2>().is_some() {
+        return comps::<2>(value)
+            .map(|c| Box::new(IVec2::new(c[0] as i32, c[1] as i32)) as Box<dyn PartialReflect>);
+    }
+    if target.try_downcast_ref::<UVec2>().is_some() {
+        return comps::<2>(value)
+            .map(|c| Box::new(UVec2::new(c[0] as u32, c[1] as u32)) as Box<dyn PartialReflect>);
+    }
+    if target.try_downcast_ref::<Vec3>().is_some() {
+        return comps::<3>(value).map(|c| {
+            Box::new(Vec3::new(c[0] as f32, c[1] as f32, c[2] as f32)) as Box<dyn PartialReflect>
+        });
+    }
+    if target.try_downcast_ref::<IVec3>().is_some() {
+        return comps::<3>(value).map(|c| {
+            Box::new(IVec3::new(c[0] as i32, c[1] as i32, c[2] as i32)) as Box<dyn PartialReflect>
+        });
+    }
+    if target.try_downcast_ref::<UVec3>().is_some() {
+        return comps::<3>(value).map(|c| {
+            Box::new(UVec3::new(c[0] as u32, c[1] as u32, c[2] as u32)) as Box<dyn PartialReflect>
+        });
+    }
+    if target.try_downcast_ref::<Vec4>().is_some() {
+        return comps::<4>(value).map(|c| {
+            Box::new(Vec4::new(
+                c[0] as f32,
+                c[1] as f32,
+                c[2] as f32,
+                c[3] as f32,
+            )) as Box<dyn PartialReflect>
+        });
+    }
+    if target.try_downcast_ref::<IVec4>().is_some() {
+        return comps::<4>(value).map(|c| {
+            Box::new(IVec4::new(
+                c[0] as i32,
+                c[1] as i32,
+                c[2] as i32,
+                c[3] as i32,
+            )) as Box<dyn PartialReflect>
+        });
+    }
+    if target.try_downcast_ref::<UVec4>().is_some() {
+        return comps::<4>(value).map(|c| {
+            Box::new(UVec4::new(
+                c[0] as u32,
+                c[1] as u32,
+                c[2] as u32,
+                c[3] as u32,
+            )) as Box<dyn PartialReflect>
+        });
+    }
+    None
 }
 
 pub(crate) fn shader_value_to_reflect(value: &ShaderValue) -> Result<Box<dyn PartialReflect>> {
@@ -345,6 +488,9 @@ pub(crate) fn shader_value_to_reflect(value: &ShaderValue) -> Result<Box<dyn Par
         ShaderValue::Int3(v) => Box::new(IVec3::from_array(*v)),
         ShaderValue::Int4(v) => Box::new(IVec4::from_array(*v)),
         ShaderValue::UInt(v) => Box::new(*v),
+        ShaderValue::UInt2(v) => Box::new(UVec2::from_array(*v)),
+        ShaderValue::UInt3(v) => Box::new(UVec3::from_array(*v)),
+        ShaderValue::UInt4(v) => Box::new(UVec4::from_array(*v)),
         ShaderValue::Mat4(v) => Box::new(Mat4::from_cols_array(v)),
         ShaderValue::Texture(_)
         | ShaderValue::Buffer(_)

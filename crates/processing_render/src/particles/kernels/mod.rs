@@ -52,6 +52,17 @@ impl Plugin for ParticlesKernelsPlugin {
         embedded_asset!(app, "attr_lookup2d.wgsl");
         embedded_asset!(app, "scatter_surface.wgsl");
         embedded_asset!(app, "scatter_volume.wgsl");
+        embedded_asset!(app, "scan_block.wgsl");
+        embedded_asset!(app, "scan_add.wgsl");
+        embedded_asset!(app, "grid_clear.wgsl");
+        embedded_asset!(app, "grid_count.wgsl");
+        embedded_asset!(app, "grid_copy.wgsl");
+        embedded_asset!(app, "grid_scatter.wgsl");
+        embedded_asset!(app, "bitonic.wgsl");
+        embedded_asset!(app, "compact_flag.wgsl");
+        embedded_asset!(app, "compact_scatter.wgsl");
+        embedded_asset!(app, "reduce.wgsl");
+        embedded_asset!(app, "neighbor.wgsl");
     }
 }
 
@@ -279,6 +290,7 @@ pub fn particles_kernel_field() -> error::Result<Entity> {
     Ok(entity)
 }
 
+// Bind `op*` buffers directly, not named attributes, so they declare no requires.
 pub fn particles_kernel_attr_linear() -> error::Result<Entity> {
     let shader = shader_load("embedded://processing_render/particles/kernels/attr_linear.wgsl")?;
     let entity = compute_create(shader)?;

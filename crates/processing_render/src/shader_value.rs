@@ -11,6 +11,9 @@ pub enum ShaderValue {
     Int3([i32; 3]),
     Int4([i32; 4]),
     UInt(u32),
+    UInt2([u32; 2]),
+    UInt3([u32; 3]),
+    UInt4([u32; 4]),
     Mat4([f32; 16]),
     Texture(Entity),
     Buffer(Entity),
@@ -30,6 +33,9 @@ impl ShaderValue {
             ShaderValue::Int3(v) => Some(v.iter().flat_map(|i| i.to_le_bytes()).collect()),
             ShaderValue::Int4(v) => Some(v.iter().flat_map(|i| i.to_le_bytes()).collect()),
             ShaderValue::UInt(v) => Some(v.to_le_bytes().to_vec()),
+            ShaderValue::UInt2(v) => Some(v.iter().flat_map(|u| u.to_le_bytes()).collect()),
+            ShaderValue::UInt3(v) => Some(v.iter().flat_map(|u| u.to_le_bytes()).collect()),
+            ShaderValue::UInt4(v) => Some(v.iter().flat_map(|u| u.to_le_bytes()).collect()),
             ShaderValue::Mat4(v) => Some(v.iter().flat_map(|f| f.to_le_bytes()).collect()),
             ShaderValue::Texture(_)
             | ShaderValue::Buffer(_)
@@ -41,9 +47,9 @@ impl ShaderValue {
     pub fn byte_size(&self) -> Option<usize> {
         match self {
             ShaderValue::Float(_) | ShaderValue::Int(_) | ShaderValue::UInt(_) => Some(4),
-            ShaderValue::Float2(_) | ShaderValue::Int2(_) => Some(8),
-            ShaderValue::Float3(_) | ShaderValue::Int3(_) => Some(12),
-            ShaderValue::Float4(_) | ShaderValue::Int4(_) => Some(16),
+            ShaderValue::Float2(_) | ShaderValue::Int2(_) | ShaderValue::UInt2(_) => Some(8),
+            ShaderValue::Float3(_) | ShaderValue::Int3(_) | ShaderValue::UInt3(_) => Some(12),
+            ShaderValue::Float4(_) | ShaderValue::Int4(_) | ShaderValue::UInt4(_) => Some(16),
             ShaderValue::Mat4(_) => Some(64),
             ShaderValue::Texture(_)
             | ShaderValue::Buffer(_)
@@ -67,6 +73,13 @@ impl ShaderValue {
             }
             Some(arr)
         }
+        fn u32s<const N: usize>(bytes: &[u8]) -> Option<[u32; N]> {
+            let mut arr = [0u32; N];
+            for i in 0..N {
+                arr[i] = u32::from_le_bytes(bytes[i * 4..(i + 1) * 4].try_into().ok()?);
+            }
+            Some(arr)
+        }
         match self {
             ShaderValue::Float(_) => Some(ShaderValue::Float(f32::from_le_bytes(
                 bytes[..4].try_into().ok()?,
@@ -83,6 +96,9 @@ impl ShaderValue {
             ShaderValue::UInt(_) => Some(ShaderValue::UInt(u32::from_le_bytes(
                 bytes[..4].try_into().ok()?,
             ))),
+            ShaderValue::UInt2(_) => Some(ShaderValue::UInt2(u32s::<2>(bytes)?)),
+            ShaderValue::UInt3(_) => Some(ShaderValue::UInt3(u32s::<3>(bytes)?)),
+            ShaderValue::UInt4(_) => Some(ShaderValue::UInt4(u32s::<4>(bytes)?)),
             ShaderValue::Mat4(_) => Some(ShaderValue::Mat4(f32s::<16>(bytes)?)),
             ShaderValue::Texture(_)
             | ShaderValue::Buffer(_)
