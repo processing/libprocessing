@@ -1,3 +1,17 @@
+// Proximity linker with per-edge alpha falloff — the Generative-Gestaltung
+// "lissajous, all points connected" effect (M_2_5_01), on the GPU.
+//
+// For each source particle we walk the spatial grid and, for every OTHER
+// particle within `connection_radius`, add a line whose alpha falls off with
+// the edge's length: a = (1 / (d/R + 1))^ramp. Short links are near-opaque,
+// long links fade out.
+//
+// The dynamic topology is handled by `processing::prims`: the sketch applies
+// this kernel with `p.apply(link, primitives=edges)` and the engine takes
+// care of counts, capacity, and indirect drawing.
+
+import { processing::prims };
+
 struct GridParams {
     grid_min: vec3<f32>,
     cell_size: f32,
@@ -9,23 +23,19 @@ struct GridParams {
 
 struct Params {
     connection_radius: f32,
-    connection_ramp: f32,  // falloff exponent
-    line_alpha: f32,       // opacity scale
-    max_links: u32,        // per-particle edge cap
+    connection_ramp: f32,  // falloff exponent (p5 uses 6)
+    line_alpha: f32,       // overall opacity scale (p5's lineAlpha)
+    _pad: f32,
 }
 
 // Auto-bound by apply(): names must be position/color.
-@group(0) @binding(0) var<storage, read>       position:  array<f32>;
-@group(0) @binding(1) var<storage, read>       color:     array<f32>;
-@group(0) @binding(2) var<storage, read_write> edge_pos:  array<f32>;
-@group(0) @binding(3) var<storage, read_write> edge_col:  array<f32>;
-@group(0) @binding(4) var<storage, read_write> indices:   array<u32>;
-@group(0) @binding(5) var<storage, read_write> draw_args: array<atomic<u32>>;
+@group(0) @binding(0) var<storage, read> position: array<f32>;
+@group(0) @binding(1) var<storage, read> color:    array<f32>;
 // Bound by grid.bind().
-@group(0) @binding(6) var<storage, read>       offsets:   array<u32>;
-@group(0) @binding(7) var<storage, read>       sorted:    array<u32>;
-@group(0) @binding(8) var<uniform>             params:    Params;
-@group(0) @binding(9) var<uniform>             gp:        GridParams;
+@group(0) @binding(2) var<storage, read> offsets:  array<u32>;
+@group(0) @binding(3) var<storage, read> sorted:   array<u32>;
+@group(0) @binding(4) var<uniform>       params:   Params;
+@group(0) @binding(5) var<uniform>       gp:       GridParams;
 
 fn cell_coords(p: vec3<f32>, grid_min: vec3<f32>, cell_size: f32, dims: vec3<u32>) -> vec3<i32> {
     let rel = (p - grid_min) / cell_size;
@@ -48,24 +58,12 @@ fn load_rgb(i: u32) -> vec3<f32> {
     return vec3<f32>(color[i * 4u], color[i * 4u + 1u], color[i * 4u + 2u]);
 }
 
-fn emit_vertex(slot: u32, p: vec3<f32>, rgb: vec3<f32>, a: f32) {
-    edge_pos[slot * 3u + 0u] = p.x;
-    edge_pos[slot * 3u + 1u] = p.y;
-    edge_pos[slot * 3u + 2u] = p.z;
-    edge_col[slot * 4u + 0u] = rgb.x;
-    edge_col[slot * 4u + 1u] = rgb.y;
-    edge_col[slot * 4u + 2u] = rgb.z;
-    edge_col[slot * 4u + 3u] = a;
-    indices[slot] = slot;
-}
-
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let i = gid.x;
     let count = arrayLength(&position) / 3u;
     if i >= count { return; }
 
-    let cap = arrayLength(&indices);
     let pos = load_pos(i);
     let rgb = load_rgb(i);
     let radius = params.connection_radius;
@@ -81,7 +79,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let x0 = max(base.x - reach, 0);
     let x1 = min(base.x + reach, i32(gp.dims_x) - 1);
 
-    var emitted = 0u;
     for (var cz = z0; cz <= z1; cz++) {
         for (var cy = y0; cy <= y1; cy++) {
             for (var cx = x0; cx <= x1; cx++) {
@@ -96,17 +93,16 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
                     let d2 = dot(diff, diff);
                     if d2 > r2 { continue; }
 
-                    if emitted >= params.max_links { return; }
-                    emitted += 1u;
-
+                    // Per-edge alpha: short links solid, long links fade out.
                     let d = sqrt(d2);
-                    let a = pow(1.0 / (d / radius + 1.0), params.connection_ramp) * params.line_alpha;
+                    let a = pow(1.0 / (d / radius + 1.0), params.connection_ramp)
+                        * params.line_alpha;
 
-                    let slot = atomicAdd(&draw_args[0], 2u);
-                    if slot + 1u < cap {
-                        emit_vertex(slot, pos, rgb, a);
-                        emit_vertex(slot + 1u, pj, load_rgb(j), a);
-                    }
+                    var v0 = prims::vertex(pos);
+                    v0.color = vec4<f32>(rgb, a);
+                    var v1 = prims::vertex(pj);
+                    v1.color = vec4<f32>(load_rgb(j), a);
+                    prims::line(v0, v1);
                 }
             }
         }

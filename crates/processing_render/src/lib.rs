@@ -35,17 +35,19 @@ pub use particles::{
     COMBINE_MIN, COMBINE_MUL, COMBINE_POW, COMBINE_SUB, FALLOFF_CONST, FALLOFF_CUBIC,
     FALLOFF_INVERSE, FALLOFF_LINEAR, FALLOFF_QUADRATIC, FALLOFF_SMOOTHSTEP, particles_apply,
     particles_attribute_add, particles_buffer, particles_capacity, particles_connectivity_indirect,
+    particles_primitives_apply, particles_primitives_attempted, particles_primitives_create,
+    particles_primitives_field,
     particles_create, particles_create_from_geometry, particles_destroy, particles_emit,
-    particles_emit_gpu, particles_ensure_attribute, particles_flock, particles_gather,
-    particles_kernel_age, particles_kernel_attr_combine, particles_kernel_attr_linear,
-    particles_kernel_attr_lookup1d, particles_kernel_attr_lookup2d, particles_kernel_attr_mix,
-    particles_kernel_attract, particles_kernel_bounds_box, particles_kernel_bounds_geometry,
-    particles_kernel_bounds_sphere, particles_kernel_drag, particles_kernel_field,
-    particles_kernel_flock, particles_kernel_force, particles_kernel_impulse,
-    particles_kernel_integrate, particles_kernel_noise, particles_kernel_orient,
-    particles_kernel_transform, particles_kernel_vortex, particles_reset_indices,
-    particles_scatter_create, particles_scatter_volume_create, particles_set_connectivity,
-    prefix_sum_u32,
+    particles_emit_gpu, particles_ensure_attribute, particles_flock, particles_flock_auto,
+    particles_gather, particles_kernel_age, particles_kernel_attr_combine,
+    particles_kernel_attr_linear, particles_kernel_attr_lookup1d, particles_kernel_attr_lookup2d,
+    particles_kernel_attr_mix, particles_kernel_attract, particles_kernel_bounds_box,
+    particles_kernel_bounds_geometry, particles_kernel_bounds_sphere, particles_kernel_drag,
+    particles_kernel_field, particles_kernel_flock, particles_kernel_force,
+    particles_kernel_impulse, particles_kernel_integrate, particles_kernel_noise,
+    particles_kernel_orient, particles_kernel_transform, particles_kernel_vortex,
+    particles_reset_indices, particles_scatter_create, particles_scatter_volume_create,
+    particles_set_connectivity, prefix_sum_u32,
 };
 
 use std::path::PathBuf;
@@ -1901,24 +1903,29 @@ fn material_set_particles_buffer(
             return Err(error::ProcessingError::MaterialNotFound);
         };
         let world = app.world_mut();
-        let preserved = {
+        let (preserved, prev_blend_state, prev_depth_write) = {
             let mut mats = world.resource_mut::<Assets<DefaultMat>>();
-            let base = mats
+            let mat = mats
                 .get(&handle)
-                .ok_or(error::ProcessingError::MaterialNotFound)?
-                .base
-                .clone();
+                .ok_or(error::ProcessingError::MaterialNotFound)?;
+            let base = mat.base.clone();
+            let blend_state = mat.extension.blend_state;
+            let depth_write = mat.extension.depth_write;
             mats.remove(&handle);
-            base
+            (base, blend_state, depth_write)
         };
         let extension = match slot {
             ParticlesBufferSlot::Albedo => ParticlesExtension {
                 colors: Some(buffer_handle),
                 emissive_colors: None,
+                blend_state: prev_blend_state,
+                depth_write: prev_depth_write,
             },
             ParticlesBufferSlot::Emissive => ParticlesExtension {
                 colors: None,
                 emissive_colors: Some(buffer_handle),
+                blend_state: prev_blend_state,
+                depth_write: prev_depth_write,
             },
         };
         let new_handle = world
@@ -2454,29 +2461,29 @@ pub fn compute_set(
 pub fn compute_dispatch(entity: Entity, x: u32, y: u32, z: u32) -> error::Result<()> {
     app_mut(|app| {
         app.update();
-
-        let args = {
-            let world = app.world();
-            let c = world
-                .get::<compute::Compute>(entity)
-                .ok_or(error::ProcessingError::ComputeNotFound)?;
-            let mesh_bindings = compute::resolve_mesh_bindings(world, c)?;
-            (
-                c.pipeline_id,
-                c.bind_group_layout_descriptors.clone(),
-                c.shader.clone(),
-                mesh_bindings,
-                x,
-                y,
-                z,
-            )
-        };
-        app.sub_app_mut(bevy::render::RenderApp)
-            .world_mut()
-            .run_system_cached_with(compute::dispatch, args)
-            .unwrap()
+        
+    let args = {
+        let world = app.world();
+        let c = world
+            .get::<compute::Compute>(entity)
+            .ok_or(error::ProcessingError::ComputeNotFound)?;
+        let mesh_bindings = compute::resolve_mesh_bindings(world, c)?;
+        (
+            c.pipeline_id,
+            c.bind_group_layout_descriptors.clone(),
+            c.shader.clone(),
+            mesh_bindings,
+            x,
+            y,
+            z,
+        )
+    };
+    app.sub_app_mut(bevy::render::RenderApp)
+        .world_mut()
+        .run_system_cached_with(compute::dispatch, args)
+                    .unwrap()
     })
-}
+            }
 
 pub fn compute_destroy(entity: Entity) -> error::Result<()> {
     app_mut(|app| {

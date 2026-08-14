@@ -25,9 +25,9 @@ use bevy::{
     mesh::MeshVertexBufferLayoutRef,
     pbr::{
         DrawMaterial, EntitiesNeedingSpecialization, MainPassOpaqueDrawFunction,
-        MainPassTransparentDrawFunction, MaterialBindGroupAllocator, MaterialBindGroupAllocators,
-        MaterialFragmentShader, MaterialVertexShader, MeshPipelineKey, PreparedMaterial,
-        RenderMaterialBindings, RenderMaterialInstance, RenderMaterialInstances, base_specialize,
+        MainPassTransparentDrawFunction, MaterialFragmentShader, MaterialVertexShader,
+        MeshPipelineKey, PreparedMaterial, RenderMaterialInstance, RenderMaterialInstances,
+        base_specialize,
     },
     prelude::*,
     reflect::{PartialReflect, ReflectMut, ReflectRef, structs::Struct},
@@ -35,6 +35,9 @@ use bevy::{
         Extract, RenderApp, RenderStartup,
         camera::{DirtySpecializationSystems, DirtySpecializations},
         erased_render_asset::{ErasedRenderAsset, ErasedRenderAssetPlugin, PrepareAssetError},
+        material_bind_groups::{
+            MaterialBindGroupAllocator, MaterialBindGroupAllocators, RenderMaterialBindings,
+        },
         render_asset::RenderAssets,
         render_phase::DrawFunctions,
         render_resource::{

@@ -2203,10 +2203,36 @@ impl Graphics {
     #[pyo3(signature = (particles, geometry = None, topology = None))]
     pub fn particles(
         &self,
-        particles: &crate::particles::Particles,
+        particles: &Bound<'_, PyAny>,
         geometry: Option<&Geometry>,
         topology: Option<&str>,
     ) -> PyResult<()> {
+        // A dynamic-topology target knows its own topology and draws its
+        // internal expanded-vertex field.
+        if let Ok(prims) = particles.extract::<PyRef<crate::particles::Primitives>>() {
+            if geometry.is_some() || topology.is_some() {
+                return Err(PyValueError::new_err(
+                    "particles(primitives): geometry/topology come from the target",
+                ));
+            }
+            return graphics_record_command(
+                self.entity,
+                DrawCommand::Particles {
+                    particles: prims.field,
+                    geometry: None,
+                    topology: prims.topology,
+                },
+            )
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")));
+        }
+
+        let particles = particles
+            .extract::<PyRef<crate::particles::Particles>>()
+            .map_err(|_| {
+                pyo3::exceptions::PyTypeError::new_err(
+                    "particles(): expected a Particles or Primitives object",
+                )
+            })?;
         let topology = match topology {
             Some(s) => geometry::Topology::parse(s).ok_or_else(|| {
                 PyValueError::new_err(format!("particles(): unknown topology {s:?}"))

@@ -105,7 +105,7 @@ impl MaterialKey {
         }
     }
 
-    fn to_standard_material(&self) -> StandardMaterial {
+    pub(crate) fn to_standard_material(&self) -> StandardMaterial {
         match self {
             MaterialKey::Color {
                 transparent,

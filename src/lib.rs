@@ -60,7 +60,8 @@ fn create_app(config: Config) -> App {
         });
 
     app.add_plugins(plugins);
-    app.add_plugins(processing_midi::MidiPlugin);
+    // TEMP(bevy-020): midi disabled
+    // app.add_plugins(processing_midi::MidiPlugin);
     app.add_plugins(processing_input::InputPlugin);
     app.add_plugins(processing_render::ProcessingRenderPlugin);
 

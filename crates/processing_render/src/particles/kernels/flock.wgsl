@@ -9,6 +9,7 @@ struct FlockParams {
     max_speed: f32,
     max_force: f32,
     min_speed: f32,
+    max_neighbors: u32,
 }
 
 struct GridParams {
@@ -71,35 +72,61 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     var coh_sum = vec3<f32>(0.0);
     var flock_count = 0u;
 
-    for (var dz = -1; dz <= 1; dz++) {
-        let cz = bz + dz;
+    let cap = fp.max_neighbors;
+
+    var starts: array<u32, 27>;
+    var counts: array<u32, 27>;
+    var total = 0u;
+    for (var m = 0u; m < 27u; m++) {
+        counts[m] = 0u;
+        let cx = bx + i32(m % 3u) - 1;
+        let cy = by + i32((m / 3u) % 3u) - 1;
+        let cz = bz + i32(m / 9u) - 1;
+        if cx < 0 || cx >= i32(gp.dims_x) { continue; }
+        if cy < 0 || cy >= i32(gp.dims_y) { continue; }
         if cz < 0 || cz >= i32(gp.dims_z) { continue; }
-        for (var dy = -1; dy <= 1; dy++) {
-            let cy = by + dy;
-            if cy < 0 || cy >= i32(gp.dims_y) { continue; }
-            for (var dx = -1; dx <= 1; dx++) {
-                let cx = bx + dx;
-                if cx < 0 || cx >= i32(gp.dims_x) { continue; }
+        let cell = cell_index(vec3<u32>(u32(cx), u32(cy), u32(cz)), dims);
+        let start = offsets[cell];
+        starts[m] = start;
+        counts[m] = offsets[cell + 1u] - start;
+        total += counts[m];
+    }
 
-                let cell = cell_index(vec3<u32>(u32(cx), u32(cy), u32(cz)), dims);
-                let start = offsets[cell];
-                let end = offsets[cell + 1u];
-                for (var s = start; s < end; s++) {
-                    let j = sorted[s];
-                    if j == i { continue; }
+    var budget = total;
+    if cap > 0u {
+        budget = min(total, cap * 7u);
+    }
+    let phase = (i * 2654435761u) % max(total, 1u);
 
-                    let diff = pos - load_pos(j);
-                    let d2 = dot(diff, diff);
-                    if d2 > 0.000001 && d2 < neighbor_d2 {
-                        if d2 < sep_d2 {
-                            sep_steer += diff / d2;
-                            sep_count += 1u;
-                        }
-                        ali_sum += load_vel(j);
-                        coh_sum += diff;
-                        flock_count += 1u;
-                    }
-                }
+    for (var t = 0u; t < budget; t++) {
+        var r: u32;
+        if budget == total {
+            r = t;
+        } else {
+            r = (phase + (t * total) / budget) % total;
+        }
+        var m = 0u;
+        var acc = 0u;
+        loop {
+            if r < acc + counts[m] { break; }
+            acc += counts[m];
+            m++;
+        }
+        let j = sorted[starts[m] + (r - acc)];
+        if j == i { continue; }
+
+        let diff = pos - load_pos(j);
+        let d2 = dot(diff, diff);
+        if d2 > 0.000001 && d2 < neighbor_d2 {
+            if d2 < sep_d2 {
+                sep_steer += diff / d2;
+                sep_count += 1u;
+            }
+            ali_sum += load_vel(j);
+            coh_sum += diff;
+            flock_count += 1u;
+            if cap > 0u && flock_count >= cap {
+                break;
             }
         }
     }

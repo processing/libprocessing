@@ -9,7 +9,7 @@ use bevy::pbr::{
 use bevy::prelude::*;
 use bevy::render::{
     mesh::MeshVertexBufferLayoutRef,
-    render_resource::{AsBindGroup, RenderPipelineDescriptor},
+    render_resource::{AsBindGroup, BlendState, RenderPipelineDescriptor},
     storage::ShaderBuffer,
 };
 use bevy::shader::ShaderRef;
@@ -31,6 +31,8 @@ pub type ParticlesMaterial = ExtendedMaterial<StandardMaterial, ParticlesExtensi
 pub struct ParticlesExtensionKey {
     pub has_albedo: bool,
     pub has_emissive: bool,
+    pub blend_state: Option<BlendState>,
+    pub depth_write: Option<bool>,
 }
 
 impl From<&ParticlesExtension> for ParticlesExtensionKey {
@@ -38,6 +40,8 @@ impl From<&ParticlesExtension> for ParticlesExtensionKey {
         Self {
             has_albedo: ext.colors.is_some(),
             has_emissive: ext.emissive_colors.is_some(),
+            blend_state: ext.blend_state,
+            depth_write: ext.depth_write,
         }
     }
 }
@@ -49,6 +53,10 @@ pub struct ParticlesExtension {
     pub colors: Option<Handle<ShaderBuffer>>,
     #[storage(101, read_only)]
     pub emissive_colors: Option<Handle<ShaderBuffer>>,
+    /// Custom blend override for the sketch's `blend_mode()`.
+    #[reflect(ignore)]
+    pub blend_state: Option<BlendState>,
+    pub depth_write: Option<bool>,
 }
 
 impl MaterialExtension for ParticlesExtension {
@@ -74,6 +82,11 @@ impl MaterialExtension for ParticlesExtension {
                 fragment.shader_defs.push("HAS_EMISSIVE_COLORS".into());
             }
         }
+        crate::material::apply_pipeline_state(
+            descriptor,
+            key.bind_group_data.blend_state,
+            key.bind_group_data.depth_write,
+        );
         Ok(())
     }
 }

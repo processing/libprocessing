@@ -3810,6 +3810,14 @@ pub extern "C" fn processing_particles_apply(particles_id: u64, compute_id: u64)
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_flock(particles_id: u64, flock_id: u64) {
+    error::clear_error();
+    error::check(|| {
+        particles_flock_auto(Entity::from_bits(particles_id), Entity::from_bits(flock_id))
+    });
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_draw(graphics_id: u64, particles_id: u64, geometry_id: u64) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);

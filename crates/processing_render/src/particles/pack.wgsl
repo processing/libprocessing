@@ -11,6 +11,7 @@ struct MeshInput {
     timestamp: u32,
     tag: u32,
     morph_descriptor_index: u32,
+    metadata_index: u32,
 }
 
 struct MeshCullingData {

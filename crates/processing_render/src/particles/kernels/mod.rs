@@ -252,6 +252,17 @@ pub fn particles_kernel_impulse() -> error::Result<Entity> {
     Ok(entity)
 }
 
+// TODO(WIP): tiled all-pairs exact flock kernel for the `max_neighbors == 0`
+// path in `particles_flock_auto`. Stubbed so the build stays green while the
+// kernel is written.
+pub fn particles_kernel_flock_naive() -> error::Result<Entity> {
+    Err(error::ProcessingError::InvalidArgument(
+        "the exact (all-pairs) flock kernel is not implemented yet; \
+         set max_neighbors > 0 to use the grid-accelerated path"
+            .to_string(),
+    ))
+}
+
 pub fn particles_kernel_flock() -> error::Result<Entity> {
     let shader = shader_load("embedded://processing_render/particles/kernels/flock.wgsl")?;
     let entity = compute_create(shader)?;
@@ -264,6 +275,7 @@ pub fn particles_kernel_flock() -> error::Result<Entity> {
     compute_set(entity, "max_speed", ShaderValue::Float(0.1))?;
     compute_set(entity, "max_force", ShaderValue::Float(0.003))?;
     compute_set(entity, "min_speed", ShaderValue::Float(0.02))?;
+    compute_set(entity, "max_neighbors", ShaderValue::UInt(64))?;
     Ok(entity)
 }
 

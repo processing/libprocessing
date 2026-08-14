@@ -316,9 +316,10 @@ pub fn set_depth_write(
                 mat.extension.depth_write = Some(value);
                 Ok(())
             }
-            MaterialMut::Particles(_) => Err(ProcessingError::InvalidArgument(
-                "depth-write is not yet configurable on particle materials".to_string(),
-            )),
+            MaterialMut::Particles(mat) => {
+                mat.extension.depth_write = Some(value);
+                Ok(())
+            }
             MaterialMut::Custom(mat) => {
                 mat.depth_write = Some(value);
                 Ok(())
@@ -346,9 +347,11 @@ pub fn set_custom_blend(
                 mat.base.alpha_mode = AlphaMode::Blend;
                 Ok(())
             }
-            MaterialMut::Particles(_) => Err(ProcessingError::InvalidArgument(
-                "custom blend is not yet configurable on particle materials".to_string(),
-            )),
+            MaterialMut::Particles(mat) => {
+                mat.extension.blend_state = Some(blend);
+                mat.base.alpha_mode = AlphaMode::Blend;
+                Ok(())
+            }
             MaterialMut::Custom(mat) => {
                 mat.blend_state = Some(blend);
                 mat.alpha_mode = AlphaMode::Blend;

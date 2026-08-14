@@ -8,6 +8,7 @@ pub mod kernels;
 pub mod material;
 pub mod pack;
 pub mod point_render;
+pub mod prims;
 pub mod reduce;
 pub mod scan;
 mod scatter;
@@ -21,9 +22,14 @@ pub use algebra::{
 };
 pub use compact::compact;
 pub use emit::{
-    particles_apply, particles_emit, particles_emit_gpu, particles_flock, particles_gather,
+    AutoFlockGrid, particles_apply, particles_emit, particles_emit_gpu, particles_flock,
+    particles_flock_auto, particles_gather,
 };
 pub use grid::{Grid, GridParams, grid_bind, grid_build, grid_create};
+pub use prims::{
+    PrimitivesTarget, particles_primitives_apply, particles_primitives_attempted,
+    particles_primitives_create, particles_primitives_field,
+};
 pub use kernels::{
     BOUNDS_CLAMP, BOUNDS_REFLECT, BOUNDS_SOFT, BOUNDS_WRAP, COMBINE_ADD, COMBINE_DIV, COMBINE_MAX,
     COMBINE_MIN, COMBINE_MUL, COMBINE_POW, COMBINE_SUB, FALLOFF_CONST, FALLOFF_CUBIC,
@@ -96,11 +102,17 @@ pub struct Particles {
     pub connectivity: Option<Connectivity>,
     /// Ring-buffer write cursor; wraps at `capacity`.
     pub emit_head: u32,
+    /// Set by the raster draw path, consumed by the primitives-apply path so
+    /// a target's counts reset once per draw regardless of frame pacing.
+    pub drawn_since_apply: bool,
 }
 
 #[derive(Clone, Copy)]
 pub struct Connectivity {
-    pub index_buffer: Entity,
+    /// Index buffer, when the topology shares vertices (mesh-carry or a
+    /// GPU-generated index buffer). `None` for dynamic-topology targets,
+    /// whose vertices are unique by construction and draw non-indexed.
+    pub index_buffer: Option<Entity>,
     pub indirect_buffer: Entity,
 }
 
@@ -150,6 +162,7 @@ pub fn create(
             raster_draw_entity: None,
             connectivity: None,
             emit_head: 0,
+            drawn_since_apply: false,
         })
         .id();
     Ok(entity)
@@ -218,7 +231,7 @@ pub fn create_from_geometry(
             BufferUsages::INDIRECT,
         );
         Connectivity {
-            index_buffer,
+            index_buffer: Some(index_buffer),
             indirect_buffer,
         }
     });
@@ -231,6 +244,7 @@ pub fn create_from_geometry(
             raster_draw_entity: None,
             connectivity,
             emit_head: 0,
+            drawn_since_apply: false,
         })
         .id();
     Ok(entity)
@@ -254,12 +268,14 @@ pub fn particles_set_connectivity(
             .get_mut::<Particles>(particles_entity)
             .ok_or(error::ProcessingError::ParticlesNotFound)?;
         Ok(field.connectivity.replace(Connectivity {
-            index_buffer,
+            index_buffer: Some(index_buffer),
             indirect_buffer,
         }))
     })?;
     if let Some(previous) = previous {
-        crate::buffer_destroy(previous.index_buffer)?;
+        if let Some(previous_index) = previous.index_buffer {
+            crate::buffer_destroy(previous_index)?;
+        }
         crate::buffer_destroy(previous.indirect_buffer)?;
     }
     Ok(index_buffer)
@@ -384,7 +400,9 @@ pub fn destroy(
         commands.entity(raster_draw_entity).despawn();
     }
     if let Some(connectivity) = p.connectivity {
-        commands.entity(connectivity.index_buffer).despawn();
+        if let Some(index_buffer) = connectivity.index_buffer {
+            commands.entity(index_buffer).despawn();
+        }
         commands.entity(connectivity.indirect_buffer).despawn();
     }
     commands.entity(entity).despawn();

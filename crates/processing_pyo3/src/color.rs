@@ -124,6 +124,8 @@ fn components(color: &Color) -> [f32; 4] {
         Color::Lcha(c) => c.to_f32_array(),
         Color::Oklaba(c) => c.to_f32_array(),
         Color::Oklcha(c) => c.to_f32_array(),
+        Color::Okhsla(c) => c.to_f32_array(),
+        Color::Okhsva(c) => c.to_f32_array(),
         Color::Xyza(c) => c.to_f32_array(),
     }
 }
@@ -140,6 +142,8 @@ fn components_no_alpha(color: &Color) -> [f32; 3] {
         Color::Lcha(c) => c.to_f32_array_no_alpha(),
         Color::Oklaba(c) => c.to_f32_array_no_alpha(),
         Color::Oklcha(c) => c.to_f32_array_no_alpha(),
+        Color::Okhsla(c) => c.to_f32_array_no_alpha(),
+        Color::Okhsva(c) => c.to_f32_array_no_alpha(),
         Color::Xyza(c) => c.to_f32_array_no_alpha(),
     }
 }

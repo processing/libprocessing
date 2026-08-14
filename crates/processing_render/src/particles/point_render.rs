@@ -71,6 +71,7 @@ impl Plugin for ParticlesPointRenderPlugin {
 }
 
 #[derive(Component, Clone, ExtractComponent)]
+#[extract_app(RenderApp)]
 #[require(VisibilityClass)]
 #[component(on_add = visibility::add_visibility_class::<ParticleRasterDraw>)]
 pub struct ParticleRasterDraw {
@@ -260,20 +261,19 @@ fn prepare_raster_bind_groups(
         let Some(position) = gpu_buffers.get(&draw.position) else {
             continue;
         };
-        let (index, indirect) = match (&draw.index, &draw.indirect) {
-            (Some(index_handle), Some(indirect_handle)) => {
-                let (Some(index_gpu), Some(indirect_gpu)) = (
-                    gpu_buffers.get(index_handle),
-                    gpu_buffers.get(indirect_handle),
-                ) else {
-                    continue;
-                };
-                (
-                    Some(index_gpu.buffer.clone()),
-                    Some(indirect_gpu.buffer.clone()),
-                )
-            }
-            _ => (None, None),
+        let indirect = match &draw.indirect {
+            Some(indirect_handle) => match gpu_buffers.get(indirect_handle) {
+                Some(indirect_gpu) => Some(indirect_gpu.buffer.clone()),
+                None => continue,
+            },
+            None => None,
+        };
+        let index = match (&draw.index, indirect.is_some()) {
+            (Some(index_handle), true) => match gpu_buffers.get(index_handle) {
+                Some(index_gpu) => Some(index_gpu.buffer.clone()),
+                None => continue,
+            },
+            _ => None,
         };
         let color_buffer = match &draw.color {
             Some(handle) => match gpu_buffers.get(handle) {
@@ -475,6 +475,8 @@ impl<P: PhaseItem> RenderCommand<P> for DrawParticleRaster {
                 pass.set_index_buffer(index.slice(..), IndexFormat::Uint32);
                 pass.draw_indexed_indirect(indirect, 0);
             }
+            // Dynamic-topology targets: unique vertices, GPU-written count.
+            (None, Some(indirect)) => pass.draw_indirect(indirect, 0),
             _ => pass.draw(0..entry.count, 0..1),
         }
         RenderCommandResult::Success

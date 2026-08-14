@@ -984,20 +984,27 @@ pub fn flush_draw_commands(
                     };
                     let position = buffer.handle.clone();
                     let count = particles_data.capacity;
+                    particles_data.drawn_since_apply = true;
 
                     let (index, indirect) = match particles_data.connectivity {
                         Some(connectivity) => {
-                            let (Ok(index_buf), Ok(indirect_buf)) = (
-                                p_particle_buffers.get(connectivity.index_buffer),
-                                p_particle_buffers.get(connectivity.indirect_buffer),
-                            ) else {
+                            let Ok(indirect_buf) =
+                                p_particle_buffers.get(connectivity.indirect_buffer)
+                            else {
                                 warn!("connectivity buffers for {:?} not found", particles);
                                 continue;
                             };
-                            (
-                                Some(index_buf.handle.clone()),
-                                Some(indirect_buf.handle.clone()),
-                            )
+                            let index = match connectivity.index_buffer {
+                                Some(index_entity) => {
+                                    let Ok(index_buf) = p_particle_buffers.get(index_entity) else {
+                                        warn!("connectivity buffers for {:?} not found", particles);
+                                        continue;
+                                    };
+                                    Some(index_buf.handle.clone())
+                                }
+                                None => None,
+                            };
+                            (index, Some(indirect_buf.handle.clone()))
                         }
                         None => (None, None),
                     };
@@ -1084,13 +1091,24 @@ pub fn flush_draw_commands(
                                     warn!("Could not find material for entity {:?}", mat_entity);
                                     continue;
                                 };
-                                clone_custom_material_with_blend(
-                                    &mut res.custom_materials,
-                                    &untyped.0,
-                                    *blend_state,
-                                )
+                                clone_material_with_blend(&mut res, &untyped.0, *blend_state)
                             }
-                            _ => material_key.to_material(&mut res.materials),
+                            _ => {
+                                // map fill to the base color
+                                let mut base = material_key.to_standard_material();
+                                if let Some(color) = state.style.fill.color() {
+                                    base.base_color = color;
+                                }
+                                res.materials
+                                    .add(ProcessingExtendedMaterial {
+                                        base,
+                                        extension: ProcessingMaterial {
+                                            blend_state: material_key.blend_state(),
+                                            depth_write: None,
+                                        },
+                                    })
+                                    .untyped()
+                            }
                         }
                     };
 
@@ -1505,6 +1523,39 @@ fn clone_custom_material_with_blend(
     }
 }
 
+fn clone_material_with_blend(
+    res: &mut RenderResources,
+    original: &UntypedHandle,
+    blend_state: Option<BlendState>,
+) -> UntypedHandle {
+    let Some(bs) = blend_state else {
+        return original.clone();
+    };
+
+    if let Ok(handle) = original
+        .clone()
+        .try_typed::<crate::particles::material::ParticlesMaterial>()
+    {
+        if let Some(original_mat) = res.particles_materials.get(&handle) {
+            let mut variant = original_mat.clone();
+            variant.extension.blend_state = Some(bs);
+            variant.base.alpha_mode = AlphaMode::Blend;
+            return res.particles_materials.add(variant).untyped();
+        }
+    }
+
+    if let Ok(handle) = original.clone().try_typed::<ProcessingExtendedMaterial>() {
+        if let Some(original_mat) = res.materials.get(&handle) {
+            let mut variant = original_mat.clone();
+            variant.extension.blend_state = Some(bs);
+            variant.base.alpha_mode = AlphaMode::Blend;
+            return res.materials.add(variant).untyped();
+        }
+    }
+
+    clone_custom_material_with_blend(&mut res.custom_materials, original, Some(bs))
+}
+
 fn material_key_with_color(
     key: &MaterialKey,
     color: Color,
@@ -1553,6 +1604,8 @@ fn particles_fill_material(
         extension: ParticlesExtension {
             colors: Some(buf.handle.clone()),
             emissive_colors: None,
+            blend_state: None,
+            depth_write: None,
         },
     });
     Some(handle.untyped())

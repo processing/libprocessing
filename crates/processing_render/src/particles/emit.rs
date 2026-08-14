@@ -6,11 +6,14 @@ use processing_core::app_mut;
 use processing_core::error;
 
 use crate::geometry;
-use crate::particles::grid::{Grid, grid_bind, grid_build};
+use crate::particles::grid::{Grid, GridParams, grid_bind, grid_build, grid_create};
 use crate::particles::kernels::KernelRequires;
 use crate::particles::{Particles, particles_ensure_attribute};
 use crate::shader_value::ShaderValue;
-use crate::{buffer_write_element, compute_create, compute_dispatch, compute_set, shader_load};
+use crate::{
+    buffer_write_element, compute_create, compute_dispatch, compute_set,
+    shader_load,
+};
 
 const WORKGROUP_SIZE: u32 = 64;
 
@@ -169,6 +172,107 @@ pub fn particles_flock(
     grid_build(grid, position)?;
     grid_bind(grid, flock_entity)?;
     particles_apply(particles_entity, flock_entity)
+}
+
+#[derive(Component, Clone, Copy)]
+pub struct AutoFlockGrid(pub Grid);
+
+#[derive(Component, Clone, Copy)]
+pub struct NaiveFlockKernel(pub Entity);
+
+const FLOCK_PARAMS: [&str; 8] = [
+    "sep_distance",
+    "neighbor_distance",
+    "weight_separation",
+    "weight_alignment",
+    "weight_cohesion",
+    "max_speed",
+    "max_force",
+    "min_speed",
+];
+
+pub fn particles_flock_auto(particles_entity: Entity, flock_entity: Entity) -> error::Result<()> {
+    let (capacity, cell_size, cap, existing, naive) = app_mut(|app| {
+        let world = app.world();
+        let capacity = world
+            .get::<Particles>(particles_entity)
+            .ok_or(error::ProcessingError::ParticlesNotFound)?
+            .capacity;
+        let compute = world.get::<crate::compute::Compute>(flock_entity);
+        let cell_size = compute
+            .and_then(|c| c.shader.get::<f32>("neighbor_distance").copied())
+            .unwrap_or(2.5)
+            .max(1e-3);
+        let cap = compute
+            .and_then(|c| c.shader.get::<u32>("max_neighbors").copied())
+            .unwrap_or(64);
+        let existing = world.get::<AutoFlockGrid>(flock_entity).map(|g| g.0);
+        let naive = world.get::<NaiveFlockKernel>(flock_entity).map(|n| n.0);
+        Ok((capacity, cell_size, cap, existing, naive))
+    })?;
+
+    if cap == 0 {
+        let naive = match naive {
+            Some(e) => e,
+            None => {
+                let e = crate::particles::kernels::particles_kernel_flock_naive()?;
+                app_mut(|app| {
+                    app.world_mut()
+                        .entity_mut(flock_entity)
+                        .insert(NaiveFlockKernel(e));
+                    Ok(())
+                })?;
+                e
+            }
+        };
+        let values: Vec<(usize, f32)> = app_mut(|app| {
+            let compute = app.world().get::<crate::compute::Compute>(flock_entity);
+            Ok(FLOCK_PARAMS
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, name)| {
+                    compute
+                        .and_then(|c| c.shader.get::<f32>(name).copied())
+                        .map(|v| (idx, v))
+                })
+                .collect())
+        })?;
+        for (idx, v) in values {
+            compute_set(naive, FLOCK_PARAMS[idx], ShaderValue::Float(v))?;
+        }
+        return particles_apply(particles_entity, naive);
+    }
+
+    let reusable = existing.filter(|g| {
+        g.capacity == capacity && (g.params.cell_size - cell_size).abs() < f32::EPSILON
+    });
+    let grid = match reusable {
+        Some(g) => g,
+        None => {
+            if let Some(old) = existing {
+                let _ = crate::buffer_destroy(old.offsets);
+                let _ = crate::buffer_destroy(old.cursor);
+                let _ = crate::buffer_destroy(old.sorted);
+            }
+            const HALF: f32 = 40.0;
+            let dim = (((2.0 * HALF) / cell_size).ceil() as u32).clamp(1, 32);
+            let half_extent = dim as f32 * cell_size / 2.0;
+            let params = GridParams {
+                min: [-half_extent; 3],
+                cell_size,
+                dims: [dim; 3],
+            };
+            let g = grid_create(params, capacity)?;
+            app_mut(|app| {
+                app.world_mut()
+                    .entity_mut(flock_entity)
+                    .insert(AutoFlockGrid(g));
+                Ok(())
+            })?;
+            g
+        }
+    };
+    particles_flock(particles_entity, flock_entity, &grid)
 }
 
 static NEIGHBOR_COMPUTE: Mutex<Option<Entity>> = Mutex::new(None);

@@ -13,6 +13,7 @@
 #import bevy_pbr::{
     forward_io::{VertexOutput, FragmentOutput},
     pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
+    pbr_types::STANDARD_MATERIAL_FLAGS_UNLIT_BIT,
 }
 #endif
 
@@ -46,13 +47,21 @@ fn fragment(
     );
 #endif
 
-    pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);
+    pbr_input.material.base_color = alpha_discard(
+        pbr_input.material.flags,
+        pbr_input.material.alpha_cutoff,
+        pbr_input.material.base_color
+    );
 
 #ifdef PREPASS_PIPELINE
     let out = deferred_output(in, pbr_input);
 #else
     var out: FragmentOutput;
-    out.color = apply_pbr_lighting(pbr_input);
+    if (pbr_input.material.flags & STANDARD_MATERIAL_FLAGS_UNLIT_BIT) == 0u {
+        out.color = apply_pbr_lighting(pbr_input);
+    } else {
+        out.color = pbr_input.material.base_color;
+    }
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
 #endif
 

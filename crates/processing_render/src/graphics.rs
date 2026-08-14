@@ -232,6 +232,12 @@ pub fn create(
         entity_commands.insert((Hdr, Bloom::NATURAL, Tonemapping::TonyMcMapface));
     }
 
+    // TEMP(bevy-020 debug): force direct drawing to bisect the indirect-args
+    // build for sorted instance batches.
+    if std::env::var("PROCESSING_NO_INDIRECT").is_ok() {
+        entity_commands.insert(bevy::render::view::NoIndirectDrawing);
+    }
+
     let entity = entity_commands.id();
 
     Ok(entity)
@@ -673,7 +679,10 @@ pub fn readback_raw(
 
     r.recv().expect("Failed to receive the map_async message");
 
-    let data = buffer_slice.get_mapped_range().to_vec();
+    let data = buffer_slice
+        .get_mapped_range()
+        .expect("Failed to get mapped range for readback")
+        .to_vec();
 
     graphics.readback_buffer.unmap();
 

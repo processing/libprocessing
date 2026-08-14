@@ -155,7 +155,10 @@ pub fn read_buffer_gpu(
         .map_err(|e| ProcessingError::BufferMapError(format!("map channel closed: {e}")))?
         .map_err(|e| ProcessingError::BufferMapError(format!("map failed: {e}")))?;
 
-    let bytes = buffer_slice.get_mapped_range().to_vec();
+    let bytes = buffer_slice
+        .get_mapped_range()
+        .map_err(|e| ProcessingError::BufferMapError(format!("get_mapped_range failed: {e}")))?
+        .to_vec();
     readback_buffer.unmap();
     Ok(bytes)
 }
@@ -280,6 +283,7 @@ pub fn create_compute(app: &mut App, shader_entity: Entity) -> Result<Entity> {
         shader_defs: Vec::new(),
         entry_point: Some(entry_point.clone().into()),
         zero_initialize_workgroup_memory: true,
+        constants: default(),
     };
 
     let pipeline_id = app

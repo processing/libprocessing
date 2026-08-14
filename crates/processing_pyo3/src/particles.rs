@@ -137,6 +137,39 @@ impl Grid {
     }
 }
 
+/// A dynamic-topology target: kernels add points, lines, or triangles to it
+/// via the WESL `processing::prims` module, and `particles(target)` draws
+/// whatever was added this frame. Created with `p.primitives(...)`.
+#[pyclass(unsendable)]
+pub struct Primitives {
+    pub(crate) target: Entity,
+    pub(crate) field: Entity,
+    pub(crate) topology: geometry::Topology,
+    pub(crate) capacity: u32,
+}
+
+#[pymethods]
+impl Primitives {
+    /// Capacity in primitives.
+    #[getter]
+    pub fn capacity(&self) -> u32 {
+        self.capacity
+    }
+
+    /// Primitives the kernels tried to add this frame, including any dropped
+    /// because the target was full. Reads back a small GPU stat; call it
+    /// when you want the number rather than every frame.
+    pub fn emitted(&self) -> PyResult<u32> {
+        particles_primitives_attempted(self.target).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// True when kernels tried to add more primitives than the capacity this
+    /// frame (the excess was dropped).
+    pub fn overflowed(&self) -> PyResult<bool> {
+        Ok(self.emitted()? > self.capacity)
+    }
+}
+
 static FLOCK_COMPUTE: std::sync::Mutex<Option<Entity>> = std::sync::Mutex::new(None);
 
 fn flock_compute() -> PyResult<Entity> {
@@ -782,18 +815,50 @@ impl Particles {
         particles_reset_indices(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    #[pyo3(signature = (kind, **kwargs))]
+    /// Creates a dynamic-topology target over this field: kernels applied
+    /// with `apply(kernel, primitives=target)` add points, lines, or
+    /// triangles to it via the WESL `processing::prims` module, and
+    /// `particles(target)` draws whatever was added this frame. `capacity`
+    /// is counted in primitives.
+    #[pyo3(signature = (topology, capacity))]
+    pub fn primitives(&self, topology: &str, capacity: u32) -> PyResult<Primitives> {
+        let topology = processing_render::geometry::Topology::parse(topology).ok_or_else(|| {
+            PyValueError::new_err(format!("primitives(): unknown topology {topology:?}"))
+        })?;
+        let target = particles_primitives_create(self.entity, topology, capacity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let field = processing_render::particles_primitives_field(target)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Primitives {
+            target,
+            field,
+            topology,
+            capacity,
+        })
+    }
+
+    #[pyo3(signature = (kind, primitives = None, **kwargs))]
     pub fn apply(
         &self,
         kind: &Bound<'_, PyAny>,
+        primitives: Option<PyRef<Primitives>>,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
         if let Ok(compute) = kind.extract::<PyRef<Compute>>() {
             if let Some(kwargs) = kwargs {
                 compute.set(Some(kwargs))?;
             }
+            if let Some(prims) = primitives {
+                return particles_primitives_apply(prims.target, compute.entity)
+                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")));
+            }
             return particles_apply(self.entity, compute.entity)
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")));
+        }
+        if primitives.is_some() {
+            return Err(PyTypeError::new_err(
+                "apply(primitives=...) requires a Compute kernel",
+            ));
         }
         let name: String = kind.extract().map_err(|_| {
             PyTypeError::new_err(
