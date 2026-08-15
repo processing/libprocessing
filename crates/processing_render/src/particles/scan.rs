@@ -6,7 +6,7 @@ use processing_core::error::Result;
 
 use crate::shader_value::ShaderValue;
 use crate::{
-    buffer_create, buffer_destroy, buffer_size, compute_create, compute_dispatch, compute_set,
+    buffer_create, buffer_destroy, buffer_size, compute_create, compute_dispatch_quiet, compute_set,
     shader_load,
 };
 
@@ -67,7 +67,7 @@ pub fn prefix_sum_u32(buffer: Entity) -> Result<()> {
 
         compute_set(block, "data", ShaderValue::Buffer(level_bufs[lvl]))?;
         compute_set(block, "block_sums", ShaderValue::Buffer(sums))?;
-        compute_dispatch(block, num_blocks as u32, 1, 1)?;
+        compute_dispatch_quiet(block, num_blocks as u32, 1, 1)?;
 
         level_bufs.push(sums);
         level_ns.push(num_blocks);
@@ -82,7 +82,7 @@ pub fn prefix_sum_u32(buffer: Entity) -> Result<()> {
         let num_blocks = level_ns[k].div_ceil(BLOCK).max(1);
         compute_set(add, "data", ShaderValue::Buffer(level_bufs[k]))?;
         compute_set(add, "block_sums", ShaderValue::Buffer(level_bufs[k + 1]))?;
-        compute_dispatch(add, num_blocks as u32, 1, 1)?;
+        compute_dispatch_quiet(add, num_blocks as u32, 1, 1)?;
     }
 
     Ok(())

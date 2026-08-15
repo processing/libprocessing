@@ -374,6 +374,11 @@ pub fn particles_apply(particles_entity: Entity, compute_entity: Entity) -> erro
         }
     }
 
+    // Full dispatch (with app.update()) on purpose: user-facing applies must
+    // see resources created earlier in the same frame — the strong "set then
+    // apply just works" invariant. The quiet variant is reserved for the
+    // internal grid/scan passes, where no new resources can appear between
+    // dispatches.
     let workgroup_count = capacity.div_ceil(WORKGROUP_SIZE);
     compute_dispatch(compute_entity, workgroup_count, 1, 1)
 }

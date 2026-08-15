@@ -6,7 +6,7 @@ use processing_core::error::Result;
 
 use crate::particles::scan::prefix_sum_u32;
 use crate::shader_value::ShaderValue;
-use crate::{buffer_create, compute_create, compute_dispatch, compute_set, shader_load};
+use crate::{buffer_create, compute_create, compute_dispatch_quiet, compute_set, shader_load};
 
 const CLEAR_SHADER: &str = "embedded://processing_render/particles/kernels/grid_clear.wgsl";
 const COUNT_SHADER: &str = "embedded://processing_render/particles/kernels/grid_count.wgsl";
@@ -89,24 +89,24 @@ pub fn grid_build(grid: &Grid, position: Entity) -> Result<()> {
     let num_cells = grid.params.num_cells();
 
     compute_set(clear, "counts", ShaderValue::Buffer(grid.offsets))?;
-    compute_dispatch(clear, (num_cells + 1).div_ceil(CLEAR_WG), 1, 1)?;
+    compute_dispatch_quiet(clear, (num_cells + 1).div_ceil(CLEAR_WG), 1, 1)?;
 
     compute_set(count, "position", ShaderValue::Buffer(position))?;
     compute_set(count, "counts", ShaderValue::Buffer(grid.offsets))?;
     set_domain(count, &grid.params)?;
-    compute_dispatch(count, grid.capacity.div_ceil(PARTICLE_WG), 1, 1)?;
+    compute_dispatch_quiet(count, grid.capacity.div_ceil(PARTICLE_WG), 1, 1)?;
 
     prefix_sum_u32(grid.offsets)?;
 
     compute_set(copy, "starts", ShaderValue::Buffer(grid.offsets))?;
     compute_set(copy, "cursor", ShaderValue::Buffer(grid.cursor))?;
-    compute_dispatch(copy, num_cells.div_ceil(COPY_WG), 1, 1)?;
+    compute_dispatch_quiet(copy, num_cells.div_ceil(COPY_WG), 1, 1)?;
 
     compute_set(scatter, "position", ShaderValue::Buffer(position))?;
     compute_set(scatter, "cursor", ShaderValue::Buffer(grid.cursor))?;
     compute_set(scatter, "sorted", ShaderValue::Buffer(grid.sorted))?;
     set_domain(scatter, &grid.params)?;
-    compute_dispatch(scatter, grid.capacity.div_ceil(PARTICLE_WG), 1, 1)?;
+    compute_dispatch_quiet(scatter, grid.capacity.div_ceil(PARTICLE_WG), 1, 1)?;
 
     Ok(())
 }

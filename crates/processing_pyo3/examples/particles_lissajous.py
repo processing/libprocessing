@@ -1,24 +1,15 @@
 from mewnala import *
 from math import cos, sin
 
-ALPHA_OVER = BlendMode(
-    color_src=BlendMode.SRC_ALPHA,
-    color_dst=BlendMode.ONE_MINUS_SRC_ALPHA,
-    color_op=BlendMode.OP_ADD,
-    alpha_src=BlendMode.ONE,
-    alpha_dst=BlendMode.ONE_MINUS_SRC_ALPHA,
-    alpha_op=BlendMode.OP_ADD,
-)
-
 N = 10000
 SCALE = 10.0
 FX, FY, FZ = 3.0, 4.0, 5.0
 
-CONNECTION_RADIUS = 3.5  # link points closer than this
-CONNECTION_RAMP = 6.0    # alpha = (1/(d/R + 1))^ramp
-LINE_ALPHA = 0.5         # overall opacity scale
-MAX_LINES = 2_000_000    # capacity of the dynamic line set (extra dropped, see edges.overflowed())
-HUE_MIX = 0.0            # 0 = grayscale, 1 = rainbow
+CONNECTION_RADIUS = 3.5
+CONNECTION_RAMP = 6.0
+LINE_ALPHA = 0.5
+MAX_LINES = 2_000_000
+HUE_MIX = 0.0
 
 p = None
 edges = None
@@ -64,7 +55,6 @@ def draw():
     grid.bind(link)
     p.apply(link, primitives=edges)
 
-    blend_mode(ALPHA_OVER)
     particles(edges)
 
 

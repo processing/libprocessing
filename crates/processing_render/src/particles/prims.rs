@@ -41,6 +41,10 @@ pub struct PrimitivesTarget {
     pub verts_per_prim: u32,
     /// The widened indirect-args buffer (also the field's connectivity).
     pub args: Entity,
+    /// One-thread kernel that zeroes the per-frame counts in `args`. Reset
+    /// must happen on the GPU: a CPU-side asset write races the kernel
+    /// dispatches, silently clobbering a frame's output either way it lands.
+    pub reset_kernel: Entity,
 }
 
 fn verts_per_prim(topology: Topology) -> error::Result<u32> {
@@ -84,6 +88,12 @@ pub fn particles_primitives_create(
         u32s_to_bytes(&[0, 1, 0, 0, 0, capacity_verts, vpp, 0]),
     )?;
 
+    let reset_shader = crate::shader_load(
+        "embedded://processing_render/particles/kernels/prims_reset.wgsl",
+    )?;
+    let reset_kernel = crate::compute_create(reset_shader)?;
+    crate::compute_set(reset_kernel, "prims_args", ShaderValue::Buffer(args))?;
+
     app_mut(|app| {
         let mut field_data = app
             .world_mut()
@@ -102,6 +112,7 @@ pub fn particles_primitives_create(
                 capacity_prims,
                 verts_per_prim: vpp,
                 args,
+                reset_kernel,
             })
             .id())
     })
@@ -143,24 +154,23 @@ pub fn particles_primitives_apply(
     target_entity: Entity,
     compute_entity: Entity,
 ) -> error::Result<()> {
-    let (field, source, args, drawn) = app_mut(|app| {
+    let (field, source, args, reset_kernel, drawn) = app_mut(|app| {
         let target = app
             .world()
             .get::<PrimitivesTarget>(target_entity)
             .ok_or(error::ProcessingError::ParticlesNotFound)?;
-        let (field, source, args) = (target.field, target.source, target.args);
+        let (field, source, args, reset_kernel) =
+            (target.field, target.source, target.args, target.reset_kernel);
         let mut field_data = app
             .world_mut()
             .get_mut::<Particles>(field)
             .ok_or(error::ProcessingError::ParticlesNotFound)?;
         let drawn = std::mem::take(&mut field_data.drawn_since_apply);
-        Ok((field, source, args, drawn))
+        Ok((field, source, args, reset_kernel, drawn))
     })?;
 
     if drawn {
-        // Reset draw count + attempted; instance_count stays 1, and the
-        // capacity/verts-per-prim tail is untouched.
-        crate::buffer_write_element(args, 0, u32s_to_bytes(&[0, 1, 0, 0, 0]))?;
+        crate::compute_dispatch(reset_kernel, 1, 1, 1)?;
     }
 
     let (position_buf, color_buf) = app_mut(|app| {

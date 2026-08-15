@@ -1023,6 +1023,14 @@ pub fn flush_draw_commands(
 
                     flush_batch(&mut res, &mut batch, &p_material_handles);
 
+                    // Processing parity: the default BLEND mode (style state
+                    // `None`) alpha-composites; REPLACE is the opaque
+                    // overwrite fast path.
+                    let blend = match state.style.blend_state {
+                        None => Some(BlendState::ALPHA_BLENDING),
+                        Some(bs) if bs == BlendState::REPLACE => None,
+                        other => other,
+                    };
                     let raster_draw = crate::particles::point_render::ParticleRasterDraw {
                         position,
                         count,
@@ -1031,7 +1039,7 @@ pub fn flush_draw_commands(
                         indirect,
                         color,
                         normal,
-                        blend: state.style.blend_state,
+                        blend,
                     };
                     match particles_data.raster_draw_entity {
                         Some(e) => {

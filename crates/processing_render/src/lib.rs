@@ -2461,7 +2461,34 @@ pub fn compute_set(
 pub fn compute_dispatch(entity: Entity, x: u32, y: u32, z: u32) -> error::Result<()> {
     app_mut(|app| {
         app.update();
-        
+        dispatch_inner(app, entity, x, y, z)
+    })
+}
+
+/// Dispatch without pumping a full `app.update()` first. Multi-pass GPU
+/// algorithms (grid build, prefix sum) and per-frame kernel chains issue
+/// many dispatches back to back; running the entire app schedule between
+/// each one costs an engine frame per dispatch and dwarfs the GPU work.
+/// Queue submission order already guarantees pass ordering. The one thing
+/// `update()` provides that a dispatch may genuinely need is pipeline
+/// compilation on first use — so on `PipelineNotReady` we pump once and
+/// retry.
+pub(crate) fn compute_dispatch_quiet(
+    entity: Entity,
+    x: u32,
+    y: u32,
+    z: u32,
+) -> error::Result<()> {
+    app_mut(|app| match dispatch_inner(app, entity, x, y, z) {
+        Err(error::ProcessingError::PipelineNotReady(_)) => {
+            app.update();
+            dispatch_inner(app, entity, x, y, z)
+        }
+        r => r,
+    })
+}
+
+fn dispatch_inner(app: &mut App, entity: Entity, x: u32, y: u32, z: u32) -> error::Result<()> {
     let args = {
         let world = app.world();
         let c = world
@@ -2481,9 +2508,8 @@ pub fn compute_dispatch(entity: Entity, x: u32, y: u32, z: u32) -> error::Result
     app.sub_app_mut(bevy::render::RenderApp)
         .world_mut()
         .run_system_cached_with(compute::dispatch, args)
-                    .unwrap()
-    })
-            }
+        .unwrap()
+}
 
 pub fn compute_destroy(entity: Entity) -> error::Result<()> {
     app_mut(|app| {
