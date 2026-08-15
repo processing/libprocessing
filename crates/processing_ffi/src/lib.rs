@@ -27,6 +27,27 @@ pub extern "C" fn processing_init() {
     error::check(|| init(Config::default()));
 }
 
+/// Initialize libProcessing with an asset root directory. Relative paths
+/// passed to `processing_shader_load` (and image/gltf loads) resolve
+/// against this directory. Same constraints as `processing_init`.
+///
+/// SAFETY:
+/// - `asset_root` must be non-null.
+/// - This is called from the main thread if the platform requires it.
+/// - This can only be called once.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_init_with_asset_root(asset_root: *const std::ffi::c_char) {
+    error::clear_error();
+    error::check(|| {
+        let asset_root = unsafe { cstr_to_str(asset_root) }?;
+        let mut config = Config::default();
+        if !asset_root.is_empty() {
+            config.set(ConfigKey::AssetRootPath, asset_root.to_string());
+        }
+        init(config)
+    });
+}
+
 /// Create a WebGPU surface from a macOS NSWindow handle.
 ///
 /// SAFETY:
@@ -3833,6 +3854,172 @@ pub extern "C" fn processing_particles_draw(graphics_id: u64, particles_id: u64,
     });
 }
 
+fn topology_from_u32(topology: u32) -> Result<geometry::Topology, ProcessingError> {
+    match topology {
+        0 => Ok(geometry::Topology::PointList),
+        1 => Ok(geometry::Topology::LineList),
+        2 => Ok(geometry::Topology::LineStrip),
+        3 => Ok(geometry::Topology::TriangleList),
+        4 => Ok(geometry::Topology::TriangleStrip),
+        _ => Err(ProcessingError::InvalidArgument(format!(
+            "unknown topology {topology}"
+        ))),
+    }
+}
+
+/// Draw `particles` with an explicit topology. `geometry_id` 0 draws raw
+/// vertices with the given topology instead of instanced geometry.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_draw_topology(
+    graphics_id: u64,
+    particles_id: u64,
+    geometry_id: u64,
+    topology: u32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Particles {
+                particles: Entity::from_bits(particles_id),
+                geometry: (geometry_id != 0).then(|| Entity::from_bits(geometry_id)),
+                topology: topology_from_u32(topology)?,
+            },
+        )
+    });
+}
+
+/// Grids are plain structs, not ECS entities, so the FFI keeps them in a
+/// handle table.
+static GRIDS: std::sync::Mutex<(u64, Option<std::collections::HashMap<u64, Grid>>)> =
+    std::sync::Mutex::new((0, None));
+
+fn grid_get(handle: u64) -> Result<Grid, ProcessingError> {
+    GRIDS
+        .lock()
+        .unwrap()
+        .1
+        .as_ref()
+        .and_then(|m| m.get(&handle).copied())
+        .ok_or_else(|| ProcessingError::InvalidArgument(format!("unknown grid handle {handle}")))
+}
+
+/// Create a spatial hash grid sized to `particles_id`'s capacity. Returns a
+/// grid handle (not an entity id), or 0 on error.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_grid_create(
+    particles_id: u64,
+    min_x: f32,
+    min_y: f32,
+    min_z: f32,
+    cell_size: f32,
+    dims_x: u32,
+    dims_y: u32,
+    dims_z: u32,
+) -> u64 {
+    error::clear_error();
+    error::check(|| {
+        let capacity = particles_capacity(Entity::from_bits(particles_id))?;
+        let grid = grid_create(
+            GridParams {
+                min: [min_x, min_y, min_z],
+                cell_size,
+                dims: [dims_x, dims_y, dims_z],
+            },
+            capacity,
+        )?;
+        let mut guard = GRIDS.lock().unwrap();
+        guard.0 += 1;
+        let handle = guard.0;
+        guard.1.get_or_insert_with(Default::default).insert(handle, grid);
+        Ok(handle)
+    })
+    .unwrap_or(0)
+}
+
+/// Rebuild the grid's cell index from a position buffer.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_grid_build(grid_handle: u64, position_buf_id: u64) {
+    error::clear_error();
+    error::check(|| grid_build(&grid_get(grid_handle)?, Entity::from_bits(position_buf_id)));
+}
+
+/// Bind the grid's offsets/sorted buffers and domain uniforms onto `compute`.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_grid_bind(grid_handle: u64, compute_id: u64) {
+    error::clear_error();
+    error::check(|| grid_bind(&grid_get(grid_handle)?, Entity::from_bits(compute_id)));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_grid_destroy(grid_handle: u64) {
+    error::clear_error();
+    error::check(|| {
+        let grid = GRIDS
+            .lock()
+            .unwrap()
+            .1
+            .as_mut()
+            .and_then(|m| m.remove(&grid_handle))
+            .ok_or_else(|| {
+                ProcessingError::InvalidArgument(format!("unknown grid handle {grid_handle}"))
+            })?;
+        buffer_destroy(grid.offsets)?;
+        buffer_destroy(grid.cursor)?;
+        buffer_destroy(grid.sorted)
+    });
+}
+
+/// Create a dynamic-topology primitives target over `particles_id`.
+/// `topology` must be 0 (points), 1 (lines), or 3 (triangles); capacity is
+/// counted in primitives. Returns the target entity id, or 0 on error.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_primitives_create(
+    particles_id: u64,
+    topology: u32,
+    capacity_prims: u32,
+) -> u64 {
+    error::clear_error();
+    error::check(|| {
+        particles_primitives_create(
+            Entity::from_bits(particles_id),
+            topology_from_u32(topology)?,
+            capacity_prims,
+        )
+    })
+    .map(|e| e.to_bits())
+    .unwrap_or(0)
+}
+
+/// Apply `compute` over the target's source field with the target's buffers
+/// bound under the `processing::prims` reserved names.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_primitives_apply(target_id: u64, compute_id: u64) {
+    error::clear_error();
+    error::check(|| {
+        particles_primitives_apply(Entity::from_bits(target_id), Entity::from_bits(compute_id))
+    });
+}
+
+/// The internal particle field holding the target's expanded vertices (what
+/// gets drawn), or 0 on error.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_primitives_field(target_id: u64) -> u64 {
+    error::clear_error();
+    error::check(|| particles_primitives_field(Entity::from_bits(target_id)))
+        .map(|e| e.to_bits())
+        .unwrap_or(0)
+}
+
+/// Primitives the kernels attempted to add this frame, including any dropped
+/// for capacity. Reads a small stat back from the GPU.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_primitives_attempted(target_id: u64) -> u32 {
+    error::clear_error();
+    error::check(|| particles_primitives_attempted(Entity::from_bits(target_id))).unwrap_or(0)
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_fill_buffer(graphics_id: u64, buffer_id: u64) {
     error::clear_error();
@@ -4043,7 +4230,12 @@ pub extern "C" fn processing_input_scroll(surface_id: u64, x: f32, y: f32) {
 pub extern "C" fn processing_input_key(surface_id: u64, key_code: u32, pressed: bool) {
     error::clear_error();
     error::check(|| {
-        let kc = key_code_from_u32(key_code)?;
+        // Silently skip keys with no mapping (media keys, GLFW_KEY_UNKNOWN):
+        // matches the Rust GLFW runner's `if let Some(kc) = glfw_key_to_bevy`.
+        // An input callback must never take down the render loop.
+        let Ok(kc) = key_code_from_u32(key_code) else {
+            return Ok(());
+        };
         input_set_key(Entity::from_bits(surface_id), kc, pressed)
     });
 }
@@ -4052,7 +4244,14 @@ pub extern "C" fn processing_input_key(surface_id: u64, key_code: u32, pressed: 
 pub extern "C" fn processing_input_char(surface_id: u64, key_code: u32, codepoint: u32) {
     error::clear_error();
     error::check(|| {
-        let kc = key_code_from_u32(key_code)?;
+        // 0 = no associated key: char events arrive separately from key
+        // events on GLFW. Matches the Rust GLFW runner, which sends
+        // KeyCode::Unidentified for WindowEvent::Char.
+        let kc = if key_code == 0 {
+            KeyCode::Unidentified(bevy::input::keyboard::NativeKeyCode::Unidentified)
+        } else {
+            key_code_from_u32(key_code)?
+        };
         let ch = char::from_u32(codepoint).ok_or_else(|| {
             ProcessingError::InvalidArgument(format!("invalid codepoint: {codepoint}"))
         })?;
