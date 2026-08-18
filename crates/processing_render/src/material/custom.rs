@@ -11,7 +11,7 @@ wesl::wesl_pkg!(lygia);
 
 use bevy::{
     asset::{AsAssetId, AssetEventSystems},
-    core_pipeline::core_3d::Opaque3d,
+    core_pipeline::core_3d::{AlphaMask3d, Opaque3d, Transparent3d},
     ecs::system::{
         SystemParamItem,
         lifetimeless::{SRes, SResMut},
@@ -24,10 +24,10 @@ use bevy::{
     },
     mesh::MeshVertexBufferLayoutRef,
     pbr::{
-        DrawMaterial, EntitiesNeedingSpecialization, MainPassOpaqueDrawFunction,
-        MainPassTransparentDrawFunction, MaterialFragmentShader, MaterialVertexShader,
-        MeshPipelineKey, PreparedMaterial, RenderMaterialInstance, RenderMaterialInstances,
-        base_specialize,
+        DrawMaterial, EntitiesNeedingSpecialization, MainPassAlphaMaskDrawFunction,
+        MainPassOpaqueDrawFunction, MainPassTransparentDrawFunction, MaterialFragmentShader,
+        MaterialVertexShader, MeshPipelineKey, PreparedMaterial, RenderMaterialInstance,
+        RenderMaterialInstances, base_specialize,
     },
     prelude::*,
     reflect::{PartialReflect, ReflectMut, ReflectRef, structs::Struct},
@@ -576,6 +576,8 @@ impl ErasedRenderAsset for CustomMaterial {
     type ErasedAsset = PreparedMaterial;
     type Param = (
         SRes<DrawFunctions<Opaque3d>>,
+        SRes<DrawFunctions<AlphaMask3d>>,
+        SRes<DrawFunctions<Transparent3d>>,
         SRes<AssetServer>,
         SRes<RenderDevice>,
         SResMut<MaterialBindGroupAllocators>,
@@ -589,6 +591,8 @@ impl ErasedRenderAsset for CustomMaterial {
         asset_id: AssetId<Self::SourceAsset>,
         (
             opaque_draw_functions,
+            alpha_mask_draw_functions,
+            transparent_draw_functions,
             _asset_server,
             render_device,
             bind_group_allocators,
@@ -631,9 +635,34 @@ impl ErasedRenderAsset for CustomMaterial {
                 .insert(bind_group_allocator.allocate_unprepared(unprepared, &bind_group_layout)),
         };
 
-        let draw_function = opaque_draw_functions.read().id::<DrawMaterial>();
+        // A `DrawFunctionId` is an index into a PER-PHASE registry — each
+        // phase label must carry its own registry's id, never a reused one.
+        let draw_opaque = opaque_draw_functions.read().id::<DrawMaterial>();
+        let draw_alpha_mask = alpha_mask_draw_functions.read().id::<DrawMaterial>();
+        let draw_transparent = transparent_draw_functions.read().id::<DrawMaterial>();
 
         let blend_state = source_asset.blend_state;
+        // A custom blend forces the sorted transparent phase (an arbitrary
+        // blend equation can't be assumed commutative); otherwise honor the
+        // explicitly-set alpha mode.
+        let alpha_mode = if blend_state.is_some() {
+            AlphaMode::Blend
+        } else {
+            source_asset.alpha_mode
+        };
+        // The queue phase must follow the effective alpha mode (as
+        // bevy_pbr's Material impl derives it) — a Blend material left in
+        // the default Opaque binned phase draws before Transparent3d and is
+        // erased by the background quad, which is itself a Transparent3d
+        // REPLACE draw.
+        let render_phase_type = match alpha_mode {
+            AlphaMode::Blend
+            | AlphaMode::Premultiplied
+            | AlphaMode::Add
+            | AlphaMode::Multiply => bevy::material::RenderPhaseType::Transparent,
+            AlphaMode::Mask(_) => bevy::material::RenderPhaseType::AlphaMask,
+            _ => bevy::material::RenderPhaseType::Opaque,
+        };
         let mut properties = MaterialProperties {
             mesh_pipeline_key_bits: ErasedMeshPipelineKey::new(MeshPipelineKey::empty()),
             base_specialize: Some(base_specialize),
@@ -644,18 +673,13 @@ impl ErasedRenderAsset for CustomMaterial {
                 depth_write: source_asset.depth_write,
             }),
             user_specialize: Some(specialize),
-            // A custom blend forces the sorted transparent phase (an arbitrary
-            // blend equation can't be assumed commutative); otherwise honor the
-            // explicitly-set alpha mode.
-            alpha_mode: if blend_state.is_some() {
-                AlphaMode::Blend
-            } else {
-                source_asset.alpha_mode
-            },
+            alpha_mode,
+            render_phase_type,
             ..Default::default()
         };
-        properties.add_draw_function(MainPassOpaqueDrawFunction, draw_function);
-        properties.add_draw_function(MainPassTransparentDrawFunction, draw_function);
+        properties.add_draw_function(MainPassOpaqueDrawFunction, draw_opaque);
+        properties.add_draw_function(MainPassAlphaMaskDrawFunction, draw_alpha_mask);
+        properties.add_draw_function(MainPassTransparentDrawFunction, draw_transparent);
         if source_asset.has_vertex {
             properties.add_shader(MaterialVertexShader, source_asset.shader_handle.clone());
         }
@@ -667,6 +691,22 @@ impl ErasedRenderAsset for CustomMaterial {
             binding,
             properties: Arc::new(properties),
         })
+    }
+
+    fn unload_asset(
+        source_asset: AssetId<Self::SourceAsset>,
+        (_, _, _, _, _, bind_group_allocators, render_material_bindings, _, _): &mut SystemParamItem<
+            Self::Param,
+        >,
+    ) {
+        // Mirror bevy_pbr's Material unload: without this the per-frame
+        // blend-state clones leak a RenderMaterialBindings entry and a
+        // bind-group slot every frame.
+        if let Some(binding) = render_material_bindings.remove(&source_asset.untyped())
+            && let Some(allocator) = bind_group_allocators.get_mut(&TypeId::of::<CustomMaterial>())
+        {
+            allocator.free(binding);
+        }
     }
 }
 

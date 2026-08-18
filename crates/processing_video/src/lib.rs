@@ -10,7 +10,9 @@ pub use nannou_video::{
 };
 
 mod record;
-pub use record::{RecorderPixelFormat, VideoRecordError, VideoRecorder, VideoRecorderConfig};
+pub use record::{
+    RecorderCodec, RecorderPixelFormat, VideoRecordError, VideoRecorder, VideoRecorderConfig,
+};
 
 use processing_core::app_mut;
 use processing_core::error::{ProcessingError, Result};

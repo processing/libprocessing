@@ -150,6 +150,74 @@ impl CameraProjection for ProcessingProjection {
     }
 }
 
+/// Off-axis (asymmetric) perspective projection — classic OpenGL/Processing
+/// `frustum()`. `left`/`right`/`bottom`/`top` bound the view volume on the
+/// near plane, in view-space units.
+#[derive(Debug, Clone, Reflect)]
+pub struct FrustumProjection {
+    pub left: f32,
+    pub right: f32,
+    pub bottom: f32,
+    pub top: f32,
+    pub near: f32,
+    pub far: f32,
+}
+
+impl CameraProjection for FrustumProjection {
+    fn get_clip_from_view(&self) -> Mat4 {
+        // The standard glFrustum matrix, except depth is REVERSED (near → 1,
+        // far → 0) to match the rest of the pipeline — bevy's perspective is
+        // infinite-reverse and its ortho swaps near/far for the same reason.
+        // An ortho can reverse by swapping near/far in the standard formula;
+        // a frustum cannot (near also sets the x/y scale), so the z column is
+        // derived directly: it hits 1 at z_view = −near and 0 at z_view = −far.
+        let (l, r, b, t, n, f) = (
+            self.left,
+            self.right,
+            self.bottom,
+            self.top,
+            self.near,
+            self.far,
+        );
+        Mat4::from_cols(
+            Vec4::new(2.0 * n / (r - l), 0.0, 0.0, 0.0),
+            Vec4::new(0.0, 2.0 * n / (t - b), 0.0, 0.0),
+            Vec4::new((r + l) / (r - l), (t + b) / (t - b), n / (f - n), -1.0),
+            Vec4::new(0.0, 0.0, n * f / (f - n), 0.0),
+        )
+    }
+
+    fn get_clip_from_view_for_sub(&self, _sub_view: &bevy::camera::SubCameraView) -> Mat4 {
+        self.get_clip_from_view()
+    }
+
+    fn update(&mut self, _width: f32, _height: f32) {
+        // Explicit view-volume bounds don't track the window size.
+    }
+
+    fn far(&self) -> f32 {
+        self.far
+    }
+
+    fn get_frustum_corners(&self, z_near: f32, z_far: f32) -> [Vec3A; 8] {
+        // The near-plane bounds scale linearly with distance along the rays.
+        let sn = z_near.abs() / self.near;
+        let sf = z_far.abs() / self.near;
+        [
+            // near plane
+            Vec3A::new(self.right * sn, self.bottom * sn, z_near), // bottom-right
+            Vec3A::new(self.right * sn, self.top * sn, z_near),    // top-right
+            Vec3A::new(self.left * sn, self.top * sn, z_near),     // top-left
+            Vec3A::new(self.left * sn, self.bottom * sn, z_near),  // bottom-left
+            // far plane
+            Vec3A::new(self.right * sf, self.bottom * sf, z_far), // bottom-right
+            Vec3A::new(self.right * sf, self.top * sf, z_far),    // top-right
+            Vec3A::new(self.left * sf, self.top * sf, z_far),     // top-left
+            Vec3A::new(self.left * sf, self.bottom * sf, z_far),  // bottom-left
+        ]
+    }
+}
+
 pub fn create(
     In((width, height, surface_entity, texture_format)): In<(u32, u32, Entity, TextureFormat)>,
     mut commands: Commands,
@@ -373,7 +441,7 @@ pub fn perspective(
             aspect_ratio,
             near,
             far,
-            near_clip_plane,
+            near_clip_plane: _,
         },
     )): In<(Entity, PerspectiveProjection)>,
     mut projections: Query<&mut Projection>,
@@ -382,12 +450,22 @@ pub fn perspective(
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
-    *projection = Projection::Perspective(PerspectiveProjection {
-        fov,
-        aspect_ratio,
+    // An explicit perspective() must honor ALL its parameters — including a
+    // deliberately anamorphic aspect ratio. Bevy's PerspectiveProjection
+    // cannot: its update() overwrites aspect_ratio with the viewport aspect
+    // on every render-area pass, silently discarding the caller's value. So
+    // express the same view volume as the equivalent symmetric frustum,
+    // whose update() is inert. The window-tracking default stays with
+    // mode_3d's Projection::Perspective.
+    let top = near * (fov / 2.0).tan();
+    let right = top * aspect_ratio;
+    *projection = Projection::custom(FrustumProjection {
+        left: -right,
+        right,
+        bottom: -top,
+        top,
         near,
         far,
-        near_clip_plane,
     });
 
     Ok(())
@@ -425,6 +503,53 @@ pub fn ortho(
     *projection = Projection::custom(ProcessingProjection {
         width: right - left,
         height: top - bottom,
+        near,
+        far,
+    });
+
+    Ok(())
+}
+
+pub struct FrustumArgs {
+    pub left: f32,
+    pub right: f32,
+    pub bottom: f32,
+    pub top: f32,
+    pub near: f32,
+    pub far: f32,
+}
+
+/// glFrustum-style asymmetric perspective: the bounds are on the NEAR plane.
+pub fn frustum(
+    In((
+        entity,
+        FrustumArgs {
+            left,
+            right,
+            bottom,
+            top,
+            near,
+            far,
+        },
+    )): In<(Entity, FrustumArgs)>,
+    mut projections: Query<&mut Projection>,
+) -> Result<()> {
+    let mut projection = projections
+        .get_mut(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    if !(near > 0.0 && far > near && right != left && top != bottom) {
+        return Err(ProcessingError::InvalidArgument(format!(
+            "frustum requires 0 < near < far and non-empty bounds, \
+             got left={left} right={right} bottom={bottom} top={top} near={near} far={far}"
+        )));
+    }
+
+    *projection = Projection::custom(FrustumProjection {
+        left,
+        right,
+        bottom,
+        top,
         near,
         far,
     });
@@ -704,6 +829,310 @@ pub fn readback_raw(
         width: graphics.size.width,
         height: graphics.size.height,
     })
+}
+
+// ── Asynchronous readback ring ──────────────────────────────────────────────
+// The synchronous readback above stalls the caller for a full pipeline flush
+// plus the GPU→CPU copy every call — at 3840×4320 that is most of a frame's
+// wall time and dominates recording. The ring splits the operation: `enqueue`
+// submits the copy and returns immediately; `fetch` hands back frames whose
+// map has completed, in submission order. With a few frames in flight the
+// copy of frame N overlaps the render of frame N+1 and readback mostly
+// leaves the critical path. Consumers that tolerate a frame or two of
+// latency (the video recorder) use this; point queries keep the sync path.
+
+/// Frames allowed in flight before `readback_ring_enqueue` refuses. Bounds
+/// memory (one full frame each — ~66MB at 3840×4320) and bounds how far the
+/// producer can run ahead.
+pub const READBACK_RING_DEPTH: usize = 3;
+
+struct PendingReadback {
+    buffer: bevy::render::render_resource::Buffer,
+    ready: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// The copy's own submission, so a blocking fetch waits for exactly this
+    /// copy — waiting for "the most recent submission" would drain the whole
+    /// queue (including newer copies and the in-flight render) and serialize
+    /// the pipeline into burst-stall cycles.
+    submission: wgpu::SubmissionIndex,
+    padded_bytes_per_row: usize,
+    bytes_per_row: usize,
+    format: TextureFormat,
+    width: u32,
+    height: u32,
+}
+
+/// GPU-side format conversion in front of the readback: HDR (or any
+/// non-8-bit) surfaces are blitted into an 8-bit sRGB texture BEFORE the
+/// copy, so the readback moves half the bytes and the CPU never touches a
+/// float pixel. (A 3840×4320 Rgba16Float frame is 132MB and a per-pixel CPU
+/// conversion of it costs ~350ms — it, not the copy, was the recording
+/// bottleneck.)
+struct ConvertPass {
+    texture: wgpu::Texture,
+    view: wgpu::TextureView,
+    blitter: wgpu::util::TextureBlitter,
+    width: u32,
+    height: u32,
+}
+
+/// Per-graphics async readback state; created lazily on first enqueue.
+#[derive(Component, Default)]
+pub struct ReadbackRing {
+    free: Vec<(bevy::render::render_resource::Buffer, u64)>,
+    pending: std::collections::VecDeque<PendingReadback>,
+    convert: Option<ConvertPass>,
+}
+
+pub fn readback_ring_enqueue(
+    In((entity, texture)): In<(Entity, Texture)>,
+    world: &mut World,
+) -> Result<()> {
+    let render_device = world.resource::<RenderDevice>().clone();
+    let render_queue = world.resource::<RenderQueue>().clone();
+    let (source_format, size) = {
+        let graphics = world
+            .get::<Graphics>(entity)
+            .ok_or(ProcessingError::GraphicsNotFound)?;
+        (graphics.texture_format, graphics.size)
+    };
+    // 8-bit surfaces read back as they are; everything else converts on the
+    // GPU to 8-bit sRGB first (see ConvertPass).
+    let needs_convert = !matches!(
+        source_format,
+        TextureFormat::Rgba8UnormSrgb
+            | TextureFormat::Rgba8Unorm
+            | TextureFormat::Bgra8UnormSrgb
+            | TextureFormat::Bgra8Unorm
+    );
+    let format = if needs_convert {
+        TextureFormat::Rgba8UnormSrgb
+    } else {
+        source_format
+    };
+    let px_size = pixel_size(format)?;
+    let bytes_per_row = size.width as usize * px_size;
+    let padded_bytes_per_row = RenderDevice::align_copy_bytes_per_row(bytes_per_row);
+    let buffer_size = padded_bytes_per_row as u64 * size.height as u64;
+
+    if world.get::<ReadbackRing>(entity).is_none() {
+        world.entity_mut(entity).insert(ReadbackRing::default());
+    }
+    {
+        let ring = world.get::<ReadbackRing>(entity).unwrap();
+        if ring.pending.len() >= READBACK_RING_DEPTH {
+            return Err(ProcessingError::InvalidArgument(
+                "readback ring full; fetch completed frames first".to_string(),
+            ));
+        }
+    }
+
+    // Reuse a free buffer of the right size; a resize just retires old ones.
+    let buffer = {
+        let mut ring = world.get_mut::<ReadbackRing>(entity).unwrap();
+        ring.free.retain(|(_, sz)| *sz == buffer_size);
+        match ring.free.pop() {
+            Some((b, _)) => b,
+            None => create_readback_buffer(
+                &render_device,
+                size.width,
+                size.height,
+                format,
+                "async readback ring buffer",
+            )?,
+        }
+    };
+
+    if needs_convert {
+        let stale = match world.get::<ReadbackRing>(entity).unwrap().convert {
+            Some(ref c) => c.width != size.width || c.height != size.height,
+            None => true,
+        };
+        if stale {
+            let device = render_device.wgpu_device();
+            let tex = device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("async readback convert target"),
+                size: wgpu::Extent3d {
+                    width: size.width,
+                    height: size.height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: TextureFormat::Rgba8UnormSrgb,
+                usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+                view_formats: &[],
+            });
+            let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+            let blitter =
+                wgpu::util::TextureBlitter::new(device, TextureFormat::Rgba8UnormSrgb);
+            world.get_mut::<ReadbackRing>(entity).unwrap().convert = Some(ConvertPass {
+                texture: tex,
+                view,
+                blitter,
+                width: size.width,
+                height: size.height,
+            });
+        }
+    }
+
+    let mut encoder = render_device.create_command_encoder(&CommandEncoderDescriptor::default());
+    let copy_src = if needs_convert {
+        let src_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let ring = world.get::<ReadbackRing>(entity).unwrap();
+        let convert = ring.convert.as_ref().unwrap();
+        convert
+            .blitter
+            .copy(render_device.wgpu_device(), &mut encoder, &src_view, &convert.view);
+        convert.texture.clone()
+    } else {
+        // bevy's Texture derefs to the raw wgpu texture.
+        wgpu::Texture::clone(&texture)
+    };
+    encoder.copy_texture_to_buffer(
+        copy_src.as_image_copy(),
+        TexelCopyBufferInfo {
+            buffer: &buffer,
+            layout: TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(
+                    std::num::NonZero::<u32>::new(padded_bytes_per_row as u32)
+                        .unwrap()
+                        .into(),
+                ),
+                rows_per_image: None,
+            },
+        },
+        size,
+    );
+    let submission = render_queue.submit(std::iter::once(encoder.finish()));
+
+    let ready = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let ready_cb = std::sync::Arc::clone(&ready);
+    buffer.slice(..).map_async(MapMode::Read, move |r| {
+        r.expect("Failed to map async readback buffer");
+        ready_cb.store(true, std::sync::atomic::Ordering::Release);
+    });
+
+    world
+        .get_mut::<ReadbackRing>(entity)
+        .unwrap()
+        .pending
+        .push_back(PendingReadback {
+            buffer,
+            ready,
+            submission,
+            padded_bytes_per_row,
+            bytes_per_row,
+            format,
+            width: size.width,
+            height: size.height,
+        });
+    Ok(())
+}
+
+/// Number of enqueued readbacks not yet fetched.
+pub fn readback_ring_pending(In(entity): In<Entity>, world: &mut World) -> Result<usize> {
+    Ok(world
+        .get::<ReadbackRing>(entity)
+        .map(|r| r.pending.len())
+        .unwrap_or(0))
+}
+
+/// Fetch the oldest enqueued readback if (or, blocking, once) its copy has
+/// completed. Returns `None` when nothing is pending, or when non-blocking
+/// and the oldest copy is still in flight.
+pub fn readback_ring_fetch(
+    In((entity, blocking)): In<(Entity, bool)>,
+    world: &mut World,
+) -> Result<Option<ReadbackData>> {
+    let render_device = world.resource::<RenderDevice>().clone();
+    {
+        let Some(ring) = world.get::<ReadbackRing>(entity) else {
+            return Ok(None);
+        };
+        if ring.pending.is_empty() {
+            return Ok(None);
+        }
+    }
+
+    // Pump the device so map_async callbacks can fire; block only if asked,
+    // and then only until THIS copy's submission completes — never the whole
+    // queue.
+    loop {
+        let (ready, submission) = {
+            let ring = world.get::<ReadbackRing>(entity).unwrap();
+            let front = ring.pending.front().unwrap();
+            (
+                front.ready.load(std::sync::atomic::Ordering::Acquire),
+                front.submission.clone(),
+            )
+        };
+        if ready {
+            break;
+        }
+        if blocking {
+            render_device
+                .poll(PollType::Wait {
+                    submission_index: Some(submission),
+                    timeout: None,
+                })
+                .expect("Failed to poll device for async readback");
+        } else {
+            render_device
+                .poll(PollType::Poll)
+                .expect("Failed to poll device for async readback");
+            let ready_now = {
+                let ring = world.get::<ReadbackRing>(entity).unwrap();
+                ring.pending
+                    .front()
+                    .unwrap()
+                    .ready
+                    .load(std::sync::atomic::Ordering::Acquire)
+            };
+            if !ready_now {
+                return Ok(None);
+            }
+        }
+    }
+
+    let pr = world
+        .get_mut::<ReadbackRing>(entity)
+        .unwrap()
+        .pending
+        .pop_front()
+        .unwrap();
+    let data = pr
+        .buffer
+        .slice(..)
+        .get_mapped_range()
+        .expect("Failed to get mapped range for async readback")
+        .to_vec();
+    pr.buffer.unmap();
+
+    let unpadded = if pr.padded_bytes_per_row != pr.bytes_per_row {
+        data.chunks_exact(pr.padded_bytes_per_row)
+            .take(pr.height as usize)
+            .flat_map(|row| &row[..pr.bytes_per_row])
+            .copied()
+            .collect()
+    } else {
+        data
+    };
+
+    let buffer_size = pr.padded_bytes_per_row as u64 * pr.height as u64;
+    world
+        .get_mut::<ReadbackRing>(entity)
+        .unwrap()
+        .free
+        .push((pr.buffer, buffer_size));
+
+    Ok(Some(ReadbackData {
+        bytes: unpadded,
+        format: pr.format,
+        width: pr.width,
+        height: pr.height,
+    }))
 }
 
 pub fn update_region_write(

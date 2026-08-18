@@ -96,3 +96,120 @@ fn crf_controls_output_size() {
         sizes[1]
     );
 }
+
+/// VideoToolbox hardware encode: macOS-only, so gate on the codec actually
+/// being present in the linked ffmpeg rather than on the platform.
+#[test]
+fn videotoolbox_roundtrip() {
+    use processing_video::RecorderCodec;
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("out_vt.mp4");
+
+    let config = VideoRecorderConfig::new(WIDTH, HEIGHT, FPS)
+        .with_codec(RecorderCodec::H264VideoToolbox)
+        .with_bitrate(2_000_000);
+    let mut recorder = match VideoRecorder::new(&path, config) {
+        Ok(r) => r,
+        Err(processing_video::VideoRecordError::CodecUnavailable { .. }) => {
+            eprintln!("h264_videotoolbox not available; skipping");
+            return;
+        }
+        Err(e) => panic!("recorder create failed: {e}"),
+    };
+    for i in 0..FRAMES {
+        recorder.record_frame(gradient_frame(i)).unwrap();
+    }
+    assert_eq!(recorder.finish().unwrap(), FRAMES);
+
+    let mut decoder = video_rs::Decoder::new(path.as_path()).unwrap();
+    assert_eq!(decoder.size(), (WIDTH, HEIGHT));
+    let mut decoded = 0u64;
+    loop {
+        match decoder.decode_raw() {
+            Ok(_) => decoded += 1,
+            Err(video_rs::Error::DecodeExhausted | video_rs::Error::ReadExhausted) => break,
+            Err(e) => panic!("decode error after {decoded} frames: {e}"),
+        }
+    }
+    assert_eq!(decoded, FRAMES);
+}
+
+/// Hardware-encoder session creation at Deep Space delivery resolutions.
+/// Apple's hardware H.264 encoder rejects dimensions above 4096px (session
+/// error -12903), which includes the 3840x4320 per-surface files — those are
+/// allowed to fail with a Create error. HEVC must work at both delivery
+/// sizes.
+#[test]
+fn videotoolbox_delivery_resolutions() {
+    use processing_video::{RecorderCodec, VideoRecordError};
+
+    let dir = tempfile::tempdir().unwrap();
+    let cases = [
+        (RecorderCodec::H264VideoToolbox, 3840u32, 4320u32),
+        (RecorderCodec::HevcVideoToolbox, 3840, 4320),
+        (RecorderCodec::HevcVideoToolbox, 7680, 4320),
+    ];
+    for (i, (codec, w, h)) in cases.into_iter().enumerate() {
+        let path = dir.path().join(format!("delivery_{i}.mp4"));
+        let config = VideoRecorderConfig::new(w, h, 60.0).with_codec(codec);
+        let mut recorder = match VideoRecorder::new(&path, config) {
+            Ok(r) => r,
+            Err(VideoRecordError::CodecUnavailable { .. }) => {
+                eprintln!("{codec:?} not available; skipping");
+                continue;
+            }
+            Err(e @ VideoRecordError::Create { .. })
+                if codec == RecorderCodec::H264VideoToolbox =>
+            {
+                // Hardware-dependent: Apple's H.264 encoder caps at 4096px.
+                eprintln!("{codec:?} at {w}x{h}: {e}");
+                continue;
+            }
+            Err(e) => panic!("{codec:?} at {w}x{h}: {e}"),
+        };
+        let frame = vec![128u8; w as usize * h as usize * 4];
+        for _ in 0..3 {
+            recorder.record_frame(frame.clone()).unwrap();
+        }
+        assert_eq!(recorder.finish().unwrap(), 3, "{codec:?} at {w}x{h}");
+    }
+}
+
+/// The VideoToolbox BGRA fast path (no swscale — hardware colorspace
+/// conversion) must produce a decodable file like the NV12 path.
+#[test]
+fn videotoolbox_bgra_direct_roundtrip() {
+    use processing_video::{RecorderCodec, RecorderPixelFormat};
+
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("out_bgra.mp4");
+    let config = VideoRecorderConfig::new(WIDTH, HEIGHT, FPS)
+        .with_codec(RecorderCodec::H264VideoToolbox)
+        .with_pixel_format(RecorderPixelFormat::Bgra8)
+        .with_bitrate(2_000_000);
+    let mut recorder = match VideoRecorder::new(&path, config) {
+        Ok(r) => r,
+        Err(processing_video::VideoRecordError::CodecUnavailable { .. }) => {
+            eprintln!("h264_videotoolbox not available; skipping");
+            return;
+        }
+        Err(e) => panic!("recorder create failed: {e}"),
+    };
+    for i in 0..FRAMES {
+        recorder.record_frame(gradient_frame(i)).unwrap(); // bytes reinterpreted as BGRA — fine for a roundtrip
+    }
+    assert_eq!(recorder.finish().unwrap(), FRAMES);
+
+    let mut decoder = video_rs::Decoder::new(path.as_path()).unwrap();
+    assert_eq!(decoder.size(), (WIDTH, HEIGHT));
+    let mut decoded = 0u64;
+    loop {
+        match decoder.decode_raw() {
+            Ok(_) => decoded += 1,
+            Err(video_rs::Error::DecodeExhausted | video_rs::Error::ReadExhausted) => break,
+            Err(e) => panic!("decode error after {decoded} frames: {e}"),
+        }
+    }
+    assert_eq!(decoded, FRAMES);
+}

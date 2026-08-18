@@ -666,6 +666,45 @@ pub fn graphics_readback_raw(graphics_entity: Entity) -> error::Result<graphics:
     })
 }
 
+/// Submit an asynchronous readback of the current graphics surface into the
+/// per-graphics ring (bounded at [`graphics::READBACK_RING_DEPTH`] frames in
+/// flight). Returns immediately; collect results with
+/// [`graphics_readback_fetch`]. The copy of one frame overlaps the render of
+/// the next, keeping readback off the critical path for streaming consumers
+/// like the video recorder.
+pub fn graphics_readback_enqueue(graphics_entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        graphics::flush(app, graphics_entity)?;
+        let vt = graphics::view_target(app, graphics_entity)?;
+        let texture = vt.main_texture().clone();
+        app.world_mut()
+            .run_system_cached_with(graphics::readback_ring_enqueue, (graphics_entity, texture))
+            .unwrap()
+    })
+}
+
+/// Fetch the oldest completed asynchronous readback, in submission order.
+/// Non-blocking unless `blocking`; `None` when nothing is ready/pending.
+pub fn graphics_readback_fetch(
+    graphics_entity: Entity,
+    blocking: bool,
+) -> error::Result<Option<graphics::ReadbackData>> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(graphics::readback_ring_fetch, (graphics_entity, blocking))
+            .unwrap()
+    })
+}
+
+/// Asynchronous readbacks submitted but not yet fetched.
+pub fn graphics_readback_pending(graphics_entity: Entity) -> error::Result<usize> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(graphics::readback_ring_pending, graphics_entity)
+            .unwrap()
+    })
+}
+
 /// Read back pixel data from the graphics surface as LinearRgba.
 pub fn graphics_readback(graphics_entity: Entity) -> error::Result<Vec<LinearRgba>> {
     let raw = graphics_readback_raw(graphics_entity)?;
@@ -919,6 +958,38 @@ pub fn graphics_ortho(
                 (
                     graphics_entity,
                     graphics::OrthoArgs {
+                        left,
+                        right,
+                        bottom,
+                        top,
+                        near,
+                        far,
+                    },
+                ),
+            )
+            .unwrap()
+    })
+}
+
+/// glFrustum-style asymmetric perspective projection; the bounds are on the
+/// near plane, matching classic Processing/OpenGL `frustum()`.
+pub fn graphics_frustum(
+    graphics_entity: Entity,
+    left: f32,
+    right: f32,
+    bottom: f32,
+    top: f32,
+    near: f32,
+    far: f32,
+) -> error::Result<()> {
+    app_mut(|app| {
+        flush(app, graphics_entity)?;
+        app.world_mut()
+            .run_system_cached_with(
+                graphics::frustum,
+                (
+                    graphics_entity,
+                    graphics::FrustumArgs {
                         left,
                         right,
                         bottom,

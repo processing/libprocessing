@@ -9,8 +9,12 @@ use crate::color::Color;
 
 mod color;
 mod error;
+#[cfg(feature = "video")]
+mod video;
 
-unsafe fn cstr_to_str<'a>(ptr: *const std::ffi::c_char) -> Result<&'a str, ProcessingError> {
+pub(crate) unsafe fn cstr_to_str<'a>(
+    ptr: *const std::ffi::c_char,
+) -> Result<&'a str, ProcessingError> {
     unsafe { std::ffi::CStr::from_ptr(ptr) }
         .to_str()
         .map_err(|_| ProcessingError::InvalidArgument("non-UTF8 C string".to_string()))
@@ -311,6 +315,8 @@ pub extern "C" fn processing_end_draw(graphics_id: u64) {
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_exit(exit_code: u8) {
     error::clear_error();
+    #[cfg(feature = "video")]
+    video::finish_on_exit();
     error::check(|| exit(exit_code));
 }
 
@@ -1975,6 +1981,27 @@ pub extern "C" fn processing_ortho(
     error::check(|| graphics_ortho(graphics_entity, left, right, bottom, top, near, far));
 }
 
+/// Set a glFrustum-style asymmetric (off-axis) perspective projection.
+/// `left`/`right`/`bottom`/`top` bound the view volume on the NEAR plane,
+/// matching classic Processing/OpenGL `frustum()`. Requires 0 < near < far.
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_frustum(
+    graphics_id: u64,
+    left: f32,
+    right: f32,
+    bottom: f32,
+    top: f32,
+    near: f32,
+    far: f32,
+) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_frustum(graphics_entity, left, right, bottom, top, near, far));
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_transform_set_position(entity_id: u64, x: f32, y: f32, z: f32) {
     error::clear_error();
@@ -2784,6 +2811,31 @@ pub extern "C" fn processing_geometry_sphere(radius: f32, sectors: u32, stacks: 
     error::check(|| geometry_sphere(radius, sectors, stacks))
         .map(|e| e.to_bits())
         .unwrap_or(0)
+}
+
+/// Tessellate and extrude `text` into a 3D geometry, honoring the graphics
+/// context's current text font, size, and style. `x`/`y` position the
+/// baseline as in text(); `depth` is the extrusion depth. Returns the
+/// geometry entity, or 0 on error.
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - text is a valid, NUL-terminated C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_graphics_text_to_geometry(
+    graphics_id: u64,
+    text: *const std::ffi::c_char,
+    x: f32,
+    y: f32,
+    depth: f32,
+) -> u64 {
+    error::clear_error();
+    error::check(|| {
+        let text = unsafe { cstr_to_str(text) }?;
+        let mesh = graphics_text_to_model(Entity::from_bits(graphics_id), text, x, y, depth)?;
+        Ok(geometry_create_from_mesh(mesh)?.to_bits())
+    })
+    .unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
