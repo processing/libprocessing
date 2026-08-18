@@ -60,3 +60,5 @@ cache-keys = [
     { file = "../*/src/**/*.rs" },
     { file = "../*/Cargo.toml" },
 ]
+# The earliest version that supports the current lock file revision (3)
+required-version = ">=0.8.4"
