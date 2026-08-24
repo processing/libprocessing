@@ -43,7 +43,7 @@ uv init mewnala-sketchbook && cd mewnala-sketchbook
 uv add mewnala
 ```
 
-Now create a file named `sketchh.py` at the root of `mewnala-sketchbook`.
+Now create a file named `sketch.py` at the root of `mewnala-sketchbook`.
 
 You can use this code to test
 
