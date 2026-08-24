@@ -11,10 +11,10 @@ fn main() {
 }
 
 fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(400, 400)?;
+    let mut glfw_ctx = GlfwContext::new(400, 400, false)?;
     init(Config::default())?;
 
-    let surface = glfw_ctx.create_surface(400, 400)?;
+    let surface = glfw_ctx.create_surface(400, 400, false)?;
     let graphics = graphics_create(surface, 400, 400, TextureFormat::Rgba16Float)?;
 
     let mut t: f32 = 0.0;

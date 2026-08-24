@@ -28,10 +28,10 @@ fn main() {
 fn sketch() -> error::Result<()> {
     let width = 500;
     let height = 500;
-    let mut glfw_ctx = GlfwContext::new(width, height)?;
+    let mut glfw_ctx = GlfwContext::new(width, height, false)?;
     init(Config::default())?;
 
-    let surface = glfw_ctx.create_surface(width, height)?;
+    let surface = glfw_ctx.create_surface(width, height, false)?;
     let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
 
     let mut index: usize = 0;

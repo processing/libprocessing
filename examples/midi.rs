@@ -44,10 +44,10 @@ fn main() {
 }
 
 fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(WIDTH, HEIGHT)?;
+    let mut glfw_ctx = GlfwContext::new(WIDTH, HEIGHT, false)?;
     init(Config::default())?;
 
-    let surface = glfw_ctx.create_surface(WIDTH, HEIGHT)?;
+    let surface = glfw_ctx.create_surface(WIDTH, HEIGHT, false)?;
     let graphics = graphics_create(surface, WIDTH, HEIGHT, TextureFormat::Rgba16Float)?;
 
     midi_refresh_ports()?;

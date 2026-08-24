@@ -9,10 +9,10 @@ fn main() {
 }
 
 fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(600, 300)?;
+    let mut glfw_ctx = GlfwContext::new(600, 300, false)?;
     init(Config::default())?;
 
-    let surface = glfw_ctx.create_surface(600, 300)?;
+    let surface = glfw_ctx.create_surface(600, 300, false)?;
     let graphics = graphics_create(surface, 600, 300, TextureFormat::Rgba16Float)?;
 
     let joins = [
