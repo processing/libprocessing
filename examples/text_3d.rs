@@ -12,10 +12,10 @@ fn main() {
 fn sketch() -> error::Result<()> {
     let width = 1200;
     let height = 700;
-    let mut glfw_ctx = GlfwContext::new(width, height)?;
+    let mut glfw_ctx = GlfwContext::new(width, height, false)?;
     init(Config::default())?;
 
-    let surface = glfw_ctx.create_surface(width, height)?;
+    let surface = glfw_ctx.create_surface(width, height, false)?;
     let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;

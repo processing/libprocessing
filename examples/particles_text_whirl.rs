@@ -261,10 +261,10 @@ fn main() {
 }
 
 fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(1200, 800)?;
+    let mut glfw_ctx = GlfwContext::new(1200, 800, false)?;
     init(Config::default())?;
 
-    let surface = glfw_ctx.create_surface(1200, 800)?;
+    let surface = glfw_ctx.create_surface(1200, 800, false)?;
     let graphics = graphics_create(surface, 1200, 800, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
