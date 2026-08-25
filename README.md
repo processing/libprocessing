@@ -113,6 +113,12 @@ Install [wasm-pack](https://rustwasm.github.io/wasm-pack/):
 cargo install wasm-pack
 ```
 
+On Windows, you'll need to manually install `wasm-opt`
+
+```bash
+cargo install wasm-opt
+```
+
 You'll also need the wasm32 target:
 
 ```bash
