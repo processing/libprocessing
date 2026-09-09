@@ -45,6 +45,9 @@ pub struct PrimitivesTarget {
     /// must happen on the GPU: a CPU-side asset write races the kernel
     /// dispatches, silently clobbering a frame's output either way it lands.
     pub reset_kernel: Entity,
+    /// Shader entity used only by `reset_kernel`; retained so destruction can
+    /// release the complete internally-created target graph.
+    pub reset_shader: Entity,
 }
 
 fn verts_per_prim(topology: Topology) -> error::Result<u32> {
@@ -113,8 +116,31 @@ pub fn particles_primitives_create(
                 verts_per_prim: vpp,
                 args,
                 reset_kernel,
+                reset_shader,
             })
             .id())
+    })
+}
+
+/// Destroy a dynamic-topology target and every entity it created internally.
+/// The source particle field is borrowed and deliberately survives.
+pub fn particles_primitives_destroy(target_entity: Entity) -> error::Result<()> {
+    let (field, reset_kernel, reset_shader) = app_mut(|app| {
+        let target = app
+            .world()
+            .get::<PrimitivesTarget>(target_entity)
+            .ok_or(error::ProcessingError::ParticlesNotFound)?;
+        Ok((target.field, target.reset_kernel, target.reset_shader))
+    })?;
+
+    // Destroy the internal field first: it owns the widened indirect args
+    // buffer through Connectivity. The reset compute borrows that buffer.
+    crate::particles_destroy(field)?;
+    crate::compute_destroy(reset_kernel)?;
+    crate::shader_destroy(reset_shader)?;
+    app_mut(|app| {
+        app.world_mut().entity_mut(target_entity).despawn();
+        Ok(())
     })
 }
 

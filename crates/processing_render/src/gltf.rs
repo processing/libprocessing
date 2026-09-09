@@ -9,6 +9,7 @@ use bevy::{
     camera::visibility::RenderLayers,
     ecs::system::RunSystemOnce,
     gltf::{Gltf, GltfMaterial, GltfMeshName},
+    mesh::Indices,
     pbr::ExtendedMaterial,
     prelude::*,
     world_serialization::WorldInstanceSpawner,
@@ -18,6 +19,7 @@ use crate::geometry::{BuiltinAttributes, Geometry, layout::VertexLayout};
 use crate::graphics;
 use crate::material::ProcessingMaterial;
 use crate::render::material::{ProcessingExtendedMaterial, UntypedMaterial};
+use crate::render::primitive::ensure_vertex_colors;
 use processing_core::config::{Config, ConfigKey};
 use processing_core::error::{ProcessingError, Result};
 
@@ -69,6 +71,12 @@ pub struct GltfHandle {
     handle: Handle<Gltf>,
     instance_id: bevy::world_serialization::InstanceId,
     graphics_entity: Entity,
+}
+
+impl GltfHandle {
+    pub(crate) fn gltf_handle(&self) -> &Handle<Gltf> {
+        &self.handle
+    }
 }
 
 pub fn load(
@@ -128,6 +136,22 @@ pub fn load(
     Ok(entity)
 }
 
+/// Destroy a loaded glTF handle and the scene instance spawned for queries.
+/// Shapes/materials explicitly extracted from it are independent Processing
+/// resources and retain their own handles until their respective destroy API
+/// is called.
+pub fn destroy(In(gltf_entity): In<Entity>, world: &mut World) -> Result<()> {
+    let instance_id = world
+        .get::<GltfHandle>(gltf_entity)
+        .ok_or(ProcessingError::InvalidEntity)?
+        .instance_id;
+    world.resource_scope(|world, mut spawner: Mut<WorldInstanceSpawner>| {
+        spawner.despawn_instance_sync(world, &instance_id);
+    });
+    world.despawn(gltf_entity);
+    Ok(())
+}
+
 pub fn geometry(
     In((gltf_entity, name)): In<(Entity, String)>,
     world: &mut World,
@@ -165,6 +189,8 @@ pub fn geometry(
         (handle, transform)
     };
 
+    prepare_for_draw(world, &mesh_handle);
+
     let builtins = world.resource::<BuiltinAttributes>();
     let attrs = vec![
         builtins.position,
@@ -180,6 +206,39 @@ pub fn geometry(
         ))
         .id();
     Ok(entity)
+}
+
+/// Bring a gltf mesh up to the shape the immediate-mode draw paths expect.
+///
+/// Meshes the engine builds itself all carry an index buffer and a vertex
+/// color attribute, and the `VertexLayout` this module declares for a gltf
+/// geometry names `color` too. A gltf primitive is whatever the file and the
+/// loader between them produced, so both have to be guaranteed here instead of
+/// assumed. Neither changes how the mesh looks.
+fn prepare_for_draw(world: &mut World, handle: &Handle<Mesh>) {
+    let mut meshes = world.resource_mut::<Assets<Mesh>>();
+    let Some(mut mesh) = meshes.get_mut(handle) else {
+        return;
+    };
+    ensure_indexed(&mut mesh);
+    ensure_vertex_colors(&mut mesh);
+}
+
+/// Give a mesh the trivial index buffer if it arrived without one, so that
+/// `stroke()` can draw it.
+///
+/// The wireframe pass pulls its vertices through the index buffer and quietly
+/// skips any mesh that has none, so a non-indexed mesh cannot be outlined --
+/// and gltf primitives commonly arrive without indices. `0..n` names
+/// exactly the vertices the draw already walks in exactly the order it walks
+/// them, so this changes nothing about how the mesh renders; it only gives
+/// the wireframe pass the handle it needs.
+fn ensure_indexed(mesh: &mut Mesh) {
+    if mesh.indices().is_some() {
+        return;
+    }
+    let count = mesh.count_vertices() as u32;
+    mesh.insert_indices(Indices::U32((0..count).collect()));
 }
 
 /// Translate a bevy [`GltfMaterial`] into the [`StandardMaterial`] base of a

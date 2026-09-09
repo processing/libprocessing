@@ -3,7 +3,15 @@ use bevy::mesh::PrimitiveTopology;
 use bevy::prelude::*;
 use bevy::render::mesh::VertexAttributeValues;
 
-fn ensure_vertex_colors(mesh: &mut Mesh) {
+/// Give a mesh the white vertex-color attribute if it has none.
+///
+/// Every mesh the engine draws is expected to carry one -- the `VertexLayout`
+/// the geometry paths declare names `color` -- so a mesh that arrives without
+/// it (from a gltf primitive, say) has to be brought up to the same shape.
+/// White is the identity for the shaders that consume it, so a mesh that
+/// already has colors keeps them and one that does not is unchanged in
+/// appearance.
+pub fn ensure_vertex_colors(mesh: &mut Mesh) {
     if mesh.attribute(Mesh::ATTRIBUTE_COLOR).is_none() {
         let vertex_count = mesh
             .attribute(Mesh::ATTRIBUTE_POSITION)

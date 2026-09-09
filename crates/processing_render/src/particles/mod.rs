@@ -28,7 +28,7 @@ pub use emit::{
 pub use grid::{Grid, GridParams, grid_bind, grid_build, grid_create};
 pub use prims::{
     PrimitivesTarget, particles_primitives_apply, particles_primitives_attempted,
-    particles_primitives_create, particles_primitives_field,
+    particles_primitives_create, particles_primitives_destroy, particles_primitives_field,
 };
 pub use kernels::{
     BOUNDS_CLAMP, BOUNDS_REFLECT, BOUNDS_SOFT, BOUNDS_WRAP, COMBINE_ADD, COMBINE_DIV, COMBINE_MAX,
@@ -105,6 +105,17 @@ pub struct Particles {
     /// Set by the raster draw path, consumed by the primitives-apply path so
     /// a target's counts reset once per draw regardless of frame pacing.
     pub drawn_since_apply: bool,
+    /// When set, instanced draws of this system are skinned: the pack kernel
+    /// samples the pose pool by the per-particle phase attribute.
+    pub skin: Option<ParticlesSkin>,
+}
+
+/// Pose-pool attachment for skinned particle instances (see
+/// `crate::animation::SkinPosePool`).
+#[derive(Clone, Copy)]
+pub struct ParticlesSkin {
+    pub pool: Entity,
+    pub phase_attr: Entity,
 }
 
 #[derive(Clone, Copy)]
@@ -120,6 +131,24 @@ impl Particles {
     pub fn buffer(&self, attribute: Entity) -> Option<Entity> {
         self.buffers.get(&attribute).copied()
     }
+}
+
+/// Attach a pose pool + phase attribute; pack dispatch switches to the
+/// skin-enabled pipeline for this system's instanced draws.
+pub fn set_skin_pool(
+    In((particles_entity, pool, phase_attr)): In<(Entity, Entity, Entity)>,
+    mut particles: Query<&mut Particles>,
+) -> Result<()> {
+    let mut p = particles
+        .get_mut(particles_entity)
+        .map_err(|_| ProcessingError::InvalidEntity)?;
+    if !p.buffers.contains_key(&phase_attr) {
+        return Err(ProcessingError::InvalidArgument(
+            "skin pool phase attribute is not an attribute of this particle system".to_string(),
+        ));
+    }
+    p.skin = Some(ParticlesSkin { pool, phase_attr });
+    Ok(())
 }
 
 #[derive(Component, Clone, Copy)]
@@ -163,6 +192,7 @@ pub fn create(
             connectivity: None,
             emit_head: 0,
             drawn_since_apply: false,
+            skin: None,
         })
         .id();
     Ok(entity)
@@ -245,6 +275,7 @@ pub fn create_from_geometry(
             connectivity,
             emit_head: 0,
             drawn_since_apply: false,
+            skin: None,
         })
         .id();
     Ok(entity)

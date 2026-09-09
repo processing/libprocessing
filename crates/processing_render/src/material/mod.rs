@@ -134,6 +134,31 @@ pub fn set_property(
             return Ok(());
         }
 
+        // Textures (2D images and 3D voxel textures alike) bind by name into
+        // the material's dynamic shader; `create_bindings` resolves the
+        // GpuImage at prepare time. `texture_handle` was resolved above.
+        if let ShaderValue::Texture(_) = &value {
+            let handle = texture_handle.expect("texture_handle resolved for ShaderValue::Texture");
+            let category = mat
+                .shader
+                .reflection()
+                .parameter(&name)
+                .map(|p| p.category())
+                .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.clone()))?;
+            if !matches!(
+                category,
+                ParameterCategory::Texture
+                    | ParameterCategory::StorageTexture
+                    | ParameterCategory::Sampler
+            ) {
+                return Err(ProcessingError::InvalidArgument(format!(
+                    "property `{name}` expects {category:?}, got Texture"
+                )));
+            }
+            mat.shader.insert(&name, handle);
+            return Ok(());
+        }
+
         return custom::set_property(&mut mat, &name, &value);
     }
 
@@ -324,6 +349,30 @@ pub fn set_depth_write(
                 mat.depth_write = Some(value);
                 Ok(())
             }
+        },
+    )
+}
+
+pub fn set_depth_bias(
+    In((entity, value)): In<(Entity, f32)>,
+    material_handles: Query<&UntypedMaterial>,
+    mut pbr: ResMut<Assets<PbrMaterial>>,
+    mut particles: ResMut<Assets<crate::particles::material::ParticlesMaterial>>,
+    mut custom: ResMut<Assets<custom::CustomMaterial>>,
+) -> error::Result<()> {
+    edit_material(
+        entity,
+        &material_handles,
+        &mut pbr,
+        &mut particles,
+        &mut custom,
+        |m| {
+            match m {
+                MaterialMut::Pbr(mat) => mat.base.depth_bias = value,
+                MaterialMut::Particles(mat) => mat.base.depth_bias = value,
+                MaterialMut::Custom(mat) => mat.depth_bias = value,
+            }
+            Ok(())
         },
     )
 }

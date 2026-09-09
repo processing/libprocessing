@@ -153,6 +153,174 @@ pub fn create(
         .id()
 }
 
+/// Create a 3D texture usable as a storage texture in compute kernels
+/// (`texture_storage_3d<FMT, write>`) and as a sampled `texture_3d<f32>` in
+/// materials/filters. Zero-initialized; trilinear clamp-to-edge sampler.
+///
+/// Unlike 2D images this is never a render attachment, and the CPU-side asset
+/// copy is dropped after upload (a 256^3 field is 32MB — keeping a main-world
+/// mirror would double it). Readback goes through `readback_3d_raw`.
+pub fn create_3d(
+    In((size, texture_format)): In<(Extent3d, TextureFormat)>,
+    mut commands: Commands,
+    mut images: ResMut<Assets<bevy::image::Image>>,
+    render_device: Res<RenderDevice>,
+) -> Result<Entity> {
+    let px_size = pixel_size(texture_format)?;
+    let data = vec![
+        0u8;
+        size.width as usize
+            * size.height as usize
+            * size.depth_or_array_layers as usize
+            * px_size
+    ];
+    let mut image = bevy::image::Image::new(
+        size,
+        TextureDimension::D3,
+        data,
+        texture_format,
+        RenderAssetUsages::RENDER_WORLD,
+    );
+    image.texture_descriptor.usage = TextureUsages::TEXTURE_BINDING
+        | TextureUsages::STORAGE_BINDING
+        | TextureUsages::COPY_DST
+        | TextureUsages::COPY_SRC;
+    image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+        mag_filter: ImageFilterMode::Linear,
+        min_filter: ImageFilterMode::Linear,
+        mipmap_filter: ImageFilterMode::Linear,
+        address_mode_u: ImageAddressMode::ClampToEdge,
+        address_mode_v: ImageAddressMode::ClampToEdge,
+        address_mode_w: ImageAddressMode::ClampToEdge,
+        ..Default::default()
+    });
+
+    let handle = images.add(image);
+    let readback_buffer = create_readback_buffer_3d(
+        &render_device,
+        size.width,
+        size.height,
+        size.depth_or_array_layers,
+        texture_format,
+        "Texture3D Readback Buffer",
+    )?;
+
+    Ok(commands
+        .spawn(Image {
+            handle,
+            readback_buffer,
+            texture_format,
+            size,
+        })
+        .id())
+}
+
+/// Upload a full volume of tightly-packed texel bytes into a 3D texture.
+pub fn write_3d_raw(
+    In((entity, texture, data)): In<(Entity, Texture, Vec<u8>)>,
+    p_images: Query<&Image>,
+    render_queue: Res<RenderQueue>,
+) -> Result<()> {
+    let p_image = p_images
+        .get(entity)
+        .map_err(|_| ProcessingError::ImageNotFound)?;
+    let px_size = pixel_size(p_image.texture_format)? as u32;
+    let expected = (p_image.size.width
+        * p_image.size.height
+        * p_image.size.depth_or_array_layers
+        * px_size) as usize;
+    if data.len() != expected {
+        return Err(ProcessingError::InvalidArgument(format!(
+            "texture3d write: expected {} bytes for {}x{}x{} {:?}, got {}",
+            expected,
+            p_image.size.width,
+            p_image.size.height,
+            p_image.size.depth_or_array_layers,
+            p_image.texture_format,
+            data.len()
+        )));
+    }
+
+    render_queue.write_texture(
+        TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: Origin3d::ZERO,
+            aspect: Default::default(),
+        },
+        &data,
+        TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(p_image.size.width * px_size),
+            rows_per_image: Some(p_image.size.height),
+        },
+        p_image.size,
+    );
+
+    Ok(())
+}
+
+/// Read a full 3D texture back as tightly-packed texel bytes (row padding from
+/// the copy alignment is stripped).
+pub fn readback_3d_raw(
+    In((entity, texture)): In<(Entity, Texture)>,
+    p_images: Query<&Image>,
+    render_device: Res<RenderDevice>,
+    render_queue: ResMut<RenderQueue>,
+) -> Result<Vec<u8>> {
+    let p_image = p_images
+        .get(entity)
+        .map_err(|_| ProcessingError::ImageNotFound)?;
+
+    let px_size = pixel_size(p_image.texture_format)?;
+    let padded_bytes_per_row =
+        RenderDevice::align_copy_bytes_per_row(p_image.size.width as usize * px_size);
+
+    let mut encoder = render_device.create_command_encoder(&CommandEncoderDescriptor::default());
+    encoder.copy_texture_to_buffer(
+        texture.as_image_copy(),
+        TexelCopyBufferInfo {
+            buffer: &p_image.readback_buffer,
+            layout: TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(
+                    std::num::NonZero::<u32>::new(padded_bytes_per_row as u32)
+                        .unwrap()
+                        .into(),
+                ),
+                rows_per_image: Some(p_image.size.height),
+            },
+        },
+        p_image.size,
+    );
+    render_queue.submit(std::iter::once(encoder.finish()));
+
+    let buffer_slice = p_image.readback_buffer.slice(..);
+    let (s, r) = crossbeam_channel::bounded(1);
+    buffer_slice.map_async(MapMode::Read, move |res| match res {
+        Ok(res) => s.send(res).expect("Failed to send map update"),
+        Err(err) => panic!("Failed to map buffer {err}"),
+    });
+    render_device
+        .poll(PollType::wait_indefinitely())
+        .expect("Failed to poll device for map async");
+    r.recv().expect("Failed to receive the map_async message");
+
+    let padded = buffer_slice
+        .get_mapped_range()
+        .expect("Failed to get mapped range for readback")
+        .to_vec();
+    p_image.readback_buffer.unmap();
+
+    let bytes_per_row = p_image.size.width as usize * px_size;
+    let rows = (p_image.size.height * p_image.size.depth_or_array_layers) as usize;
+    let mut out = Vec::with_capacity(bytes_per_row * rows);
+    for row in padded.chunks_exact(padded_bytes_per_row).take(rows) {
+        out.extend_from_slice(&row[..bytes_per_row]);
+    }
+    Ok(out)
+}
+
 pub fn load_start(world: &mut World, path: PathBuf) -> Handle<bevy::image::Image> {
     world.get_asset_server().load(path)
 }
@@ -432,11 +600,34 @@ pub fn destroy(
 /// Get the size in bytes of a single pixel for the given texture format.
 pub fn pixel_size(format: TextureFormat) -> Result<usize> {
     match format {
+        TextureFormat::R16Float => Ok(2),
+        TextureFormat::R32Float | TextureFormat::R32Uint | TextureFormat::Rg16Float => Ok(4),
         TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => Ok(4),
         TextureFormat::Rgba16Float => Ok(8),
         TextureFormat::Rgba32Float => Ok(16),
         _ => Err(ProcessingError::UnsupportedTextureFormat),
     }
+}
+
+/// Create a readback buffer sized for a (possibly 3D) texture.
+pub fn create_readback_buffer_3d(
+    render_device: &RenderDevice,
+    width: u32,
+    height: u32,
+    depth: u32,
+    format: TextureFormat,
+    label: &str,
+) -> Result<Buffer> {
+    let px_size = pixel_size(format)?;
+    let padded_bytes_per_row = RenderDevice::align_copy_bytes_per_row(width as usize * px_size);
+    let buffer_size = padded_bytes_per_row as u64 * height as u64 * depth as u64;
+
+    Ok(render_device.create_buffer(&BufferDescriptor {
+        label: Some(label),
+        size: buffer_size,
+        usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    }))
 }
 
 /// Convert LinearRgba pixels to raw bytes in the specified texture format.

@@ -158,6 +158,7 @@ pub fn apply(app: &mut App, graphics: Entity, filter: Entity) -> Result<()> {
         )
     };
 
+    if std::env::var("PROCESSING_TRACE_VT").is_ok() { eprintln!("ENGINE filter apply"); }
     // flush() also extracts the shader asset to the render world.
     crate::graphics::flush(app, graphics)?;
 

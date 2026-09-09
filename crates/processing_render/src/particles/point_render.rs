@@ -123,9 +123,21 @@ impl Specializer<RenderPipeline> for RasterSpecializer {
         if key.has_normal {
             defs.push("HAS_NORMALS");
         }
-        if matches!(topology, Topology::TriangleList | Topology::TriangleStrip) {
-            defs.push("SHADED");
-        }
+        // NO implicit shading. Triangle prims used to get a hardcoded
+        // directional light baked into point.wgsl (`SHADED`), with the normal
+        // derived from screen-space derivatives when the target had none. That
+        // meant:
+        //   * per-vertex colours were never what you got — a flat sheet facing
+        //     +Z came out at 0.48x, so a shader computing paper 244/240/232
+        //     could not match `background(244, 240, 232)`;
+        //   * no material call could turn it off, because this path bypasses
+        //     the material system entirely;
+        //   * geometry with more than one orientation shaded in bands. A
+        //     canvas folded into a wall and a floor rendered as two different
+        //     colours across the crease from identical vertex colours (0.48x
+        //     vs 0.89x for the hardcoded light at (0.4, 0.85, 0.35)).
+        // Prims carry per-vertex colour and the kernel that wrote them owns
+        // the look; shading is that kernel's business, not the renderer's.
         for def in defs {
             descriptor.vertex.shader_defs.push(def.into());
             if let Some(fragment) = descriptor.fragment.as_mut() {

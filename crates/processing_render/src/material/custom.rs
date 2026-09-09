@@ -91,6 +91,7 @@ pub struct CustomMaterial {
     pub alpha_mode: AlphaMode,
     pub double_sided: Option<bool>,
     pub depth_write: Option<bool>,
+    pub depth_bias: f32,
 }
 
 #[derive(Component)]
@@ -305,6 +306,7 @@ pub fn create_custom(
         alpha_mode: AlphaMode::Opaque,
         double_sided: None,
         depth_write: None,
+        depth_bias: 0.0,
     };
     let handle = custom_materials.add(material);
     Ok(commands.spawn(UntypedMaterial(handle.untyped())).id())
@@ -615,6 +617,54 @@ impl ErasedRenderAsset for CustomMaterial {
             gpu_buffers,
         );
 
+        // Every binding the reflected LAYOUT declares must be present in the
+        // bind group. `create_bindings` skips a storage parameter whose buffer
+        // isn't resolvable yet (unset, or its GpuShaderBuffer not prepared in
+        // this frame), which would otherwise hand wgpu a short descriptor —
+        // "Number of bindings in bind group descriptor (1) does not match the
+        // number of bindings defined in the bind group layout (3)" — and that
+        // is a validation error, i.e. it kills the app. A material with two
+        // storage buffers hit this every time. Retry instead: a
+        // not-yet-prepared buffer resolves on a later frame, and a genuinely
+        // unset one gets a named warning rather than a crash.
+        if bindings.len() != layout_entries.len() {
+            let bound: Vec<u32> = bindings.iter().map(|(b, _)| *b).collect();
+            let missing: Vec<u32> = layout_entries
+                .iter()
+                .map(|e| e.binding)
+                .filter(|b| !bound.contains(b))
+                .collect();
+            let names: Vec<String> = reflection
+                .parameters()
+                .filter(|p| missing.contains(&p.binding()))
+                .filter_map(|p| p.name().map(|n| n.to_string()))
+                .collect();
+            // Diagnose WHICH half is missing: no handle on the extracted
+            // material (assignment hasn't reached the render world) vs handle
+            // present but its GpuShaderBuffer not prepared yet (asset race).
+            let detail: Vec<String> = names
+                .iter()
+                .map(|n| match source_asset.shader.buffer_handle(n) {
+                    None => format!("{n}: NO HANDLE on extracted material"),
+                    Some(h) => match gpu_buffers.get(h) {
+                        None => format!("{n}: handle present, GPU BUFFER NOT PREPARED"),
+                        Some(_) => format!("{n}: handle+gpu present (unexpected)"),
+                    },
+                })
+                .collect();
+            warn!(
+                "custom material: {} of {} @group(3) bindings unresolved {:?} \
+                 (unbound: {:?}) — retrying next frame. If this repeats, the \
+                 shader declares a storage buffer that was never assigned; \
+                 set it with set_uniforms/set-uniforms!.",
+                missing.len(),
+                layout_entries.len(),
+                detail,
+                missing,
+            );
+            return Err(PrepareAssetError::RetryNextUpdate(source_asset));
+        }
+
         let unprepared = UnpreparedBindGroup {
             bindings: BindingResources(bindings),
         };
@@ -675,6 +725,7 @@ impl ErasedRenderAsset for CustomMaterial {
             user_specialize: Some(specialize),
             alpha_mode,
             render_phase_type,
+            depth_bias: source_asset.depth_bias,
             ..Default::default()
         };
         properties.add_draw_function(MainPassOpaqueDrawFunction, draw_opaque);

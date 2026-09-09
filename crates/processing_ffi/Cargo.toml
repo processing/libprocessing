@@ -11,15 +11,17 @@ name = "processing"
 crate-type = ["cdylib", "staticlib"]
 
 [features]
-default = ["video"]
+default = ["video", "physics"]
 wayland = ["processing/wayland"]
 x11 = ["processing/x11"]
 webcam = ["processing/webcam"]
 cuda = ["processing/cuda"]
 video = ["processing/video", "dep:processing_video"]
+physics = ["processing/physics", "dep:processing_physics"]
 
 [dependencies]
 processing = { workspace = true }
+processing_physics = { workspace = true, optional = true }
 processing_video = { workspace = true, optional = true }
 bevy = { workspace = true }
 half = "2.7"

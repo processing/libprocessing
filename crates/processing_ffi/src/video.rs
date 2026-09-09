@@ -145,8 +145,14 @@ enum RecState {
         preset: Option<String>,
         codec: RecorderCodec,
         bitrate: Option<u64>,
+        bframes: Option<u32>,
     },
     Active(VideoRecorder),
+    /// GPU-resident path (macOS + VideoToolbox codecs): frames are blitted
+    /// into IOSurface-backed pixel buffers and encoded by the media engine;
+    /// no readback, no CPU pixel work. See `video_macos`.
+    #[cfg(target_os = "macos")]
+    Gpu(crate::video_macos::GpuRecorder),
 }
 
 static RECORDER: Mutex<Option<RecState>> = Mutex::new(None);
@@ -205,6 +211,7 @@ fn feed_frame(state: &mut RecState, raw: graphics::ReadbackData) -> Result<(), P
         preset,
         codec,
         bitrate,
+        bframes,
     } = state
     {
         let mut config =
@@ -213,6 +220,7 @@ fn feed_frame(state: &mut RecState, raw: graphics::ReadbackData) -> Result<(), P
         config.preset = preset.clone();
         config.codec = *codec;
         config.bitrate = *bitrate;
+        config.bframes = *bframes;
         let recorder = VideoRecorder::new(&*path, config).map_err(record_err)?;
         *state = RecState::Active(recorder);
     }
@@ -249,7 +257,10 @@ fn drain_ring(state: &mut RecState) -> Result<(), ProcessingError> {
 /// rate-controlled by `bitrate_bps` (bits per second; pass 0 or negative for
 /// an automatic choice of ~0.1 bits/pixel/frame). Frames are queued with
 /// `processing_record_capture` and the file is finalized by
-/// `processing_record_end`.
+/// `processing_record_end`. `bframes` caps consecutive B frames; pass a
+/// negative value for the encoder default (3 for x264), or 0 to disable them,
+/// which removes the periodic quality pulse B frames cause on content the
+/// codec predicts badly.
 ///
 /// SAFETY:
 /// - Init has been called.
@@ -263,6 +274,7 @@ pub unsafe extern "C" fn processing_record_begin(
     preset: *const c_char,
     codec: u8,
     bitrate_bps: i64,
+    bframes: i32,
 ) {
     error::clear_error();
     error::check(|| {
@@ -308,6 +320,15 @@ pub unsafe extern "C" fn processing_record_begin(
             }
         };
         let bitrate = (bitrate_bps > 0).then_some(bitrate_bps as u64);
+        let bframes = match bframes {
+            i32::MIN..0 => None,
+            0..=16 => Some(bframes as u32),
+            _ => {
+                return Err(ProcessingError::InvalidArgument(format!(
+                    "bframes must be between 0 (none) and 16, got {bframes}"
+                )));
+            }
+        };
         let mut slot = RECORDER.lock().unwrap();
         if slot.is_some() {
             return Err(ProcessingError::InvalidArgument(
@@ -321,6 +342,7 @@ pub unsafe extern "C" fn processing_record_begin(
             preset,
             codec,
             bitrate,
+            bframes,
         });
         Ok(())
     });
@@ -342,6 +364,44 @@ pub extern "C" fn processing_record_capture(graphics_id: u64) {
         };
         ACTIVE_GRAPHICS.store(graphics_id, Ordering::Relaxed);
         let entity = Entity::from_bits(graphics_id);
+        // macOS + a VideoToolbox codec: promote to the GPU-resident path on
+        // the first capture. `PROCESSING_RECORD_CPU=1` forces the readback +
+        // ffmpeg path (A/B comparison, escape hatch).
+        #[cfg(target_os = "macos")]
+        if let RecState::Pending {
+            path,
+            fps,
+            codec,
+            bitrate,
+            bframes,
+            ..
+        } = state
+            && std::env::var_os("PROCESSING_RECORD_CPU").is_none()
+        {
+            let avf_codec = match codec {
+                RecorderCodec::H264VideoToolbox => Some(processing_video::macos::AvfCodec::H264),
+                RecorderCodec::HevcVideoToolbox => Some(processing_video::macos::AvfCodec::Hevc),
+                RecorderCodec::X264 => None,
+            };
+            if let Some(avf_codec) = avf_codec {
+                *state = RecState::Gpu(crate::video_macos::GpuRecorder::new(
+                    std::mem::take(path),
+                    *fps,
+                    avf_codec,
+                    *bitrate,
+                    *bframes,
+                ));
+            }
+        }
+        #[cfg(target_os = "macos")]
+        if let RecState::Gpu(gpu) = state {
+            let result = gpu.capture(entity);
+            if result.is_err() {
+                *slot = None;
+                ACTIVE_GRAPHICS.store(0, Ordering::Relaxed);
+            }
+            return result;
+        }
         let result = (|| {
             let timing = std::env::var_os("PROCESSING_RECORD_TIMING").is_some();
             let t0 = std::time::Instant::now();
@@ -400,7 +460,7 @@ pub extern "C" fn processing_record_end() -> u64 {
             )),
             Some(mut state) => {
                 let drained = drain_ring(&mut state);
-                ACTIVE_GRAPHICS.store(0, Ordering::Relaxed);
+                let _entity_bits = ACTIVE_GRAPHICS.swap(0, Ordering::Relaxed);
                 drained?;
                 match state {
                     RecState::Pending { .. } => Err(ProcessingError::InvalidArgument(
@@ -409,6 +469,8 @@ pub extern "C" fn processing_record_end() -> u64 {
                             .to_string(),
                     )),
                     RecState::Active(recorder) => recorder.finish().map_err(record_err),
+                    #[cfg(target_os = "macos")]
+                    RecState::Gpu(gpu) => gpu.finish(_entity_bits),
                 }
             }
         }
@@ -422,8 +484,15 @@ pub(crate) fn finish_on_exit() {
         && let Some(mut state) = slot.take()
     {
         let _ = drain_ring(&mut state);
-        if let RecState::Active(recorder) = state {
-            let _ = recorder.finish();
+        match state {
+            RecState::Active(recorder) => {
+                let _ = recorder.finish();
+            }
+            #[cfg(target_os = "macos")]
+            RecState::Gpu(gpu) => {
+                let _ = gpu.finish(ACTIVE_GRAPHICS.load(Ordering::Relaxed));
+            }
+            _ => {}
         }
     }
     ACTIVE_GRAPHICS.store(0, Ordering::Relaxed);

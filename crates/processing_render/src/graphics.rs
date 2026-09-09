@@ -4,14 +4,16 @@
 //! In Bevy terms, a graphics object is represented as an entity with a camera component
 //! configured to render to a specific surface (either a window or an offscreen image).
 use bevy::{
+    anti_alias::taa::TemporalAntiAliasing,
     camera::{
         CameraMainTextureUsages, CameraOutputMode, CameraProjection, ClearColorConfig, Hdr,
         ImageRenderTarget, MsaaWriteback, Projection, RenderTarget, visibility::RenderLayers,
     },
+    core_pipeline::prepass::{DepthPrepass, MotionVectorPrepass},
     core_pipeline::tonemapping::Tonemapping,
     ecs::query::QueryEntityError,
+    pbr::contact_shadows::ContactShadows,
     math::{Mat4, Vec3A},
-    post_process::bloom::Bloom,
     prelude::*,
     render::{
         RenderApp,
@@ -30,7 +32,7 @@ use crate::{
     Flush,
     image::{Image, create_readback_buffer, pixel_size, pixels_to_bytes},
     render::{
-        BATCH_INDEX_STEP, RenderState,
+        BATCH_INDEX_STEP, NEAR_HEADROOM, RenderState,
         command::{CommandBuffer, DrawCommand},
         filter,
     },
@@ -48,6 +50,16 @@ impl Plugin for GraphicsPlugin {
             .add_systems(PostUpdate, sync_to_surface);
     }
 }
+
+/// Marks a canvas that holds SIMULATION STATE rather than a picture:
+/// feedback patches, accumulators, reaction-diffusion fields. Such a canvas
+/// is guaranteed post-process-free — bloom and tonemapping are never applied,
+/// because both write back THROUGH the view target and would re-transform the
+/// stored state every frame (tonemapping converges it to the tonemapper's
+/// fixed point, which looks like a mysterious blur/wash bug). Draws into it
+/// also write LINEAR color, so values round-trip exactly.
+#[derive(Component)]
+pub struct StateCanvas;
 
 #[derive(Component)]
 pub struct Graphics {
@@ -101,13 +113,29 @@ impl ProcessingProjection {
 
 impl CameraProjection for ProcessingProjection {
     fn get_clip_from_view(&self) -> Mat4 {
+        // Depth is REVERSED (near -> 1, far -> 0), which an ortho expresses by
+        // swapping near and far in the standard formula. Everything else in
+        // the pipeline assumes it: the depth test is GreaterEqual, the depth
+        // buffer clears to 0 = far, bevy's own OrthographicProjection swaps
+        // for this reason, FrustumProjection below derives the same convention
+        // by hand, and world_from_screen unprojects with `1.0 - depth`.
+        //
+        // Unswapped, this projection alone ran forward-z, and every depth
+        // comparison in 2d came out backwards: a later draw LOST to an earlier
+        // one, and the background/clear quad -- built at ndc_z ~= 0, the far
+        // plane under reverse-z (create_ndc_background_quad) -- landed on the
+        // NEAR plane, where it sorted last in Transparent3d and repainted over
+        // every blended draw in the frame. That is what made blended draws
+        // vanish inside offscreen canvases.
+        //
+        // NEAR_HEADROOM opens the near side for the per-batch z staircase.
         Mat4::orthographic_rh(
             0.0,
             self.width,
             self.height, // bottom = height
             0.0,         // top = 0
-            self.near,
             self.far,
+            self.near - NEAR_HEADROOM,
         )
     }
 
@@ -219,7 +247,13 @@ impl CameraProjection for FrustumProjection {
 }
 
 pub fn create(
-    In((width, height, surface_entity, texture_format)): In<(u32, u32, Entity, TextureFormat)>,
+    In((width, height, surface_entity, texture_format, state)): In<(
+        u32,
+        u32,
+        Entity,
+        TextureFormat,
+        bool,
+    )>,
     mut commands: Commands,
     mut layer_manager: ResMut<RenderLayersManager>,
     p_images: Query<&Image, With<Surface>>,
@@ -287,7 +321,18 @@ pub fn create(
         render_layer,
         CommandBuffer::new(),
         RenderState::default(),
-        crate::color::ColorMode::default(),
+        // A state canvas takes LINEAR color: the host normalizes fill/stroke
+        // to 0..1 and the engine would otherwise read those as sRGB, so
+        // fill(0.5) would land at linear 0.21 — fatal when the "color" is a
+        // reagent concentration rather than a picture.
+        if state {
+            crate::color::ColorMode {
+                space: crate::color::ColorSpace::Linear,
+                max: [1.0; 4],
+            }
+        } else {
+            crate::color::ColorMode::default()
+        },
         SurfaceSize(width, height),
         Graphics {
             readback_buffer,
@@ -296,8 +341,28 @@ pub fn create(
         },
     ));
 
-    if is_hdr {
-        entity_commands.insert((Hdr, Bloom::NATURAL, Tonemapping::TonyMcMapface));
+    // Physical-lux contract: EV100 9.7 (Blender's default, and bevy's own
+    // implicit default) unless overridden for calibration probes.
+    entity_commands.insert(bevy::camera::Exposure {
+        ev100: std::env::var("PROCESSING_EV100")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(9.7),
+    });
+
+    if state {
+        // Float precision, zero post-processing: the canvas IS the data.
+        entity_commands.insert((StateCanvas, Hdr));
+    } else if is_hdr {
+        // Bloom is OPT-IN: a canvas gets HDR + the tonemapper, but no bloom
+        // until `bloom()` asks for it. Shipping `Bloom::NATURAL` here meant
+        // every canvas had UN-THRESHOLDED bloom (intensity 0.15, prefilter
+        // threshold 0.0) without asking — which contradicts the documented
+        // API (`no_bloom` "disables bloom previously enabled with bloom")
+        // and, in a dense scene, hazes the whole frame including areas with
+        // nothing drawn in them. It also skips the bloom node entirely when
+        // unused, which is free performance at show resolutions.
+        entity_commands.insert((Hdr, Tonemapping::TonyMcMapface));
     }
 
     // TEMP(bevy-020 debug): force direct drawing to bisect the indirect-args
@@ -309,6 +374,85 @@ pub fn create(
     let entity = entity_commands.id();
 
     Ok(entity)
+}
+
+/// Turn screen-space contact shadows on or off for this canvas' camera.
+///
+/// Contact shadows are the short dark line where two surfaces meet -- box on
+/// box, box on ground. Shadow maps do the big forms; at cascade resolution
+/// they cannot resolve a contact, which is what makes a dense pile of objects
+/// read as one mass instead of many things.
+///
+/// `length` is in WORLD units, not pixels: it is how far the ray marches from
+/// the contact, so it scales with the scene, not with the window. `thickness`
+/// is likewise world units -- the depth buffer only carries 2.5D information,
+/// so the effect has to assume some thickness for what it finds there.
+/// `linear_steps` is the per-pixel raymarch step count, and the one to spend
+/// down if the effect costs too much at delivery resolution.
+///
+/// A canvas is a camera here, so this applies to whichever canvas is passed:
+/// the primary, a `create_offscreen` buffer, or a `create_window` canvas.
+///
+/// `ContactShadows` requires a depth prepass, which bevy attaches for us. We
+/// take it away again on disable -- nothing else in the engine asks for a
+/// prepass, so leaving one running would be paying for a full depth pass per
+/// frame to feed an effect that is off.
+pub fn set_contact_shadows(
+    In((entity, enabled, linear_steps, thickness, length)): In<(Entity, bool, u32, f32, f32)>,
+    mut commands: Commands,
+    graphics: Query<(), With<Graphics>>,
+) -> Result<()> {
+    graphics
+        .get(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    if enabled {
+        commands.entity(entity).insert(ContactShadows {
+            linear_steps,
+            thickness,
+            length,
+        });
+    } else {
+        commands
+            .entity(entity)
+            .remove::<ContactShadows>()
+            .remove::<DepthPrepass>();
+    }
+    Ok(())
+}
+
+/// Turn temporal antialiasing on or off for this canvas' camera.
+///
+/// Kept separate from `set_contact_shadows` deliberately, even though bevy's
+/// own contact-shadows example pairs them: TAA rewrites how the WHOLE canvas
+/// is antialiased, adds a motion-vector prepass, and jitters the projection
+/// every frame. Turning that on as a side effect of asking for a lighting
+/// detail would be a large, invisible change to a sketch's whole image.
+///
+/// TAA requires MSAA off -- the two are different answers to the same
+/// question and bevy cannot run both -- so this switches MSAA off with it and
+/// restores the default sample count on the way out.
+pub fn set_temporal_aa(
+    In((entity, enabled)): In<(Entity, bool)>,
+    mut commands: Commands,
+    graphics: Query<(), With<Graphics>>,
+) -> Result<()> {
+    graphics
+        .get(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+
+    if enabled {
+        commands
+            .entity(entity)
+            .insert((TemporalAntiAliasing::default(), Msaa::Off));
+    } else {
+        commands
+            .entity(entity)
+            .remove::<TemporalAntiAliasing>()
+            .remove::<MotionVectorPrepass>()
+            .insert(Msaa::default());
+    }
+    Ok(())
 }
 
 #[allow(dead_code)]
@@ -579,8 +723,16 @@ pub fn set_bloom(
     In((entity, intensity, threshold)): In<(Entity, f32, f32)>,
     mut commands: Commands,
     mut tonemapping_query: Query<&mut Tonemapping>,
+    state_canvases: Query<(), With<StateCanvas>>,
 ) -> Result<()> {
     use bevy::post_process::bloom::{Bloom, BloomCompositeMode, BloomPrefilter};
+
+    // Post-processing on a state canvas would corrupt the stored state; the
+    // guarantee is the whole point of asking for one.
+    if state_canvases.get(entity).is_ok() {
+        warn!("bloom() ignored: this graphics is a state canvas (post-process-free by contract)");
+        return Ok(());
+    }
 
     let mut bloom = Bloom::NATURAL;
     bloom.intensity = intensity;
@@ -635,6 +787,7 @@ pub fn destroy(
 }
 
 pub fn begin_draw(In(entity): In<Entity>, mut state_query: Query<&mut RenderState>) -> Result<()> {
+    if std::env::var("PROCESSING_TRACE_VT").is_ok() { eprintln!("ENGINE begin_draw ==== FRAME ===="); }
     let mut state = state_query
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
@@ -682,10 +835,80 @@ pub fn screen_point(
     ))
 }
 
+/// A canvas that has finished a frame and is waiting for the next
+/// `app.update()` to put it on screen, instead of forcing an update of its
+/// own. See [`arm_present`].
+#[derive(Component)]
+pub struct PendingPresent;
+
+/// Arm `entity` to present on the next update rather than presenting now.
+///
+/// `present` costs a whole `app.update()` — around 3ms of fixed CPU work
+/// regardless of what was drawn — so a sketch driving N windows through the
+/// usual `endDraw`-per-canvas path pays N of them per frame and falls off a
+/// cliff by a couple of dozen windows. The renderer never needed that: a
+/// camera is active exactly when its graphics carries `Flush`
+/// (`render::activate_cameras`), so any number of canvases can render and
+/// present within a SINGLE update. Arming marks the canvas ready and leaves
+/// the update to whoever runs one next — in practice the primary window's
+/// `endDraw`, which Processing always calls at the end of every frame.
+///
+/// Only safe for canvases nothing samples back: a window surface is never an
+/// image source, so no draw call can observe the delay. Offscreen buffers
+/// keep presenting synchronously.
+pub fn arm_present(app: &mut App, entity: Entity) -> Result<()> {
+    let mut graphics = graphics_mut!(app, entity);
+    graphics
+        .get_mut::<Camera>()
+        .ok_or(ProcessingError::GraphicsNotFound)?
+        .output_mode = CameraOutputMode::Write {
+        blend_state: None,
+        clear_color: ClearColorConfig::None,
+    };
+    graphics.insert((Flush, PendingPresent));
+    Ok(())
+}
+
+/// Stand every armed canvas back down after an update presented it.
+fn disarm_pending(app: &mut App) {
+    let world = app.world_mut();
+    let armed: Vec<Entity> = world
+        .query_filtered::<Entity, With<PendingPresent>>()
+        .iter(world)
+        .collect();
+    for entity in armed {
+        let Ok(mut graphics) = world.get_entity_mut(entity) else {
+            continue;
+        };
+        if let Some(mut camera) = graphics.get_mut::<Camera>() {
+            camera.output_mode = CameraOutputMode::Skip;
+        }
+        graphics.remove::<(Flush, PendingPresent)>();
+    }
+}
+
+/// Whether `entity` has draw commands recorded since its last flush.
+///
+/// A canvas with an empty command buffer has already rendered everything it
+/// was asked to, so flushing it again is a whole wasted `app.update()`. The
+/// blit path (`image(pg, ...)`) flushes its source defensively, which at a
+/// hundred-odd offscreen canvases per frame is the single largest cost in the
+/// frame; this lets it skip the ones that are already clean.
+pub fn has_pending(In(entity): In<Entity>, buffers: Query<&CommandBuffer>) -> Result<bool> {
+    Ok(!buffers
+        .get(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?
+        .commands
+        .is_empty())
+}
+
 pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
+    if std::env::var("PROCESSING_TRACE_VT").is_ok() { eprintln!("ENGINE flush+update"); }
     graphics_mut!(app, entity).insert(Flush);
     app.update();
     graphics_mut!(app, entity).remove::<Flush>();
+    // Whatever was armed for presentation rode along on that update.
+    disarm_pending(app);
     Ok(())
 }
 
@@ -755,25 +978,66 @@ pub struct ReadbackData {
 }
 
 pub fn readback_raw(
-    In((entity, texture)): In<(Entity, Texture)>,
-    graphics_query: Query<&Graphics>,
-    render_device: Res<RenderDevice>,
-    render_queue: Res<RenderQueue>,
+    In((entity, texture, lut_view)): In<(Entity, Texture, Option<wgpu::TextureView>)>,
+    world: &mut World,
 ) -> Result<ReadbackData> {
-    let graphics = graphics_query
-        .get(entity)
-        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+    let render_device = world.resource::<RenderDevice>().clone();
+    let render_queue = world.resource::<RenderQueue>().clone();
+    let (source_format, size, readback_buffer) = {
+        let graphics = world
+            .get::<Graphics>(entity)
+            .ok_or(ProcessingError::GraphicsNotFound)?;
+        (
+            graphics.texture_format,
+            graphics.size,
+            graphics.readback_buffer.clone(),
+        )
+    };
+
+    // Same conversion policy as the async ring: 8-bit surfaces read back
+    // as-is; HDR surfaces convert on the GPU to 8-bit sRGB, honoring the
+    // camera's tonemapping — so q/save/loadPixels see what the screen shows.
+    let needs_convert = !matches!(
+        source_format,
+        TextureFormat::Rgba8UnormSrgb
+            | TextureFormat::Rgba8Unorm
+            | TextureFormat::Bgra8UnormSrgb
+            | TextureFormat::Bgra8Unorm
+    );
+    let format = if needs_convert {
+        TextureFormat::Rgba8UnormSrgb
+    } else {
+        source_format
+    };
+    let px_size = pixel_size(format)?;
+    let bytes_per_row = size.width as usize * px_size;
+    let padded_bytes_per_row = RenderDevice::align_copy_bytes_per_row(bytes_per_row);
+
+    if world.get::<ReadbackRing>(entity).is_none() {
+        world.entity_mut(entity).insert(ReadbackRing::default());
+    }
+    let copy_src = prepare_convert_source(
+        world,
+        entity,
+        &render_device,
+        &texture,
+        needs_convert,
+        size,
+        &lut_view,
+    );
 
     let mut encoder = render_device.create_command_encoder(&CommandEncoderDescriptor::default());
-
-    let px_size = pixel_size(graphics.texture_format)?;
-    let padded_bytes_per_row =
-        RenderDevice::align_copy_bytes_per_row(graphics.size.width as usize * px_size);
+    if needs_convert {
+        let src_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let ring = world.get::<ReadbackRing>(entity).unwrap();
+        let convert = ring.convert.as_ref().unwrap();
+        record_convert(&render_device, &mut encoder, convert, &src_view);
+    }
 
     encoder.copy_texture_to_buffer(
-        texture.as_image_copy(),
+        copy_src.as_image_copy(),
         TexelCopyBufferInfo {
-            buffer: &graphics.readback_buffer,
+            buffer: &readback_buffer,
             layout: TexelCopyBufferLayout {
                 offset: 0,
                 bytes_per_row: Some(
@@ -784,12 +1048,15 @@ pub fn readback_raw(
                 rows_per_image: None,
             },
         },
-        graphics.size,
+        size,
     );
 
     render_queue.submit(std::iter::once(encoder.finish()));
 
-    let buffer_slice = graphics.readback_buffer.slice(..);
+    // The readback buffer is sized for the (larger or equal) source format;
+    // map only the region this copy wrote.
+    let mapped_len = padded_bytes_per_row as u64 * size.height as u64;
+    let buffer_slice = readback_buffer.slice(..mapped_len);
 
     let (s, r) = crossbeam_channel::bounded(1);
 
@@ -809,13 +1076,12 @@ pub fn readback_raw(
         .expect("Failed to get mapped range for readback")
         .to_vec();
 
-    graphics.readback_buffer.unmap();
+    readback_buffer.unmap();
 
     // strip row padding
-    let bytes_per_row = graphics.size.width as usize * px_size;
     let unpadded = if padded_bytes_per_row != bytes_per_row {
         data.chunks_exact(padded_bytes_per_row)
-            .take(graphics.size.height as usize)
+            .take(size.height as usize)
             .flat_map(|row| &row[..bytes_per_row])
             .copied()
             .collect()
@@ -825,9 +1091,9 @@ pub fn readback_raw(
 
     Ok(ReadbackData {
         bytes: unpadded,
-        format: graphics.texture_format,
-        width: graphics.size.width,
-        height: graphics.size.height,
+        format,
+        width: size.width,
+        height: size.height,
     })
 }
 
@@ -846,9 +1112,19 @@ pub fn readback_raw(
 /// producer can run ahead.
 pub const READBACK_RING_DEPTH: usize = 3;
 
+/// A queued readback's mapping is still in flight.
+const READBACK_PENDING: u8 = 0;
+/// It mapped, and the bytes can be read.
+const READBACK_READY: u8 = 1;
+/// It will never map. wgpu calls the `map_async` callback with an error when
+/// the device goes away underneath a copy that is still in flight, which is
+/// the ordinary way a recording sketch exits: the window closes, the device is
+/// torn down, and whatever was queued that frame aborts.
+const READBACK_FAILED: u8 = 2;
+
 struct PendingReadback {
     buffer: bevy::render::render_resource::Buffer,
-    ready: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    state: std::sync::Arc<std::sync::atomic::AtomicU8>,
     /// The copy's own submission, so a blocking fetch waits for exactly this
     /// copy — waiting for "the most recent submission" would drain the whole
     /// queue (including newer copies and the in-flight render) and serialize
@@ -862,17 +1138,306 @@ struct PendingReadback {
 }
 
 /// GPU-side format conversion in front of the readback: HDR (or any
-/// non-8-bit) surfaces are blitted into an 8-bit sRGB texture BEFORE the
+/// non-8-bit) surfaces are converted into an 8-bit sRGB texture BEFORE the
 /// copy, so the readback moves half the bytes and the CPU never touches a
 /// float pixel. (A 3840×4320 Rgba16Float frame is 132MB and a per-pixel CPU
 /// conversion of it costs ~350ms — it, not the copy, was the recording
 /// bottleneck.)
+///
+/// The conversion honors the camera's tonemapping so captures match the
+/// screen: `Tonemapping::None` (the show's calibrated mode) is a plain blit
+/// — byte-identical to the previous behavior — while `TonyMcMapface` runs
+/// bevy's own LUT in a tiny fullscreen pass. Without this, captures of lit
+/// scenes read the raw HDR canvas and clamp everything bright to white.
+enum ConvertMode {
+    Blit(wgpu::util::TextureBlitter),
+    Tonemap {
+        pipeline: wgpu::RenderPipeline,
+        bind_group_layout: wgpu::BindGroupLayout,
+        lut_view: wgpu::TextureView,
+        lut_sampler: wgpu::Sampler,
+    },
+}
+
 struct ConvertPass {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
-    blitter: wgpu::util::TextureBlitter,
+    mode: ConvertMode,
     width: u32,
     height: u32,
+}
+
+/// Matches bevy's `sample_tony_mc_mapface_lut` (tonemapping_shared.wgsl);
+/// exposure is already pre-applied during shading, so tonemapping is the
+/// only remaining display transform. Output target is Rgba8UnormSrgb, so
+/// the hardware performs the sRGB encode.
+const TONEMAP_CONVERT_SHADER: &str = r#"
+@group(0) @binding(0) var hdr_tex: texture_2d<f32>;
+@group(0) @binding(1) var lut_tex: texture_3d<f32>;
+@group(0) @binding(2) var lut_smp: sampler;
+
+@vertex
+fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
+    let uv = vec2<f32>(f32((i << 1u) & 2u), f32(i & 2u));
+    return vec4<f32>(uv * 2.0 - 1.0, 0.0, 1.0);
+}
+
+const LUT_DIMS: f32 = 48.0;
+
+fn tony_mc_mapface(stimulus: vec3<f32>) -> vec3<f32> {
+    let uv = saturate(
+        (stimulus / (stimulus + 1.0)) * ((LUT_DIMS - 1.0) / LUT_DIMS) + 0.5 / LUT_DIMS,
+    );
+    return textureSampleLevel(lut_tex, lut_smp, uv, 0.0).rgb;
+}
+
+@fragment
+fn fs(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
+    let c = textureLoad(hdr_tex, vec2<i32>(pos.xy), 0);
+    return vec4<f32>(tony_mc_mapface(max(c.rgb, vec3<f32>(0.0))), 1.0);
+}
+"#;
+
+fn build_tonemap_convert(
+    device: &wgpu::Device,
+    lut_view: wgpu::TextureView,
+) -> ConvertMode {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("readback tonemap convert"),
+        source: wgpu::ShaderSource::Wgsl(TONEMAP_CONVERT_SHADER.into()),
+    });
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("readback tonemap convert"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D3,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 2,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                count: None,
+            },
+        ],
+    });
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("readback tonemap convert"),
+        bind_group_layouts: &[Some(&bind_group_layout)],
+        immediate_size: 0,
+    });
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("readback tonemap convert"),
+        layout: Some(&layout),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: Some("vs"),
+            compilation_options: Default::default(),
+            buffers: &[],
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs"),
+            compilation_options: Default::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: wgpu::TextureFormat::Rgba8UnormSrgb,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    });
+    let lut_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        label: Some("readback tonemap lut"),
+        mag_filter: wgpu::FilterMode::Linear,
+        min_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::MipmapFilterMode::Linear,
+        address_mode_u: wgpu::AddressMode::ClampToEdge,
+        address_mode_v: wgpu::AddressMode::ClampToEdge,
+        address_mode_w: wgpu::AddressMode::ClampToEdge,
+        ..Default::default()
+    });
+    ConvertMode::Tonemap {
+        pipeline,
+        bind_group_layout,
+        lut_view,
+        lut_sampler,
+    }
+}
+
+/// Ensure the graphics' convert pass matches the current size and camera
+/// tonemapping, and return the texture the readback copy should read from.
+/// The capture must show what the camera setting shows: TonyMcMapface runs
+/// the LUT pass; None (and, conservatively, any variant we don't replicate)
+/// is a plain blit — the raw-linear behavior every calibrated-unlit sketch
+/// depends on.
+fn prepare_convert_source(
+    world: &mut World,
+    entity: Entity,
+    render_device: &RenderDevice,
+    texture: &Texture,
+    needs_convert: bool,
+    size: Extent3d,
+    lut_view: &Option<wgpu::TextureView>,
+) -> wgpu::Texture {
+    if !needs_convert {
+        // bevy's Texture derefs to the raw wgpu texture.
+        return wgpu::Texture::clone(texture);
+    }
+    // The canvas texture is the camera's render TARGET: bevy's tonemapping
+    // node has already been applied by the time anything lands in it, for
+    // every Tonemapping mode. Running the LUT here again double-tonemaps —
+    // tony(tony(x)) plateaus at tony(1.0) ≈ sRGB 169, which masked the whole
+    // lit-exposure miscalibration (captures showed flat grey while the
+    // window was hot white). Readback is therefore ALWAYS a plain blit.
+    let want_tonemap = false;
+    let _ = lut_view;
+
+    let stale = match world.get::<ReadbackRing>(entity).unwrap().convert {
+        Some(ref c) => {
+            c.width != size.width
+                || c.height != size.height
+                || matches!(c.mode, ConvertMode::Tonemap { .. }) != want_tonemap
+        }
+        None => true,
+    };
+    if stale {
+        let device = render_device.wgpu_device();
+        let tex = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("async readback convert target"),
+            size: wgpu::Extent3d {
+                width: size.width,
+                height: size.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: TextureFormat::Rgba8UnormSrgb,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+        let mode = if want_tonemap {
+            build_tonemap_convert(device, lut_view.clone().unwrap())
+        } else {
+            ConvertMode::Blit(wgpu::util::TextureBlitter::new(
+                device,
+                TextureFormat::Rgba8UnormSrgb,
+            ))
+        };
+        world.get_mut::<ReadbackRing>(entity).unwrap().convert = Some(ConvertPass {
+            texture: tex,
+            view,
+            mode,
+            width: size.width,
+            height: size.height,
+        });
+    }
+    world
+        .get::<ReadbackRing>(entity)
+        .unwrap()
+        .convert
+        .as_ref()
+        .unwrap()
+        .texture
+        .clone()
+}
+
+/// Record the convert (blit or tonemap) into `encoder`, writing the source
+/// into the convert pass's sRGB8 target.
+fn record_convert(
+    render_device: &RenderDevice,
+    encoder: &mut wgpu::CommandEncoder,
+    convert: &ConvertPass,
+    src_view: &wgpu::TextureView,
+) {
+    match &convert.mode {
+        ConvertMode::Blit(blitter) => {
+            blitter.copy(render_device.wgpu_device(), encoder, src_view, &convert.view);
+        }
+        ConvertMode::Tonemap {
+            pipeline,
+            bind_group_layout,
+            lut_view,
+            lut_sampler,
+        } => {
+            let bind_group = render_device
+                .wgpu_device()
+                .create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("readback tonemap convert"),
+                    layout: bind_group_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::TextureView(src_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: wgpu::BindingResource::TextureView(lut_view),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: wgpu::BindingResource::Sampler(lut_sampler),
+                        },
+                    ],
+                });
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("readback tonemap convert"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &convert.view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            pass.set_pipeline(pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            pass.draw(0..3, 0..1);
+        }
+    }
+}
+
+/// Resolve the GPU texture view of bevy's TonyMcMapface LUT, if loaded.
+pub fn tonemap_lut_view(app: &mut App) -> Option<wgpu::TextureView> {
+    use bevy::core_pipeline::tonemapping::TonemappingLuts;
+    let lut_id = app
+        .world()
+        .get_resource::<TonemappingLuts>()?
+        .tony_mc_mapface
+        .id();
+    let render_world = app.sub_app(RenderApp).world();
+    let gpu_images =
+        render_world.get_resource::<bevy::render::render_asset::RenderAssets<bevy::render::texture::GpuImage>>()?;
+    let img = gpu_images.get(lut_id)?;
+    Some((*img.texture_view).clone())
 }
 
 /// Per-graphics async readback state; created lazily on first enqueue.
@@ -884,7 +1449,7 @@ pub struct ReadbackRing {
 }
 
 pub fn readback_ring_enqueue(
-    In((entity, texture)): In<(Entity, Texture)>,
+    In((entity, texture, lut_view)): In<(Entity, Texture, Option<wgpu::TextureView>)>,
     world: &mut World,
 ) -> Result<()> {
     let render_device = world.resource::<RenderDevice>().clone();
@@ -942,53 +1507,23 @@ pub fn readback_ring_enqueue(
         }
     };
 
-    if needs_convert {
-        let stale = match world.get::<ReadbackRing>(entity).unwrap().convert {
-            Some(ref c) => c.width != size.width || c.height != size.height,
-            None => true,
-        };
-        if stale {
-            let device = render_device.wgpu_device();
-            let tex = device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("async readback convert target"),
-                size: wgpu::Extent3d {
-                    width: size.width,
-                    height: size.height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: TextureFormat::Rgba8UnormSrgb,
-                usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
-                view_formats: &[],
-            });
-            let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
-            let blitter =
-                wgpu::util::TextureBlitter::new(device, TextureFormat::Rgba8UnormSrgb);
-            world.get_mut::<ReadbackRing>(entity).unwrap().convert = Some(ConvertPass {
-                texture: tex,
-                view,
-                blitter,
-                width: size.width,
-                height: size.height,
-            });
-        }
-    }
+    let copy_src = prepare_convert_source(
+        world,
+        entity,
+        &render_device,
+        &texture,
+        needs_convert,
+        size,
+        &lut_view,
+    );
 
     let mut encoder = render_device.create_command_encoder(&CommandEncoderDescriptor::default());
-    let copy_src = if needs_convert {
+    if needs_convert {
         let src_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let ring = world.get::<ReadbackRing>(entity).unwrap();
         let convert = ring.convert.as_ref().unwrap();
-        convert
-            .blitter
-            .copy(render_device.wgpu_device(), &mut encoder, &src_view, &convert.view);
-        convert.texture.clone()
-    } else {
-        // bevy's Texture derefs to the raw wgpu texture.
-        wgpu::Texture::clone(&texture)
-    };
+        record_convert(&render_device, &mut encoder, convert, &src_view);
+    }
     encoder.copy_texture_to_buffer(
         copy_src.as_image_copy(),
         TexelCopyBufferInfo {
@@ -1007,11 +1542,22 @@ pub fn readback_ring_enqueue(
     );
     let submission = render_queue.submit(std::iter::once(encoder.finish()));
 
-    let ready = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let ready_cb = std::sync::Arc::clone(&ready);
+    let state = std::sync::Arc::new(std::sync::atomic::AtomicU8::new(READBACK_PENDING));
+    let state_cb = std::sync::Arc::clone(&state);
     buffer.slice(..).map_async(MapMode::Read, move |r| {
-        r.expect("Failed to map async readback buffer");
-        ready_cb.store(true, std::sync::atomic::Ordering::Release);
+        // This runs on wgpu's callback thread, so a panic here takes the
+        // process down from somewhere with no useful context. A mapping that
+        // aborts is expected during teardown -- the device can be gone before
+        // the last frame's copy lands -- so record the failure and let the
+        // fetch side drop the readback.
+        let next = match r {
+            Ok(()) => READBACK_READY,
+            Err(err) => {
+                debug!("readback buffer mapping aborted, dropping the frame: {err}");
+                READBACK_FAILED
+            }
+        };
+        state_cb.store(next, std::sync::atomic::Ordering::Release);
     });
 
     world
@@ -1020,7 +1566,7 @@ pub fn readback_ring_enqueue(
         .pending
         .push_back(PendingReadback {
             buffer,
-            ready,
+            state,
             submission,
             padded_bytes_per_row,
             bytes_per_row,
@@ -1029,6 +1575,18 @@ pub fn readback_ring_enqueue(
             height: size.height,
         });
     Ok(())
+}
+
+/// Retire the oldest queued readback without reading it.
+///
+/// For a readback whose mapping or poll failed -- which is what happens when
+/// the device is torn down with a copy still in flight. The buffer is dropped
+/// rather than recycled onto the free list, since wgpu still regards it as
+/// mapped and handing it back out would fail again on its next use.
+fn drop_failed_readback(world: &mut World, entity: Entity) {
+    if let Some(mut ring) = world.get_mut::<ReadbackRing>(entity) {
+        ring.pending.pop_front();
+    }
 }
 
 /// Number of enqueued readbacks not yet fetched.
@@ -1060,37 +1618,51 @@ pub fn readback_ring_fetch(
     // and then only until THIS copy's submission completes — never the whole
     // queue.
     loop {
-        let (ready, submission) = {
+        let (state, submission) = {
             let ring = world.get::<ReadbackRing>(entity).unwrap();
             let front = ring.pending.front().unwrap();
             (
-                front.ready.load(std::sync::atomic::Ordering::Acquire),
+                front.state.load(std::sync::atomic::Ordering::Acquire),
                 front.submission.clone(),
             )
         };
-        if ready {
+        if state == READBACK_READY {
             break;
         }
-        if blocking {
-            render_device
-                .poll(PollType::Wait {
-                    submission_index: Some(submission),
-                    timeout: None,
-                })
-                .expect("Failed to poll device for async readback");
+        // A mapping that aborted is never coming back, so retire the entry
+        // rather than waiting on it forever. Its buffer is deliberately NOT
+        // returned to the free list: it is still considered mapped by wgpu and
+        // reusing it would be a second failure.
+        if state == READBACK_FAILED {
+            drop_failed_readback(world, entity);
+            return Ok(None);
+        }
+        // Polling can itself fail once the device is gone, which is the same
+        // teardown story -- drop the frame instead of taking the process with
+        // it.
+        let polled = if blocking {
+            render_device.poll(PollType::Wait {
+                submission_index: Some(submission),
+                timeout: None,
+            })
         } else {
-            render_device
-                .poll(PollType::Poll)
-                .expect("Failed to poll device for async readback");
-            let ready_now = {
+            render_device.poll(PollType::Poll)
+        };
+        if let Err(err) = polled {
+            debug!("polling for a readback failed, dropping the frame: {err}");
+            drop_failed_readback(world, entity);
+            return Ok(None);
+        }
+        if !blocking {
+            let state_now = {
                 let ring = world.get::<ReadbackRing>(entity).unwrap();
                 ring.pending
                     .front()
                     .unwrap()
-                    .ready
+                    .state
                     .load(std::sync::atomic::Ordering::Acquire)
             };
-            if !ready_now {
+            if state_now == READBACK_PENDING {
                 return Ok(None);
             }
         }
@@ -1102,12 +1674,12 @@ pub fn readback_ring_fetch(
         .pending
         .pop_front()
         .unwrap();
-    let data = pr
-        .buffer
-        .slice(..)
-        .get_mapped_range()
-        .expect("Failed to get mapped range for async readback")
-        .to_vec();
+    let Ok(mapped) = pr.buffer.slice(..).get_mapped_range() else {
+        debug!("readback buffer went away before it could be read, dropping the frame");
+        return Ok(None);
+    };
+    let data = mapped.to_vec();
+    drop(mapped);
     pr.buffer.unmap();
 
     let unpadded = if pr.padded_bytes_per_row != pr.bytes_per_row {

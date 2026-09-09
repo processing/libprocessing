@@ -71,6 +71,9 @@ fn create_app(config: Config) -> App {
     #[cfg(feature = "video")]
     app.add_plugins(processing_video::NannouVideoPlugin);
 
+    #[cfg(feature = "physics")]
+    app.add_plugins(processing_physics::ProcessingPhysicsPlugin);
+
     #[cfg(feature = "webcam")]
     app.add_plugins(processing_webcam::WebcamPlugin);
 

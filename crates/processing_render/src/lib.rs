@@ -1,6 +1,10 @@
 #![allow(clippy::module_inception)]
 
+pub mod animation;
 pub mod camera;
+/// GPU-resident frame capture into IOSurfaces; macOS only.
+#[cfg(target_os = "macos")]
+pub mod capture_macos;
 pub mod color;
 pub mod compute;
 pub mod geometry;
@@ -36,7 +40,7 @@ pub use particles::{
     FALLOFF_INVERSE, FALLOFF_LINEAR, FALLOFF_QUADRATIC, FALLOFF_SMOOTHSTEP, particles_apply,
     particles_attribute_add, particles_buffer, particles_capacity, particles_connectivity_indirect,
     particles_primitives_apply, particles_primitives_attempted, particles_primitives_create,
-    particles_primitives_field,
+    particles_primitives_destroy, particles_primitives_field,
     particles_create, particles_create_from_geometry, particles_destroy, particles_emit,
     particles_emit_gpu, particles_ensure_attribute, particles_flock, particles_flock_auto,
     particles_gather, particles_kernel_age, particles_kernel_attr_combine,
@@ -73,7 +77,7 @@ pub struct ProcessingRenderPlugin;
 
 impl Plugin for ProcessingRenderPlugin {
     fn build(&self, app: &mut App) {
-        use render::material::{add_custom_materials, add_processing_materials};
+        use render::material::sync_typed_materials;
         use render::{activate_cameras, clear_transient_meshes, flush_draw_commands};
 
         let config = app.world().resource::<Config>().clone();
@@ -104,16 +108,12 @@ impl Plugin for ProcessingRenderPlugin {
             bevy::camera_controller::pan_camera::PanCameraPlugin,
             text::font::TextPlugin,
         ));
+        app.add_plugins(animation::AnimationPoolPlugin);
 
         app.add_systems(First, (clear_transient_meshes, activate_cameras))
             .add_systems(
                 Update,
-                (
-                    flush_draw_commands,
-                    add_processing_materials,
-                    add_custom_materials,
-                    particles::material::add_particles_materials,
-                )
+                (flush_draw_commands, sync_typed_materials)
                     .chain()
                     .before(AssetEventSystems),
             );
@@ -376,6 +376,14 @@ pub fn surface_resize(graphics_entity: Entity, width: u32, height: u32) -> error
     })
 }
 
+pub fn surface_set_vsync(entity: Entity, vsync: bool) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(surface::set_vsync, (entity, vsync))
+            .unwrap()
+    })
+}
+
 pub fn surface_set_pixel_density(entity: Entity, density: f32) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
@@ -523,12 +531,25 @@ pub fn graphics_create(
     height: u32,
     texture_format: TextureFormat,
 ) -> error::Result<Entity> {
+    graphics_create_ex(surface_entity, width, height, texture_format, false)
+}
+
+/// Create a graphics context, optionally as a STATE canvas: a
+/// post-process-free, linear-color float target for feedback/simulation
+/// patches (see [`graphics::StateCanvas`]).
+pub fn graphics_create_ex(
+    surface_entity: Entity,
+    width: u32,
+    height: u32,
+    texture_format: TextureFormat,
+    state: bool,
+) -> error::Result<Entity> {
     app_mut(|app| -> error::Result<Entity> {
         let entity = app
             .world_mut()
             .run_system_cached_with(
                 graphics::create,
-                (width, height, surface_entity, texture_format),
+                (width, height, surface_entity, texture_format, state),
             )
             .unwrap()?;
 
@@ -559,6 +580,21 @@ pub fn graphics_present(graphics_entity: Entity) -> error::Result<()> {
 /// End the current draw pass for the graphics surface.
 pub fn graphics_end_draw(graphics_entity: Entity) -> error::Result<()> {
     app_mut(|app| graphics::end_draw(app, graphics_entity))
+}
+
+/// Whether a canvas has draw commands waiting for a flush.
+pub fn graphics_has_pending(graphics_entity: Entity) -> error::Result<bool> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(graphics::has_pending, graphics_entity)
+            .unwrap()
+    })
+}
+
+/// End a draw without forcing an update: the canvas is armed to present on
+/// the next one. See [`graphics::arm_present`].
+pub fn graphics_arm_present(graphics_entity: Entity) -> error::Result<()> {
+    app_mut(|app| graphics::arm_present(app, graphics_entity))
 }
 
 /// Apply a filter to a graphics canvas.
@@ -660,8 +696,12 @@ pub fn graphics_readback_raw(graphics_entity: Entity) -> error::Result<graphics:
         graphics::flush(app, graphics_entity)?;
         let vt = graphics::view_target(app, graphics_entity)?;
         let texture = vt.main_texture().clone();
+        let lut_view = graphics::tonemap_lut_view(app);
         app.world_mut()
-            .run_system_cached_with(graphics::readback_raw, (graphics_entity, texture))
+            .run_system_cached_with(
+                graphics::readback_raw,
+                (graphics_entity, texture, lut_view),
+            )
             .unwrap()
     })
 }
@@ -677,8 +717,12 @@ pub fn graphics_readback_enqueue(graphics_entity: Entity) -> error::Result<()> {
         graphics::flush(app, graphics_entity)?;
         let vt = graphics::view_target(app, graphics_entity)?;
         let texture = vt.main_texture().clone();
+        let lut_view = graphics::tonemap_lut_view(app);
         app.world_mut()
-            .run_system_cached_with(graphics::readback_ring_enqueue, (graphics_entity, texture))
+            .run_system_cached_with(
+                graphics::readback_ring_enqueue,
+                (graphics_entity, texture, lut_view),
+            )
             .unwrap()
     })
 }
@@ -701,6 +745,74 @@ pub fn graphics_readback_pending(graphics_entity: Entity) -> error::Result<usize
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(graphics::readback_ring_pending, graphics_entity)
+            .unwrap()
+    })
+}
+
+/// Non-blocking device poll: pumps wgpu so `map_async` and
+/// `on_submitted_work_done` callbacks can fire while a caller waits on GPU
+/// completions outside the render loop.
+pub fn graphics_device_poll() -> error::Result<()> {
+    app_mut(|app| {
+        let device = app
+            .world()
+            .resource::<bevy::render::renderer::RenderDevice>()
+            .clone();
+        let _ = device.poll(bevy::render::render_resource::PollType::Poll);
+        Ok(())
+    })
+}
+
+/// Current pixel size of the graphics surface.
+pub fn graphics_surface_size(graphics_entity: Entity) -> error::Result<(u32, u32)> {
+    app_mut(|app| {
+        let graphics = app
+            .world()
+            .get::<graphics::Graphics>(graphics_entity)
+            .ok_or(error::ProcessingError::GraphicsNotFound)?;
+        Ok((graphics.size.width, graphics.size.height))
+    })
+}
+
+/// Flush pending draws, blit the canvas into the given IOSurface on the GPU,
+/// and fire `on_done` (from wgpu's callback thread) once the blit completes.
+/// The GPU-resident recording path; see `capture_macos`.
+#[cfg(target_os = "macos")]
+pub fn graphics_capture_into_iosurface(
+    graphics_entity: Entity,
+    iosurface: *mut std::ffi::c_void,
+    iosurface_id: u32,
+    on_done: capture_macos::CaptureDone,
+) -> error::Result<()> {
+    let iosurface = iosurface as usize;
+    app_mut(|app| {
+        // Capture runs right after endDraw, which already flushed and
+        // rendered — an unconditional flush here would pump a whole extra
+        // app.update() (~3ms of fixed cost) per recorded frame for nothing.
+        let pending = app
+            .world_mut()
+            .run_system_cached_with(graphics::has_pending, graphics_entity)
+            .unwrap()?;
+        if pending {
+            graphics::flush(app, graphics_entity)?;
+        }
+        let vt = graphics::view_target(app, graphics_entity)?;
+        let texture = vt.main_texture().clone();
+        app.world_mut()
+            .run_system_cached_with(
+                capture_macos::capture_into_surface,
+                (graphics_entity, texture, iosurface, iosurface_id, on_done),
+            )
+            .unwrap()
+    })
+}
+
+/// Drop the GPU capture cache for a graphics (end of a recording).
+#[cfg(target_os = "macos")]
+pub fn graphics_capture_reset(graphics_entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(capture_macos::capture_reset, graphics_entity)
             .unwrap()
     })
 }
@@ -1003,6 +1115,45 @@ pub fn graphics_frustum(
     })
 }
 
+/// Spawn an animation pose pool: K paused puppet instances of the glTF's
+/// scene, seeked along `clip_name` at k/K, whose joint matrices feed skinned
+/// particle instancing. Returns the pool entity.
+pub fn gltf_animation_pool(gltf_entity: Entity, clip_name: &str, k: u32) -> error::Result<Entity> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(
+                animation::pool_create,
+                (gltf_entity, clip_name.to_string(), k),
+            )
+            .unwrap()
+    })
+}
+
+pub fn gltf_animation_pool_destroy(pool_entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(animation::pool_destroy, pool_entity)
+            .unwrap()
+    })
+}
+
+/// Attach a pose pool + per-particle phase attribute to a particle system;
+/// its pack dispatch switches to the skin-enabled variant.
+pub fn particles_set_skin_pool(
+    particles_entity: Entity,
+    pool_entity: Entity,
+    phase_attribute: Entity,
+) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(
+                particles::set_skin_pool,
+                (particles_entity, pool_entity, phase_attribute),
+            )
+            .unwrap()
+    })
+}
+
 pub fn graphics_world_from_screen(
     graphics_entity: Entity,
     sx: f32,
@@ -1177,6 +1328,56 @@ pub fn image_create(
             .world_mut()
             .run_system_cached_with(image::create, (size, data, texture_format))
             .unwrap())
+    })
+}
+
+/// Create a 3D texture (compute-writable storage texture + trilinear-sampled
+/// `texture_3d<f32>`), zero-initialized.
+pub fn texture3d_create(size: Extent3d, texture_format: TextureFormat) -> error::Result<Entity> {
+    app_mut(|app| {
+        let entity = app
+            .world_mut()
+            .run_system_cached_with(image::create_3d, (size, texture_format))
+            .unwrap()?;
+        // Prepare the GpuImage now so the texture can be bound (compute
+        // dispatch, material prepare) or written this same frame.
+        app.update();
+        Ok(entity)
+    })
+}
+
+/// The wgpu texture for an image entity, pumping one update if the GPU asset
+/// has not been prepared yet.
+fn image_texture(
+    app: &mut App,
+    entity: Entity,
+) -> error::Result<bevy::render::render_resource::Texture> {
+    match gpu_image(app, entity) {
+        Ok(img) => Ok(img.texture.clone()),
+        Err(_) => {
+            app.update();
+            Ok(gpu_image(app, entity)?.texture.clone())
+        }
+    }
+}
+
+/// Upload a full volume of tightly-packed texel bytes into a 3D texture.
+pub fn texture3d_write(entity: Entity, data: Vec<u8>) -> error::Result<()> {
+    app_mut(|app| {
+        let texture = image_texture(app, entity)?;
+        app.world_mut()
+            .run_system_cached_with(image::write_3d_raw, (entity, texture, data))
+            .unwrap()
+    })
+}
+
+/// Read a full 3D texture back as tightly-packed texel bytes.
+pub fn texture3d_readback(entity: Entity) -> error::Result<Vec<u8>> {
+    app_mut(|app| {
+        let texture = image_texture(app, entity)?;
+        app.world_mut()
+            .run_system_cached_with(image::readback_3d_raw, (entity, texture))
+            .unwrap()
     })
 }
 
@@ -1356,6 +1557,98 @@ pub fn image_destroy(entity: Entity) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(image::destroy, entity)
+            .unwrap()
+    })
+}
+
+/// Destroy a light.
+pub fn light_destroy(light_entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(light::destroy, light_entity)
+            .unwrap()
+    })
+}
+
+/// Aim a light along a travel direction (Processing directionalLight
+/// convention).
+pub fn light_set_direction(light_entity: Entity, dir: Vec3) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(light::set_direction, (light_entity, dir))
+            .unwrap()
+    })
+}
+
+/// Toggle shadow casting on a directional light.
+pub fn light_set_shadows(light_entity: Entity, enabled: bool) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(light::set_shadows, (light_entity, enabled))
+            .unwrap()
+    })
+}
+
+/// Toggle contact-shadow casting on a directional light.
+pub fn light_set_contact_shadows(light_entity: Entity, enabled: bool) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(light::set_contact_shadows, (light_entity, enabled))
+            .unwrap()
+    })
+}
+
+/// Set a directional light's shadow-map depth and normal bias.
+pub fn light_set_shadow_bias(
+    light_entity: Entity,
+    depth_bias: f32,
+    normal_bias: f32,
+) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(
+                light::set_shadow_bias,
+                (light_entity, depth_bias, normal_bias),
+            )
+            .unwrap()
+    })
+}
+
+/// Turn screen-space contact shadows on or off for a canvas' camera.
+///
+/// Checks that bevy's `ContactShadowsPlugin` is actually in the app rather
+/// than assuming it rides in with `PbrPlugin`: it does today, but a plugin
+/// that is not registered would leave this silently inserting a component
+/// nothing reads, which is exactly the kind of quiet no-op that costs an
+/// afternoon.
+pub fn graphics_set_contact_shadows(
+    graphics_entity: Entity,
+    enabled: bool,
+    linear_steps: u32,
+    thickness: f32,
+    length: f32,
+) -> error::Result<()> {
+    app_mut(|app| {
+        if enabled && !app.is_plugin_added::<bevy::pbr::contact_shadows::ContactShadowsPlugin>() {
+            bevy::log::warn_once!(
+                "contact shadows were requested but ContactShadowsPlugin is not registered in \
+                 this app, so nothing will change on screen."
+            );
+        }
+        app.world_mut()
+            .run_system_cached_with(
+                graphics::set_contact_shadows,
+                (graphics_entity, enabled, linear_steps, thickness, length),
+            )
+            .unwrap()
+    })
+}
+
+/// Turn temporal antialiasing on or off for a canvas' camera.
+pub fn graphics_set_temporal_aa(graphics_entity: Entity, enabled: bool) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(graphics::set_temporal_aa, (graphics_entity, enabled))
             .unwrap()
     })
 }
@@ -2074,6 +2367,14 @@ pub fn material_set_depth_write(entity: Entity, value: bool) -> error::Result<()
     })
 }
 
+pub fn material_set_depth_bias(entity: Entity, value: f32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(material::set_depth_bias, (entity, value))
+            .unwrap()
+    })
+}
+
 pub fn material_set_custom_blend(
     entity: Entity,
     blend: bevy::render::render_resource::BlendState,
@@ -2254,6 +2555,14 @@ pub fn gltf_load(graphics_entity: Entity, path: &str) -> error::Result<Entity> {
     app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(gltf::load, (graphics_entity, path.to_string()))
+            .unwrap()
+    })
+}
+
+pub fn gltf_destroy(gltf_entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(gltf::destroy, gltf_entity)
             .unwrap()
     })
 }
@@ -2531,6 +2840,7 @@ pub fn compute_set(
 
 pub fn compute_dispatch(entity: Entity, x: u32, y: u32, z: u32) -> error::Result<()> {
     app_mut(|app| {
+        if std::env::var("PROCESSING_TRACE_VT").is_ok() { eprintln!("ENGINE dispatch(update first)"); }
         app.update();
         dispatch_inner(app, entity, x, y, z)
     })
@@ -2544,18 +2854,35 @@ pub fn compute_dispatch(entity: Entity, x: u32, y: u32, z: u32) -> error::Result
 /// `update()` provides that a dispatch may genuinely need is pipeline
 /// compilation on first use — so on `PipelineNotReady` we pump once and
 /// retry.
-pub(crate) fn compute_dispatch_quiet(
+///
+/// Public since it is also the user-facing fast path for dispatch chains:
+/// callers opt out of the "resources created earlier this frame are always
+/// visible" guarantee that [`compute_dispatch`] buys with its update — a
+/// buffer or texture created since the last update may bind as unresolved.
+/// Set everything up, then chain quiet dispatches.
+pub fn compute_dispatch_quiet(
     entity: Entity,
     x: u32,
     y: u32,
     z: u32,
 ) -> error::Result<()> {
-    app_mut(|app| match dispatch_inner(app, entity, x, y, z) {
-        Err(error::ProcessingError::PipelineNotReady(_)) => {
-            app.update();
-            dispatch_inner(app, entity, x, y, z)
+    app_mut(|app| {
+        let result = match dispatch_inner(app, entity, x, y, z) {
+            Err(error::ProcessingError::PipelineNotReady(_)) => {
+                app.update();
+                dispatch_inner(app, entity, x, y, z)
+            }
+            r => r,
+        };
+        // `invalidate_rw_buffers` normally runs in the main schedule's `Last`,
+        // which a quiet dispatch skips — without this a CPU readback after a
+        // quiet chain returns the stale synced copy instead of the GPU data.
+        if result.is_ok() {
+            app.world_mut()
+                .run_system_cached(compute::invalidate_rw_buffers)
+                .unwrap();
         }
-        r => r,
+        result
     })
 }
 
@@ -2642,6 +2969,18 @@ pub fn font_create(name: &str) -> error::Result<Entity> {
             })
             .id();
         Ok(entity)
+    })
+}
+
+/// Destroy a font handle entity. Registered font data remains cached in the
+/// process-wide text context and may be reused by another handle.
+pub fn font_destroy(font_entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        if app.world().get::<text::font::Font>(font_entity).is_none() {
+            return Err(error::ProcessingError::InvalidEntity);
+        }
+        app.world_mut().entity_mut(font_entity).despawn();
+        Ok(())
     })
 }
 

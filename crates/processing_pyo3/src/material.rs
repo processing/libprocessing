@@ -100,6 +100,7 @@ fn apply_kwargs(entity: Entity, kwargs: &Bound<'_, PyDict>) -> PyResult<()> {
             "unlit" => material_set_unlit(entity, py_truthy(&value)?).map_err(rt)?,
             "double_sided" => material_set_double_sided(entity, py_truthy(&value)?).map_err(rt)?,
             "depth_write" => material_set_depth_write(entity, py_truthy(&value)?).map_err(rt)?,
+            "depth_bias" => material_set_depth_bias(entity, value.extract::<f32>()?).map_err(rt)?,
             "alpha_mode" => {
                 material_set_alpha_mode(entity, value.extract::<u8>()?, 0.5).map_err(rt)?
             }

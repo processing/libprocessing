@@ -40,16 +40,6 @@ fn vertex(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 
 @fragment
 fn fragment(frag: VertexOutput) -> @location(0) vec4<f32> {
-    var rgb = frag.color.rgb;
-#ifdef SHADED
-    #ifdef HAS_NORMALS
-    let normal = normalize(frag.normal);
-    #else
-    let normal = normalize(cross(dpdx(frag.world), dpdy(frag.world)));
-    #endif
-    let light = normalize(vec3<f32>(0.4, 0.85, 0.35));
-    let diffuse = abs(dot(normal, light));
-    rgb = rgb * (0.2 + 0.8 * diffuse);
-#endif
-    return vec4<f32>(rgb, frag.color.a);
+    // Per-vertex colour is authoritative — see the note in point_render.rs.
+    return frag.color;
 }

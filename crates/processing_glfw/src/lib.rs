@@ -13,7 +13,7 @@ use processing_core::error::Result;
 use processing_input::{
     input_cursor_grab_mode, input_cursor_visible, input_flush, input_set_char,
     input_set_cursor_enter, input_set_cursor_leave, input_set_focus, input_set_key,
-    input_set_mouse_button, input_set_mouse_move, input_set_scroll, input_window_resize,
+    input_set_mouse_button, input_set_mouse_move, input_set_scroll,
 };
 use processing_render::surface::{MonitorWorkarea, WindowControls};
 
@@ -410,9 +410,10 @@ impl ManagedWindow {
             return false;
         }
 
-        // Apply the coalesced resize once, the WindowResized message and Window change are processed this poll.
+        // Apply the coalesced resize once, so the WindowResized message and the
+        // Window change are both processed this poll. `surface_resize` writes
+        // the message itself -- see the note in `processing_render::surface`.
         if let Some((width, height)) = pending_resize {
-            input_window_resize(surface, width as f32, height as f32).unwrap();
             processing_render::surface_resize(surface, width as u32, height as u32).unwrap();
         }
 

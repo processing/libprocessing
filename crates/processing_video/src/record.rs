@@ -123,6 +123,16 @@ pub struct VideoRecorderConfig {
     /// Target bitrate in bits per second. VideoToolbox only; `None` picks
     /// ~0.1 bits/pixel/frame from the resolution and fps.
     pub bitrate: Option<u64>,
+    /// Maximum consecutive B frames. `None` leaves the encoder default (3 for
+    /// x264).
+    ///
+    /// B frames are cheap to encode and can come out several times smaller
+    /// than the P frames around them. On content the codec predicts badly --
+    /// dense instanced geometry tumbling, say -- that size gap becomes a
+    /// visible periodic pulse in quality, at the period of the GOP pattern.
+    /// `Some(0)` turns them off, which removes the pulse without the bitrate
+    /// increase that raising quality would cost.
+    pub bframes: Option<u32>,
 }
 
 impl VideoRecorderConfig {
@@ -138,6 +148,7 @@ impl VideoRecorderConfig {
             crf: None,
             preset: None,
             bitrate: None,
+            bframes: None,
         }
     }
 
@@ -176,6 +187,11 @@ impl VideoRecorderConfig {
         self
     }
 
+    pub fn with_bframes(mut self, bframes: u32) -> Self {
+        self.bframes = Some(bframes);
+        self
+    }
+
     /// Default VideoToolbox bitrate: ~0.1 bits per pixel per frame, clamped
     /// to a sane range. 3840×4320@60 ≈ 100 Mbps, 7680×4320@60 ≈ 200 Mbps.
     fn auto_bitrate(&self) -> u64 {
@@ -202,7 +218,12 @@ pub enum VideoRecordError {
     Encode { frame: u64, source: ffmpeg::Error },
     #[error("failed to finalize video: {0}")]
     Finish(ffmpeg::Error),
-    #[error("frame has {got} bytes but {expected} were expected ({width}x{height} {format:?})")]
+    #[error(
+        "frame has {got} bytes but {expected} were expected ({width}x{height} {format:?}) — \
+         the recorder is sized to the frame it first captured, so this usually means a \
+         DIFFERENT canvas (an offscreen/state buffer) was captured into the same recording; \
+         record the primary canvas only"
+    )]
     FrameSize {
         expected: usize,
         got: usize,
@@ -294,6 +315,11 @@ impl FrameEncoder {
         video.set_frame_rate(Some(ffmpeg::Rational::new(config.fps.round() as i32, 1)));
         if let Some(interval) = config.keyframe_interval {
             video.set_gop(interval as u32);
+        }
+        // Set on the codec context rather than as an x264 private option, so
+        // it reaches the VideoToolbox encoders too.
+        if let Some(bframes) = config.bframes {
+            video.set_max_b_frames(bframes as usize);
         }
 
         let mut options = HashMap::new();

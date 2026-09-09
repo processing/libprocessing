@@ -363,6 +363,24 @@ pub fn dispatch(
             }
         }
 
+        // A short bind group is a FATAL wgpu validation error, not a warning.
+        // `create_bindings` skips any parameter it can't resolve yet (an
+        // unset buffer/texture, or a GpuImage/GpuShaderBuffer asset not
+        // prepared in this frame) — fail with the parameter names instead.
+        if bindings.len() != desc.entries.len() {
+            let bound: Vec<u32> = bindings.iter().map(|(b, _)| *b).collect();
+            let missing: Vec<String> = reflection
+                .parameters()
+                .filter(|p| p.group() == *group && !bound.contains(&p.binding()))
+                .filter_map(|p| p.name().map(|n| n.to_string()))
+                .collect();
+            return Err(ProcessingError::InvalidArgument(format!(
+                "compute dispatch: unresolved @group({group}) bindings {missing:?} — \
+                 set them with set-uniforms! (a texture created this frame needs one \
+                 engine update before it can bind; draw a frame first)"
+            )));
+        }
+
         let bind_group_entries: Vec<_> = bindings
             .iter()
             .map(

@@ -24,11 +24,13 @@ use bevy::{
     camera::RenderTarget,
     ecs::query::QueryEntityError,
     math::{IRect, IVec2},
-    prelude::{Commands, Component, Entity, In, Query, ResMut, Window, With, default},
+    prelude::{
+        Commands, Component, Entity, In, MessageWriter, Query, ResMut, Window, With, default,
+    },
     render::render_resource::{Extent3d, TextureFormat},
     window::{
-        CompositeAlphaMode, Monitor, RawHandleWrapper, WindowLevel, WindowMode, WindowPosition,
-        WindowRef, WindowResolution, WindowWrapper,
+        CompositeAlphaMode, Monitor, PresentMode, RawHandleWrapper, WindowLevel, WindowMode,
+        WindowPosition, WindowRef, WindowResized, WindowResolution, WindowWrapper,
     },
 };
 use raw_window_handle::{
@@ -418,6 +420,7 @@ pub fn resize(
     In((window_entity, width, height)): In<(Entity, u32, u32)>,
     mut windows: Query<&mut Window>,
     mut graphics_query: Query<(&RenderTarget, &mut SurfaceSize)>,
+    mut resized: MessageWriter<WindowResized>,
 ) -> Result<()> {
     let width = width.max(1);
     let height = height.max(1);
@@ -439,7 +442,66 @@ pub fn resize(
             *surface_size = SurfaceSize(width, height);
         }
     }
+
+    // `camera_system` recomputes a camera's `clip_from_view` off this message
+    // and nothing else -- it does not watch `Window` for changes. Without it a
+    // resized surface keeps the projection it was built with: the swapchain and
+    // `SurfaceSize` follow, but 2d drawing coordinates stop meaning content
+    // pixels and a 3d camera keeps the stale aspect ratio. The Rust-side GLFW
+    // runner used to write this itself, which left the FFI path (every
+    // JVM-hosted sketch, and every `window_set_size` on a secondary window)
+    // without it. Writing it here covers both callers.
+    resized.write(WindowResized {
+        window: window_entity,
+        width: width as f32,
+        height: height as f32,
+    });
     Ok(())
+}
+
+/// Set a window surface's swapchain present mode.
+///
+/// `vsync` false selects [`PresentMode::AutoNoVsync`], asking for a draw loop
+/// that is not paced to the display's refresh rate (falling back `Immediate`
+/// -> `Mailbox` -> `Fifo` where the platform lacks it, unlike bare
+/// `Immediate` / `Mailbox`, which panic when unsupported). That is what an
+/// offline render wants: nothing is watching the window, and captures read
+/// back the canvas texture rather than the swapchain, so tearing cannot reach
+/// the file.
+///
+/// `vsync` true restores [`PresentMode::AutoVsync`]. The window is created
+/// vsynced ([`PresentMode::Fifo`], bevy's `Window` default), so a caller that
+/// never touches this keeps the paced behaviour.
+///
+/// **This buys nothing on macOS** (measured 2026-08-30, `quil/dev/vsync_probe.clj`).
+/// Metal offers only `Fifo` and `Immediate`, so `AutoNoVsync` resolves to
+/// `Immediate` = `CAMetalLayer.setDisplaySyncEnabled(false)` — and a composited
+/// `CAMetalLayer` still gets its drawables released on the compositor's
+/// cadence, so `nextDrawable` stays paced by refresh regardless. A trivial
+/// draw measures 120.0 fps vsynced and 118.4 fps not, on a 120 Hz display.
+/// What actually sets the ceiling there is the window's SIZE: a 3840x4320
+/// window paces at exactly 60 fps in both modes, because compositing it does
+/// not fit in one vblank. Render offscreen behind a small window instead.
+pub fn set_vsync(
+    In((window_entity, vsync)): In<(Entity, bool)>,
+    mut windows: Query<&mut Window>,
+) -> Result<()> {
+    let mode = if vsync {
+        PresentMode::AutoVsync
+    } else {
+        PresentMode::AutoNoVsync
+    };
+    if let Ok(mut window) = windows.get_mut(window_entity) {
+        // Guarded so an unchanged mode doesn't trip change detection: bevy
+        // reconfigures the swapchain whenever `present_mode` differs from the
+        // extracted one, and there is no reason to churn it every call.
+        if window.present_mode != mode {
+            window.present_mode = mode;
+        }
+        Ok(())
+    } else {
+        Err(error::ProcessingError::SurfaceNotFound)
+    }
 }
 
 pub fn set_pixel_density(

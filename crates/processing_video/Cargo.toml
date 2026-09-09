@@ -14,5 +14,19 @@ processing_render = { workspace = true }
 thiserror = "2"
 video-rs = "0.11"
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = "0.3"
+objc2-core-foundation = "0.3"
+objc2-core-video = { version = "0.3", features = ["objc2-io-surface"] }
+objc2-core-media = "0.3"
+objc2-av-foundation = { version = "0.3", features = [
+    "objc2-core-media",
+    "objc2-core-video",
+    "block2",
+] }
+objc2-io-surface = "0.3"
+block2 = "0.6"
+
 [dev-dependencies]
 tempfile = "3"

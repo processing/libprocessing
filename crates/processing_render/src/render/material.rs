@@ -6,6 +6,7 @@ use std::ops::Deref;
 
 use crate::material::ProcessingMaterial;
 use crate::material::custom::{CustomMaterial, CustomMaterial3d};
+use crate::particles::material::ParticlesMaterial;
 
 #[derive(Component, Deref)]
 pub struct UntypedMaterial(pub UntypedHandle);
@@ -178,20 +179,37 @@ impl MaterialKey {
     }
 }
 
-pub fn add_processing_materials(mut commands: Commands, meshes: Query<(Entity, &UntypedMaterial)>) {
+/// Project `UntypedMaterial` onto the typed material component bevy renders
+/// with, and clear the slots the handle's type does *not* call for.
+///
+/// Draw entities outlive a single draw — every instanced body draw of one
+/// particle system shares `particles_data.draw_entity`, and mesh draws reuse
+/// their entity across frames — so a typed component left behind by an earlier
+/// material of a different type would keep the entity queued in that material's
+/// pipeline and overdraw the current one. Inserting without removing is what
+/// made a particle system drawn first with a constant-albedo (extended)
+/// material and then with a per-particle (particles) material render with the
+/// stale extended material.
+pub fn sync_typed_materials(mut commands: Commands, meshes: Query<(Entity, &UntypedMaterial)>) {
     for (entity, handle) in meshes.iter() {
         let handle = handle.deref().clone();
-        if let Ok(handle) = handle.try_typed::<ProcessingExtendedMaterial>() {
-            commands.entity(entity).insert(MeshMaterial3d(handle));
-        }
-    }
-}
+        let mut entity = commands.entity(entity);
 
-pub fn add_custom_materials(mut commands: Commands, meshes: Query<(Entity, &UntypedMaterial)>) {
-    for (entity, handle) in meshes.iter() {
-        let handle = handle.deref().clone();
-        if let Ok(handle) = handle.try_typed::<CustomMaterial>() {
-            commands.entity(entity).insert(CustomMaterial3d(handle));
+        if let Ok(handle) = handle.clone().try_typed::<ProcessingExtendedMaterial>() {
+            entity
+                .insert(MeshMaterial3d(handle))
+                .remove::<CustomMaterial3d>()
+                .remove::<MeshMaterial3d<ParticlesMaterial>>();
+        } else if let Ok(handle) = handle.clone().try_typed::<CustomMaterial>() {
+            entity
+                .insert(CustomMaterial3d(handle))
+                .remove::<MeshMaterial3d<ProcessingExtendedMaterial>>()
+                .remove::<MeshMaterial3d<ParticlesMaterial>>();
+        } else if let Ok(handle) = handle.try_typed::<ParticlesMaterial>() {
+            entity
+                .insert(MeshMaterial3d(handle))
+                .remove::<MeshMaterial3d<ProcessingExtendedMaterial>>()
+                .remove::<CustomMaterial3d>();
         }
     }
 }

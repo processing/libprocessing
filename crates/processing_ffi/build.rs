@@ -18,7 +18,11 @@ fn main() {
         .expect("Unable to generate bindings")
         .write_to_file(&output_file);
 
-    println!("cargo:rerun-if-changed=src/lib.rs");
+    // The whole source tree, not just lib.rs: exports live in modules
+    // (video.rs, canvas.rs, ...) too, and naming only lib.rs meant a new or
+    // changed export in any of them left a stale header behind -- which shows
+    // up much later as a jextract binding that does not match the library.
+    println!("cargo:rerun-if-changed=src");
     println!("cargo:rerun-if-changed=cbindgen.toml");
     println!(
         "cargo:warning=Generated header at: {}",

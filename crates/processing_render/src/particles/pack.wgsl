@@ -24,7 +24,7 @@ struct MeshCullingData {
 struct PackParams {
     base_input_index: u32,
     count: u32,
-    _pad0: u32,
+    pool_size: u32,
     _pad1: u32,
 }
 
@@ -41,6 +41,13 @@ struct PackParams {
 @group(0) @binding(5) var<storage, read> life: array<f32>;
 #endif
 @group(0) @binding(6) var<uniform> params: PackParams;
+#ifdef HAS_SKIN
+// Per-particle animation phase in [0,1) and the pose pool's live skin
+// indices (joint-matrix offsets into the global skin array, refreshed every
+// frame by prepare — they are not stable across frames).
+@group(0) @binding(7) var<storage, read> skin_phase: array<f32>;
+@group(0) @binding(8) var<storage, read> skin_index_table: array<u32>;
+#endif
 
 fn quat_to_basis(q: vec4<f32>) -> mat3x3<f32> {
     let x = q.x; let y = q.y; let z = q.z; let w = q.w;
@@ -103,6 +110,15 @@ fn pack(@builtin(global_invocation_id) gid: vec3<u32>) {
         vec4<f32>(c0.z, c1.z, c2.z, pos.z),
     );
     mesh_input_buffer[slot].tag = i;
+
+#ifdef HAS_SKIN
+    let pool_size = params.pool_size;
+    let pose = min(u32(fract(skin_phase[i]) * f32(pool_size)), pool_size - 1u);
+    mesh_input_buffer[slot].current_skin_index = skin_index_table[pose];
+    // MESH_FLAGS_SKIN_INSTANCE_COMPOSE_BIT: the vertex shader composes this
+    // instance's transform with the pooled skeleton pose.
+    mesh_input_buffer[slot].flags = mesh_input_buffer[slot].flags | (1u << 26u);
+#endif
 
     mesh_culling_buffer[slot].aabb_center = vec3<f32>(0.0, 0.0, 0.0);
     mesh_culling_buffer[slot].aabb_half_extents = vec3<f32>(1.0, 1.0, 1.0);

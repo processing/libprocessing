@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use bevy::asset::embedded_asset;
 use bevy::material::specialize::SpecializedMeshPipelineError;
 use bevy::pbr::{
@@ -13,8 +11,6 @@ use bevy::render::{
     storage::ShaderBuffer,
 };
 use bevy::shader::ShaderRef;
-
-use crate::render::material::UntypedMaterial;
 
 pub struct ParticlesMaterialPlugin;
 
@@ -88,16 +84,5 @@ impl MaterialExtension for ParticlesExtension {
             key.bind_group_data.depth_write,
         );
         Ok(())
-    }
-}
-
-pub fn add_particles_materials(mut commands: Commands, meshes: Query<(Entity, &UntypedMaterial)>) {
-    for (entity, handle) in meshes.iter() {
-        let handle = handle.deref().clone();
-        if let Ok(handle) = handle.try_typed::<ParticlesMaterial>() {
-            commands
-                .entity(entity)
-                .insert(MeshMaterial3d::<ParticlesMaterial>(handle));
-        }
     }
 }

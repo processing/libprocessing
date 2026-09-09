@@ -7,10 +7,16 @@ use processing::prelude::{error::ProcessingError, shader_value::ShaderValue, *};
 
 use crate::color::Color;
 
+mod canvas;
 mod color;
 mod error;
+mod texture3d;
+#[cfg(feature = "physics")]
+mod physics;
 #[cfg(feature = "video")]
 mod video;
+#[cfg(all(feature = "video", target_os = "macos"))]
+mod video_macos;
 
 pub(crate) unsafe fn cstr_to_str<'a>(
     ptr: *const std::ffi::c_char,
@@ -218,6 +224,26 @@ pub extern "C" fn processing_surface_resize(window_id: u64, width: u32, height: 
     error::check(|| surface_resize(window_entity, width, height));
 }
 
+/// Set the swapchain present mode for a window surface: `vsync` false selects
+/// `AutoNoVsync`, uncapping the draw loop from the display's refresh rate.
+///
+/// Windows are created vsynced, so this only ever has to be called to turn
+/// vsync off — the case an offline render wants, where the loop should run as
+/// fast as render + capture allow and nothing is watching the window. Tearing
+/// cannot reach a recording: `processing_record_capture` reads back the canvas
+/// texture, never the swapchain.
+///
+/// SAFETY:
+/// - Init and surface_create have been called.
+/// - window_id is a valid ID returned from surface_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_surface_set_vsync(window_id: u64, vsync: bool) {
+    error::clear_error();
+    let window_entity = Entity::from_bits(window_id);
+    error::check(|| surface_set_vsync(window_entity, vsync));
+}
+
 /// Set the background color for the given graphics context.
 ///
 /// SAFETY:
@@ -305,6 +331,36 @@ pub extern "C" fn processing_end_draw(graphics_id: u64) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
     error::check(|| graphics_end_draw(graphics_entity));
+}
+
+/// Whether a canvas has draw commands waiting for a flush. Callers that flush
+/// defensively before sampling a canvas can skip the flush (a whole
+/// `app.update()`) when this is false.
+///
+/// SAFETY:
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_graphics_has_pending(graphics_id: u64) -> bool {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_has_pending(graphics_entity)).unwrap_or(true)
+}
+
+/// End the current draw WITHOUT forcing a GPU update: the canvas is armed to
+/// present on the next update instead. For window canvases only — a single
+/// update presents every armed window, so N windows cost one update per frame
+/// rather than N.
+///
+/// SAFETY:
+/// - Init and graphics_create have been called.
+/// - graphics_id is a valid ID returned from graphics_create.
+/// - This is called from the same thread as init.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_arm_present(graphics_id: u64) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| graphics_arm_present(graphics_entity));
 }
 
 /// Shuts down internal resources with given exit code, but does *not* terminate the process.
@@ -902,6 +958,40 @@ pub extern "C" fn processing_curve(
     });
 }
 
+/// Draw a box.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_box(graphics_id: u64, width: f32, height: f32, depth: f32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Box {
+                width,
+                height,
+                depth,
+            },
+        )
+    });
+}
+
+/// Draw a sphere.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_sphere(graphics_id: u64, radius: f32, sectors: u32, stacks: u32) {
+    error::clear_error();
+    let graphics_entity = Entity::from_bits(graphics_id);
+    error::check(|| {
+        graphics_record_command(
+            graphics_entity,
+            DrawCommand::Sphere {
+                radius,
+                sectors,
+                stacks,
+            },
+        )
+    });
+}
+
 /// Draw a cylinder.
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_cylinder(graphics_id: u64, radius: f32, height: f32, detail: u32) {
@@ -1139,6 +1229,12 @@ pub unsafe extern "C" fn processing_create_font(name_ptr: *const std::ffi::c_cha
     error::clear_error();
     let name = unsafe { std::ffi::CStr::from_ptr(name_ptr) }.to_string_lossy();
     error::check(|| font_create(&name).map(|e| e.to_bits())).unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_font_destroy(font_id: u64) {
+    error::clear_error();
+    error::check(|| font_destroy(Entity::from_bits(font_id)));
 }
 
 /// Query the number of variable font axes for a font.
@@ -1618,6 +1714,12 @@ pub unsafe extern "C" fn processing_image_load(path: *const std::ffi::c_char) ->
     error::check(|| image_load(path_str))
         .map(|entity| entity.to_bits())
         .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_image_destroy(image_id: u64) {
+    error::clear_error();
+    error::check(|| image_destroy(Entity::from_bits(image_id)));
 }
 
 #[unsafe(no_mangle)]
@@ -2838,6 +2940,76 @@ pub unsafe extern "C" fn processing_graphics_text_to_geometry(
     .unwrap_or(0)
 }
 
+/// Destroy a light created by any of the light-create functions.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_light_destroy(light_id: u64) {
+    error::clear_error();
+    error::check(|| light_destroy(Entity::from_bits(light_id)));
+}
+
+/// Aim a light: (x, y, z) is the direction the light travels (Processing's
+/// directionalLight convention).
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_light_set_direction(light_id: u64, x: f32, y: f32, z: f32) {
+    error::clear_error();
+    error::check(|| light_set_direction(Entity::from_bits(light_id), Vec3::new(x, y, z)));
+}
+
+/// Enable or disable shadow casting for a directional light.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_light_set_shadows(light_id: u64, enabled: bool) {
+    error::clear_error();
+    error::check(|| light_set_shadows(Entity::from_bits(light_id), enabled));
+}
+
+/// Enable or disable contact-shadow casting for a directional light.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_light_set_contact_shadows(light_id: u64, enabled: bool) {
+    error::clear_error();
+    error::check(|| light_set_contact_shadows(Entity::from_bits(light_id), enabled));
+}
+
+/// Set a directional light's shadow-map depth and normal bias.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_light_set_shadow_bias(
+    light_id: u64,
+    depth_bias: f32,
+    normal_bias: f32,
+) {
+    error::clear_error();
+    error::check(|| {
+        light_set_shadow_bias(Entity::from_bits(light_id), depth_bias, normal_bias)
+    });
+}
+
+/// Enable or disable screen-space contact shadows on a canvas' camera.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_graphics_contact_shadows(
+    graphics_id: u64,
+    enabled: bool,
+    linear_steps: u32,
+    thickness: f32,
+    length: f32,
+) {
+    error::clear_error();
+    error::check(|| {
+        graphics_set_contact_shadows(
+            Entity::from_bits(graphics_id),
+            enabled,
+            linear_steps,
+            thickness,
+            length,
+        )
+    });
+}
+
+/// Enable or disable temporal antialiasing on a canvas' camera.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_graphics_temporal_aa(graphics_id: u64, enabled: bool) {
+    error::clear_error();
+    error::check(|| graphics_set_temporal_aa(Entity::from_bits(graphics_id), enabled));
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_light_create_directional(
     graphics_id: u64,
@@ -3003,6 +3175,12 @@ pub extern "C" fn processing_material_set_unlit(mat_id: u64, value: bool) {
 pub extern "C" fn processing_material_set_depth_write(mat_id: u64, value: bool) {
     error::clear_error();
     error::check(|| material_set_depth_write(Entity::from_bits(mat_id), value));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_material_set_depth_bias(mat_id: u64, value: f32) {
+    error::clear_error();
+    error::check(|| material_set_depth_bias(Entity::from_bits(mat_id), value));
 }
 
 #[unsafe(no_mangle)]
@@ -3504,6 +3682,15 @@ pub extern "C" fn processing_compute_dispatch(compute_id: u64, x: u32, y: u32, z
     error::check(|| compute_dispatch(Entity::from_bits(compute_id), x, y, z));
 }
 
+/// Dispatch without pumping an engine update first. See
+/// `compute_dispatch_quiet`: submission order still guarantees pass ordering,
+/// but resources created since the last update may not be bindable yet.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_compute_dispatch_quiet(compute_id: u64, x: u32, y: u32, z: u32) {
+    error::clear_error();
+    error::check(|| compute_dispatch_quiet(Entity::from_bits(compute_id), x, y, z));
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_compute_destroy(compute_id: u64) {
     error::clear_error();
@@ -3825,6 +4012,12 @@ pub unsafe extern "C" fn processing_gltf_load(
     .unwrap_or(0)
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_gltf_destroy(gltf_id: u64) {
+    error::clear_error();
+    error::check(|| gltf_destroy(Entity::from_bits(gltf_id)));
+}
+
 /// # Safety
 /// - `name` is a valid null-terminated C string.
 #[unsafe(no_mangle)]
@@ -3839,6 +4032,53 @@ pub unsafe extern "C" fn processing_gltf_geometry(
     })
     .map(|e| e.to_bits())
     .unwrap_or(0)
+}
+
+/// Spawn an animation pose pool from a loaded GLTF: `k` paused puppet
+/// instances of the scene, seeked along the named clip at pose/k of its
+/// duration. Their joint matrices drive skinned particle instancing (see
+/// `processing_particles_set_skin_pool`). Returns the pool id, or 0 on error.
+///
+/// # Safety
+/// - `clip_name` is a valid null-terminated C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_gltf_animation_pool(
+    gltf_id: u64,
+    clip_name: *const std::ffi::c_char,
+    k: u32,
+) -> u64 {
+    error::clear_error();
+    error::check(|| {
+        let clip_name = unsafe { cstr_to_str(clip_name) }?;
+        gltf_animation_pool(Entity::from_bits(gltf_id), clip_name, k)
+    })
+    .map(|e| e.to_bits())
+    .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_gltf_animation_pool_destroy(pool_id: u64) {
+    error::clear_error();
+    error::check(|| gltf_animation_pool_destroy(Entity::from_bits(pool_id)));
+}
+
+/// Attach an animation pose pool and a per-particle phase attribute (float,
+/// phase in [0,1)) to a particle system. Instanced draws of the system are
+/// then skinned: each instance takes the pool pose nearest its phase.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_set_skin_pool(
+    particles_id: u64,
+    pool_id: u64,
+    phase_attr_id: u64,
+) {
+    error::clear_error();
+    error::check(|| {
+        particles_set_skin_pool(
+            Entity::from_bits(particles_id),
+            Entity::from_bits(pool_id),
+            Entity::from_bits(phase_attr_id),
+        )
+    });
 }
 
 /// # Safety
@@ -4042,6 +4282,14 @@ pub extern "C" fn processing_particles_primitives_create(
     })
     .map(|e| e.to_bits())
     .unwrap_or(0)
+}
+
+/// Destroy a dynamic-topology target and its internal field, buffers, reset
+/// kernel, and reset shader. The source particle system is borrowed.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_primitives_destroy(target_id: u64) {
+    error::clear_error();
+    error::check(|| particles_primitives_destroy(Entity::from_bits(target_id)));
 }
 
 /// Apply `compute` over the target's source field with the target's buffers

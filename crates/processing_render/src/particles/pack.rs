@@ -8,7 +8,7 @@ use bevy::pbr::{
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::render::{
-    Extract, ExtractSchedule, Render, RenderApp, RenderSystems,
+    Extract, ExtractSchedule, Render, RenderApp, RenderStartup, RenderSystems,
     batching::gpu_preprocessing::BatchedInstanceBuffers,
     render_asset::RenderAssets,
     render_resource::{
@@ -22,6 +22,10 @@ use bevy::render::{
 };
 use bevy::shader::{Shader, ShaderDefVal};
 
+use bevy::pbr::SkinUniforms;
+use bevy::render::render_resource::{BufferInitDescriptor, BufferUsages};
+
+use crate::animation::SkinPosePool;
 use crate::compute;
 use crate::geometry::BuiltinAttributes;
 
@@ -50,6 +54,7 @@ impl Plugin for ParticlesPackPlugin {
             .init_resource::<ExtractedParticlesDraws>()
             .init_resource::<ParticlesPackPipelines>()
             .init_resource::<ParticlesPackBindGroups>()
+            .add_systems(RenderStartup, prewarm_pack_pipelines)
             .add_systems(ExtractSchedule, extract_particles_draws)
             .add_systems(
                 Render,
@@ -67,6 +72,7 @@ pub struct PackPipelineKey {
     pub has_rotation: bool,
     pub has_scale: bool,
     pub has_life: bool,
+    pub has_skin: bool,
 }
 
 pub struct CachedPackPipeline {
@@ -83,7 +89,7 @@ pub struct ParticlesPackPipelines {
 struct ParticlesPackParams {
     base_input_index: u32,
     count: u32,
-    _pad0: u32,
+    pool_size: u32,
     _pad1: u32,
 }
 
@@ -93,6 +99,9 @@ pub struct ExtractedParticlesData {
     pub rotation: Option<Handle<ShaderBuffer>>,
     pub scale: Option<Handle<ShaderBuffer>>,
     pub life: Option<Handle<ShaderBuffer>>,
+    /// Phase attribute buffer + the pool's slot entities (main world), whose
+    /// live skin indices prepare resolves each frame.
+    pub skin: Option<(Handle<ShaderBuffer>, Vec<MainEntity>)>,
 }
 
 #[derive(Resource, Default)]
@@ -143,6 +152,10 @@ fn pack_layout_entries(key: PackPipelineKey) -> Vec<BindGroupLayoutEntry> {
         entries.push(layout_entry(5, storage_r));
     }
     entries.push(layout_entry(6, uniform));
+    if key.has_skin {
+        entries.push(layout_entry(7, storage_r));
+        entries.push(layout_entry(8, storage_r));
+    }
     entries
 }
 
@@ -166,7 +179,40 @@ fn shader_defs_for(key: PackPipelineKey) -> Vec<ShaderDefVal> {
     if key.has_life {
         defs.push("HAS_LIFE".into());
     }
+    if key.has_skin {
+        defs.push("HAS_SKIN".into());
+    }
     defs
+}
+
+/// Queue every pack-kernel variant up front.
+///
+/// The pack kernel is what writes per-instance transforms into the batch slab,
+/// so until its pipeline exists an instanced draw renders NOTHING — measured:
+/// a particle system drawn from frame 1 is blank on frame 1 and correct on
+/// frame 2, while a second system whose first draw happens later appears
+/// immediately (the pipeline is hot by then). That one-time cost also lands
+/// MID-SHOW the first time a new variant appears — the skinned (`has_skin`)
+/// pack for the crow cut is a different pipeline from the unskinned one, so it
+/// would otherwise blank its own first frame at the cut.
+///
+/// There are only 2^4 = 16 combinations and they are small compute pipelines,
+/// so compiling them all at startup is cheap and makes instanced draws behave
+/// like Processing expects: draw it, and it draws THIS frame.
+fn prewarm_pack_pipelines(
+    shader: Res<ParticlesPackShader>,
+    pipeline_cache: Res<PipelineCache>,
+    mut pipelines: ResMut<ParticlesPackPipelines>,
+) {
+    for bits in 0..16u8 {
+        let key = PackPipelineKey {
+            has_rotation: bits & 0b0001 != 0,
+            has_scale: bits & 0b0010 != 0,
+            has_life: bits & 0b0100 != 0,
+            has_skin: bits & 0b1000 != 0,
+        };
+        get_or_create_pipeline(&mut pipelines, &pipeline_cache, &shader.0, key);
+    }
 }
 
 fn get_or_create_pipeline(
@@ -180,16 +226,16 @@ fn get_or_create_pipeline(
     }
     let bind_group_layout = BindGroupLayoutDescriptor::new(
         format!(
-            "ParticlesPackBindGroupLayout(rot={},scale={},life={})",
-            key.has_rotation, key.has_scale, key.has_life
+            "ParticlesPackBindGroupLayout(rot={},scale={},life={},skin={})",
+            key.has_rotation, key.has_scale, key.has_life, key.has_skin
         ),
         &pack_layout_entries(key),
     );
     let pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
         label: Some(
             format!(
-                "particles_pack_pipeline(rot={},scale={},life={})",
-                key.has_rotation, key.has_scale, key.has_life
+                "particles_pack_pipeline(rot={},scale={},life={},skin={})",
+                key.has_rotation, key.has_scale, key.has_life, key.has_skin
             )
             .into(),
         ),
@@ -213,6 +259,7 @@ fn extract_particles_draws(
     particles_draws: Extract<Query<(Entity, &ParticlesDraw)>>,
     particles_q: Extract<Query<&Particles>>,
     buffers: Extract<Query<&compute::Buffer>>,
+    pools: Extract<Query<&SkinPosePool>>,
     builtins: Extract<Res<BuiltinAttributes>>,
     mut extracted: ResMut<ExtractedParticlesDraws>,
 ) {
@@ -240,10 +287,24 @@ fn extract_particles_draws(
             .and_then(|e| buffers.get(e).ok())
             .map(|b| b.handle.clone());
 
+        let skin = p.skin.and_then(|ps| {
+            let phase_entity = p.buffer(ps.phase_attr)?;
+            let phase_buf = buffers.get(phase_entity).ok()?;
+            let pool = pools.get(ps.pool).ok()?;
+            Some((
+                phase_buf.handle.clone(),
+                pool.slots
+                    .iter()
+                    .map(|&e| MainEntity::from(e))
+                    .collect::<Vec<_>>(),
+            ))
+        });
+
         let key = PackPipelineKey {
             has_rotation: rotation.is_some(),
             has_scale: scale.is_some(),
             has_life: life.is_some(),
+            has_skin: skin.is_some(),
         };
         extracted.by_main.insert(
             MainEntity::from(entity),
@@ -253,6 +314,7 @@ fn extract_particles_draws(
                 rotation,
                 scale,
                 life,
+                skin,
             },
         );
     }
@@ -267,6 +329,7 @@ fn prepare_pack_bind_groups(
     batched_instance_buffers: Res<BatchedInstanceBuffers<MeshUniform, MeshInputUniform>>,
     culling_data_buffer: Res<MeshCullingDataBuffer>,
     gpu_buffers: Res<RenderAssets<GpuShaderBuffer>>,
+    skin_uniforms: Res<SkinUniforms>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
     mut bind_groups: ResMut<ParticlesPackBindGroups>,
@@ -304,6 +367,34 @@ fn prepare_pack_bind_groups(
             continue;
         }
 
+        // Resolve the pose pool's live skin indices. Offsets can change any
+        // frame as skins come and go, so the table is rebuilt per frame; if
+        // the pool isn't fully extracted yet (first frame or two), skip the
+        // batch rather than draw with garbage joints.
+        let mut skin_bindings = None;
+        if let Some((phase_handle, slots)) = &data.skin {
+            let Some(gpu_phase) = gpu_buffers.get(phase_handle) else {
+                continue;
+            };
+            let mut table: Vec<u32> = Vec::with_capacity(slots.len());
+            for slot in slots {
+                match skin_uniforms.skin_byte_offset(*slot) {
+                    Some(offset) => table.push(offset.index()),
+                    None => break,
+                }
+            }
+            if table.len() != slots.len() || table.is_empty() {
+                continue;
+            }
+            let bytes: Vec<u8> = table.iter().flat_map(|v| v.to_le_bytes()).collect();
+            let table_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
+                label: Some("particles_skin_index_table"),
+                contents: &bytes,
+                usage: BufferUsages::STORAGE,
+            });
+            skin_bindings = Some((gpu_phase, table_buffer, table.len() as u32));
+        }
+
         let pipeline_id =
             get_or_create_pipeline(&mut pipelines, &pipeline_cache, &shader.0, data.key);
         if !matches!(
@@ -317,6 +408,7 @@ fn prepare_pack_bind_groups(
         let params = ParticlesPackParams {
             base_input_index: reservation.input_buffer_base,
             count: reservation.max_capacity,
+            pool_size: skin_bindings.as_ref().map(|(_, _, k)| *k).unwrap_or(0),
             ..default()
         };
         let mut uniform = UniformBuffer::from(params);
@@ -358,6 +450,16 @@ fn prepare_pack_bind_groups(
             binding: 6,
             resource: uniform.binding().unwrap(),
         });
+        if let Some((gpu_phase, table_buffer, _)) = &skin_bindings {
+            entries.push(BindGroupEntry {
+                binding: 7,
+                resource: gpu_phase.buffer.as_entire_binding(),
+            });
+            entries.push(BindGroupEntry {
+                binding: 8,
+                resource: table_buffer.as_entire_binding(),
+            });
+        }
 
         let bind_group = render_device.create_bind_group(
             Some("particles_pack_bind_group"),

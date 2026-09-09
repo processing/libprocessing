@@ -12,6 +12,7 @@ use bevy::{
         visibility::{NoFrustumCulling, RenderLayers},
     },
     ecs::system::SystemParam,
+    log::warn_once,
     math::{Affine2, Affine3A, Mat4, Vec3A, Vec4},
     pbr::gpu_instance_batch::GpuBatchedMesh3d,
     prelude::*,
@@ -25,7 +26,7 @@ use primitive::{
     cone_mesh, conical_frustum_mesh, curve, cylinder_mesh, ellipse, empty_mesh, line, plane_mesh,
     quad, sphere_mesh, tetrahedron_mesh, torus_mesh, triangle,
 };
-use style::{Fill, StyleStack};
+use style::{Fill, Style, StyleStack};
 use transform::TransformStack;
 
 use crate::{
@@ -40,7 +41,20 @@ use crate::{
     text::font::TextContext,
 };
 
+/// How far each successive batch in a frame steps TOWARD the camera, so that
+/// draws resolve in painter's order: later submissions are nearer, which is
+/// what both arbiters of order want. The reverse-z depth test (GreaterEqual)
+/// keeps the nearest fragment, and `Transparent3d` sorts back-to-front and
+/// paints the nearest last. Stepping away from the camera instead inverts
+/// BOTH -- the frame renders in exact reverse submission order.
 pub(crate) const BATCH_INDEX_STEP: f32 = 0.001;
+
+/// View-space slab the 2d projection opens on the near side, so the
+/// `BATCH_INDEX_STEP` staircase has somewhere to climb before it reaches the
+/// near plane. At 0.001 units a batch this is room for 64k draws in one
+/// frame. It only ever adds visible volume, so nothing a sketch used to draw
+/// can fall out of the frustum because of it.
+pub(crate) const NEAR_HEADROOM: f32 = 64.0;
 
 #[derive(Component)]
 #[relationship(relationship_target = TransientMeshes)]
@@ -934,12 +948,32 @@ pub fn flush_draw_commands(
                                 *blend_state,
                             )
                         }
+                        // The Color key relies on per-vertex colors, which 2D
+                        // tessellation bakes in but shared model meshes lack —
+                        // the fill has to become the material's base color.
+                        MaterialKey::Color { .. } => {
+                            let mut base = material_key.to_standard_material();
+                            base.base_color = state
+                                .style
+                                .fill
+                                .color()
+                                .unwrap_or(bevy::color::Color::WHITE);
+                            res.materials
+                                .add(ProcessingExtendedMaterial {
+                                    base,
+                                    extension: ProcessingMaterial {
+                                        blend_state: material_key.blend_state(),
+                                        depth_write: None,
+                                    },
+                                })
+                                .untyped()
+                        }
                         _ => material_key.to_material(&mut res.materials),
                     };
 
                     flush_batch(&mut res, &mut batch, &p_material_handles);
 
-                    let z_offset = -(batch.draw_index as f32 * BATCH_INDEX_STEP);
+                    let z_offset = batch.draw_index as f32 * BATCH_INDEX_STEP;
                     let mut transform = state.transform.to_bevy_transform();
 
                     // if the "source" geometry was parented in a gltf scene, we need to make sure that
@@ -951,13 +985,16 @@ pub fn flush_draw_commands(
                     }
                     transform.translation.z += z_offset;
 
-                    res.commands.spawn((
+                    let mut entity = res.commands.spawn((
                         Mesh3d(geometry.handle.clone()),
                         UntypedMaterial(material_handle),
                         BelongsToGraphics(batch.graphics_entity),
                         transform,
                         batch.render_layers.clone(),
                     ));
+                    apply_stroke(&mut entity, &state.style);
+                    warn_if_unstrokeable(&res.meshes, &geometry.handle, &state.style);
+                    warn_if_skinned(&res.meshes, &geometry.handle);
 
                     batch.draw_index += 1;
                 }
@@ -1675,7 +1712,7 @@ fn flush_batch(
     material_handles: &Query<&UntypedMaterial>,
 ) {
     if let Some(mesh) = batch.current_mesh.take() {
-        let z_offset = -(batch.draw_index as f32 * BATCH_INDEX_STEP);
+        let z_offset = batch.draw_index as f32 * BATCH_INDEX_STEP;
         spawn_mesh(res, batch, mesh, z_offset, material_handles);
         batch.draw_index += 1;
     }
@@ -1689,8 +1726,6 @@ fn add_shape3d(
     mesh: Mesh,
     material_handles: &Query<&UntypedMaterial>,
 ) {
-    use bevy::pbr::wireframe::{Wireframe, WireframeColor, WireframeLineWidth, WireframeTopology};
-
     flush_batch(res, batch, material_handles);
 
     let mesh_handle = res.meshes.add(mesh);
@@ -1737,7 +1772,7 @@ fn add_shape3d(
         }
     };
 
-    let z_offset = -(batch.draw_index as f32 * BATCH_INDEX_STEP);
+    let z_offset = batch.draw_index as f32 * BATCH_INDEX_STEP;
     let mut transform = state.transform.to_bevy_transform();
     transform.translation.z += z_offset;
 
@@ -1749,20 +1784,100 @@ fn add_shape3d(
         batch.render_layers.clone(),
     ));
 
-    if let Some(stroke_color) = state.style.stroke_color {
-        entity.insert((
-            Wireframe,
-            WireframeColor {
-                color: stroke_color,
-            },
-            WireframeLineWidth {
-                width: state.style.stroke_weight,
-            },
-            WireframeTopology::Quads,
-        ));
-    }
+    apply_stroke(&mut entity, &state.style);
 
     batch.draw_index += 1;
+}
+
+/// Say so when a mesh has a `stroke()` that cannot be drawn.
+///
+/// The wireframe pass pulls vertices through the index buffer, so it silently
+/// skips a mesh that has none -- the stroke just does not appear, with no
+/// error anywhere. Meshes built in-engine are always indexed; ones that
+/// arrive through `Geometry` are whatever the file and the loader between
+/// them produced, which for a gltf primitive is often non-indexed.
+fn warn_if_unstrokeable(meshes: &Assets<Mesh>, handle: &Handle<Mesh>, style: &Style) {
+    if style.stroke_color.is_none() {
+        return;
+    }
+    if meshes
+        .get(handle)
+        .is_some_and(|mesh| mesh.indices().is_none())
+    {
+        warn_once!(
+            "stroke() is set on a mesh with no index buffer, so no outline will be drawn. \
+             The wireframe pass reads vertices through the indices; a mesh loaded without \
+             them (a gltf primitive with no normals, for instance) cannot be outlined."
+        );
+    }
+}
+
+/// Say so when a rigged mesh is drawn immediate-mode and its fill will not
+/// appear.
+///
+/// bevy decides a mesh is skinned from its vertex layout alone -- joint index
+/// and joint weight attributes present -- and specializes the pipeline for
+/// skinning on that basis, without reference to the entity or the material. A
+/// single `shape()` draw has no skin to hand it, so the fill quietly produces
+/// nothing: no error, no pixels, whatever material is set. `stroke()` is
+/// unaffected, because the wireframe pass reads positions straight out of the
+/// vertex buffer and never asks about skinning -- which is how a rigged mesh
+/// can come out as an outline with nothing inside it.
+///
+/// The instanced path is the one that can pose a rigged mesh: `particles()`
+/// with a skin pool supplies the per-instance skin this draw cannot.
+fn warn_if_skinned(meshes: &Assets<Mesh>, handle: &Handle<Mesh>) {
+    let is_skinned = meshes.get(handle).is_some_and(|mesh| {
+        mesh.attribute(Mesh::ATTRIBUTE_JOINT_INDEX).is_some()
+            && mesh.attribute(Mesh::ATTRIBUTE_JOINT_WEIGHT).is_some()
+    });
+    if is_skinned {
+        warn_once!(
+            "a rigged (skinned) mesh is being drawn as a single shape, so its fill will \
+             not appear: the mesh's joint attributes make the pipeline expect per-instance \
+             skin data that a single draw does not supply, whatever material is set. \
+             stroke() still outlines it. To draw a rigged mesh posed, put it through the \
+             instanced path with a skin pool."
+        );
+    }
+}
+
+/// Attach `stroke()` to a just-spawned 3d mesh, as a wireframe over its edges.
+///
+/// Every 3d mesh spawn goes through here, because in Processing `stroke()`
+/// applies to whatever you draw rather than to a privileged list of shapes:
+/// the built-in primitives `add_shape3d` builds, and the `DrawCommand::Geometry`
+/// path that `shape()`, `createShape()` meshes and loaded glTF models take.
+///
+/// `WireframeTopology::Quads` suppresses the diagonal shared by a pair of
+/// triangles that form a quad, which is what makes `box()` draw its 12 real
+/// edges instead of all 18 with face diagonals -- the classic Processing look.
+/// Detection is index-order based (consecutive triangle pairs sharing two
+/// vertices), so a quad-derived mesh -- cuboid, uv sphere, plane -- gets the
+/// quad edges, and a mesh that is genuinely triangles falls through to its
+/// triangle edges instead of getting a wrong answer.
+///
+/// `WireframeLineWidth` is in screen-space pixels, which is the unit
+/// `strokeWeight` already means everywhere else.
+fn apply_stroke(entity: &mut EntityCommands, style: &Style) {
+    use bevy::pbr::wireframe::{Wireframe, WireframeColor, WireframeLineWidth, WireframeTopology};
+
+    // `no_stroke()` clears the color, and that is the whole switch -- there is
+    // no separate enable flag to consult.
+    let Some(stroke_color) = style.stroke_color else {
+        return;
+    };
+
+    entity.insert((
+        Wireframe,
+        WireframeColor {
+            color: stroke_color,
+        },
+        WireframeLineWidth {
+            width: style.stroke_weight,
+        },
+        WireframeTopology::Quads,
+    ));
 }
 
 /// fullscreen quad built by transforming NDC corners by the inverse clip-from-world matrix,

@@ -14,6 +14,10 @@ pub use record::{
     RecorderCodec, RecorderPixelFormat, VideoRecordError, VideoRecorder, VideoRecorderConfig,
 };
 
+/// GPU-resident recording through AVFoundation; macOS only.
+#[cfg(target_os = "macos")]
+pub mod macos;
+
 use processing_core::app_mut;
 use processing_core::error::{ProcessingError, Result};
 use processing_render::image;

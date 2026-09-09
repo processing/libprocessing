@@ -13,6 +13,7 @@ wayland = ["processing_render/wayland"]
 x11 = ["processing_render/x11"]
 webcam = ["dep:processing_webcam"]
 video = ["dep:processing_video"]
+physics = ["dep:processing_physics"]
 cuda = ["dep:processing_cuda", "processing_cuda/cuda"]
 
 [workspace]
@@ -59,7 +60,10 @@ bevy = { path = "/Users/char/src/github.com/bevyengine/bevy-tib-rebase", default
 bevy_naga_reflect = { path = "/Users/char/src/github.com/tychedelia/bevy_naga_reflect-020" }
 bevy_cuda = { git = "https://github.com/tychedelia/bevy_cuda" }
 naga = { version = "29", features = ["wgsl-in"] }
-wesl = { version = "0.3", default-features = false }
+# naga-ext: accept naga's storage-texture format extensions (r16float etc.)
+# beyond the base WGSL list — voxel T-field kernels write
+# texture_storage_3d<r16float, write>.
+wesl = { version = "0.3", default-features = false, features = ["naga-ext"] }
 pyo3 = { git = "https://github.com/PyO3/pyo3", branch = "main" }
 pyo3-introspection = { git = "https://github.com/PyO3/pyo3", branch = "main" }
 processing = { path = "." }
@@ -72,6 +76,7 @@ processing_render = { path = "crates/processing_render" }
 # processing_audio = { path = "crates/processing_audio" }
 processing_input = { path = "crates/processing_input" }
 processing_glfw = { path = "crates/processing_glfw" }
+processing_physics = { path = "crates/processing_physics" }
 processing_video = { path = "crates/processing_video" }
 processing_webcam = { path = "crates/processing_webcam" }
 rand = "0.10"
@@ -85,6 +90,7 @@ processing_render = { workspace = true }
 # processing_midi = { workspace = true }
 # processing_audio = { workspace = true }
 processing_input = { workspace = true }
+processing_physics = { workspace = true, optional = true }
 processing_video = { workspace = true, optional = true }
 processing_webcam = { workspace = true, optional = true }
 processing_cuda = { workspace = true, optional = true }
