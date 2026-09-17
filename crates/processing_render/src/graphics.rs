@@ -463,10 +463,10 @@ pub fn set_bloom(
 
     commands.entity(entity).insert((bloom, Hdr));
 
-    if let Ok(mut tm) = tonemapping_query.get_mut(entity) {
-        if *tm == Tonemapping::None {
-            *tm = Tonemapping::TonyMcMapface;
-        }
+    if let Ok(mut tm) = tonemapping_query.get_mut(entity)
+        && *tm == Tonemapping::None
+    {
+        *tm = Tonemapping::TonyMcMapface;
     }
 
     Ok(())

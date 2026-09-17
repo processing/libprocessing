@@ -141,10 +141,10 @@ impl Specializer<RenderPipeline> for RasterSpecializer {
             target.format = key.format;
             target.blend = key.blend;
         }
-        if key.blend.is_some() {
-            if let Some(depth) = descriptor.depth_stencil.as_mut() {
-                depth.depth_write_enabled = Some(false);
-            }
+        if key.blend.is_some()
+            && let Some(depth) = descriptor.depth_stencil.as_mut()
+        {
+            depth.depth_write_enabled = Some(false);
         }
         Ok(key)
     }
