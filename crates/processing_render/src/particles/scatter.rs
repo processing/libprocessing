@@ -101,7 +101,7 @@ fn extract_scatter_geometry(mesh: &mut Mesh) -> Result<(Vec<[f32; 3]>, Vec<u32>)
         }
     };
 
-    if dense_indices.len() % 3 != 0 {
+    if !dense_indices.len().is_multiple_of(3) {
         return Err(ProcessingError::InvalidArgument(
             "scatter source mesh has a non-triangle index list".to_string(),
         ));

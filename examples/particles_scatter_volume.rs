@@ -94,7 +94,8 @@ fn sketch() -> error::Result<()> {
             graphics,
             DrawCommand::Particles {
                 particles: p,
-                geometry: particle,
+                geometry: Some(particle),
+                topology: Default::default(),
             },
         )?;
         graphics_end_draw(graphics)?;

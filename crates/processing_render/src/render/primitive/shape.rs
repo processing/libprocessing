@@ -245,7 +245,7 @@ pub fn build_direct_fill(mesh: &mut Mesh, builder: &ShapeBuilder, color: Color) 
 
     match builder.kind {
         ShapeKind::Triangles => {
-            for chunk in vertices.chunks_exact(3) {
+            for chunk in vertices.as_chunks::<3>().0 {
                 push_triangle(
                     mesh, color, chunk[0].0, chunk[0].1, chunk[1].0, chunk[1].1, chunk[2].0,
                     chunk[2].1,
@@ -296,7 +296,7 @@ pub fn build_direct_fill(mesh: &mut Mesh, builder: &ShapeBuilder, color: Color) 
             }
         }
         ShapeKind::Quads => {
-            for chunk in vertices.chunks_exact(4) {
+            for chunk in vertices.as_chunks::<4>().0 {
                 push_quad(
                     mesh, color, chunk[0].0, chunk[0].1, chunk[1].0, chunk[1].1, chunk[2].0,
                     chunk[2].1, chunk[3].0, chunk[3].1,
@@ -344,7 +344,7 @@ pub fn build_direct_stroke(
 
     match builder.kind {
         ShapeKind::Lines => {
-            for chunk in vertices.chunks_exact(2) {
+            for chunk in vertices.as_chunks::<2>().0 {
                 let mut pb = Path::builder();
                 pb.begin(Point::new(chunk[0].0, chunk[0].1));
                 pb.line_to(Point::new(chunk[1].0, chunk[1].1));
@@ -359,7 +359,7 @@ pub fn build_direct_stroke(
             }
         }
         ShapeKind::Triangles => {
-            for chunk in vertices.chunks_exact(3) {
+            for chunk in vertices.as_chunks::<3>().0 {
                 stroke_polygon(
                     mesh,
                     &[chunk[0], chunk[1], chunk[2]],
@@ -407,7 +407,7 @@ pub fn build_direct_stroke(
             }
         }
         ShapeKind::Quads => {
-            for chunk in vertices.chunks_exact(4) {
+            for chunk in vertices.as_chunks::<4>().0 {
                 stroke_polygon(
                     mesh,
                     &[chunk[0], chunk[1], chunk[2], chunk[3]],

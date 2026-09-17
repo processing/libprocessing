@@ -72,7 +72,8 @@ fn sketch() -> error::Result<()> {
             graphics,
             DrawCommand::Particles {
                 particles: p,
-                geometry: sphere,
+                geometry: Some(sphere),
+                topology: Default::default(),
             },
         )?;
         graphics_end_draw(graphics)?;

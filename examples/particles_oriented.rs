@@ -126,7 +126,8 @@ fn sketch() -> error::Result<()> {
             graphics,
             DrawCommand::Particles {
                 particles: p,
-                geometry: cube,
+                geometry: Some(cube),
+                topology: Default::default(),
             },
         )?;
         graphics_end_draw(graphics)?;
