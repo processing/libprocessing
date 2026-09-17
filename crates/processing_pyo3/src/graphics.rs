@@ -22,9 +22,10 @@ use crate::cuda::CudaImage;
 /// Flatten `*args` of numbers (or a single list/tuple of numbers) into a `Vec<f32>`.
 fn flatten_floats(args: &Bound<'_, PyTuple>) -> PyResult<Vec<f32>> {
     if args.len() == 1
-        && let Ok(seq) = args.get_item(0)?.extract::<Vec<f32>>() {
-            return Ok(seq);
-        }
+        && let Ok(seq) = args.get_item(0)?.extract::<Vec<f32>>()
+    {
+        return Ok(seq);
+    }
     let mut out = Vec::with_capacity(args.len());
     for item in args.iter() {
         out.push(item.extract::<f32>()?);

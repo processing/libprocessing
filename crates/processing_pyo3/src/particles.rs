@@ -155,9 +155,10 @@ static PHYSICS_COMPUTES: std::sync::Mutex<Option<HashMap<String, Entity>>> =
 fn physics_compute(name: &str) -> PyResult<Option<Entity>> {
     let lower = name.to_ascii_lowercase();
     if let Some(cache) = PHYSICS_COMPUTES.lock().unwrap().as_ref()
-        && let Some(&e) = cache.get(&lower) {
-            return Ok(Some(e));
-        }
+        && let Some(&e) = cache.get(&lower)
+    {
+        return Ok(Some(e));
+    }
     let created = if lower == c::NOISE {
         particles_kernel_noise()
     } else if lower == c::TRANSFORM {
