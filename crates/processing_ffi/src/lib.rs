@@ -64,7 +64,7 @@ pub extern "C" fn processing_surface_create(
     scale_factor: f32,
 ) -> u64 {
     error::clear_error();
-    error::check(|| surface_create_windows(window_handle, width, height, scale_factor))
+    error::check(|| surface_create_windows(window_handle, width, height, scale_factor, false))
         .map(|e| e.to_bits())
         .unwrap_or(0)
 }
@@ -87,7 +87,7 @@ pub extern "C" fn processing_surface_create_wayland(
 ) -> u64 {
     error::clear_error();
     error::check(|| {
-        surface_create_wayland(window_handle, display_handle, width, height, scale_factor)
+        surface_create_wayland(window_handle, display_handle, width, height, scale_factor, false)
     })
     .map(|e| e.to_bits())
     .unwrap_or(0)
@@ -110,7 +110,7 @@ pub extern "C" fn processing_surface_create_x11(
     scale_factor: f32,
 ) -> u64 {
     error::clear_error();
-    error::check(|| surface_create_x11(window_handle, display_handle, width, height, scale_factor))
+    error::check(|| surface_create_x11(window_handle, display_handle, width, height, scale_factor, false))
         .map(|e| e.to_bits())
         .unwrap_or(0)
 }
@@ -133,7 +133,7 @@ pub extern "C" fn processing_surface_create(
 ) -> u64 {
     error::clear_error();
     error::check(|| {
-        surface_create_linux(window_handle, display_handle, width, height, scale_factor)
+        surface_create_linux(window_handle, display_handle, width, height, scale_factor, false)
     })
     .map(|e| e.to_bits())
     .unwrap_or(0)
@@ -4434,5 +4434,29 @@ fn key_code_to_u32(kc: KeyCode) -> u32 {
         KeyCode::SuperRight => PROCESSING_KEY_SUPER_RIGHT,
         KeyCode::ContextMenu => PROCESSING_KEY_CONTEXT_MENU,
         _ => 0,
+    }
+}
+
+/// Tick the Bevy app one frame.
+/// Call this once per frame from your external event loop, before begin_draw.
+/// Returns true if the app should continue running, false if it should exit.
+///
+/// This is intended for embedders that drive their own window and event loop
+/// (e.g. a native C++ host) and need to advance libprocessing's internal state
+/// each frame without using the built-in GLFW runner.
+///
+/// SAFETY:
+/// - `processing_init` has been called.
+/// - This is called from the same thread as `init`.
+/// - This must not be called after `processing_exit`.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_poll_events() -> bool {
+    error::clear_error();
+    match processing_core::app_mut(|app| {
+        app.update();
+        Ok(())
+    }) {
+        Ok(_) => true,
+        Err(_) => false,
     }
 }
