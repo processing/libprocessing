@@ -19,6 +19,7 @@ cuda = ["processing/cuda"]
 
 [dependencies]
 processing = { workspace = true }
+processing_core = { workspace = true }
 bevy = { workspace = true }
 half = "2.7"
 
