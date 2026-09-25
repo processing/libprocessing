@@ -19,10 +19,10 @@ fn main() {
 fn sketch() -> error::Result<()> {
     let width = 400;
     let height = 400;
-    let mut glfw_ctx = GlfwContext::new(width, height)?;
+    let mut glfw_ctx = GlfwContext::new(width, height, false)?;
     init(Config::default())?;
 
-    let surface = glfw_ctx.create_surface(width, height)?;
+    let surface = glfw_ctx.create_surface(width, height, false)?;
     let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
 
     while glfw_ctx.poll_events() {
