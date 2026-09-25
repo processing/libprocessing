@@ -1,6 +1,12 @@
 """Processing math methods and vector/quaternion types."""
 import math as _math
 from .mewnala import math as _native_math
+
+# extend native math so glob imports work
+for _name in dir(_native_math):
+    if not _name.startswith("_"):
+        globals()[_name] = getattr(_native_math, _name)
+del _name
 from math import (
     sin, cos, tan,
     atan, atan2,
