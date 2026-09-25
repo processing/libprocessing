@@ -34,18 +34,18 @@ pub use particles::{
     BOUNDS_CLAMP, BOUNDS_REFLECT, BOUNDS_SOFT, BOUNDS_WRAP, COMBINE_ADD, COMBINE_DIV, COMBINE_MAX,
     COMBINE_MIN, COMBINE_MUL, COMBINE_POW, COMBINE_SUB, FALLOFF_CONST, FALLOFF_CUBIC,
     FALLOFF_INVERSE, FALLOFF_LINEAR, FALLOFF_QUADRATIC, FALLOFF_SMOOTHSTEP, particles_apply,
-    particles_attribute_add, particles_buffer, particles_capacity, particles_connectivity_indirect,
-    particles_create, particles_create_from_geometry, particles_destroy, particles_emit,
-    particles_emit_gpu, particles_ensure_attribute, particles_flock, particles_gather,
-    particles_kernel_age, particles_kernel_attr_combine, particles_kernel_attr_linear,
-    particles_kernel_attr_lookup1d, particles_kernel_attr_lookup2d, particles_kernel_attr_mix,
-    particles_kernel_attract, particles_kernel_bounds_box, particles_kernel_bounds_geometry,
-    particles_kernel_bounds_sphere, particles_kernel_drag, particles_kernel_field,
-    particles_kernel_flock, particles_kernel_force, particles_kernel_impulse,
-    particles_kernel_integrate, particles_kernel_noise, particles_kernel_orient,
-    particles_kernel_transform, particles_kernel_vortex, particles_reset_indices,
-    particles_scatter_create, particles_scatter_volume_create, particles_set_connectivity,
-    prefix_sum_u32,
+    particles_attribute_add, particles_attributes, particles_buffer, particles_capacity,
+    particles_connectivity_indirect, particles_create, particles_create_from_geometry,
+    particles_destroy, particles_emit, particles_emit_gpu, particles_ensure_attribute,
+    particles_flock, particles_gather, particles_kernel_age, particles_kernel_attr_combine,
+    particles_kernel_attr_linear, particles_kernel_attr_lookup1d, particles_kernel_attr_lookup2d,
+    particles_kernel_attr_mix, particles_kernel_attract, particles_kernel_bounds_box,
+    particles_kernel_bounds_geometry, particles_kernel_bounds_sphere, particles_kernel_drag,
+    particles_kernel_field, particles_kernel_flock, particles_kernel_force,
+    particles_kernel_impulse, particles_kernel_integrate, particles_kernel_noise,
+    particles_kernel_orient, particles_kernel_transform, particles_kernel_vortex,
+    particles_reset_indices, particles_scatter_create, particles_scatter_volume_create,
+    particles_set_connectivity, prefix_sum_u32,
 };
 
 use std::path::PathBuf;
@@ -1247,6 +1247,50 @@ pub fn image_update(entity: Entity, pixels: &[LinearRgba]) -> error::Result<()> 
     })
 }
 
+/// Replace an image's contents from raw bytes already laid out in its texture
+/// format.
+pub fn image_update_raw(entity: Entity, data: &[u8]) -> error::Result<()> {
+    app_mut(|app| {
+        if gpu_image(app, entity).is_err() && app.world().get::<image::Image>(entity).is_some() {
+            app.update();
+        }
+        let texture = gpu_image(app, entity)?.texture.clone();
+        let world = app.world_mut();
+        let (size, texture_format) = {
+            let p_image = world
+                .get::<image::Image>(entity)
+                .ok_or(error::ProcessingError::ImageNotFound)?;
+            (p_image.size, p_image.texture_format)
+        };
+        let px_size = image::pixel_size(texture_format)? as u32;
+        let expected = (size.width * size.height * px_size) as usize;
+        if data.len() != expected {
+            return Err(error::ProcessingError::InvalidArgument(format!(
+                "expected {expected} bytes for a {}x{} {:?} image, got {}",
+                size.width,
+                size.height,
+                texture_format,
+                data.len()
+            )));
+        }
+        world
+            .run_system_cached_with(
+                image::update_region_write,
+                (
+                    entity,
+                    texture,
+                    0,
+                    0,
+                    size.width,
+                    size.height,
+                    data.to_vec(),
+                    px_size,
+                ),
+            )
+            .unwrap()
+    })
+}
+
 /// Update a region of an existing image with new pixel data.
 pub fn image_update_region(
     entity: Entity,
@@ -2146,6 +2190,15 @@ pub fn frame_count() -> error::Result<u32> {
             .world_mut()
             .run_system_cached(time::frame_count)
             .unwrap())
+    })
+}
+
+pub fn set_frame_count(n: u32) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(time::set_frame_count, n)
+            .unwrap();
+        Ok(())
     })
 }
 

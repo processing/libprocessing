@@ -17,6 +17,7 @@ pub(crate) mod filter;
 mod glfw;
 mod gltf;
 mod graphics;
+mod host;
 mod input;
 pub(crate) mod material;
 pub(crate) mod math;
@@ -113,7 +114,7 @@ use std::collections::HashMap;
 use std::env;
 
 #[derive(Clone, Copy)]
-struct LoopState {
+pub(crate) struct LoopState {
     looping: bool,
     redraw_requested: bool,
 }
@@ -128,8 +129,8 @@ impl Default for LoopState {
 }
 
 thread_local! {
-    static LAST_GLOBALS: RefCell<HashMap<&'static str, Py<PyAny>>> = RefCell::new(HashMap::new());
-    static LOOP_STATE: Cell<LoopState> = Cell::new(LoopState::default());
+    pub(crate) static LAST_GLOBALS: RefCell<HashMap<&'static str, Py<PyAny>>> = RefCell::new(HashMap::new());
+    pub(crate) static LOOP_STATE: Cell<LoopState> = Cell::new(LoopState::default());
 }
 
 fn update_loop_state(f: impl FnOnce(&mut LoopState)) {
@@ -185,8 +186,10 @@ fn sync_globals(module: &Bound<'_, PyModule>, globals: &Bound<'_, PyAny>) -> PyR
         get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
     let width = ::processing::prelude::surface_width(graphics.surface.entity)
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    let width = if width == 0 { graphics.width } else { width };
     let height = ::processing::prelude::surface_height(graphics.surface.entity)
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    let height = if height == 0 { graphics.height } else { height };
     input::sync_globals(globals, graphics.surface.entity, width, height)?;
     surface::sync_globals(globals, &graphics.surface, width, height)?;
     time::sync_globals(globals)?;
@@ -240,7 +243,7 @@ fn create_graphics_context(
     transparent: bool,
 ) -> PyResult<()> {
     let py = module.py();
-    let env = detect_environment(py)?;
+    let env = detect_environment(module)?;
 
     let interactive = env != "script";
     let log_level = if interactive { Some("error") } else { None };
@@ -255,6 +258,18 @@ fn create_graphics_context(
     }
 
     match env.as_str() {
+        "embedded" => {
+            let asset_path = match embedded_asset_root(module)? {
+                Some(root) => root,
+                None => get_asset_root()?,
+            };
+            let hdr = embedded_hdr(module)?;
+            let host_log_level = embedded_log_level(module)?;
+            let log_level = host_log_level.as_deref().or(log_level);
+            let graphics =
+                Graphics::new_offscreen(width, height, asset_path.as_str(), log_level, hdr)?;
+            module.setattr("_graphics", graphics)?;
+        }
         "jupyter" => {
             let asset_path = get_asset_root()?;
             let graphics =
@@ -385,7 +400,34 @@ const REGISTER_INPUTHOOK_CODE: &str = include_str!("python/register_inputhook.py
 const IPYTHON_POST_EXECUTE_CODE: &str = include_str!("python/ipython_post_execute.py");
 const JUPYTER_POST_EXECUTE_CODE: &str = include_str!("python/jupyter_post_execute.py");
 
-fn detect_environment(py: Python<'_>) -> PyResult<String> {
+fn embedded_asset_root(module: &Bound<'_, PyModule>) -> PyResult<Option<String>> {
+    match module.getattr("_asset_root") {
+        Ok(attr) if !attr.is_none() => Ok(Some(attr.extract::<String>()?)),
+        _ => Ok(None),
+    }
+}
+
+fn embedded_log_level(module: &Bound<'_, PyModule>) -> PyResult<Option<String>> {
+    match module.getattr("_embedded_log_level") {
+        Ok(attr) if !attr.is_none() => Ok(Some(attr.extract::<String>()?)),
+        _ => Ok(None),
+    }
+}
+
+fn embedded_hdr(module: &Bound<'_, PyModule>) -> PyResult<bool> {
+    match module.getattr("_embedded_hdr") {
+        Ok(attr) if !attr.is_none() => attr.is_truthy(),
+        _ => Ok(false),
+    }
+}
+
+fn detect_environment(module: &Bound<'_, PyModule>) -> PyResult<String> {
+    let py = module.py();
+    if let Ok(flag) = module.getattr("_embedded")
+        && flag.is_truthy()?
+    {
+        return Ok("embedded".to_string());
+    }
     let locals = PyDict::new(py);
     let code = CString::new(DETECT_ENV_CODE)?;
     py.run(code.as_c_str(), None, Some(&locals))?;
@@ -396,7 +438,7 @@ fn detect_environment(py: Python<'_>) -> PyResult<String> {
 }
 
 #[pymodule]
-mod mewnala {
+pub mod mewnala {
     use super::*;
 
     #[pymodule_export]
@@ -652,6 +694,167 @@ mod mewnala {
         Ok(())
     }
 
+    /// Register an embedding host. From now on `size()` allocates an offscreen
+    /// canvas instead of opening a window, `run()` is a no-op, and the host is
+    /// expected to drive frames itself with `_tick()` + `_host_frame()` and to
+    /// read the canvas back.
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (asset_root=None, *, hdr=false, log_level=None))]
+    fn _embed(
+        module: &Bound<'_, PyModule>,
+        asset_root: Option<&str>,
+        hdr: bool,
+        log_level: Option<&str>,
+    ) -> PyResult<()> {
+        let py = module.py();
+        module.setattr("_embedded", true)?;
+        match asset_root {
+            Some(root) => module.setattr("_asset_root", root)?,
+            None => module.setattr("_asset_root", py.None())?,
+        }
+        module.setattr("_embedded_hdr", hdr)?;
+        match log_level {
+            Some(level) => module.setattr("_embedded_log_level", level)?,
+            None => module.setattr("_embedded_log_level", py.None())?,
+        }
+        Ok(())
+    }
+
+    #[pymodule_export]
+    use super::host::SketchContext;
+
+    #[pyfunction]
+    fn _context_new() -> host::SketchContext {
+        host::context_new()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn _context_enter(
+        module: &Bound<'_, PyModule>,
+        ctx: &Bound<'_, host::SketchContext>,
+    ) -> PyResult<()> {
+        host::context_enter(module, &mut ctx.borrow_mut())
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn _context_exit(
+        module: &Bound<'_, PyModule>,
+        ctx: &Bound<'_, host::SketchContext>,
+    ) -> PyResult<()> {
+        host::context_exit(module, &mut ctx.borrow_mut())
+    }
+
+    /// Read a canvas back: `(bytes, width, height, format)`, rows top-first.
+    #[pyfunction]
+    fn _host_readback(
+        py: Python<'_>,
+        graphics: u64,
+    ) -> PyResult<(Bound<'_, pyo3::types::PyBytes>, u32, u32, &'static str)> {
+        host::readback(py, graphics)
+    }
+
+    #[pyfunction]
+    fn _host_mouse_move(surface: u64, x: f32, y: f32) -> PyResult<()> {
+        host::mouse_move(surface, x, y)
+    }
+
+    /// `button`: 0 left, 1 middle, 2 right.
+    #[pyfunction]
+    fn _host_mouse_button(surface: u64, button: u8, pressed: bool) -> PyResult<()> {
+        host::mouse_button(surface, button, pressed)
+    }
+
+    #[pyfunction]
+    fn _host_scroll(surface: u64, x: f32, y: f32) -> PyResult<()> {
+        host::scroll(surface, x, y)
+    }
+
+    #[pyfunction]
+    fn _host_input_flush() -> PyResult<()> {
+        host::flush_input()
+    }
+
+    #[pyfunction]
+    fn _host_image_update(image: u64, data: &Bound<'_, PyAny>) -> PyResult<()> {
+        host::image_update(image, data)
+    }
+
+    #[pyfunction]
+    fn _host_particles_capacity(particles: u64) -> PyResult<u32> {
+        host::capacity(particles)
+    }
+
+    /// `[(name, components, buffer_bits)]` for every attribute buffer.
+    #[pyfunction]
+    fn _host_particles_attributes(particles: u64) -> PyResult<Vec<(String, u32, u64)>> {
+        host::attributes(particles)
+    }
+
+    /// The buffer for attribute `name` (created if missing), as raw bits.
+    #[pyfunction]
+    fn _host_particles_buffer(particles: u64, name: String, components: u32) -> PyResult<u64> {
+        host::attribute_buffer(particles, name, components)
+    }
+
+    #[pyfunction]
+    fn _host_buffer_read(py: Python<'_>, buffer: u64) -> PyResult<Bound<'_, pyo3::types::PyBytes>> {
+        host::read_buffer(py, buffer)
+    }
+
+    #[pyfunction]
+    fn _host_buffer_write(buffer: u64, data: &Bound<'_, PyAny>) -> PyResult<()> {
+        host::write_buffer(buffer, data)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn _ensure_graphics(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        ensure_graphics(module)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (ns, force=false))]
+    fn _host_frame(
+        module: &Bound<'_, PyModule>,
+        ns: &Bound<'_, PyAny>,
+        force: bool,
+    ) -> PyResult<bool> {
+        let py = module.py();
+        ensure_graphics(module)?;
+
+        let should_draw = force
+            || LOOP_STATE.with(|s| {
+                let state = s.get();
+                state.looping || state.redraw_requested
+            });
+        if !should_draw {
+            return Ok(false);
+        }
+
+        processing::prelude::advance_frame_count()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+
+        let windows = collect_windows(module)?;
+        for wg in &windows {
+            wg.bind(py).borrow().begin_draw()?;
+        }
+        sync_globals(module, ns)?;
+        let draw_result = match ns.get_item("draw") {
+            Ok(draw) if draw.is_callable() => draw.call0().map(|_| ()),
+            _ => Ok(()),
+        };
+        // Finish the frame even when draw() raised
+        for wg in &windows {
+            wg.bind(py).borrow().end_draw()?;
+        }
+        draw_result?;
+
+        update_loop_state(|s| s.redraw_requested = false);
+        Ok(true)
+    }
+
     #[pyfunction]
     fn redraw() -> PyResult<()> {
         update_loop_state(|s| {
@@ -835,8 +1038,7 @@ mod mewnala {
     #[pyfunction]
     #[pyo3(pass_module)]
     fn run(module: &Bound<'_, PyModule>) -> PyResult<()> {
-        let py = module.py();
-        let env = detect_environment(py)?;
+        let env = detect_environment(module)?;
 
         if env != "script" {
             warn!("run() was called, but we're in an interactive environment ({env}).");

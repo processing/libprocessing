@@ -19,6 +19,14 @@ impl Shader {
     }
 }
 
+#[pymethods]
+impl Shader {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+}
+
 impl Drop for Shader {
     fn drop(&mut self) {
         let _ = shader_destroy(self.entity);

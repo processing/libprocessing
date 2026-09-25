@@ -525,6 +525,25 @@ pub fn particles_destroy(entity: Entity) -> error::Result<()> {
     })
 }
 
+pub fn particles_attributes(
+    entity: Entity,
+) -> error::Result<Vec<(String, AttributeFormat, Entity)>> {
+    app_mut(|app| {
+        let world = app.world();
+        let particles = world
+            .get::<Particles>(entity)
+            .ok_or(error::ProcessingError::ParticlesNotFound)?;
+        let mut out = Vec::with_capacity(particles.buffers.len());
+        for (&attribute_entity, &buffer_entity) in &particles.buffers {
+            if let Some(attribute) = world.get::<Attribute>(attribute_entity) {
+                out.push((attribute.name.to_string(), attribute.format, buffer_entity));
+            }
+        }
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        Ok(out)
+    })
+}
+
 pub fn particles_capacity(entity: Entity) -> error::Result<u32> {
     app_mut(|app| {
         Ok(app
