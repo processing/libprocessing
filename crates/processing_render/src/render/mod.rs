@@ -47,7 +47,7 @@ pub(crate) const BATCH_INDEX_STEP: f32 = 0.001;
 pub struct BelongsToGraphics(pub Entity);
 
 #[derive(Component, Default)]
-#[relationship_target(relationship = BelongsToGraphics)]
+#[relationship_target(relationship = BelongsToGraphics, linked_spawn)]
 pub struct TransientMeshes(Vec<Entity>);
 
 #[derive(SystemParam)]

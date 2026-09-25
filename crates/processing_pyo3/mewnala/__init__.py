@@ -5,22 +5,18 @@ from .mewnala import *
 # through an explicit alias rather than the shadowed names.
 import builtins as _builtins
 
-# re-export the native submodules as submodules of this module, if they exist
-# this allows users to import from `mewnala.math` without needing to know about
-# the internal structure of the native module
+# re-export native submodules that have no Python counterpart as submodules of
+# this module, so users can import from `mewnala.color` without knowing about
+# the internal structure of the native module.
 import sys as _sys
 from . import mewnala as _native
-
-for _name in ("math",):
-    _sub = getattr(_native, _name, None)
-    if _sub is not None:
-        _sys.modules[f"{__name__}.{_name}"] = _sub
 
 _color = getattr(_native, "color", None)
 if _color is not None:
     _sys.modules[f"{__name__}.color"] = _color
 
-from . import math  # noqa: E402  (Python submodule, extends native math)
+import importlib as _importlib
+math = _importlib.import_module(f"{__name__}.math")  # noqa: E402
 from .math import *  # noqa: E402,F401,F403
 
 # global var handling. for wildcard import of our module, we copy into globals, otherwise
@@ -111,7 +107,11 @@ def __getattr__(name):
         g = _get_graphics()
         if g is None:
             return 0
-        x, y = g.surface.position
+        # offscreen canvases (notebooks, embedding hosts) have no window position
+        try:
+            x, y = g.surface.position
+        except (AttributeError, RuntimeError):
+            return 0
         return x if name == "window_x" else y
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
@@ -120,7 +120,9 @@ def __dir__():
     return sorted(_builtins.set(list(globals().keys()) + list(_DYNAMIC)))
 
 __all__ = sorted(
-    {n for n in dir(_native) if not n.startswith("_")} | _builtins.set(_DYNAMIC)
+    {n for n in dir(_native) if not n.startswith("_")}
+    | {n for n in dir(math) if not n.startswith("_")}
+    | _builtins.set(_DYNAMIC)
 )
 
-del _sys, _name, _sub
+del _sys, _importlib

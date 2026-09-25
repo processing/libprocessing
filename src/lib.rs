@@ -157,13 +157,17 @@ fn setup_tracing(log_level: Option<&str>) -> error::Result<()> {
     #[cfg(not(target_arch = "wasm32"))]
     {
         use tracing_subscriber::EnvFilter;
+        use tracing_subscriber::util::SubscriberInitExt;
 
         let filter = EnvFilter::try_new(log_level.unwrap_or("info"))
             .unwrap_or_else(|_| EnvFilter::new("info"));
         let subscriber = tracing_subscriber::FmtSubscriber::builder()
             .with_env_filter(filter)
             .finish();
-        tracing::subscriber::set_global_default(subscriber)?;
+        // `try_init` also installs the `log` bridge, so wgpu/naga reach this subscriber.
+        if subscriber.try_init().is_err() {
+            tracing::debug!("global tracing subscriber already set by host; keeping it");
+        }
     }
     Ok(())
 }
