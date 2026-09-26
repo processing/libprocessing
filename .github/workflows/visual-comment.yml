@@ -1,0 +1,65 @@
+name: Visual comment
+
+# Posts visual.yml's PR summary as a sticky comment. Runs from the base repository so it can
+# write to PRs from forks; it never checks out PR code and treats the artifact as untrusted.
+
+on:
+  workflow_run:
+    workflows: [ Visual ]
+    types: [ completed ]
+
+permissions: {}
+
+jobs:
+  comment:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion != 'cancelled' &&
+      github.event.workflow_run.conclusion != 'skipped'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@v8
+        id: download
+        continue-on-error: true
+        with:
+          name: visual-comment
+          path: comment
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Validate
+        id: pr
+        if: steps.download.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          pr=$(cat comment/pr)
+          notable=$(cat comment/notable)
+          [[ "$pr" =~ ^[0-9]+$ ]] || { echo "invalid PR number"; exit 1; }
+          [[ "$notable" == true || "$notable" == false ]] || { echo "invalid notable flag"; exit 1; }
+          pr_head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr" --jq .head.sha)
+          [[ "$pr_head" == "$HEAD_SHA" ]] || { echo "PR #$pr is not at $HEAD_SHA; skipping"; exit 0; }
+          echo "number=$pr" >> "$GITHUB_OUTPUT"
+          echo "notable=$notable" >> "$GITHUB_OUTPUT"
+
+      - name: Post comment
+        if: steps.pr.outputs.notable == 'true'
+        uses: marocchino/sticky-pull-request-comment@v3.0.5
+        with:
+          header: visual-regression
+          number_force: ${{ steps.pr.outputs.number }}
+          path: comment/comment.md
+
+      # A clean run only refreshes an earlier comment, so passing PRs stay quiet.
+      - name: Update comment
+        if: steps.pr.outputs.notable == 'false'
+        uses: marocchino/sticky-pull-request-comment@v3.0.5
+        with:
+          header: visual-regression
+          number_force: ${{ steps.pr.outputs.number }}
+          path: comment/comment.md
+          only_update: true

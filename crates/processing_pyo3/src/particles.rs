@@ -319,6 +319,11 @@ pub struct Attribute {
 
 #[pymethods]
 impl Attribute {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     #[new]
     pub fn new(name: &str, format: AttributeFormat) -> PyResult<Self> {
         let entity = geometry_attribute_create(name, format.to_inner())
@@ -718,6 +723,11 @@ impl Particles {
 
 #[pymethods]
 impl Particles {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     #[getter]
     pub fn capacity(&self) -> PyResult<u32> {
         particles_capacity(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))

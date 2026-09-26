@@ -17,6 +17,11 @@ impl CudaImage {
 
 #[pymethods]
 impl CudaImage {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     pub fn sync(&self) -> PyResult<()> {
         cuda_write_back(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }

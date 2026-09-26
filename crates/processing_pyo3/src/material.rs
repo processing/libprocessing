@@ -114,6 +114,11 @@ fn apply_kwargs(entity: Entity, kwargs: &Bound<'_, PyDict>) -> PyResult<()> {
 
 #[pymethods]
 impl Material {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     #[new]
     #[pyo3(signature = (shader=None, **kwargs))]
     pub fn new(shader: Option<&Shader>, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
