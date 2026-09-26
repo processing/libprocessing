@@ -64,7 +64,7 @@ fn sketch() -> error::Result<()> {
             DrawCommand::Particles {
                 particles: p,
                 geometry: Some(particle),
-                topology: geometry::Topology::PointList,
+                topology: Default::default(),
             },
         )?;
         graphics_end_draw(graphics)?;

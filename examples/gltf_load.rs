@@ -21,10 +21,10 @@ fn main() {
 fn sketch() -> error::Result<()> {
     let width = 800;
     let height = 600;
-    let mut glfw_ctx = GlfwContext::new(width, height)?;
+    let mut glfw_ctx = GlfwContext::new(width, height, false)?;
     init(Config::default())?;
 
-    let surface = glfw_ctx.create_surface(width, height)?;
+    let surface = glfw_ctx.create_surface(width, height, false)?;
     let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
 
     let gltf = gltf_load(graphics, "gltf/Duck.glb")?;
