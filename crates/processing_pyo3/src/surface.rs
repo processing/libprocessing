@@ -36,6 +36,11 @@ impl Surface {
 
 #[pymethods]
 impl Surface {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     pub fn poll_events(&mut self) -> bool {
         match &mut self.glfw_ctx {
             Some(ctx) => ctx.poll_events(),

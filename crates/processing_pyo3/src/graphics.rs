@@ -419,6 +419,11 @@ pub struct Light {
 
 #[pymethods]
 impl Light {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     #[pyo3(signature = (*args))]
     pub fn position(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
         let v = extract_vec3(args)?;
@@ -447,6 +452,11 @@ pub struct Font {
 
 #[pymethods]
 impl Font {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     /// Query variable font axes.
     ///
     /// Returns a list of `(tag, min, max, default)` tuples.
@@ -551,6 +561,23 @@ impl<'a, 'py> FromPyObject<'a, 'py> for ImageRef {
 
 #[pymethods]
 impl Image {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
+    /// Replace the whole image from raw pixel bytes in the image's format
+    /// (RGBA, 8 bits per channel for images from `create_image`), tightly
+    /// packed, top row first. Accepts anything with the buffer protocol:
+    /// `bytes`, `bytearray`, a C-contiguous `uint8` numpy array, ... This is
+    /// the fast path for streaming frames in; `pixels`/`update_pixels` go
+    /// through Python objects per pixel.
+    pub fn update_raw(&self, data: &Bound<'_, PyAny>) -> PyResult<()> {
+        let buffer = pyo3::buffer::PyBuffer::<u8>::get(data)?;
+        let bytes = buffer.to_vec(data.py())?;
+        image_update_raw(self.entity, &bytes).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     /// Applies a `Sampler` to this image, controlling filtering and wrapping.
     ///
     /// ```python
@@ -715,6 +742,11 @@ impl Geometry {
 
 #[pymethods]
 impl Geometry {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     #[pyo3(signature = (*args))]
     pub fn color(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
         let v = extract_vec4(args)?;
@@ -853,6 +885,11 @@ impl Graphics {
 
 #[pymethods]
 impl Graphics {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     #[new]
     #[allow(clippy::too_many_arguments)]
     pub fn new(

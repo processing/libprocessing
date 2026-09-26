@@ -63,6 +63,11 @@ impl Buffer {
 
 #[pymethods]
 impl Buffer {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     pub fn __len__(&self) -> usize {
         match &self.element_type {
             Some(et) => et
@@ -325,6 +330,11 @@ pub(crate) fn set_compute_kwargs(
 
 #[pymethods]
 impl Compute {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     #[pyo3(signature = (**kwargs))]
     pub fn set(&self, kwargs: Option<&Bound<'_, pyo3::types::PyDict>>) -> PyResult<()> {
         match kwargs {

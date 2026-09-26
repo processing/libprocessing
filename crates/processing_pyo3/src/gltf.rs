@@ -18,6 +18,11 @@ impl Gltf {
 
 #[pymethods]
 impl Gltf {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     pub fn geometry(&self, name: &str) -> PyResult<Geometry> {
         let entity = gltf_geometry(self.entity, name)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;

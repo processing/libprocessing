@@ -6205,6 +6205,7 @@ dependencies = [
  "bevy",
  "png",
  "processing",
+ "processing_core",
  "processing_cuda",
  "processing_glfw",
  "processing_render",
