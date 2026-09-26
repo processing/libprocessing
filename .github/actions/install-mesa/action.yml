@@ -10,7 +10,12 @@ runs:
       run: |
         set -e
         sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1
-        icd=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
-        test -f "$icd"
+        icd=$(dpkg -L mesa-vulkan-drivers | grep -E '/lvp_icd[^/]*\.json$' | head -1)
+        if [ -z "$icd" ]; then
+          echo "::error::no lavapipe ICD in mesa-vulkan-drivers"
+          dpkg -L mesa-vulkan-drivers | grep -E '\.json$'
+          exit 1
+        fi
+        echo "Using $icd"
         echo "VK_DRIVER_FILES=$icd" >> "$GITHUB_ENV"
         dpkg-query -W mesa-vulkan-drivers
