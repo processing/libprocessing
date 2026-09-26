@@ -319,7 +319,7 @@ impl GlfwContext {
         if input_flush().is_err() {
             return false;
         }
-        main_open
+        main_open && !processing_render::ci::done()
     }
 
     /// Content scale (DPI) of the main window.

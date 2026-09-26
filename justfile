@@ -35,3 +35,9 @@ wasm-release:
 
 wasm-serve: wasm-build
     python3 -m http.server 8000
+
+visual-render out="target/visual/actual" *args:
+    python3 tests/visual/visual.py render --out {{out}} {{args}}
+
+visual-compare baseline actual="target/visual/actual" out="target/visual/report":
+    python3 tests/visual/visual.py compare --baseline {{baseline}} --actual {{actual}} --out {{out}}

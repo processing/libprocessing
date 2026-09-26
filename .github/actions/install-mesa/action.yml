@@ -1,0 +1,39 @@
+name: 'Install Mesa'
+description: 'Install a pinned Mesa build and select lavapipe as the only Vulkan driver'
+inputs:
+  # Prebuilt by wgpu's CI (https://github.com/gfx-rs/ci-build/releases). Pinned so screenshots
+  # don't drift with the runner image's Mesa.
+  version:
+    default: '26.1.3'
+  ci-binary-build:
+    default: 'build29'
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Mesa
+      shell: bash
+      env:
+        MESA_VERSION: ${{ inputs.version }}
+        CI_BINARY_BUILD: ${{ inputs.ci-binary-build }}
+      run: |
+        set -e
+        dir="$RUNNER_TEMP/mesa"
+        mkdir -p "$dir"
+        curl -L --retry 5 "https://github.com/gfx-rs/ci-build/releases/download/$CI_BINARY_BUILD/mesa-$MESA_VERSION-linux-x86_64.tar.xz" -o "$RUNNER_TEMP/mesa.tar.xz"
+        tar xpf "$RUNNER_TEMP/mesa.tar.xz" -C "$dir"
+
+        # The ICD shipped in the tarball points at the build machine's paths.
+        cat <<- EOF > "$dir/icd.json"
+        {
+          "ICD": {
+            "api_version": "1.4.348",
+            "library_arch": "64",
+            "library_path": "$dir/lib/x86_64-linux-gnu/libvulkan_lvp.so"
+          },
+          "file_format_version": "1.0.1"
+        }
+        EOF
+
+        echo "VK_DRIVER_FILES=$dir/icd.json" >> "$GITHUB_ENV"
+        echo "LD_LIBRARY_PATH=$dir/lib/x86_64-linux-gnu/:$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
+        echo "LIBGL_DRIVERS_PATH=$dir/lib/x86_64-linux-gnu/dri" >> "$GITHUB_ENV"

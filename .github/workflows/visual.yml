@@ -1,0 +1,152 @@
+name: Visual
+
+# Renders tests/visual/cases.toml under lavapipe
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+    types: [ opened, synchronize, reopened, labeled, unlabeled ]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: visual-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_RELEASE_DEBUG: 0
+  WGPU_BACKEND: vulkan
+  WGPU_ADAPTER_NAME: llvmpipe
+  # Catch reads of uninitialized GPU memory instead of rendering whatever was there
+  LVP_POISON_MEMORY: "true"
+  # llvmpipe JITs for the host CPU
+  LP_NATIVE_VECTOR_WIDTH: "256"
+  ODIFF_VERSION: 4.5.0
+
+jobs:
+  visual:
+    name: Visual regression
+    # Only re-run on label changes that involve the override label.
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.action != 'labeled' && github.event.action != 'unlabeled') ||
+      github.event.label.name == 'deliberate-rendering-change'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          # PR checkouts are merge commits; HEAD^1 is the main commit they're compared against.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - uses: ./.github/actions/install-mesa
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install xvfb and odiff
+        run: |
+          sudo apt-get install -y --no-install-recommends xvfb
+          npm install -g "odiff-bin@$ODIFF_VERSION"
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-visual-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-visual-
+            ${{ runner.os }}-cargo-
+
+      - name: Render
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" python3 tests/visual/visual.py render --out out/actual
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: visual-screenshots
+          path: out/actual
+          retention-days: ${{ github.event_name == 'push' && 90 || 14 }}
+
+      - name: Fetch baseline from main
+        id: baseline
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(git rev-parse HEAD^1)
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          run_id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow visual.yml --branch main --event push \
+            --commit "$sha" --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [ -n "$run_id" ] && gh run download "$run_id" -R "$GITHUB_REPOSITORY" -n visual-screenshots -D out/baseline; then
+            echo "Using screenshots from run $run_id"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No screenshots published for $sha; rendering it here"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Render baseline
+        if: steps.baseline.outputs.found == 'false'
+        # A base that predates the harness can't render; its cases are then reported as new.
+        continue-on-error: true
+        env:
+          BASE_SHA: ${{ steps.baseline.outputs.sha }}
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/base" "$BASE_SHA"
+          git -C "$RUNNER_TEMP/base" submodule update --init --depth 1
+          xvfb-run -a -s "-screen 0 1920x1080x24" \
+            python3 tests/visual/visual.py render --root "$RUNNER_TEMP/base" --out out/baseline
+
+      - name: Compare
+        id: compare
+        if: github.event_name == 'pull_request'
+        env:
+          ALLOW_CHANGES: ${{ contains(github.event.pull_request.labels.*.name, 'deliberate-rendering-change') && '--allow-changes' || '' }}
+        run: |
+          mkdir -p out/baseline
+          python3 tests/visual/visual.py compare --baseline out/baseline --actual out/actual --out out/report $ALLOW_CHANGES
+
+      - uses: actions/upload-artifact@v7
+        id: report
+        if: always() && hashFiles('out/report/report.html') != ''
+        with:
+          path: out/report/report.html
+          archive: false
+          retention-days: 14
+
+      - name: Summarize
+        if: always() && hashFiles('out/report/summary.md') != ''
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPORT_URL: ${{ steps.report.outputs.artifact-url }}
+        run: |
+          mkdir -p out/comment
+          {
+            cat out/report/summary.md
+            echo
+            echo "[Open the visual report]($REPORT_URL) · [workflow run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+          } > out/comment/comment.md
+          cat out/comment/comment.md >> "$GITHUB_STEP_SUMMARY"
+          echo "$PR_NUMBER" > out/comment/pr
+          jq '[.results[] | select(.status != "pass")] | length > 0' out/report/results.json > out/comment/notable
+
+      - uses: actions/upload-artifact@v7
+        if: always() && hashFiles('out/comment/comment.md') != ''
+        with:
+          name: visual-comment
+          path: out/comment
+          retention-days: 1

@@ -1,6 +1,7 @@
 #![allow(clippy::module_inception)]
 
 pub mod camera;
+pub mod ci;
 pub mod color;
 pub mod compute;
 pub mod geometry;
@@ -101,7 +102,8 @@ impl Plugin for ProcessingRenderPlugin {
             bevy::camera_controller::free_camera::FreeCameraPlugin,
             bevy::camera_controller::pan_camera::PanCameraPlugin,
             text::font::TextPlugin,
-        ));
+        ))
+        .add_plugins(ci::CiPlugin);
 
         app.add_systems(First, (clear_transient_meshes, activate_cameras))
             .add_systems(
