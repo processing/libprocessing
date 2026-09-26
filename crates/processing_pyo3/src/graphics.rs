@@ -2206,6 +2206,21 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    pub fn texture(&self, source: ImageRef) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::Texture(source.entity))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn no_texture(&self) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::NoTexture)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn texture_transform(&self, transform: crate::math::PyAffine2) -> PyResult<()> {
+        graphics_record_command(self.entity, DrawCommand::TextureTransform(transform.0))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     pub fn unlit(&self) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::Unlit)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))

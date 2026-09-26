@@ -31,6 +31,10 @@ fn create_with_format(In(format): In<WebcamFormat>, mut commands: Commands) -> E
 }
 
 fn create_image(In(entity): In<Entity>, world: &mut World) -> Result<Entity> {
+    if let Some(linked) = world.get::<image::LinkedImage>(entity) {
+        return Ok(linked.0);
+    }
+
     let stream = world
         .get::<WebcamStream>(entity)
         .ok_or(ProcessingError::WebcamNotConnected)?;
@@ -39,6 +43,7 @@ fn create_image(In(entity): In<Entity>, world: &mut World) -> Result<Entity> {
     let child = world
         .run_system_once_with(image::from_handle, handle)
         .unwrap()?;
+    world.entity_mut(entity).insert(image::LinkedImage(child));
     world.entity_mut(entity).add_child(child);
     Ok(child)
 }

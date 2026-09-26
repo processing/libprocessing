@@ -1,3 +1,4 @@
+use bevy::math::Affine2;
 use bevy::math::Affine3A;
 use bevy::prelude::*;
 use bevy::render::render_resource::{BlendComponent, BlendFactor, BlendOperation, BlendState};
@@ -515,6 +516,9 @@ pub enum DrawCommand {
     Roughness(f32),
     Metallic(f32),
     Emissive(Color),
+    Texture(Entity),
+    NoTexture,
+    TextureTransform(Affine2),
     Unlit,
     Tint(Color),
     NoTint,

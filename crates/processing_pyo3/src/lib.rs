@@ -2031,6 +2031,27 @@ pub mod mewnala {
 
     #[pyfunction]
     #[pyo3(pass_module)]
+    fn texture(module: &Bound<'_, PyModule>, source: graphics::ImageRef) -> PyResult<()> {
+        graphics!(module).texture(source)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn no_texture(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).no_texture()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn texture_transform(
+        module: &Bound<'_, PyModule>,
+        transform: crate::math::PyAffine2,
+    ) -> PyResult<()> {
+        graphics!(module).texture_transform(transform)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
     fn unlit(module: &Bound<'_, PyModule>) -> PyResult<()> {
         graphics!(module).unlit()
     }

@@ -222,6 +222,25 @@ pub fn flush_draw_commands(
                     pbr.blend_state = None;
                     state.style.material_key = pbr.into();
                 }
+                DrawCommand::Texture(entity) => {
+                    if let Ok(img) = p_images.get(entity) {
+                        let mut pbr = state.style.material_key.as_pbr();
+                        pbr.base_color_texture = Some(img.handle.clone());
+                        state.style.material_key = pbr.into();
+                    }
+                }
+                DrawCommand::NoTexture => {
+                    if let MaterialKey::Pbr { .. } = &state.style.material_key {
+                        let mut pbr = state.style.material_key.as_pbr();
+                        pbr.base_color_texture = None;
+                        state.style.material_key = pbr.into();
+                    }
+                }
+                DrawCommand::TextureTransform(transform) => {
+                    let mut pbr = state.style.material_key.as_pbr();
+                    pbr.uv_transform = transform;
+                    state.style.material_key = pbr.into();
+                }
                 DrawCommand::Unlit => {
                     state.style.material_key = MaterialKey::Color {
                         transparent: state.fill_is_transparent(),
