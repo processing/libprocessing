@@ -4453,3 +4453,27 @@ fn key_code_to_u32(kc: KeyCode) -> u32 {
         _ => 0,
     }
 }
+
+/// Tick the Bevy app one frame.
+/// Call this once per frame from your external event loop, before begin_draw.
+/// Returns true if the app should continue running, false if it should exit.
+///
+/// This is intended for embedders that drive their own window and event loop
+/// (e.g. a native C++ host) and need to advance libprocessing's internal state
+/// each frame without using the built-in GLFW runner.
+///
+/// SAFETY:
+/// - `processing_init` has been called.
+/// - This is called from the same thread as `init`.
+/// - This must not be called after `processing_exit`.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_poll_events() -> bool {
+    error::clear_error();
+    match processing_core::app_mut(|app| {
+        app.update();
+        Ok(())
+    }) {
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
