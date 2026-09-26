@@ -29,7 +29,7 @@ def draw():
         angle = t + i * 0.15
         x = cx + r * cos(angle)
         y = cy + r * sin(angle)
-        fill(217, (0.3 + i / 24.0) * 255, 51)
+        fill(51, (0.3 + i / 24.0) * 255, 217)
         ellipse(x, y, 6, 6)
 
     fill(25, 25, 25, 38)

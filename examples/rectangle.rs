@@ -31,8 +31,8 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(
             graphics,
             DrawCommand::Rect {
-                x: 10.0,
-                y: 10.0,
+                x: 60.0,
+                y: 40.0,
                 w: 100.0,
                 h: 100.0,
                 radii: [0.0, 0.0, 0.0, 0.0],
