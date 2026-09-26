@@ -101,6 +101,14 @@ pub fn blit(
 }
 
 #[derive(Component)]
+#[relationship(relationship_target = LinkedImageTarget)]
+pub struct LinkedImage(pub Entity);
+
+#[derive(Component)]
+#[relationship_target(relationship = LinkedImage)]
+pub struct LinkedImageTarget(Entity);
+
+#[derive(Component)]
 pub struct Image {
     pub handle: Handle<bevy::image::Image>,
     readback_buffer: Buffer,
