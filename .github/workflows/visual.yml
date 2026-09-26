@@ -81,35 +81,28 @@ jobs:
           retention-days: ${{ github.event_name == 'push' && 90 || 14 }}
 
       - name: Fetch baseline from main
-        id: baseline
         if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           sha=$(git rev-parse HEAD^1)
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          run_id=$(gh run list -R "$GITHUB_REPOSITORY" --workflow visual.yml --branch main --event push \
-            --commit "$sha" --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')
-          if [ -n "$run_id" ] && gh run download "$run_id" -R "$GITHUB_REPOSITORY" -n visual-screenshots -D out/baseline; then
-            echo "Using screenshots from run $run_id"
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No screenshots published for $sha; rendering it here"
-            echo "found=false" >> "$GITHUB_OUTPUT"
+          latest() {
+            gh run list -R "$GITHUB_REPOSITORY" --workflow visual.yml --branch main --event push \
+              --commit "$sha" --limit 1 --json databaseId,status,conclusion --jq '.[0] // empty'
+          }
+          run=$(latest)
+          if [ -n "$run" ] && [ "$(jq -r .status <<< "$run")" != completed ]; then
+            id=$(jq -r .databaseId <<< "$run")
+            echo "Waiting for main's run $id to publish screenshots"
+            gh run watch "$id" -R "$GITHUB_REPOSITORY" --interval 30 > /dev/null || true
+            run=$(latest)
           fi
-
-      - name: Render baseline
-        if: steps.baseline.outputs.found == 'false'
-        # A base that predates the harness can't render; its cases are then reported as new.
-        continue-on-error: true
-        env:
-          BASE_SHA: ${{ steps.baseline.outputs.sha }}
-          CARGO_TARGET_DIR: ${{ github.workspace }}/target
-        run: |
-          git worktree add --detach "$RUNNER_TEMP/base" "$BASE_SHA"
-          git -C "$RUNNER_TEMP/base" submodule update --init --depth 1
-          xvfb-run -a -s "-screen 0 1920x1080x24" \
-            python3 tests/visual/visual.py render --root "$RUNNER_TEMP/base" --out out/baseline
+          if [ "$(jq -r '.conclusion // empty' <<< "$run")" = success ] &&
+            gh run download "$(jq -r .databaseId <<< "$run")" -R "$GITHUB_REPOSITORY" -n visual-screenshots -D out/baseline; then
+            echo "Using screenshots from run $(jq -r .databaseId <<< "$run")"
+          else
+            echo "::notice::No screenshots published for main at $sha; cases are reported as new"
+          fi
 
       - name: Compare
         id: compare

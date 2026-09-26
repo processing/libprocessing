@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Visual regression harness.
 
-    visual.py render  --out DIR [--root CHECKOUT] [--only NAME ...]
+    visual.py render  --out DIR [--only NAME ...]
     visual.py compare --baseline DIR --actual DIR --out DIR [--allow-changes]
 """
 
@@ -75,7 +75,7 @@ def adapter_from_log(log: str) -> str | None:
 
 
 def cmd_render(args: argparse.Namespace) -> int:
-    root = Path(args.root).resolve()
+    root = REPO
     out = Path(args.out).resolve()
     logs = out / "logs"
     logs.mkdir(parents=True, exist_ok=True)
@@ -364,7 +364,6 @@ def main() -> int:
 
     render = sub.add_parser("render", help="render every case to PNG")
     render.add_argument("--out", required=True)
-    render.add_argument("--root", default=str(REPO), help="checkout to build and render")
     render.add_argument("--only", nargs="+", metavar="NAME")
     render.add_argument("--skip-build", action="store_true", help="reuse existing builds")
     render.set_defaults(func=cmd_render)
