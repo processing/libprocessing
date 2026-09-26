@@ -1,0 +1,21 @@
+name: 'Install Mesa'
+description: "Install the runner release's lavapipe and select it as the only Vulkan driver"
+runs:
+  using: 'composite'
+  steps:
+    # Distro Mesa rather than gfx-rs/ci-build: those builds have no window-system support
+    # (-Dplatforms=), so they can't create the X11 surfaces sketches render to.
+    - name: Install Mesa
+      shell: bash
+      run: |
+        set -e
+        sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1
+        icd=$(dpkg -L mesa-vulkan-drivers | grep -E '/lvp_icd[^/]*\.json$' | head -1)
+        if [ -z "$icd" ]; then
+          echo "::error::no lavapipe ICD in mesa-vulkan-drivers"
+          dpkg -L mesa-vulkan-drivers | grep -E '\.json$'
+          exit 1
+        fi
+        echo "Using $icd"
+        echo "VK_DRIVER_FILES=$icd" >> "$GITHUB_ENV"
+        dpkg-query -W mesa-vulkan-drivers

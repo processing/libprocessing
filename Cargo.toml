@@ -94,7 +94,7 @@ processing_glfw = { workspace = true }
 rand = { workspace = true }
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
-processing_glfw = { workspace = true, features = ["wayland"] }
+processing_glfw = { workspace = true, features = ["wayland", "x11"] }
 
 ## TODO: Remove these patches once we've moved back to depending on upstream bevy
 [patch."https://github.com/bevyengine/bevy"]

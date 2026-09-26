@@ -6231,6 +6231,7 @@ dependencies = [
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
  "parley 0.7.0",
+ "png",
  "processing_core",
  "raw-window-handle",
  "skrifa 0.37.0",

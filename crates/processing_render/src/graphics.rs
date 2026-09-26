@@ -581,7 +581,8 @@ pub fn present(app: &mut App, entity: Entity) -> Result<()> {
 
 /// End the current draw
 pub fn end_draw(app: &mut App, entity: Entity) -> Result<()> {
-    present(app, entity)
+    present(app, entity)?;
+    crate::ci::after_end_draw(app, entity)
 }
 
 /// Do some work on the GPU to ensure that the render target texture is initialized and can be read

@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
 
 use bevy::math::{Affine2, EulerRot, Mat2, Quat, Vec2, Vec3, Vec4};
@@ -6,6 +7,20 @@ use pyo3::{
     prelude::*,
     types::PyTuple,
 };
+use rand::{SeedableRng, rngs::StdRng};
+use rand_distr::Distribution;
+
+thread_local! {
+    static CI_RNG: RefCell<Option<StdRng>> =
+        RefCell::new(processing_render::ci::enabled().then(|| StdRng::seed_from_u64(0)));
+}
+
+fn sample<T>(dist: impl Distribution<T>) -> T {
+    CI_RNG.with_borrow_mut(|rng| match rng {
+        Some(rng) => dist.sample(rng),
+        None => dist.sample(&mut rand::rng()),
+    })
+}
 
 pub fn hash_f32(val: f32, state: &mut impl Hasher) {
     if val == 0.0 {
@@ -537,8 +552,7 @@ impl_py_vec!(PyVec2, "Vec2", 2, [(x, set_x, 0), (y, set_y, 1)], Vec2, extra {
 
     #[staticmethod]
     fn random() -> Self {
-        use rand_distr::{Distribution, UnitCircle};
-        let [x, y]: [f32; 2] = UnitCircle.sample(&mut rand::rng());
+        let [x, y]: [f32; 2] = sample(rand_distr::UnitCircle);
         Self(Vec2::new(x, y))
     }
 
@@ -560,8 +574,7 @@ impl_py_vec!(PyVec3, "Vec3", 3, [(x, set_x, 0), (y, set_y, 1), (z, set_z, 2)], V
 
     #[staticmethod]
     fn random() -> Self {
-        use rand_distr::{Distribution, UnitSphere};
-        let [x, y, z]: [f32; 3] = UnitSphere.sample(&mut rand::rng());
+        let [x, y, z]: [f32; 3] = sample(rand_distr::UnitSphere);
         Self(Vec3::new(x, y, z))
     }
 

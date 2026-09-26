@@ -8,6 +8,7 @@ use bevy::input::mouse::{
 };
 use bevy::input::touch::TouchPhase;
 use bevy::prelude::*;
+use bevy::time::TimeSystems;
 use bevy::window::{CursorMoved, WindowResized};
 
 use processing_core::app_mut;
@@ -17,10 +18,18 @@ pub use state::{CursorPosition, LastKey, LastMouseButton};
 
 pub struct InputPlugin;
 
+#[derive(Resource, Default)]
+struct InputFlushing(bool);
+
 impl Plugin for InputPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<LastKey>()
             .init_resource::<LastMouseButton>()
+            .init_resource::<InputFlushing>()
+            .configure_sets(
+                First,
+                TimeSystems.run_if(|flushing: Res<InputFlushing>| !flushing.0),
+            )
             .add_systems(
                 PreUpdate,
                 (
@@ -208,9 +217,11 @@ pub fn input_set_cursor_icon(
 pub fn input_flush() -> error::Result<()> {
     app_mut(|app| {
         let world = app.world_mut();
+        world.resource_mut::<InputFlushing>().0 = true;
         world.run_schedule(First);
         world.run_schedule(PreUpdate);
         world.run_schedule(RunFixedMainLoop);
+        world.resource_mut::<InputFlushing>().0 = false;
         Ok(())
     })
 }

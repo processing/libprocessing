@@ -493,6 +493,9 @@ pub mod mewnala {
 
     #[pymodule_init]
     fn init(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        if processing_render::ci::enabled() {
+            PyModule::import(module.py(), "random")?.call_method1("seed", (0,))?;
+        }
         super::constants::register(module)
     }
 

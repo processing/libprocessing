@@ -1,0 +1,178 @@
+# Visual regression cases.
+
+[defaults]
+frame = 30
+threshold = 0.1
+max_diff_percent = 0.05
+
+[[case]]
+name = "rectangle"
+rust = "rectangle"
+
+[[case]]
+name = "primitives_3d"
+rust = "primitives_3d"
+
+[[case]]
+name = "particles_noise"
+rust = "particles_noise"
+
+[[case]]
+name = "py_primitives_3d"
+python = "primitives_3d.py"
+
+[[case]]
+name = "py_particles_noise"
+python = "particles_noise.py"
+
+[[case]]
+name = "py_animated_mesh"
+python = "animated_mesh.py"
+
+[[case]]
+name = "py_background_image"
+python = "background_image.py"
+
+[[case]]
+name = "py_blend_modes"
+python = "blend_modes.py"
+
+[[case]]
+name = "py_box"
+python = "box.py"
+
+[[case]]
+name = "py_camera_controllers"
+python = "camera_controllers.py"
+
+[[case]]
+name = "py_curves"
+python = "curves.py"
+
+[[case]]
+name = "py_custom_material"
+python = "custom_material.py"
+
+[[case]]
+name = "py_feedback"
+python = "feedback.py"
+
+[[case]]
+name = "py_flocking"
+python = "flocking.py"
+
+[[case]]
+name = "py_flocking_duck"
+python = "flocking_duck.py"
+
+[[case]]
+name = "py_flocking_gpu"
+python = "flocking_gpu.py"
+
+[[case]]
+name = "py_geometry_methods"
+python = "geometry_methods.py"
+
+[[case]]
+name = "py_gltf_load"
+python = "gltf_load.py"
+
+[[case]]
+name = "py_lights"
+python = "lights.py"
+
+[[case]]
+name = "py_materials"
+python = "materials.py"
+
+[[case]]
+name = "py_multi_window"
+python = "multi_window.py"
+
+[[case]]
+name = "py_particles_animated"
+python = "particles_animated.py"
+
+[[case]]
+name = "py_particles_basic"
+python = "particles_basic.py"
+
+[[case]]
+name = "py_particles_density"
+python = "particles_density.py"
+
+[[case]]
+name = "py_particles_emit"
+python = "particles_emit.py"
+
+[[case]]
+name = "py_particles_emit_gpu"
+python = "particles_emit_gpu.py"
+
+[[case]]
+name = "py_particles_from_mesh"
+python = "particles_from_mesh.py"
+
+[[case]]
+name = "py_particles_gpu_surface"
+python = "particles_gpu_surface.py"
+
+[[case]]
+name = "py_particles_gpu_surface_lit"
+python = "particles_gpu_surface_lit.py"
+
+[[case]]
+name = "py_particles_lifecycle"
+python = "particles_lifecycle.py"
+
+[[case]]
+name = "py_particles_lines"
+python = "particles_lines.py"
+
+[[case]]
+name = "py_particles_lissajous"
+python = "particles_lissajous.py"
+
+[[case]]
+name = "py_particles_points"
+python = "particles_points.py"
+
+[[case]]
+name = "py_particles_scatter_volume"
+python = "particles_scatter_volume.py"
+
+[[case]]
+name = "py_particles_sphere"
+python = "particles_sphere.py"
+
+[[case]]
+name = "py_particles_stress"
+python = "particles_stress.py"
+
+[[case]]
+name = "py_particles_surface"
+python = "particles_surface.py"
+
+[[case]]
+name = "py_primitives_2d"
+python = "primitives_2d.py"
+
+[[case]]
+name = "py_rectangle"
+python = "rectangle.py"
+
+[[case]]
+name = "py_shapes"
+python = "shapes.py"
+
+[[case]]
+name = "py_style_stack"
+python = "style_stack.py"
+
+[[case]]
+name = "py_text"
+python = "text.py"
+
+[[case]]
+name = "py_window_controls"
+python = "window_controls.py"
