@@ -42,7 +42,7 @@ def draw():
     material(mat)
     particles(p, particle)
 
-    noise.set(scale=0.25, strength=0.02, time=elapsed_time * 0.5)
+    noise.set(scale=0.25, strength=0.025, time=elapsed_time * 0.5)
     p.apply(noise)
 
 
