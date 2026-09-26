@@ -154,10 +154,10 @@ static PHYSICS_COMPUTES: std::sync::Mutex<Option<HashMap<String, Entity>>> =
 
 fn physics_compute(name: &str) -> PyResult<Option<Entity>> {
     let lower = name.to_ascii_lowercase();
-    if let Some(cache) = PHYSICS_COMPUTES.lock().unwrap().as_ref() {
-        if let Some(&e) = cache.get(&lower) {
-            return Ok(Some(e));
-        }
+    if let Some(cache) = PHYSICS_COMPUTES.lock().unwrap().as_ref()
+        && let Some(&e) = cache.get(&lower)
+    {
+        return Ok(Some(e));
     }
     let created = if lower == c::NOISE {
         particles_kernel_noise()
@@ -319,6 +319,11 @@ pub struct Attribute {
 
 #[pymethods]
 impl Attribute {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     #[new]
     pub fn new(name: &str, format: AttributeFormat) -> PyResult<Self> {
         let entity = geometry_attribute_create(name, format.to_inner())
@@ -718,6 +723,11 @@ impl Particles {
 
 #[pymethods]
 impl Particles {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     #[getter]
     pub fn capacity(&self) -> PyResult<u32> {
         particles_capacity(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))

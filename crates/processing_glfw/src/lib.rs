@@ -17,6 +17,10 @@ use processing_input::{
 };
 use processing_render::surface::{MonitorWorkarea, WindowControls};
 
+fn is_wayland(glfw: &Glfw) -> bool {
+    cfg!(target_os = "linux") && glfw.get_platform() == glfw::Platform::Wayland
+}
+
 /// A single GLFW instance drives every window (GLFW's event pump is global). The
 /// main window is `windows[0]`; `create_window` appends more.
 pub struct GlfwContext {
@@ -96,30 +100,33 @@ impl GlfwContext {
 
         // Set _NET_WM_WINDOW_TYPE_DIALOG so tiling WMs (i3, sway) float the window
         #[cfg(all(target_os = "linux", feature = "x11"))]
-        unsafe {
+        if glfw.get_platform() == glfw::Platform::X11 {
             use std::ffi::CString;
-            let display = window.glfw.get_x11_display() as *mut x11::xlib::Display;
-            let xwindow = window.get_x11_window() as x11::xlib::Window;
-            let net_wm_window_type = x11::xlib::XInternAtom(
-                display,
-                CString::new("_NET_WM_WINDOW_TYPE").unwrap().as_ptr(),
-                0,
-            );
-            let net_wm_window_type_dialog = x11::xlib::XInternAtom(
-                display,
-                CString::new("_NET_WM_WINDOW_TYPE_DIALOG").unwrap().as_ptr(),
-                0,
-            );
-            x11::xlib::XChangeProperty(
-                display,
-                xwindow,
-                net_wm_window_type,
-                x11::xlib::XA_ATOM,
-                32,
-                x11::xlib::PropModeReplace,
-                &net_wm_window_type_dialog as *const _ as *const u8,
-                1,
-            );
+            // SAFETY: GLFW is on X11, so the display and window handles are live Xlib objects.
+            unsafe {
+                let display = window.glfw.get_x11_display() as *mut x11::xlib::Display;
+                let xwindow = window.get_x11_window() as x11::xlib::Window;
+                let net_wm_window_type = x11::xlib::XInternAtom(
+                    display,
+                    CString::new("_NET_WM_WINDOW_TYPE").unwrap().as_ptr(),
+                    0,
+                );
+                let net_wm_window_type_dialog = x11::xlib::XInternAtom(
+                    display,
+                    CString::new("_NET_WM_WINDOW_TYPE_DIALOG").unwrap().as_ptr(),
+                    0,
+                );
+                x11::xlib::XChangeProperty(
+                    display,
+                    xwindow,
+                    net_wm_window_type,
+                    x11::xlib::XA_ATOM,
+                    32,
+                    x11::xlib::PropModeReplace,
+                    &net_wm_window_type_dialog as *const _ as *const u8,
+                    1,
+                );
+            }
         }
 
         window.show();
@@ -275,19 +282,41 @@ impl GlfwContext {
             let handle = self.windows[idx].window.get_win32_window() as u64;
             surface_create_windows(handle, width, height, scale_factor, transparent)?
         };
-        #[cfg(all(target_os = "linux", feature = "wayland"))]
-        let entity = {
-            use processing_render::surface_create_wayland;
-            let wh = self.windows[idx].window.get_wayland_window() as u64;
-            let dh = self.glfw.get_wayland_display() as u64;
-            surface_create_wayland(wh, dh, width, height, scale_factor, transparent)?
-        };
-        #[cfg(all(target_os = "linux", feature = "x11", not(feature = "wayland")))]
-        let entity = {
-            use processing_render::surface_create_x11;
-            let wh = self.windows[idx].window.get_x11_window() as u64;
-            let dh = self.glfw.get_x11_display() as u64;
-            surface_create_x11(wh, dh, width, height, scale_factor, transparent)?
+        #[cfg(target_os = "linux")]
+        let entity = match self.glfw.get_platform() {
+            #[cfg(feature = "wayland")]
+            glfw::Platform::Wayland => {
+                let wh = self.windows[idx].window.get_wayland_window() as u64;
+                let dh = self.glfw.get_wayland_display() as u64;
+                processing_render::surface_create_wayland(
+                    wh,
+                    dh,
+                    width,
+                    height,
+                    scale_factor,
+                    transparent,
+                )?
+            }
+            #[cfg(feature = "x11")]
+            glfw::Platform::X11 => {
+                let wh = self.windows[idx].window.get_x11_window() as u64;
+                let dh = self.glfw.get_x11_display() as u64;
+                processing_render::surface_create_x11(
+                    wh,
+                    dh,
+                    width,
+                    height,
+                    scale_factor,
+                    transparent,
+                )?
+            }
+            platform => {
+                return Err(processing_core::error::ProcessingError::InvalidArgument(
+                    format!(
+                        "GLFW is running on {platform:?}, which this build doesn't support; enable the matching `x11`/`wayland` feature"
+                    ),
+                ));
+            }
         };
 
         self.windows[idx].surface = Some(entity);
@@ -319,7 +348,7 @@ impl GlfwContext {
         if input_flush().is_err() {
             return false;
         }
-        main_open
+        main_open && !processing_render::ci::done()
     }
 
     /// Content scale (DPI) of the main window.
@@ -438,8 +467,7 @@ impl ManagedWindow {
         if desired.maximize {
             self.window.maximize();
         }
-        #[cfg(not(all(target_os = "linux", feature = "wayland")))]
-        if desired.focus {
+        if desired.focus && !is_wayland(glfw) {
             self.window.focus();
         }
 
@@ -463,16 +491,13 @@ impl ManagedWindow {
         self.last_applied.size = bevy::math::UVec2::new(w.max(0) as u32, h.max(0) as u32);
     }
 
-    #[cfg(not(feature = "wayland"))]
     fn frame_pos(&self) -> IVec2 {
+        if is_wayland(&self.window.glfw) {
+            return self.last_applied.position;
+        }
         let (cx, cy) = self.window.get_pos();
         let (inset_l, inset_t, _, _) = self.window.get_frame_size();
         IVec2::new(cx - inset_l, cy - inset_t)
-    }
-
-    #[cfg(feature = "wayland")]
-    fn frame_pos(&self) -> IVec2 {
-        self.last_applied.position
     }
 
     fn apply_window(&mut self, glfw: &mut Glfw, desired: &DesiredWindow) {
@@ -482,9 +507,9 @@ impl ManagedWindow {
             self.window.set_title(&desired.title);
             last.title.clone_from(&desired.title);
         }
-        #[cfg(not(feature = "wayland"))]
         if let Some(pos) = desired.position
             && pos != last.position
+            && !is_wayland(glfw)
         {
             let (inset_l, inset_t, _, _) = self.window.get_frame_size();
             self.window.set_pos(pos.x + inset_l, pos.y + inset_t);
@@ -512,16 +537,18 @@ impl ManagedWindow {
             last.decorations = desired.decorations;
         }
         if desired.window_level != last.window_level {
-            #[cfg(not(all(target_os = "linux", feature = "wayland")))]
-            self.window
-                .set_floating(matches!(desired.window_level, BevyWindowLevel::AlwaysOnTop));
+            if !is_wayland(glfw) {
+                self.window
+                    .set_floating(matches!(desired.window_level, BevyWindowLevel::AlwaysOnTop));
+            }
             last.window_level = desired.window_level;
         }
         if let Some(opacity) = desired.opacity
             && (opacity - last.opacity).abs() > f32::EPSILON
         {
-            #[cfg(not(all(target_os = "linux", feature = "wayland")))]
-            self.window.set_opacity(opacity);
+            if !is_wayland(glfw) {
+                self.window.set_opacity(opacity);
+            }
             last.opacity = opacity;
         }
         if desired.fullscreen_on != last.fullscreen_on {
@@ -590,7 +617,6 @@ impl ManagedWindow {
 #[derive(Clone, Debug)]
 struct DesiredWindow {
     title: String,
-    #[cfg(not(feature = "wayland"))]
     position: Option<IVec2>,
     size: bevy::math::UVec2,
     visible: bool,
@@ -602,7 +628,6 @@ struct DesiredWindow {
     iconify: bool,
     restore: bool,
     maximize: bool,
-    #[cfg(not(all(target_os = "linux", feature = "wayland")))]
     focus: bool,
 }
 
@@ -624,7 +649,6 @@ fn read_desired_window(surface: Entity) -> Option<DesiredWindow> {
         };
         Ok(Some(DesiredWindow {
             title: window.title.clone(),
-            #[cfg(not(feature = "wayland"))]
             position: match window.position {
                 WindowPosition::At(p) => Some(p),
                 _ => None,
@@ -642,7 +666,6 @@ fn read_desired_window(surface: Entity) -> Option<DesiredWindow> {
             iconify: controls.pending_iconify,
             restore: controls.pending_restore,
             maximize: controls.pending_maximize,
-            #[cfg(not(all(target_os = "linux", feature = "wayland")))]
             focus: controls.pending_focus,
         }))
     })

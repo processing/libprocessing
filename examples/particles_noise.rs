@@ -1,5 +1,4 @@
 use processing_glfw::GlfwContext;
-use std::time::Instant;
 
 use bevy::math::Vec3;
 use processing::prelude::*;
@@ -11,10 +10,10 @@ fn main() {
 }
 
 fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(900, 700)?;
+    let mut glfw_ctx = GlfwContext::new(900, 700, false)?;
     init(Config::default())?;
 
-    let surface = glfw_ctx.create_surface(900, 700)?;
+    let surface = glfw_ctx.create_surface(900, 700, false)?;
     let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
@@ -53,7 +52,6 @@ fn sketch() -> error::Result<()> {
     };
     let noise = particles_kernel_noise()?;
 
-    let start = Instant::now();
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;
         graphics_record_command(
@@ -65,12 +63,13 @@ fn sketch() -> error::Result<()> {
             graphics,
             DrawCommand::Particles {
                 particles: p,
-                geometry: particle,
+                geometry: Some(particle),
+                topology: Default::default(),
             },
         )?;
         graphics_end_draw(graphics)?;
 
-        let t = start.elapsed().as_secs_f32();
+        let t = elapsed_time()?;
         compute_set(noise, "scale", shader_value::ShaderValue::Float(0.25))?;
         compute_set(noise, "strength", shader_value::ShaderValue::Float(0.02))?;
         compute_set(noise, "time", shader_value::ShaderValue::Float(t * 0.5))?;

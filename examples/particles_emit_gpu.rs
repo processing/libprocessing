@@ -120,10 +120,10 @@ fn main() {
 }
 
 fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(900, 700)?;
+    let mut glfw_ctx = GlfwContext::new(900, 700, false)?;
     init(Config::default())?;
 
-    let surface = glfw_ctx.create_surface(900, 700)?;
+    let surface = glfw_ctx.create_surface(900, 700, false)?;
     let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
@@ -187,7 +187,8 @@ fn sketch() -> error::Result<()> {
             graphics,
             DrawCommand::Particles {
                 particles: p,
-                geometry: particle,
+                geometry: Some(particle),
+                topology: Default::default(),
             },
         )?;
         graphics_end_draw(graphics)?;

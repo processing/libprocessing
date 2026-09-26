@@ -9,6 +9,11 @@ pub struct Monitor {
 
 #[pymethods]
 impl Monitor {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     #[getter]
     pub fn width(&self) -> PyResult<u32> {
         monitor_width(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))

@@ -19,12 +19,12 @@ fn main() {
 }
 
 fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(600, 600)?;
+    let mut glfw_ctx = GlfwContext::new(600, 600, false)?;
     init(Config::default())?;
 
     let width = 600;
     let height = 600;
-    let surface = glfw_ctx.create_surface(width, height)?;
+    let surface = glfw_ctx.create_surface(width, height, false)?;
     let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
 
     let grid_size = 20;

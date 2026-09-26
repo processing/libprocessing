@@ -14,6 +14,11 @@ pub struct Webcam {
 
 #[pymethods]
 impl Webcam {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     #[new]
     #[pyo3(signature = (width=None, height=None, framerate=None))]
     pub fn new(width: Option<u32>, height: Option<u32>, framerate: Option<u32>) -> PyResult<Self> {

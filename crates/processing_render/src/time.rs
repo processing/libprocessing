@@ -8,6 +8,10 @@ pub fn frame_count(frame: Option<Res<ProcessingFrame>>) -> u32 {
     frame.map(|f| f.0).unwrap_or(0)
 }
 
+pub fn set_frame_count(In(n): In<u32>, mut frame: ResMut<ProcessingFrame>) {
+    frame.0 = n;
+}
+
 pub fn advance_frame_count(mut frame: ResMut<ProcessingFrame>) {
     frame.0 = frame.0.wrapping_add(1);
 }

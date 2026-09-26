@@ -87,7 +87,14 @@ pub extern "C" fn processing_surface_create_wayland(
 ) -> u64 {
     error::clear_error();
     error::check(|| {
-        surface_create_wayland(window_handle, display_handle, width, height, scale_factor, false)
+        surface_create_wayland(
+            window_handle,
+            display_handle,
+            width,
+            height,
+            scale_factor,
+            false,
+        )
     })
     .map(|e| e.to_bits())
     .unwrap_or(0)
@@ -110,9 +117,18 @@ pub extern "C" fn processing_surface_create_x11(
     scale_factor: f32,
 ) -> u64 {
     error::clear_error();
-    error::check(|| surface_create_x11(window_handle, display_handle, width, height, scale_factor, false))
-        .map(|e| e.to_bits())
-        .unwrap_or(0)
+    error::check(|| {
+        surface_create_x11(
+            window_handle,
+            display_handle,
+            width,
+            height,
+            scale_factor,
+            false,
+        )
+    })
+    .map(|e| e.to_bits())
+    .unwrap_or(0)
 }
 
 /// Create a WebGPU surface on Linux. The display server is auto-detected from
@@ -133,7 +149,14 @@ pub extern "C" fn processing_surface_create(
 ) -> u64 {
     error::clear_error();
     error::check(|| {
-        surface_create_linux(window_handle, display_handle, width, height, scale_factor, false)
+        surface_create_linux(
+            window_handle,
+            display_handle,
+            width,
+            height,
+            scale_factor,
+            false,
+        )
     })
     .map(|e| e.to_bits())
     .unwrap_or(0)
@@ -2982,15 +3005,13 @@ pub extern "C" fn processing_filter_set_passes(filter_id: u64, passes: u32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_filter_blur() -> u64 {
     error::clear_error();
-    error::check(|| filter_blur())
-        .map(|e| e.to_bits())
-        .unwrap_or(0)
+    error::check(filter_blur).map(|e| e.to_bits()).unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_filter_invert() -> u64 {
     error::clear_error();
-    error::check(|| filter_invert())
+    error::check(filter_invert)
         .map(|e| e.to_bits())
         .unwrap_or(0)
 }
@@ -2998,15 +3019,13 @@ pub extern "C" fn processing_filter_invert() -> u64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_filter_gray() -> u64 {
     error::clear_error();
-    error::check(|| filter_gray())
-        .map(|e| e.to_bits())
-        .unwrap_or(0)
+    error::check(filter_gray).map(|e| e.to_bits()).unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_filter_threshold() -> u64 {
     error::clear_error();
-    error::check(|| filter_threshold())
+    error::check(filter_threshold)
         .map(|e| e.to_bits())
         .unwrap_or(0)
 }
@@ -3014,7 +3033,7 @@ pub extern "C" fn processing_filter_threshold() -> u64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_filter_posterize() -> u64 {
     error::clear_error();
-    error::check(|| filter_posterize())
+    error::check(filter_posterize)
         .map(|e| e.to_bits())
         .unwrap_or(0)
 }
@@ -3022,7 +3041,7 @@ pub extern "C" fn processing_filter_posterize() -> u64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_filter_opaque() -> u64 {
     error::clear_error();
-    error::check(|| filter_opaque())
+    error::check(filter_opaque)
         .map(|e| e.to_bits())
         .unwrap_or(0)
 }
@@ -3030,15 +3049,13 @@ pub extern "C" fn processing_filter_opaque() -> u64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_filter_erode() -> u64 {
     error::clear_error();
-    error::check(|| filter_erode())
-        .map(|e| e.to_bits())
-        .unwrap_or(0)
+    error::check(filter_erode).map(|e| e.to_bits()).unwrap_or(0)
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_filter_dilate() -> u64 {
     error::clear_error();
-    error::check(|| filter_dilate())
+    error::check(filter_dilate)
         .map(|e| e.to_bits())
         .unwrap_or(0)
 }
