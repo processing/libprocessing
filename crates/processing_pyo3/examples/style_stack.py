@@ -28,7 +28,7 @@ def draw():
             rotate(spin)
 
             no_stroke()
-            fill(235, 90 + 130 * pulse, 60)
+            fill(0.92, 0.35 + 0.51 * pulse, 0.24)
             rect_mode(CENTER)
             rect(0, 0, cell * (0.3 + 0.15 * pulse), cell * 0.3)
 

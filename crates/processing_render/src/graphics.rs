@@ -11,7 +11,6 @@ use bevy::{
     core_pipeline::tonemapping::Tonemapping,
     ecs::query::QueryEntityError,
     math::{Mat4, Vec3A},
-    post_process::bloom::Bloom,
     prelude::*,
     render::{
         RenderApp,
@@ -210,7 +209,7 @@ pub fn create(
             ..default()
         },
         target,
-        // overridden below for hdr targets
+        // Processing draws colors as given; filmic tonemapping comes with opting into bloom.
         Tonemapping::None,
         // we need to be able to write to the texture
         CameraMainTextureUsages::default().with(TextureUsages::COPY_DST),
@@ -229,7 +228,7 @@ pub fn create(
     ));
 
     if is_hdr {
-        entity_commands.insert((Hdr, Bloom::NATURAL, Tonemapping::TonyMcMapface));
+        entity_commands.insert(Hdr);
     }
 
     let entity = entity_commands.id();
@@ -444,7 +443,7 @@ pub fn world_from_screen(
     Ok(world)
 }
 
-pub fn set_bloom(
+pub fn bloom(
     In((entity, intensity, threshold)): In<(Entity, f32, f32)>,
     mut commands: Commands,
     mut tonemapping_query: Query<&mut Tonemapping>,
@@ -472,7 +471,7 @@ pub fn set_bloom(
     Ok(())
 }
 
-pub fn remove_bloom(
+pub fn no_bloom(
     In(entity): In<Entity>,
     mut commands: Commands,
     mut tonemapping_query: Query<&mut Tonemapping>,

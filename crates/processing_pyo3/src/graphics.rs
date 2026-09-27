@@ -2293,12 +2293,12 @@ impl Graphics {
 
     #[pyo3(signature = (intensity, threshold=0.0))]
     pub fn bloom(&self, intensity: f32, threshold: f32) -> PyResult<()> {
-        if intensity <= 0.0 {
-            graphics_remove_bloom(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
-        } else {
-            graphics_set_bloom(self.entity, intensity, threshold)
-                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
-        }
+        graphics_bloom(self.entity, intensity, threshold)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn no_bloom(&self) -> PyResult<()> {
+        graphics_no_bloom(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     /// Composites a source onto this graphics with a blend mode (Processing

@@ -20,7 +20,7 @@ def draw():
         r = 40 + i * 18
         offset = t + i * 0.15
         v = 0.2 + (i / 12.0) * 0.4
-        stroke(v * 255, v * 0.8 * 255, v * 0.6 * 255)
+        stroke(v, v * 0.8, v * 0.6)
         arc(cx, cy, r * 2, r * 2, offset, offset + pi * 1.2, OPEN)
 
     no_stroke()
@@ -29,7 +29,7 @@ def draw():
         angle = t + i * 0.15
         x = cx + r * cos(angle)
         y = cy + r * sin(angle)
-        fill(217, (0.3 + i / 24.0) * 255, 51)
+        fill(0.85, 0.3 + i / 24.0, 0.2)
         ellipse(x, y, 6, 6)
 
     fill(25, 25, 25, 38)

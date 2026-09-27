@@ -1491,6 +1491,12 @@ pub mod mewnala {
     }
 
     #[pyfunction]
+    #[pyo3(pass_module)]
+    fn no_bloom(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).no_bloom()
+    }
+
+    #[pyfunction]
     #[pyo3(pass_module, signature = (*args))]
     fn rect(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
         graphics!(module).rect(args)
