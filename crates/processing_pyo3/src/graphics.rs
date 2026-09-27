@@ -2291,7 +2291,7 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    #[pyo3(signature = (intensity, threshold=0.0))]
+    #[pyo3(signature = (intensity=processing_render::graphics::DEFAULT_BLOOM_INTENSITY, threshold=0.0))]
     pub fn bloom(&self, intensity: f32, threshold: f32) -> PyResult<()> {
         graphics_bloom(self.entity, intensity, threshold)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
@@ -2299,6 +2299,18 @@ impl Graphics {
 
     pub fn no_bloom(&self) -> PyResult<()> {
         graphics_no_bloom(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    #[pyo3(signature = (mode=processing::prelude::constants::PBR_NEUTRAL))]
+    pub fn tonemapping(&self, mode: &str) -> PyResult<()> {
+        let tonemapping = processing_render::graphics::parse_tonemapping(mode)
+            .ok_or_else(|| PyValueError::new_err(format!("unknown tonemapping {mode:?}")))?;
+        graphics_tonemapping(self.entity, tonemapping)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn no_tonemapping(&self) -> PyResult<()> {
+        graphics_no_tonemapping(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     /// Composites a source onto this graphics with a blend mode (Processing

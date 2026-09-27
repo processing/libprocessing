@@ -3906,6 +3906,26 @@ pub extern "C" fn processing_graphics_remove_bloom(graphics_id: u64) {
     error::check(|| graphics_no_bloom(Entity::from_bits(graphics_id)));
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_graphics_tonemapping(graphics_id: u64, mode: u8) {
+    error::clear_error();
+    error::check(|| {
+        let tonemapping =
+            processing::prelude::graphics::tonemapping_from_u8(mode).ok_or_else(|| {
+                processing::prelude::error::ProcessingError::InvalidArgument(format!(
+                    "unknown tonemapping: {mode}"
+                ))
+            })?;
+        graphics_tonemapping(Entity::from_bits(graphics_id), tonemapping)
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_graphics_no_tonemapping(graphics_id: u64) {
+    error::clear_error();
+    error::check(|| graphics_no_tonemapping(Entity::from_bits(graphics_id)));
+}
+
 // Mouse buttons
 pub const PROCESSING_MOUSE_LEFT: u8 = 0;
 pub const PROCESSING_MOUSE_MIDDLE: u8 = 1;

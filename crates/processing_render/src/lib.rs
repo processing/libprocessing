@@ -968,6 +968,24 @@ pub fn graphics_no_bloom(graphics_entity: Entity) -> error::Result<()> {
     })
 }
 
+pub fn graphics_tonemapping(
+    graphics_entity: Entity,
+    tonemapping: bevy::core_pipeline::tonemapping::Tonemapping,
+) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(graphics::set_tonemapping, (graphics_entity, tonemapping))
+            .unwrap()
+    })
+}
+
+pub fn graphics_no_tonemapping(graphics_entity: Entity) -> error::Result<()> {
+    graphics_tonemapping(
+        graphics_entity,
+        bevy::core_pipeline::tonemapping::Tonemapping::None,
+    )
+}
+
 pub fn transform_set_position(entity: Entity, position: Vec3) -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()

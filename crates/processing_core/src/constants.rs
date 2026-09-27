@@ -55,6 +55,15 @@ pub const LAB: &str = "lab";
 pub const LCH: &str = "lch";
 pub const XYZ: &str = "xyz";
 
+pub const PBR_NEUTRAL: &str = "pbr_neutral"; // tonemapping
+pub const AGX: &str = "agx";
+pub const ACES: &str = "aces";
+pub const TONY_MC_MAPFACE: &str = "tony_mc_mapface";
+pub const BLENDER_FILMIC: &str = "blender_filmic";
+pub const REINHARD: &str = "reinhard";
+pub const REINHARD_LUMINANCE: &str = "reinhard_luminance";
+pub const SOMEWHAT_BORING_DISPLAY_TRANSFORM: &str = "somewhat_boring_display_transform";
+
 pub const MAP: &str = "map";
 pub const COMBINE: &str = "combine";
 pub const MIX: &str = "mix";
