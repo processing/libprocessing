@@ -194,7 +194,6 @@ jobs:
           submodules: true
           persist-credentials: false
 
-      - uses: dtolnay/rust-toolchain@271ea64dfe6a2ce0953f640d4ac3de19c5f75523 # 1.82.0
       - name: Build FFI shared library
         run: cargo build --release -p processing_ffi --features webcam
       - name: Stage release files
@@ -219,7 +218,6 @@ jobs:
           submodules: true
           persist-credentials: false
 
-      - uses: dtolnay/rust-toolchain@271ea64dfe6a2ce0953f640d4ac3de19c5f75523 # 1.82.0
       - name: Build FFI shared library
         run: cargo build --release -p processing_ffi --features webcam
       - name: Stage release files
@@ -272,7 +270,7 @@ jobs:
           pattern: wheels-*
           merge-multiple: true
           path: release-assets
-      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
-        with:
-          files: release-assets/*
-          generate_release_notes: true
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" release-assets/* --generate-notes
