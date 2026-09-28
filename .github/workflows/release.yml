@@ -17,7 +17,7 @@ jobs:
           submodules: true
           persist-credentials: false
 
-      - uses: ./.github/actions/setup
+      - uses: $/.github/actions/setup
       - name: Generate type stubs
         run: |
           cargo build --release -p processing_pyo3
@@ -169,7 +169,7 @@ jobs:
           submodules: true
           persist-credentials: false
 
-      - uses: ./.github/actions/setup
+      - uses: $/.github/actions/setup
       - name: Build FFI shared library
         run: cargo build --release -p processing_ffi --features wayland,x11,webcam
       - name: Stage release files
