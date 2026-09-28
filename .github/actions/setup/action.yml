@@ -23,6 +23,6 @@ runs:
       shell: bash
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@271ea64dfe6a2ce0953f640d4ac3de19c5f75523 # 1.82.0
       with:
         components: ${{ inputs.components }}

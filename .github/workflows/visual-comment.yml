@@ -21,7 +21,7 @@ jobs:
       actions: read
       pull-requests: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         id: download
         continue-on-error: true
         with:
@@ -48,7 +48,7 @@ jobs:
 
       - name: Post comment
         if: steps.pr.outputs.notable == 'true'
-        uses: marocchino/sticky-pull-request-comment@v3.0.5
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
           header: visual-regression
           number_force: ${{ steps.pr.outputs.number }}
@@ -57,7 +57,7 @@ jobs:
       # A clean run only refreshes an earlier comment, so passing PRs stay quiet.
       - name: Update comment
         if: steps.pr.outputs.notable == 'false'
-        uses: marocchino/sticky-pull-request-comment@v3.0.5
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
           header: visual-regression
           number_force: ${{ steps.pr.outputs.number }}

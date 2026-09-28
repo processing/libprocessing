@@ -194,7 +194,7 @@ jobs:
           submodules: true
           persist-credentials: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@271ea64dfe6a2ce0953f640d4ac3de19c5f75523 # 1.82.0
       - name: Build FFI shared library
         run: cargo build --release -p processing_ffi --features webcam
       - name: Stage release files
@@ -219,7 +219,7 @@ jobs:
           submodules: true
           persist-credentials: false
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@271ea64dfe6a2ce0953f640d4ac3de19c5f75523 # 1.82.0
       - name: Build FFI shared library
         run: cargo build --release -p processing_ffi --features webcam
       - name: Stage release files
@@ -252,7 +252,7 @@ jobs:
           merge-multiple: true
           path: dist
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
 
   github-release:
     name: Create GitHub Release
