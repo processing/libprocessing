@@ -2414,9 +2414,23 @@ fn buffer_write_range(
                 data.len()
             )));
         }
-        ensure_buffer_synced(app, entity)?;
+        let write = (handle, offset, data);
+        let on_gpu = app
+            .sub_app_mut(bevy::render::RenderApp)
+            .world_mut()
+            .run_system_cached_with(compute::write_buffer_gpu, &write)
+            .unwrap();
+        let synced = app
+            .world()
+            .get::<compute::Buffer>(entity)
+            .ok_or(error::ProcessingError::BufferNotFound)?
+            .synced;
+        // next read will refresh 
+        if on_gpu && !synced {
+            return Ok(());
+        }
         app.world_mut()
-            .run_system_cached_with(compute::write_buffer_cpu, (handle, offset, data))
+            .run_system_cached_with(compute::write_buffer_asset, (write, !on_gpu))
             .unwrap()
     })
 }
@@ -2509,28 +2523,52 @@ pub fn compute_set(
 pub fn compute_dispatch(entity: Entity, x: u32, y: u32, z: u32) -> error::Result<()> {
     app_mut(|app| {
         app.update();
-
-        let args = {
-            let world = app.world();
-            let c = world
-                .get::<compute::Compute>(entity)
-                .ok_or(error::ProcessingError::ComputeNotFound)?;
-            let mesh_bindings = compute::resolve_mesh_bindings(world, c)?;
-            (
-                c.pipeline_id,
-                c.bind_group_layout_descriptors.clone(),
-                c.shader.clone(),
-                mesh_bindings,
-                x,
-                y,
-                z,
-            )
-        };
-        app.sub_app_mut(bevy::render::RenderApp)
-            .world_mut()
-            .run_system_cached_with(compute::dispatch, args)
-            .unwrap()
+        dispatch_inner(app, entity, x, y, z)
     })
+}
+
+/// Dispatch without an `app.update()` first; only updates if the pipeline isn't compiled yet.
+pub(crate) fn compute_dispatch_no_update(
+    entity: Entity,
+    x: u32,
+    y: u32,
+    z: u32,
+) -> error::Result<()> {
+    app_mut(|app| match dispatch_inner(app, entity, x, y, z) {
+        Err(error::ProcessingError::PipelineNotReady(_)) => {
+            app.update();
+            dispatch_inner(app, entity, x, y, z)
+        }
+        r => r,
+    })
+}
+
+fn dispatch_inner(app: &mut App, entity: Entity, x: u32, y: u32, z: u32) -> error::Result<()> {
+    let args = {
+        let world = app.world();
+        let c = world
+            .get::<compute::Compute>(entity)
+            .ok_or(error::ProcessingError::ComputeNotFound)?;
+        let mesh_bindings = compute::resolve_mesh_bindings(world, c)?;
+        (
+            c.pipeline_id,
+            c.bind_group_layout_descriptors.clone(),
+            c.shader.clone(),
+            mesh_bindings,
+            x,
+            y,
+            z,
+        )
+    };
+    app.sub_app_mut(bevy::render::RenderApp)
+        .world_mut()
+        .run_system_cached_with(compute::dispatch, args)
+        .unwrap()?;
+    // The kernel may have written its read-write buffers, so their assets are no longer synced.
+    app.world_mut()
+        .run_system_cached(compute::invalidate_rw_buffers)
+        .unwrap();
+    Ok(())
 }
 
 pub fn compute_destroy(entity: Entity) -> error::Result<()> {
