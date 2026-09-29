@@ -15,7 +15,7 @@ def setup():
     mode_3d()
 
     p = create_particles(
-        capacity=NX * NY,
+        NX * NY,
         attributes=[Attribute.position(), Attribute.color(), Attribute.normal()],
     )
     idx = p.index_buffer((NX - 1) * (NY - 1) * 6)

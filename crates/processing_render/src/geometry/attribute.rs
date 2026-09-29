@@ -346,6 +346,19 @@ pub fn create(
     Ok(entity)
 }
 
+pub fn find(
+    In(name): In<String>,
+    builtins: Res<BuiltinAttributes>,
+    registry: Res<AttributeRegistry>,
+) -> Option<Entity> {
+    builtins.by_name(&name).or_else(|| {
+        registry
+            .by_name
+            .get(&hash_attr_name(&name))
+            .map(|(entity, _)| *entity)
+    })
+}
+
 pub fn destroy(In(entity): In<Entity>, mut commands: Commands) -> Result<()> {
     commands.entity(entity).despawn();
     Ok(())

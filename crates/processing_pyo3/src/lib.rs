@@ -1626,18 +1626,15 @@ pub mod mewnala {
         Ok(window)
     }
 
-    /// Creates a GPU particle system (Processing `createParticles`). `attributes`
-    /// defaults to `position`; other built-in attributes (`velocity`, `color`,
-    /// `scale`, `life`, `age`, ...) and declared custom ones materialize on
-    /// demand when you call `buffer("name")`.
+    /// Creates a GPU particle system (Processing `createParticles`) from a count or a `Geometry`.
+    /// Attributes are created on first use.
     #[pyfunction]
-    #[pyo3(signature = (capacity=None, attributes=None, geometry=None))]
+    #[pyo3(signature = (source, attributes=None))]
     fn create_particles(
-        capacity: Option<u32>,
+        source: &Bound<'_, PyAny>,
         attributes: Option<Vec<PyRef<'_, super::particles::Attribute>>>,
-        geometry: Option<&Geometry>,
     ) -> PyResult<super::particles::Particles> {
-        super::particles::Particles::create(capacity, attributes, geometry)
+        super::particles::Particles::create(source, attributes)
     }
 
     /// Creates a compute pass from a shader (Processing-style `createCompute`).

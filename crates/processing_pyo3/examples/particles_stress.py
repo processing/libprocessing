@@ -25,7 +25,7 @@ def setup():
     directional_light((0.0, 0.0, 1.0), 1000.0, position=Vec3.Z, look_at=Vec3.ZERO)
 
     p = create_particles(
-        geometry=Geometry.grid(GRID, GRID, GRID, SPACING),
+        Geometry.grid(GRID, GRID, GRID, SPACING),
         attributes=[Attribute.position(), Attribute.uv(), Attribute.color()],
     )
 

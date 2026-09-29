@@ -23,7 +23,7 @@ def setup():
             for z in range(10):
                 positions.extend([x - 4.5, y - 4.5, z - 4.5])
 
-    p = create_particles(capacity=capacity, attributes=[Attribute.position()])
+    p = create_particles(capacity, attributes=[Attribute.position()])
     pos_buf = p.buffer("position")
     pos_buf.write(positions)
 

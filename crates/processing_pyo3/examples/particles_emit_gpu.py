@@ -29,7 +29,7 @@ def setup():
     # so declare them (all built-in here). `velocity`/`age` are built-ins now, so
     # no custom `Attribute(...)` is needed.
     p = create_particles(
-        capacity=CAPACITY,
+        CAPACITY,
         attributes=[
             Attribute.position(),
             Attribute.velocity(),

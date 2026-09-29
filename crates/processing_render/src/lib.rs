@@ -1462,6 +1462,16 @@ pub fn geometry_attribute_create(
     })
 }
 
+/// The attribute named `name`, if one has been created.
+pub fn geometry_attribute_find(name: impl Into<String>) -> error::Result<Option<Entity>> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(geometry::attribute::find, name.into())
+            .unwrap())
+    })
+}
+
 pub fn geometry_attribute_position() -> Entity {
     app_mut(|app| {
         Ok(app

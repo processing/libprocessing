@@ -16,7 +16,7 @@ def setup():
 
     source = Geometry.sphere(5.0, 32, 24)
     p = create_particles(
-        geometry=source,
+        source,
         attributes=[Attribute.position(), Attribute.uv(), Attribute.color()],
     )
 

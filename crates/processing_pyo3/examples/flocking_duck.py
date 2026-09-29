@@ -62,7 +62,7 @@ def setup():
     duck = gltf.geometry("LOD3spShape")
 
     p = create_particles(
-        geometry=duck,
+        duck,
         attributes=[
             Attribute.position(),
             Attribute.rotation(),
