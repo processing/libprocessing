@@ -359,6 +359,18 @@ pub fn dispatch(
         .clone();
 
     let reflection = shader.reflection();
+    // a missing GPU resource drops its binding, and wgpu panics on an incomplete bind group
+    for param in reflection.parameters() {
+        let Some(name) = param.name() else { continue };
+        let ready = match (shader.buffer_handle(name), shader.image_handle(name)) {
+            (Some(handle), _) => gpu_buffers.get(handle).is_some(),
+            (_, Some(handle)) => gpu_images.get(handle).is_some(),
+            _ => true,
+        };
+        if !ready {
+            return Err(ProcessingError::ResourceNotReady(name.to_string()));
+        }
+    }
 
     let mut bind_groups = Vec::new();
     for (group, desc) in &layout_descriptors {

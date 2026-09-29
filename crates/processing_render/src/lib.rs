@@ -2535,7 +2535,10 @@ pub(crate) fn compute_dispatch_no_update(
     z: u32,
 ) -> error::Result<()> {
     app_mut(|app| match dispatch_inner(app, entity, x, y, z) {
-        Err(error::ProcessingError::PipelineNotReady(_)) => {
+        Err(
+            error::ProcessingError::PipelineNotReady(_)
+            | error::ProcessingError::ResourceNotReady(_),
+        ) => {
             app.update();
             dispatch_inner(app, entity, x, y, z)
         }

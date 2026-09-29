@@ -58,6 +58,8 @@ pub enum ProcessingError {
     PipelineCompileError(String),
     #[error("Pipeline not ready after {0} frames")]
     PipelineNotReady(u32),
+    #[error("`{0}` isn't on the GPU yet")]
+    ResourceNotReady(String),
     #[error("Particles not found")]
     ParticlesNotFound,
     #[error("Grid not found")]
