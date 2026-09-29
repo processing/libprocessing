@@ -6,6 +6,7 @@ fn falloff(d: f32, radius: f32, mode: u32) -> f32 {
         case 3u: { return n * n; }
         case 4u: { return n * n * n; }
         case 5u: { return radius / (d + radius); }
+        case 6u: { return 1.0 / max(d * d, 1e-6); }
         default: { return 1.0; }
     }
 }

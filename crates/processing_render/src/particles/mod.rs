@@ -6,6 +6,7 @@ mod emit;
 pub mod grid;
 pub mod kernels;
 pub mod material;
+pub mod neighbors;
 pub mod pack;
 pub mod point_render;
 pub mod reduce;
@@ -27,13 +28,17 @@ pub use grid::{Grid, GridParams, grid_build, grid_create, grid_destroy, grid_get
 pub use kernels::{
     BOUNDS_CLAMP, BOUNDS_REFLECT, BOUNDS_SOFT, BOUNDS_WRAP, COMBINE_ADD, COMBINE_DIV, COMBINE_MAX,
     COMBINE_MIN, COMBINE_MUL, COMBINE_POW, COMBINE_SUB, FALLOFF_CONST, FALLOFF_CUBIC,
-    FALLOFF_INVERSE, FALLOFF_LINEAR, FALLOFF_QUADRATIC, FALLOFF_SMOOTHSTEP, particles_kernel_age,
-    particles_kernel_attr_combine, particles_kernel_attr_linear, particles_kernel_attr_lookup1d,
-    particles_kernel_attr_lookup2d, particles_kernel_attr_mix, particles_kernel_attract,
-    particles_kernel_bounds_box, particles_kernel_bounds_geometry, particles_kernel_bounds_sphere,
-    particles_kernel_drag, particles_kernel_field, particles_kernel_flock, particles_kernel_force,
-    particles_kernel_impulse, particles_kernel_integrate, particles_kernel_noise,
-    particles_kernel_orient, particles_kernel_transform, particles_kernel_vortex,
+    FALLOFF_INVERSE, FALLOFF_INVERSE_SQUARE, FALLOFF_LINEAR, FALLOFF_QUADRATIC, FALLOFF_SMOOTHSTEP,
+    particles_kernel_age, particles_kernel_attr_combine, particles_kernel_attr_linear,
+    particles_kernel_attr_lookup1d, particles_kernel_attr_lookup2d, particles_kernel_attr_mix,
+    particles_kernel_attract, particles_kernel_bounds_box, particles_kernel_bounds_geometry,
+    particles_kernel_bounds_sphere, particles_kernel_drag, particles_kernel_field,
+    particles_kernel_flock, particles_kernel_force, particles_kernel_impulse,
+    particles_kernel_integrate, particles_kernel_noise, particles_kernel_orient,
+    particles_kernel_transform, particles_kernel_vortex,
+};
+pub use neighbors::{
+    particles_find_neighbors, particles_neighbor_lists, particles_neighbor_reduce,
 };
 pub use reduce::{REDUCE_OP_MAX, REDUCE_OP_MIN, REDUCE_OP_SUM, reduce};
 pub use scan::prefix_sum_u32;
@@ -96,6 +101,15 @@ pub struct Particles {
     pub connectivity: Option<Connectivity>,
     /// Ring-buffer write cursor; wraps at `capacity`.
     pub emit_head: u32,
+    pub neighbor_lists: Option<NeighborLists>,
+}
+
+/// The `neighbors` (up to `max` indices per particle) and `neighbor_count` attributes.
+#[derive(Clone, Copy)]
+pub struct NeighborLists {
+    pub neighbors: Entity,
+    pub count: Entity,
+    pub max: u32,
 }
 
 #[derive(Clone, Copy)]
@@ -150,6 +164,7 @@ pub fn create(
             raster_draw_entity: None,
             connectivity: None,
             emit_head: 0,
+            neighbor_lists: None,
         })
         .id();
     Ok(entity)
@@ -231,6 +246,7 @@ pub fn create_from_geometry(
             raster_draw_entity: None,
             connectivity,
             emit_head: 0,
+            neighbor_lists: None,
         })
         .id();
     Ok(entity)
@@ -386,6 +402,10 @@ pub fn destroy(
     if let Some(connectivity) = p.connectivity {
         commands.entity(connectivity.index_buffer).despawn();
         commands.entity(connectivity.indirect_buffer).despawn();
+    }
+    if let Some(lists) = p.neighbor_lists {
+        commands.entity(lists.neighbors).despawn();
+        commands.entity(lists.count).despawn();
     }
     commands.entity(entity).despawn();
     Ok(())

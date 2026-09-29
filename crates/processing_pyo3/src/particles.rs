@@ -111,6 +111,7 @@ fn parse_falloff(s: &str) -> PyResult<u32> {
         _ if s.eq_ignore_ascii_case(c::QUADRATIC) => Ok(FALLOFF_QUADRATIC),
         _ if s.eq_ignore_ascii_case(c::CUBIC) => Ok(FALLOFF_CUBIC),
         _ if s.eq_ignore_ascii_case(c::INVERSE) => Ok(FALLOFF_INVERSE),
+        _ if s.eq_ignore_ascii_case(c::INVERSE_SQUARE) => Ok(FALLOFF_INVERSE_SQUARE),
         _ => Err(PyValueError::new_err(format!(
             "neighbor: unknown falloff {s:?}"
         ))),
@@ -787,19 +788,56 @@ impl Particles {
             let scale = kw_f32(kwargs, "scale", 1.0)?;
             let offset = kw_f32(kwargs, "offset", 0.0)?;
             algebra_generate(out, comp, mode, seed, scale, offset).map_err(rt)
-        } else if name.eq_ignore_ascii_case(c::NEIGHBOR) {
-            reject_unknown_kwargs(kwargs, &["a", "out", "grid", "op", "radius", "falloff"])?;
+        } else if name.eq_ignore_ascii_case(c::FIND_NEIGHBORS) {
+            reject_unknown_kwargs(kwargs, &["grid", "radius", "max"])?;
             let grid = kw(kwargs, "grid")
-                .ok_or_else(|| PyRuntimeError::new_err("apply(neighbor): missing 'grid'"))?
+                .ok_or_else(|| PyTypeError::new_err("apply(find_neighbors): missing `grid=`"))?
                 .extract::<PyRef<Grid>>()
-                .map_err(|_| PyRuntimeError::new_err("apply(neighbor): 'grid' must be a Grid"))?;
+                .map_err(|_| PyTypeError::new_err("apply(find_neighbors): `grid` must be a Grid"))?
+                .entity;
+            let cell = grid_get(grid).map_err(rt)?.params.cell_size;
+            let radius = kw_f32(kwargs, "radius", cell)?;
+            let max = kw_u32(kwargs, "max", 64)?;
+            particles_find_neighbors(self.entity, grid, radius, max).map_err(rt)
+        } else if name.eq_ignore_ascii_case(c::NEIGHBOR) {
+            reject_unknown_kwargs(
+                kwargs,
+                &["a", "out", "grid", "op", "radius", "falloff", "relative"],
+            )?;
             let op = kw_op(kwargs, NEIGHBOR_MEAN, parse_neighbor_op)?;
+            let relative = match kw(kwargs, "relative") {
+                Some(v) => v.extract::<bool>()?,
+                None => false,
+            };
+            // `grid=` searches exactly; otherwise read the lists from find_neighbors
+            let grid = match kw(kwargs, "grid") {
+                Some(g) => {
+                    if relative {
+                        return Err(PyValueError::new_err(
+                            "apply(neighbor): relative=True reads the neighbor lists, so drop grid=",
+                        ));
+                    }
+                    let g = g.extract::<PyRef<Grid>>().map_err(|_| {
+                        PyTypeError::new_err("apply(neighbor): `grid` must be a Grid")
+                    })?;
+                    Some(g.entity)
+                }
+                None => None,
+            };
+            let (falloff_default, radius) = match grid {
+                Some(g) => {
+                    let cell = grid_get(g).map_err(rt)?.params.cell_size;
+                    (
+                        FALLOFF_SMOOTHSTEP,
+                        kw_f32(kwargs, "radius", cell)?.min(cell),
+                    )
+                }
+                None => (FALLOFF_CONST, kw_f32(kwargs, "radius", f32::MAX)?),
+            };
             let falloff = match kw(kwargs, "falloff") {
                 Some(v) => parse_falloff(&v.extract::<String>()?)?,
-                None => FALLOFF_SMOOTHSTEP,
+                None => falloff_default,
             };
-            let cell = grid.cell_size()?;
-            let radius = kw_f32(kwargs, "radius", cell)?.min(cell);
 
             let (a, components) = if op == NEIGHBOR_COUNT {
                 let a = match kw(kwargs, "a") {
@@ -816,16 +854,21 @@ impl Particles {
                 self.operand(kwargs, "a")?
             };
             let out = self.output(kwargs, components)?;
-            particles_gather(
-                self.entity,
-                grid.entity,
-                a,
-                out,
-                op,
-                radius,
-                falloff,
-                components,
-            )
+            match grid {
+                Some(grid) => {
+                    particles_gather(self.entity, grid, a, out, op, radius, falloff, components)
+                }
+                None => particles_neighbor_reduce(
+                    self.entity,
+                    a,
+                    out,
+                    op,
+                    radius,
+                    falloff,
+                    components,
+                    relative,
+                ),
+            }
             .map_err(rt)
         } else {
             Err(PyValueError::new_err(format!(

@@ -252,12 +252,16 @@ pub fn particles_apply(particles_entity: Entity, compute_entity: Entity) -> erro
         let field = world
             .get::<Particles>(particles_entity)
             .ok_or(error::ProcessingError::ParticlesNotFound)?;
-        let mut buffers: Vec<(String, Entity)> = Vec::with_capacity(field.buffers.len());
+        let mut buffers: Vec<(String, Entity)> = Vec::with_capacity(field.buffers.len() + 2);
         for (&attr_entity, &buf_entity) in &field.buffers {
             let attr = world
                 .get::<geometry::Attribute>(attr_entity)
                 .ok_or(error::ProcessingError::InvalidEntity)?;
             buffers.push((attr.name.to_string(), buf_entity));
+        }
+        if let Some(lists) = field.neighbor_lists {
+            buffers.push(("neighbors".to_string(), lists.neighbors));
+            buffers.push(("neighbor_count".to_string(), lists.count));
         }
         Ok((field.capacity, buffers))
     })?;

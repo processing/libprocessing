@@ -63,6 +63,8 @@ impl Plugin for ParticlesKernelsPlugin {
         embedded_asset!(app, "compact_scatter.wgsl");
         embedded_asset!(app, "reduce.wgsl");
         embedded_asset!(app, "neighbor.wgsl");
+        embedded_asset!(app, "neighbors_build.wgsl");
+        embedded_asset!(app, "neighbors_reduce.wgsl");
     }
 }
 
@@ -72,6 +74,7 @@ pub const FALLOFF_SMOOTHSTEP: u32 = 2;
 pub const FALLOFF_QUADRATIC: u32 = 3;
 pub const FALLOFF_CUBIC: u32 = 4;
 pub const FALLOFF_INVERSE: u32 = 5;
+pub const FALLOFF_INVERSE_SQUARE: u32 = 6;
 
 pub const BOUNDS_CLAMP: u32 = 0;
 pub const BOUNDS_REFLECT: u32 = 1;

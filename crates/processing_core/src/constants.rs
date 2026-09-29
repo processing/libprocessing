@@ -73,6 +73,7 @@ pub const EXTRACT: &str = "extract";
 pub const PACK: &str = "pack";
 pub const GENERATE: &str = "generate";
 pub const NEIGHBOR: &str = "neighbor";
+pub const FIND_NEIGHBORS: &str = "find_neighbors";
 
 pub const COUNT: &str = "count";
 pub const DENSITY: &str = "density";
@@ -82,6 +83,7 @@ pub const SMOOTHSTEP: &str = "smoothstep";
 pub const QUADRATIC: &str = "quadratic";
 pub const CUBIC: &str = "cubic";
 pub const INVERSE: &str = "inverse";
+pub const INVERSE_SQUARE: &str = "inverse_square";
 
 pub const AFFINE: &str = "affine";
 pub const ABS: &str = "abs";
