@@ -42,7 +42,6 @@ impl Plugin for ParticlesKernelsPlugin {
         embedded_asset!(app, "bounds_sphere.wgsl");
         embedded_asset!(app, "bounds_box.wgsl");
         embedded_asset!(app, "impulse.wgsl");
-        embedded_asset!(app, "flock.wgsl");
         embedded_asset!(app, "orient.wgsl");
         embedded_asset!(app, "field.wgsl");
         embedded_asset!(app, "attr_linear.wgsl");
@@ -252,21 +251,6 @@ pub fn particles_kernel_impulse() -> error::Result<Entity> {
         "falloff_mode",
         ShaderValue::UInt(FALLOFF_SMOOTHSTEP),
     )?;
-    Ok(entity)
-}
-
-pub fn particles_kernel_flock() -> error::Result<Entity> {
-    let shader = shader_load("embedded://processing_render/particles/kernels/flock.wgsl")?;
-    let entity = compute_create(shader)?;
-    set_requires(entity, &["position", "velocity"])?;
-    compute_set(entity, "sep_distance", ShaderValue::Float(1.2))?;
-    compute_set(entity, "neighbor_distance", ShaderValue::Float(2.5))?;
-    compute_set(entity, "weight_separation", ShaderValue::Float(1.5))?;
-    compute_set(entity, "weight_alignment", ShaderValue::Float(1.0))?;
-    compute_set(entity, "weight_cohesion", ShaderValue::Float(1.0))?;
-    compute_set(entity, "max_speed", ShaderValue::Float(0.1))?;
-    compute_set(entity, "max_force", ShaderValue::Float(0.003))?;
-    compute_set(entity, "min_speed", ShaderValue::Float(0.02))?;
     Ok(entity)
 }
 
