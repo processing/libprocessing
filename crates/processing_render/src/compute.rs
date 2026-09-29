@@ -112,17 +112,40 @@ pub fn create_buffer_with_data(
         .id()
 }
 
-pub fn write_buffer_cpu(
-    In((handle, offset, data)): In<(Handle<ShaderBuffer>, u64, Vec<u8>)>,
+/// Writes to the GPU buffer, false if it isn't prepared yet.
+pub fn write_buffer_gpu(
+    InRef((handle, offset, data)): InRef<(Handle<ShaderBuffer>, u64, Vec<u8>)>,
+    gpu_buffers: Res<RenderAssets<GpuShaderBuffer>>,
+    render_queue: Res<RenderQueue>,
+) -> bool {
+    let Some(gpu_buffer) = gpu_buffers.get(handle) else {
+        return false;
+    };
+    render_queue.write_buffer(&gpu_buffer.buffer, *offset, data);
+    true
+}
+
+/// Writes to the buffer's asset.
+pub fn write_buffer_asset(
+    In(((handle, offset, data), tracked)): In<((Handle<ShaderBuffer>, u64, Vec<u8>), bool)>,
     mut buffers: ResMut<Assets<ShaderBuffer>>,
 ) -> Result<()> {
-    let mut asset = buffers
-        .get_mut(&handle)
-        .ok_or(ProcessingError::BufferNotFound)?;
+    let patched = if tracked {
+        buffers
+            .get_mut(&handle)
+            .map(|mut asset| patch_asset(&mut asset, offset, &data))
+    } else {
+        buffers
+            .get_mut_untracked(handle.id())
+            .map(|asset| patch_asset(asset, offset, &data))
+    };
+    patched.ok_or(ProcessingError::BufferNotFound)?
+}
+
+fn patch_asset(asset: &mut ShaderBuffer, offset: u64, data: &[u8]) -> Result<()> {
     let dst = asset.data.as_mut().ok_or(ProcessingError::BufferNotFound)?;
     let start = offset as usize;
-    let end = start + data.len();
-    dst[start..end].copy_from_slice(&data);
+    dst[start..start + data.len()].copy_from_slice(data);
     Ok(())
 }
 
