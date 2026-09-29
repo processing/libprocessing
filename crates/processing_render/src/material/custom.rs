@@ -322,11 +322,27 @@ pub(crate) fn apply_reflect_field(
         return Ok(());
     }
 
-    let param_name = find_param_containing_field(shader, name);
-    if let Some(param_name) = param_name
-        && let Some(param) = shader.field_mut(&param_name)
+    // `struct.field` picks a struct explicitly
+    let (param_name, field_name) = match name.split_once('.') {
+        Some((param, field)) => (param.to_string(), field),
+        None => {
+            let params = params_containing_field(shader, name);
+            if params.len() > 1 {
+                return Err(ProcessingError::InvalidArgument(format!(
+                    "`{name}` is a field of {}; name one, e.g. `{}.{name}`",
+                    params.join(" and "),
+                    params[0],
+                )));
+            }
+            let Some(param) = params.into_iter().next() else {
+                return Err(ProcessingError::UnknownShaderProperty(name.to_string()));
+            };
+            (param, name)
+        }
+    };
+    if let Some(param) = shader.field_mut(&param_name)
         && let ReflectMut::Struct(s) = param.reflect_mut()
-        && let Some(field) = s.field_mut(name)
+        && let Some(field) = s.field_mut(field_name)
     {
         apply_field_coerced(field, value);
         return Ok(());
@@ -509,15 +525,20 @@ pub(crate) fn find_param_containing_field(
     shader: &DynamicShader,
     field_name: &str,
 ) -> Option<String> {
-    for i in 0..shader.field_len() {
-        if let Some(field) = shader.field_at(i)
-            && let ReflectRef::Struct(s) = field.reflect_ref()
-            && s.field(field_name).is_some()
-        {
-            return shader.name_at(i).map(|s: &str| s.to_string());
-        }
-    }
-    None
+    params_containing_field(shader, field_name)
+        .into_iter()
+        .next()
+}
+
+fn params_containing_field(shader: &DynamicShader, field_name: &str) -> Vec<String> {
+    (0..shader.field_len())
+        .filter(|&i| {
+            shader.field_at(i).is_some_and(|field| {
+                matches!(field.reflect_ref(), ReflectRef::Struct(s) if s.field(field_name).is_some())
+            })
+        })
+        .filter_map(|i| shader.name_at(i).map(str::to_string))
+        .collect()
 }
 
 pub struct CustomMaterialPlugin;
