@@ -22,6 +22,8 @@ pub const MAP_GEQ: u32 = 9;
 pub const MAP_LEQ: u32 = 10;
 pub const MAP_EQ: u32 = 11;
 pub const MAP_NEQ: u32 = 12;
+pub const MAP_NORMALIZE: u32 = 13;
+pub const MAP_LIMIT: u32 = 14;
 
 const MAP_SRC: &str = r#"
 struct Params {
@@ -60,10 +62,25 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let i = gid.x;
     let n = arrayLength(&a) / params.components;
     if i >= n { return; }
+    // normalize and limit scale the whole vector by its length
+    var len2 = 0.0;
+    for (var c = 0u; c < params.components; c = c + 1u) {
+        let x = a[i * params.components + c];
+        len2 += x * x;
+    }
+    let len = sqrt(len2);
+    var k = 1.0;
+    if params.op == 13u && len > 0.0 {
+        k = params.p0 / len;
+    } else if params.op == 14u && len > 0.0 {
+        k = clamp(len, params.p0, params.p1) / len;
+    }
     for (var c = 0u; c < params.components; c = c + 1u) {
         let idx = i * params.components + c;
-        @if(in_place)  { a[idx] = apply_op(a[idx]); }
-        @if(!in_place) { dst[idx] = apply_op(a[idx]); }
+        var r = a[idx] * k;
+        if params.op < 13u { r = apply_op(a[idx]); }
+        @if(in_place)  { a[idx] = r; }
+        @if(!in_place) { dst[idx] = r; }
     }
 }
 "#;
@@ -149,6 +166,8 @@ struct Params {
     op: u32,
     b_scale: f32,
     b_offset: f32,
+    // 1 = one `b` per particle, applied to every component
+    b_components: u32,
 }
 
 @if(in_place)  @group(0) @binding(0) var<storage, read_write> a:   array<f32>;
@@ -177,7 +196,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if i >= n { return; }
     for (var c = 0u; c < params.components; c = c + 1u) {
         let idx = i * params.components + c;
-        let r = combine_op(a[idx], b[idx] * params.b_scale + params.b_offset);
+        let b_idx = select(idx, i, params.b_components == 1u);
+        let r = combine_op(a[idx], b[b_idx] * params.b_scale + params.b_offset);
         @if(in_place)  { a[idx] = r; }
         @if(!in_place) { dst[idx] = r; }
     }
@@ -198,6 +218,16 @@ pub fn combine(
     check_components("combine", components)?;
     let v = variants(&COMBINE, COMBINE_SRC)?;
     let floats = buffer_size(a)? / 4;
+    let b_floats = buffer_size(b)? / 4;
+    let b_components = if b_floats == floats {
+        components
+    } else if b_floats == floats / components as u64 {
+        1
+    } else {
+        return Err(ProcessingError::InvalidArgument(format!(
+            "combine: `b` needs {components} or 1 components per particle"
+        )));
+    };
 
     let c = if dst == a {
         ensure_no_alias("combine", a, &[b])?;
@@ -216,6 +246,7 @@ pub fn combine(
     compute_set(c, "op", ShaderValue::UInt(op))?;
     compute_set(c, "b_scale", ShaderValue::Float(b_scale))?;
     compute_set(c, "b_offset", ShaderValue::Float(b_offset))?;
+    compute_set(c, "b_components", ShaderValue::UInt(b_components))?;
     dispatch_particles(c, floats, components)
 }
 

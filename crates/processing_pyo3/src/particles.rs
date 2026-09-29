@@ -25,7 +25,7 @@ use processing_render::{
 use processing_render::{GEN_GAUSSIAN, GEN_SIGNED, GEN_UNIFORM};
 use processing_render::{
     MAP_ABS, MAP_AFFINE, MAP_CLAMP, MAP_EQ, MAP_FLOOR, MAP_GEQ, MAP_GREATER, MAP_LEQ, MAP_LESS,
-    MAP_NEGATE, MAP_NEQ, MAP_SQRT, MAP_SQUARE,
+    MAP_LIMIT, MAP_NEGATE, MAP_NEQ, MAP_NORMALIZE, MAP_SQRT, MAP_SQUARE,
 };
 use processing_render::{
     REDUCE_LENGTH, REDUCE_MAX, REDUCE_MEAN, REDUCE_MIN, REDUCE_SUM, REDUCE_SUMSQ,
@@ -46,6 +46,8 @@ fn parse_map_op(s: &str) -> PyResult<u32> {
         _ if s.eq_ignore_ascii_case(c::LEQ) => Ok(MAP_LEQ),
         _ if s.eq_ignore_ascii_case(c::EQ) => Ok(MAP_EQ),
         _ if s.eq_ignore_ascii_case(c::NEQ) => Ok(MAP_NEQ),
+        _ if s.eq_ignore_ascii_case(c::NORMALIZE) => Ok(MAP_NORMALIZE),
+        _ if s.eq_ignore_ascii_case(c::LIMIT) => Ok(MAP_LIMIT),
         _ => Err(PyValueError::new_err(format!("map: unknown op {s:?}"))),
     }
 }
@@ -239,6 +241,11 @@ fn map_params(kwargs: Option<&Bound<'_, PyDict>>, op: u32) -> PyResult<(f32, f32
             kw_f32(kwargs, "offset", 0.0)?,
         ),
         MAP_CLAMP => (kw_f32(kwargs, "lo", 0.0)?, kw_f32(kwargs, "hi", 1.0)?),
+        MAP_NORMALIZE => (kw_f32(kwargs, "length", 1.0)?, 0.0),
+        MAP_LIMIT => (
+            kw_f32(kwargs, "min_length", 0.0)?,
+            kw_f32(kwargs, "max_length", f32::MAX)?,
+        ),
         MAP_GREATER | MAP_LESS | MAP_GEQ | MAP_LEQ | MAP_EQ | MAP_NEQ => (
             kw_f32(kwargs, "threshold", 0.0)?,
             kw_f32(kwargs, "epsilon", 1.0e-6)?,
@@ -251,6 +258,8 @@ fn map_param_keys(op: u32) -> &'static [&'static str] {
     match op {
         MAP_AFFINE => &["scale", "offset"],
         MAP_CLAMP => &["lo", "hi"],
+        MAP_NORMALIZE => &["length"],
+        MAP_LIMIT => &["min_length", "max_length"],
         MAP_GREATER | MAP_LESS | MAP_GEQ | MAP_LEQ | MAP_EQ | MAP_NEQ => &["threshold", "epsilon"],
         _ => &[],
     }
@@ -567,9 +576,9 @@ impl Particles {
             reject_unknown_kwargs(kwargs, &["a", "b", "out", "op", "b_scale", "b_offset"])?;
             let (a, comp) = self.operand(kwargs, "a")?;
             let (b, b_comp) = self.operand(kwargs, "b")?;
-            if b_comp != comp {
+            if b_comp != comp && b_comp != 1 {
                 return Err(PyValueError::new_err(format!(
-                    "apply(combine): `a` has {comp} components but `b` has {b_comp} (must match)"
+                    "apply(combine): the first operand has {comp} components, so the second needs {comp} or 1, not {b_comp}"
                 )));
             }
             let out = self.dest(kwargs, a)?;

@@ -15,9 +15,9 @@ pub mod sort;
 
 pub use algebra::{
     GEN_GAUSSIAN, GEN_SIGNED, GEN_UNIFORM, MAP_ABS, MAP_AFFINE, MAP_CLAMP, MAP_EQ, MAP_FLOOR,
-    MAP_GEQ, MAP_GREATER, MAP_LEQ, MAP_LESS, MAP_NEGATE, MAP_NEQ, MAP_SQRT, MAP_SQUARE,
-    REDUCE_LENGTH, REDUCE_MAX, REDUCE_MEAN, REDUCE_MIN, REDUCE_SUM, REDUCE_SUMSQ, combine, extract,
-    generate, lookup, map, mix, pack, reduce_components,
+    MAP_GEQ, MAP_GREATER, MAP_LEQ, MAP_LESS, MAP_LIMIT, MAP_NEGATE, MAP_NEQ, MAP_NORMALIZE,
+    MAP_SQRT, MAP_SQUARE, REDUCE_LENGTH, REDUCE_MAX, REDUCE_MEAN, REDUCE_MIN, REDUCE_SUM,
+    REDUCE_SUMSQ, combine, extract, generate, lookup, map, mix, pack, reduce_components,
 };
 pub use compact::compact;
 pub use emit::{

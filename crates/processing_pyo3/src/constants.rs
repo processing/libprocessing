@@ -62,7 +62,7 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     add!(
         m, MAP, COMBINE, MIX, LOOKUP, REDUCE, EXTRACT, PACK, GENERATE
     );
-    add!(m, AFFINE, ABS, NEGATE, FLOOR, SQRT);
+    add!(m, AFFINE, ABS, NEGATE, FLOOR, SQRT, NORMALIZE, LIMIT);
     add!(m, GREATER, LESS, GEQ, LEQ, EQ, NEQ);
     add!(m, SUB, MUL, DIV, POW);
     add!(m, LENGTH, SUM, SUMSQ, MEAN, MIN, MAX);
