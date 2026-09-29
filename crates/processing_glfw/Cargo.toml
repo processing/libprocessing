@@ -12,9 +12,11 @@ x11 = ["dep:x11"]
 static-link = ["glfw/static-link"]
 
 [dependencies]
-x11 = { version = "2", features = ["xlib"], optional = true }
 bevy = { workspace = true }
 glfw = "0.60.0"
 processing_core = { workspace = true }
 processing_input = { workspace = true }
 processing_render = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11 = { version = "2", features = ["xlib"], optional = true }
