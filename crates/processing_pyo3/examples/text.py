@@ -17,8 +17,8 @@ def draw():
     text("hello, processing", width / 2, height / 2)
 
     # Pulsing subtitle.
-    pulse = 150 + 105 * sin(frame_count * 0.05)
-    fill(120, pulse, 255)
+    pulse = 0.59 + 0.41 * sin(frame_count * 0.05)
+    fill(0.47, pulse, 1.0)
     text_size(20)
     text("global text now works", width / 2, height / 2 + 60)
 

@@ -33,7 +33,6 @@ def setup():
     size(1000, 800)
     window_title(f"Lissajous — all points connected — {N:,} pts")
     mode_3d()
-    bloom(0.0)
 
     p = create_particles(capacity=N, attributes=[Attribute.position(), Attribute.color()])
     # One line = 2 vertices; up to N*MAX_LINKS lines.
@@ -52,7 +51,6 @@ def setup():
 
 
 def draw():
-    bloom(0.0)  # re-assert each frame
     background(255, 255, 255)
 
     t = elapsed_time

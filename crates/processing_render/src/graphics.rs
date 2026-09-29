@@ -11,7 +11,6 @@ use bevy::{
     core_pipeline::tonemapping::Tonemapping,
     ecs::query::QueryEntityError,
     math::{Mat4, Vec3A},
-    post_process::bloom::Bloom,
     prelude::*,
     render::{
         RenderApp,
@@ -210,7 +209,6 @@ pub fn create(
             ..default()
         },
         target,
-        // overridden below for hdr targets
         Tonemapping::None,
         // we need to be able to write to the texture
         CameraMainTextureUsages::default().with(TextureUsages::COPY_DST),
@@ -229,7 +227,7 @@ pub fn create(
     ));
 
     if is_hdr {
-        entity_commands.insert((Hdr, Bloom::NATURAL, Tonemapping::TonyMcMapface));
+        entity_commands.insert(Hdr);
     }
 
     let entity = entity_commands.id();
@@ -444,10 +442,11 @@ pub fn world_from_screen(
     Ok(world)
 }
 
-pub fn set_bloom(
+pub const DEFAULT_BLOOM_INTENSITY: f32 = bevy::post_process::bloom::Bloom::NATURAL.intensity;
+
+pub fn bloom(
     In((entity, intensity, threshold)): In<(Entity, f32, f32)>,
     mut commands: Commands,
-    mut tonemapping_query: Query<&mut Tonemapping>,
 ) -> Result<()> {
     use bevy::post_process::bloom::{Bloom, BloomCompositeMode, BloomPrefilter};
 
@@ -462,29 +461,56 @@ pub fn set_bloom(
     }
 
     commands.entity(entity).insert((bloom, Hdr));
-
-    if let Ok(mut tm) = tonemapping_query.get_mut(entity)
-        && *tm == Tonemapping::None
-    {
-        *tm = Tonemapping::TonyMcMapface;
-    }
-
     Ok(())
 }
 
-pub fn remove_bloom(
-    In(entity): In<Entity>,
-    mut commands: Commands,
-    mut tonemapping_query: Query<&mut Tonemapping>,
-) -> Result<()> {
+pub fn no_bloom(In(entity): In<Entity>, mut commands: Commands) -> Result<()> {
     use bevy::post_process::bloom::Bloom;
 
     commands.entity(entity).remove::<Bloom>();
+    Ok(())
+}
 
-    if let Ok(mut tm) = tonemapping_query.get_mut(entity) {
-        *tm = Tonemapping::None;
+pub fn parse_tonemapping(s: &str) -> Option<Tonemapping> {
+    use processing_core::constants as consts;
+    [
+        (consts::PBR_NEUTRAL, Tonemapping::KhronosPbrNeutral),
+        (consts::AGX, Tonemapping::AgX),
+        (consts::ACES, Tonemapping::AcesFitted),
+        (consts::TONY_MC_MAPFACE, Tonemapping::TonyMcMapface),
+        (consts::BLENDER_FILMIC, Tonemapping::BlenderFilmic),
+        (consts::REINHARD, Tonemapping::Reinhard),
+        (consts::REINHARD_LUMINANCE, Tonemapping::ReinhardLuminance),
+        (
+            consts::SOMEWHAT_BORING_DISPLAY_TRANSFORM,
+            Tonemapping::SomewhatBoringDisplayTransform,
+        ),
+    ]
+    .into_iter()
+    .find_map(|(name, tm)| s.eq_ignore_ascii_case(name).then_some(tm))
+}
+
+pub fn tonemapping_from_u8(v: u8) -> Option<Tonemapping> {
+    match v {
+        0 => Some(Tonemapping::KhronosPbrNeutral),
+        1 => Some(Tonemapping::AgX),
+        2 => Some(Tonemapping::AcesFitted),
+        3 => Some(Tonemapping::TonyMcMapface),
+        4 => Some(Tonemapping::BlenderFilmic),
+        5 => Some(Tonemapping::Reinhard),
+        6 => Some(Tonemapping::ReinhardLuminance),
+        7 => Some(Tonemapping::SomewhatBoringDisplayTransform),
+        _ => None,
     }
+}
 
+pub fn set_tonemapping(
+    In((entity, tonemapping)): In<(Entity, Tonemapping)>,
+    mut query: Query<&mut Tonemapping>,
+) -> Result<()> {
+    *query
+        .get_mut(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)? = tonemapping;
     Ok(())
 }
 

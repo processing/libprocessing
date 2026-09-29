@@ -1485,9 +1485,27 @@ pub mod mewnala {
     }
 
     #[pyfunction]
-    #[pyo3(pass_module, signature = (intensity, threshold=0.0))]
+    #[pyo3(pass_module, signature = (intensity=processing_render::graphics::DEFAULT_BLOOM_INTENSITY, threshold=0.0))]
     fn bloom(module: &Bound<'_, PyModule>, intensity: f32, threshold: f32) -> PyResult<()> {
         graphics!(module).bloom(intensity, threshold)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn no_bloom(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).no_bloom()
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (mode=processing::prelude::constants::PBR_NEUTRAL))]
+    fn tonemapping(module: &Bound<'_, PyModule>, mode: &str) -> PyResult<()> {
+        graphics!(module).tonemapping(mode)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn no_tonemapping(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).no_tonemapping()
     }
 
     #[pyfunction]

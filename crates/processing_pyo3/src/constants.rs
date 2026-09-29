@@ -45,6 +45,17 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     add!(m, NEAREST, CLAMP, REPEAT, MIRROR);
     add!(m, SRGB, LINEAR, HSL, HSV, HWB, OKLAB, OKLCH, LAB, LCH, XYZ);
     add!(
+        m,
+        PBR_NEUTRAL,
+        AGX,
+        ACES,
+        TONY_MC_MAPFACE,
+        BLENDER_FILMIC,
+        REINHARD,
+        REINHARD_LUMINANCE,
+        SOMEWHAT_BORING_DISPLAY_TRANSFORM
+    );
+    add!(
         m, PI, TWO_PI, HALF_PI, QUARTER_PI, TAU, DEG_TO_RAD, RAD_TO_DEG
     );
 

@@ -3897,13 +3897,33 @@ pub unsafe extern "C" fn processing_graphics_world_from_screen(
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_graphics_set_bloom(graphics_id: u64, intensity: f32, threshold: f32) {
     error::clear_error();
-    error::check(|| graphics_set_bloom(Entity::from_bits(graphics_id), intensity, threshold));
+    error::check(|| graphics_bloom(Entity::from_bits(graphics_id), intensity, threshold));
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_graphics_remove_bloom(graphics_id: u64) {
     error::clear_error();
-    error::check(|| graphics_remove_bloom(Entity::from_bits(graphics_id)));
+    error::check(|| graphics_no_bloom(Entity::from_bits(graphics_id)));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_graphics_tonemapping(graphics_id: u64, mode: u8) {
+    error::clear_error();
+    error::check(|| {
+        let tonemapping =
+            processing::prelude::graphics::tonemapping_from_u8(mode).ok_or_else(|| {
+                processing::prelude::error::ProcessingError::InvalidArgument(format!(
+                    "unknown tonemapping: {mode}"
+                ))
+            })?;
+        graphics_tonemapping(Entity::from_bits(graphics_id), tonemapping)
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_graphics_no_tonemapping(graphics_id: u64) {
+    error::clear_error();
+    error::check(|| graphics_no_tonemapping(Entity::from_bits(graphics_id)));
 }
 
 // Mouse buttons

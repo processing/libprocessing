@@ -19,7 +19,7 @@ def draw():
         amp = 30 + sin(i * 0.5) * 20
 
         v = 0.3 + (i / 20.0) * 0.5
-        stroke(v * 0.6 * 255, v * 255, min(v * 1.2, 1.0) * 255)
+        stroke(v * 0.6, v, min(v * 1.2, 1.0))
 
         bezier(
             0, y_base,
