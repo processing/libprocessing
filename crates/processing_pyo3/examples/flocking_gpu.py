@@ -1,13 +1,10 @@
-# GPU flocking: the boids from flocking.py, moved entirely onto the GPU.
-# Positions and velocities live in particle attribute buffers, two compute
-# kernels update them each frame, and the flock renders instanced — nothing
-# is ever read back to the CPU. Brute-force O(N²) neighbor search is trivial
-# for a GPU at this scale; a spatial hash grid is the next step past ~100k.
+# GPU flocking: the boids from flocking.py, built from generic particle ops
+# over each boid's neighbors. Nothing is read back to the CPU.
 from mewnala import *
 from math import cos, sin
 from random import uniform
 
-BOID_COUNT = 10000
+BOID_COUNT = 100000
 BOUND = 30.0  # half-extent of the wrapping box
 NEIGHBOR_DIST = 5.0
 SEPARATION_DIST = 2.5
@@ -15,12 +12,12 @@ MAX_SPEED = 10.0  # units per second
 MAX_FORCE = 6.0  # units per second²
 DT = 1.0 / 60.0
 
-# Pass 1: every boid reads the whole flock's state and writes only its
-# steering force. Splitting the read from the write mirrors the CPU
-# example's two loops — no boid sees a half-updated neighbor.
-
-# Pass 2: integrate the steering force, wrap at the box edges, and point
-# each instanced boid along its velocity via the rotation quaternion.
+# Separation steers away from the summed offsets, so its speed is negative.
+RULES = [
+    ("separation", -MAX_SPEED, 1.5, "close"),
+    ("alignment", MAX_SPEED, 1.0, "near"),
+    ("cohesion", MAX_SPEED, 1.0, "near"),
+]
 
 p = None
 boid = None
@@ -60,15 +57,7 @@ def setup():
 
     directional_light((0.95, 0.9, 0.85), 800.0)
 
-    p = create_particles(
-        BOID_COUNT,
-        attributes=[
-            Attribute.position(),
-            Attribute.rotation(),
-            Attribute.color(),
-            Attribute.velocity(),
-        ],
-    )
+    p = create_particles(BOID_COUNT)
 
     positions = []
     velocities = []
@@ -98,6 +87,38 @@ def setup():
     )
 
 
+# Reynolds steering. `mask` zeroes it for boids with no neighbors in range,
+# which would otherwise brake.
+def steer(desired, speed, mask):
+    p.apply(MAP, desired, op=NORMALIZE, length=speed)
+    p.apply(COMBINE, desired, "velocity", op=SUB)
+    p.apply(MAP, desired, op=LIMIT, max_length=MAX_FORCE * DT)
+    p.apply(COMBINE, desired, mask, op=MUL)
+
+
+def flock():
+    p.apply(FIND_NEIGHBORS, grid=grid, radius=NEIGHBOR_DIST)
+    # what each rule steers toward, summed over the neighbors
+    p.apply(NEIGHBOR, "position", out="separation", op=SUM,
+            relative=True, radius=SEPARATION_DIST, falloff=INVERSE_SQUARE)
+    p.apply(NEIGHBOR, "velocity", out="alignment", op=SUM)
+    p.apply(NEIGHBOR, "position", out="cohesion", op=SUM, relative=True)
+    # which boids have any neighbors for each rule
+    p.apply(NEIGHBOR, out="close", op=COUNT, radius=SEPARATION_DIST)
+    p.apply(NEIGHBOR, out="near", op=COUNT)
+    p.apply(MAP, "close", op=GREATER, threshold=0)
+    p.apply(MAP, "near", op=GREATER, threshold=0)
+
+    for i, (rule, speed, weight, mask) in enumerate(RULES):
+        steer(rule, speed, mask)
+        if i == 0:
+            p.apply(MAP, rule, out="force", op=AFFINE, scale=weight)
+        else:
+            p.apply(COMBINE, "force", rule, op="add", b_scale=weight)
+    p.apply(COMBINE, "velocity", "force", op="add")
+    p.apply(MAP, "velocity", op=LIMIT, min_length=MAX_SPEED * 0.25, max_length=MAX_SPEED)
+
+
 def draw():
     global title_last_time, title_last_frame
 
@@ -114,20 +135,11 @@ def draw():
     camera_look_at(0.0, 0.0, 0.0)
     background(10, 12, 18)
 
+    flock()
+
     material(mat)
     particles(p, boid)
 
-    p.flock(
-        grid,
-        sep_distance=SEPARATION_DIST,
-        neighbor_distance=NEIGHBOR_DIST,
-        weight_separation=1.5,
-        weight_alignment=1.0,
-        weight_cohesion=1.0,
-        max_speed=MAX_SPEED,
-        max_force=MAX_FORCE * DT,
-        min_speed=MAX_SPEED * 0.25,
-    )
     p.apply(INTEGRATE, dt=DT)
     p.apply(BOUNDS_BOX, aabb_min=[-BOUND] * 3, aabb_max=[BOUND] * 3, mode=2)
     p.apply(ORIENT, forward=[0.0, 0.0, 1.0], up=[0.0, 1.0, 0.0])

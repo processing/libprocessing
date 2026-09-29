@@ -3695,14 +3695,6 @@ pub extern "C" fn processing_particles_kernel_impulse() -> u64 {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn processing_particles_kernel_flock() -> u64 {
-    error::clear_error();
-    error::check(particles_kernel_flock)
-        .map(|e| e.to_bits())
-        .unwrap_or(0)
-}
-
-#[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_kernel_orient() -> u64 {
     error::clear_error();
     error::check(particles_kernel_orient)
