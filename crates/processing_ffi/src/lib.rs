@@ -3892,6 +3892,25 @@ pub extern "C" fn processing_particles_grid_destroy(grid_id: u64) {
     error::check(|| grid_destroy(Entity::from_bits(grid_id)));
 }
 
+/// Writes each particle's `neighbors` and `neighbor_count`, rebuilding the grid first.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_find_neighbors(
+    particles_id: u64,
+    grid_id: u64,
+    radius: f32,
+    max: u32,
+) {
+    error::clear_error();
+    error::check(|| {
+        particles_find_neighbors(
+            Entity::from_bits(particles_id),
+            Entity::from_bits(grid_id),
+            radius,
+            max,
+        )
+    });
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_particles_draw(graphics_id: u64, particles_id: u64, geometry_id: u64) {
     error::clear_error();

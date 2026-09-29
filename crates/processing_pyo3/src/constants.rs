@@ -67,9 +67,17 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     add!(m, SUB, MUL, DIV, POW);
     add!(m, LENGTH, SUM, SUMSQ, MEAN, MIN, MAX);
     add!(m, UNIFORM, SIGNED, GAUSSIAN);
-    add!(m, NEIGHBOR);
+    add!(m, NEIGHBOR, FIND_NEIGHBORS);
     add!(m, COUNT, DENSITY);
-    add!(m, CONSTANT, SMOOTHSTEP, QUADRATIC, CUBIC, INVERSE);
+    add!(
+        m,
+        CONSTANT,
+        SMOOTHSTEP,
+        QUADRATIC,
+        CUBIC,
+        INVERSE,
+        INVERSE_SQUARE
+    );
     add!(
         m,
         NOISE,
