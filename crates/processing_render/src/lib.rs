@@ -29,20 +29,23 @@ pub use particles::algebra::{
 };
 pub use particles::compact::compact;
 pub use particles::grid::{Grid, GridParams, grid_build, grid_create, grid_destroy, grid_get};
+pub use particles::neighbors::{
+    particles_find_neighbors, particles_neighbor_lists, particles_neighbor_reduce,
+};
 pub use particles::reduce::{REDUCE_OP_MAX, REDUCE_OP_MIN, REDUCE_OP_SUM, reduce};
 pub use particles::sort::bitonic_sort_by_key;
 pub use particles::{
     BOUNDS_CLAMP, BOUNDS_REFLECT, BOUNDS_SOFT, BOUNDS_WRAP, COMBINE_ADD, COMBINE_DIV, COMBINE_MAX,
     COMBINE_MIN, COMBINE_MUL, COMBINE_POW, COMBINE_SUB, FALLOFF_CONST, FALLOFF_CUBIC,
-    FALLOFF_INVERSE, FALLOFF_LINEAR, FALLOFF_QUADRATIC, FALLOFF_SMOOTHSTEP, particles_apply,
-    particles_attribute_add, particles_attributes, particles_buffer, particles_capacity,
-    particles_connectivity_indirect, particles_create, particles_create_from_geometry,
-    particles_destroy, particles_emit, particles_emit_gpu, particles_ensure_attribute,
-    particles_flock, particles_gather, particles_kernel_age, particles_kernel_attr_combine,
-    particles_kernel_attr_linear, particles_kernel_attr_lookup1d, particles_kernel_attr_lookup2d,
-    particles_kernel_attr_mix, particles_kernel_attract, particles_kernel_bounds_box,
-    particles_kernel_bounds_geometry, particles_kernel_bounds_sphere, particles_kernel_drag,
-    particles_kernel_field, particles_kernel_flock, particles_kernel_force,
+    FALLOFF_INVERSE, FALLOFF_INVERSE_SQUARE, FALLOFF_LINEAR, FALLOFF_QUADRATIC, FALLOFF_SMOOTHSTEP,
+    particles_apply, particles_attribute_add, particles_attributes, particles_buffer,
+    particles_capacity, particles_connectivity_indirect, particles_create,
+    particles_create_from_geometry, particles_destroy, particles_emit, particles_emit_gpu,
+    particles_ensure_attribute, particles_flock, particles_gather, particles_kernel_age,
+    particles_kernel_attr_combine, particles_kernel_attr_linear, particles_kernel_attr_lookup1d,
+    particles_kernel_attr_lookup2d, particles_kernel_attr_mix, particles_kernel_attract,
+    particles_kernel_bounds_box, particles_kernel_bounds_geometry, particles_kernel_bounds_sphere,
+    particles_kernel_drag, particles_kernel_field, particles_kernel_flock, particles_kernel_force,
     particles_kernel_impulse, particles_kernel_integrate, particles_kernel_noise,
     particles_kernel_orient, particles_kernel_transform, particles_kernel_vortex,
     particles_reset_indices, particles_scatter_create, particles_scatter_volume_create,
