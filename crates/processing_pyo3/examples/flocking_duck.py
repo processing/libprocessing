@@ -1,4 +1,4 @@
-# Flocking inside a duck: the GPU boids from flocking_gpu.py, seeded from
+# Flocking inside a duck: GPU boids seeded from
 # the vertices of the Duck glTF mesh. Each boid remembers its spawn vertex
 # in a `home` attribute; a homing force that is negligible near home but
 # grows quadratically with distance lets the boids swirl and flock locally

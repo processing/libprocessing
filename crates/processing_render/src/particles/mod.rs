@@ -21,9 +21,7 @@ pub use algebra::{
     REDUCE_SUMSQ, combine, extract, generate, lookup, map, mix, pack, reduce_components,
 };
 pub use compact::compact;
-pub use emit::{
-    particles_apply, particles_emit, particles_emit_gpu, particles_flock, particles_gather,
-};
+pub use emit::{particles_apply, particles_emit, particles_emit_gpu, particles_gather};
 pub use grid::{Grid, GridParams, grid_build, grid_create, grid_destroy, grid_get};
 pub use kernels::{
     BOUNDS_CLAMP, BOUNDS_REFLECT, BOUNDS_SOFT, BOUNDS_WRAP, COMBINE_ADD, COMBINE_DIV, COMBINE_MAX,
@@ -33,9 +31,9 @@ pub use kernels::{
     particles_kernel_attr_lookup1d, particles_kernel_attr_lookup2d, particles_kernel_attr_mix,
     particles_kernel_attract, particles_kernel_bounds_box, particles_kernel_bounds_geometry,
     particles_kernel_bounds_sphere, particles_kernel_drag, particles_kernel_field,
-    particles_kernel_flock, particles_kernel_force, particles_kernel_impulse,
-    particles_kernel_integrate, particles_kernel_noise, particles_kernel_orient,
-    particles_kernel_transform, particles_kernel_vortex,
+    particles_kernel_force, particles_kernel_impulse, particles_kernel_integrate,
+    particles_kernel_noise, particles_kernel_orient, particles_kernel_transform,
+    particles_kernel_vortex,
 };
 pub use neighbors::{
     particles_find_neighbors, particles_neighbor_lists, particles_neighbor_reduce,

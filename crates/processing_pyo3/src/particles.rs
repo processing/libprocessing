@@ -150,18 +150,6 @@ impl Drop for Grid {
     }
 }
 
-static FLOCK_COMPUTE: std::sync::Mutex<Option<Entity>> = std::sync::Mutex::new(None);
-
-fn flock_compute() -> PyResult<Entity> {
-    let mut guard = FLOCK_COMPUTE.lock().unwrap();
-    if let Some(e) = *guard {
-        return Ok(e);
-    }
-    let e = particles_kernel_flock().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-    *guard = Some(e);
-    Ok(e)
-}
-
 static PHYSICS_COMPUTES: std::sync::Mutex<Option<HashMap<String, Entity>>> =
     std::sync::Mutex::new(None);
 
@@ -1111,24 +1099,6 @@ impl Particles {
         let entity =
             grid_create(params, capacity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(Grid { entity })
-    }
-
-    #[pyo3(signature = (grid, **kwargs))]
-    pub fn flock(&self, grid: &Grid, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<()> {
-        let flock = flock_compute()?;
-        if let Some(kwargs) = kwargs {
-            crate::compute::set_compute_kwargs(flock, kwargs)?;
-        }
-        let cell = grid.cell_size()?;
-        let neighbor_distance = kw_f32(kwargs, "neighbor_distance", cell)?.min(cell);
-        compute_set(
-            flock,
-            "neighbor_distance",
-            shader_value::ShaderValue::Float(neighbor_distance),
-        )
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        particles_flock(self.entity, flock, grid.entity)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     #[staticmethod]

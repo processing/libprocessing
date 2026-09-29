@@ -143,34 +143,6 @@ pub fn particles_emit(
     })
 }
 
-pub fn particles_flock(
-    particles_entity: Entity,
-    flock_entity: Entity,
-    grid: Entity,
-) -> error::Result<()> {
-    let position = app_mut(|app| {
-        let world = app.world();
-        let field = world
-            .get::<Particles>(particles_entity)
-            .ok_or(error::ProcessingError::ParticlesNotFound)?;
-        for (&attr_entity, &buf_entity) in &field.buffers {
-            let attr = world
-                .get::<geometry::Attribute>(attr_entity)
-                .ok_or(error::ProcessingError::InvalidEntity)?;
-            if attr.name == "position" {
-                return Ok(buf_entity);
-            }
-        }
-        Err(error::ProcessingError::InvalidArgument(
-            "particles_flock requires a `position` attribute".to_string(),
-        ))
-    })?;
-
-    grid_build(grid, position)?;
-    compute_set(flock_entity, "grid", ShaderValue::Grid(grid))?;
-    particles_apply(particles_entity, flock_entity)
-}
-
 static NEIGHBOR_COMPUTE: Mutex<Option<Entity>> = Mutex::new(None);
 
 fn neighbor_compute() -> error::Result<Entity> {
