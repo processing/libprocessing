@@ -61,7 +61,7 @@ def setup():
     directional_light((0.95, 0.9, 0.85), 800.0)
 
     p = create_particles(
-        capacity=BOID_COUNT,
+        BOID_COUNT,
         attributes=[
             Attribute.position(),
             Attribute.rotation(),

@@ -16,13 +16,13 @@ def setup():
     rest = Attribute("rest", AttributeFormat.Float3)
     sphere = Geometry.sphere(1.5, 96, 64)
     p = create_particles(
-        geometry=sphere,
+        sphere,
         attributes=[
             Attribute.position(),
             rest,
         ],
     )
-    p.apply(MAP, a=Attribute.position(), out=rest, op=AFFINE, scale=1.0, offset=0.0)
+    p.apply(MAP, Attribute.position(), out=rest, op=AFFINE, scale=1.0, offset=0.0)
 
 
 def draw():

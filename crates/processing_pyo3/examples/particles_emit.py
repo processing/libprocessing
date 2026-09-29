@@ -17,7 +17,7 @@ def setup():
 
     capacity = 2000
     p = create_particles(
-        capacity=capacity,
+        capacity,
         attributes=[Attribute.position(), Attribute.color()],
     )
 
