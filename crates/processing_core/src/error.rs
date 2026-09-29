@@ -60,6 +60,8 @@ pub enum ProcessingError {
     PipelineNotReady(u32),
     #[error("Particles not found")]
     ParticlesNotFound,
+    #[error("Grid not found")]
+    GridNotFound,
     #[error("Font not found")]
     FontNotFound,
     #[error("Font load error: {0}")]

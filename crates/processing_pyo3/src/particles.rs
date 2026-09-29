@@ -117,23 +117,33 @@ fn parse_falloff(s: &str) -> PyResult<u32> {
 
 #[pyclass(unsendable)]
 pub struct Grid {
-    pub(crate) inner: processing_render::particles::grid::Grid,
+    pub(crate) entity: Entity,
 }
 
 #[pymethods]
 impl Grid {
+    /// Opaque id for this object.
+    pub fn id(&self) -> u64 {
+        self.entity.to_bits()
+    }
+
     pub fn build(&self, position: &Buffer) -> PyResult<()> {
-        grid_build(&self.inner, position.entity)
+        grid_build(self.entity, position.entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn bind(&self, compute: &Compute) -> PyResult<()> {
-        grid_bind(&self.inner, compute.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
-    }
-
     #[getter]
-    pub fn cell_size(&self) -> f32 {
-        self.inner.params.cell_size
+    pub fn cell_size(&self) -> PyResult<f32> {
+        Ok(grid_get(self.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?
+            .params
+            .cell_size)
+    }
+}
+
+impl Drop for Grid {
+    fn drop(&mut self) {
+        let _ = grid_destroy(self.entity);
     }
 }
 
@@ -673,7 +683,7 @@ impl Particles {
                 Some(v) => parse_falloff(&v.extract::<String>()?)?,
                 None => FALLOFF_SMOOTHSTEP,
             };
-            let cell = grid.inner.params.cell_size;
+            let cell = grid.cell_size()?;
             let radius = kw_f32(kwargs, "radius", cell)?.min(cell);
 
             let (out, out_comp) = self.operand(kwargs, "out")?;
@@ -704,7 +714,7 @@ impl Particles {
             };
             particles_gather(
                 self.entity,
-                &grid.inner,
+                grid.entity,
                 a,
                 out,
                 op,
@@ -944,9 +954,9 @@ impl Particles {
             cell_size,
             dims,
         };
-        let inner =
+        let entity =
             grid_create(params, capacity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        Ok(Grid { inner })
+        Ok(Grid { entity })
     }
 
     #[pyo3(signature = (grid, **kwargs))]
@@ -955,7 +965,7 @@ impl Particles {
         if let Some(kwargs) = kwargs {
             crate::compute::set_compute_kwargs(flock, kwargs)?;
         }
-        let cell = grid.inner.params.cell_size;
+        let cell = grid.cell_size()?;
         let neighbor_distance = kw_f32(kwargs, "neighbor_distance", cell)?.min(cell);
         compute_set(
             flock,
@@ -963,7 +973,7 @@ impl Particles {
             shader_value::ShaderValue::Float(neighbor_distance),
         )
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        particles_flock(self.entity, flock, &grid.inner)
+        particles_flock(self.entity, flock, grid.entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 

@@ -10,6 +10,13 @@ fn falloff(d: f32, radius: f32, mode: u32) -> f32 {
     }
 }
 
+// a spatial hash grid, bound by `set(grid=...)` as `grid_offsets`, `grid_sorted` and `grid`
+struct Grid {
+    origin: vec3<f32>,
+    cell_size: f32,
+    dims: vec3<u32>,
+}
+
 fn cell_coords(p: vec3<f32>, grid_min: vec3<f32>, cell_size: f32, dims: vec3<u32>) -> vec3<i32> {
     let rel = (p - grid_min) / cell_size;
     return vec3<i32>(

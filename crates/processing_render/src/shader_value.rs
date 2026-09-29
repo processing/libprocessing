@@ -19,6 +19,8 @@ pub enum ShaderValue {
     Buffer(Entity),
     MeshAttribute(Entity, Entity),
     MeshIndex(Entity),
+    /// binds `{name}_offsets`, `{name}_sorted` and the `{name}` uniform
+    Grid(Entity),
 }
 
 impl ShaderValue {
@@ -40,7 +42,8 @@ impl ShaderValue {
             ShaderValue::Texture(_)
             | ShaderValue::Buffer(_)
             | ShaderValue::MeshAttribute(..)
-            | ShaderValue::MeshIndex(_) => None,
+            | ShaderValue::MeshIndex(_)
+            | ShaderValue::Grid(_) => None,
         }
     }
 
@@ -54,7 +57,8 @@ impl ShaderValue {
             ShaderValue::Texture(_)
             | ShaderValue::Buffer(_)
             | ShaderValue::MeshAttribute(..)
-            | ShaderValue::MeshIndex(_) => None,
+            | ShaderValue::MeshIndex(_)
+            | ShaderValue::Grid(_) => None,
         }
     }
 
@@ -103,7 +107,8 @@ impl ShaderValue {
             ShaderValue::Texture(_)
             | ShaderValue::Buffer(_)
             | ShaderValue::MeshAttribute(..)
-            | ShaderValue::MeshIndex(_) => None,
+            | ShaderValue::MeshIndex(_)
+            | ShaderValue::Grid(_) => None,
         }
     }
 }

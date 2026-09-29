@@ -43,6 +43,9 @@ pub(crate) fn py_to_shader_value(value: &Bound<'_, PyAny>) -> PyResult<shader_va
     if let Ok(buf) = value.extract::<PyRef<Buffer>>() {
         return Ok(shader_value::ShaderValue::Buffer(buf.entity));
     }
+    if let Ok(grid) = value.extract::<PyRef<crate::particles::Grid>>() {
+        return Ok(shader_value::ShaderValue::Grid(grid.entity));
+    }
 
     if let Ok(v) = value.extract::<[f32; 4]>() {
         return Ok(shader_value::ShaderValue::Float4(v));
