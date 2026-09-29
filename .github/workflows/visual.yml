@@ -43,7 +43,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
-          # PR checkouts are merge commits; HEAD^1 is the main commit they're compared against.
+          # PR checkouts are merge commits; HEAD^1 leads back to the main commit they're compared against.
           fetch-depth: 2
           persist-credentials: false
 
@@ -85,7 +85,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          sha=$(git rev-parse HEAD^1)
+          # Stacked PRs merge onto their parents' merge commits, so compare against the main commit
+          # at the bottom of the stack rather than HEAD^1 itself.
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$(git rev-parse HEAD^1)" --jq .merge_base_commit.sha)
           latest() {
             gh run list -R "$GITHUB_REPOSITORY" --workflow visual.yml --branch main --event push \
               --commit "$sha" --limit 1 --json databaseId,status,conclusion --jq '.[0] // empty'
@@ -99,7 +101,7 @@ jobs:
           fi
           if [ "$(jq -r '.conclusion // empty' <<< "$run")" = success ] &&
             gh run download "$(jq -r .databaseId <<< "$run")" -R "$GITHUB_REPOSITORY" -n visual-screenshots -D out/baseline; then
-            echo "Using screenshots from run $(jq -r .databaseId <<< "$run")"
+            echo "Using screenshots from main at $sha (run $(jq -r .databaseId <<< "$run"))"
           else
             echo "::notice::No screenshots published for main at $sha; cases are reported as new"
           fi
