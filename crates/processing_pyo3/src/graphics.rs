@@ -800,8 +800,7 @@ impl Geometry {
         Ok(Self { entity })
     }
 
-    /// lattice centered at the origin; topology is `POINTS`, intended as a
-    /// position source for `Particles(geometry=...)` rather than rasterized.
+    /// A point lattice centered at the origin, to seed `create_particles(geometry)`.
     #[staticmethod]
     #[pyo3(signature = (nx, ny, nz, spacing=1.0))]
     pub fn grid(nx: u32, ny: u32, nz: u32, spacing: f32) -> PyResult<Self> {

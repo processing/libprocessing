@@ -14,7 +14,7 @@ def setup():
     window_title("gpu index")
     mode_3d()
 
-    p = create_particles(capacity=NX * NY, attributes=[Attribute.position()])
+    p = create_particles(NX * NY, attributes=[Attribute.position()])
     idx = p.index_buffer((NX - 1) * (NY - 1) * 6)
     gen = create_compute(load_shader("shaders/gen_surface.wesl"))
     gen.set(indices=idx)

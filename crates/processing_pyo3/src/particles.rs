@@ -1,7 +1,7 @@
 use bevy::prelude::Entity;
 use processing::prelude::*;
 use processing_render::geometry;
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyTuple};
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError, PyValueError},
     prelude::*,
@@ -265,6 +265,54 @@ fn map_param_keys(op: u32) -> &'static [&'static str] {
     }
 }
 
+fn operand_names(verb: &str) -> &'static [&'static str] {
+    let is = |c: &str| verb.eq_ignore_ascii_case(c);
+    if is(c::MAP) || is(c::REDUCE) || is(c::EXTRACT) || is(c::LOOKUP) || is(c::NEIGHBOR) {
+        &["a"]
+    } else if is(c::COMBINE) {
+        &["a", "b"]
+    } else if is(c::MIX) {
+        &["a", "b", "t"]
+    } else {
+        &[]
+    }
+}
+
+fn with_operands<'py>(
+    verb: &str,
+    operands: &Bound<'py, PyTuple>,
+    kwargs: Option<&Bound<'py, PyDict>>,
+) -> PyResult<Option<Bound<'py, PyDict>>> {
+    let py = operands.py();
+    let merged = match kwargs {
+        Some(k) => k.copy()?,
+        None => PyDict::new(py),
+    };
+    let packs = verb.eq_ignore_ascii_case(c::PACK);
+    let names = operand_names(verb);
+    for name in names.iter().chain(packs.then_some(&"sources")) {
+        if merged.contains(*name)? {
+            return Err(PyTypeError::new_err(format!(
+                "apply({verb}): pass operands positionally, not as `{name}=`"
+            )));
+        }
+    }
+    if packs {
+        merged.set_item("sources", operands.to_list())?;
+    } else if operands.len() > names.len() {
+        return Err(PyTypeError::new_err(format!(
+            "apply({verb}): takes at most {} operand(s), got {}",
+            names.len(),
+            operands.len()
+        )));
+    } else {
+        for (name, operand) in names.iter().zip(operands.iter()) {
+            merged.set_item(*name, operand)?;
+        }
+    }
+    Ok(Some(merged))
+}
+
 fn reject_unknown_kwargs(kwargs: Option<&Bound<'_, PyDict>>, valid: &[&str]) -> PyResult<()> {
     let Some(kwargs) = kwargs else {
         return Ok(());
@@ -455,9 +503,8 @@ impl Particles {
         })
     }
 
-    /// Resolve a `buffer()` argument (an attribute name string or an `Attribute`)
-    /// to its attribute entity. Built-in names map to their factory; other names
-    /// must have been declared as custom attributes at construction.
+    /// Resolve an attribute name or `Attribute` to its entity. Unknown names must have been
+    /// written first, e.g. via `out=`.
     fn resolve_attribute(&self, attribute: &Bound<'_, PyAny>) -> PyResult<Entity> {
         if let Ok(attr) = attribute.extract::<Attribute>() {
             return Ok(attr.entity);
@@ -469,8 +516,13 @@ impl Particles {
             if let Some((entity, _)) = self.name_to_attr.get(&name) {
                 return Ok(*entity);
             }
+            if let Some(entity) = geometry_attribute_find(&name)
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?
+            {
+                return Ok(entity);
+            }
             return Err(PyValueError::new_err(format!(
-                "\"{name}\" is not a built-in attribute; pass its Attribute to buffer()"
+                "no attribute \"{name}\" yet; write to it first, e.g. out=\"{name}\""
             )));
         }
         Err(PyTypeError::new_err(
@@ -503,24 +555,66 @@ impl Particles {
     }
 
     fn operand(&self, kwargs: Option<&Bound<'_, PyDict>>, key: &str) -> PyResult<(Entity, u32)> {
-        let val = kw(kwargs, key)
-            .ok_or_else(|| PyRuntimeError::new_err(format!("apply(): missing operand '{key}'")))?;
+        let val = kw(kwargs, key).ok_or_else(|| {
+            PyTypeError::new_err(match key {
+                "out" => "apply(): missing `out=`",
+                _ => "apply(): missing an operand",
+            })
+        })?;
         self.resolve_operand(&val)
     }
 
-    fn dest(&self, kwargs: Option<&Bound<'_, PyDict>>, in_place: Entity) -> PyResult<Entity> {
+    /// Resolve `out=`, creating it with `components` if new. An existing `out` must match.
+    fn output(&self, kwargs: Option<&Bound<'_, PyDict>>, components: u32) -> PyResult<Entity> {
+        let rt = |e: error::ProcessingError| PyRuntimeError::new_err(format!("{e}"));
+        let val =
+            kw(kwargs, "out").ok_or_else(|| PyTypeError::new_err("apply(): missing `out=`"))?;
+        if let Ok(name) = val.extract::<String>()
+            && Self::builtin_attribute(&name).is_none()
+            && !self.name_to_attr.contains_key(&name)
+            && geometry_attribute_find(&name).map_err(rt)?.is_none()
+        {
+            use processing_render::geometry::AttributeFormat as F;
+            let format = match components {
+                1 => F::Float,
+                2 => F::Float2,
+                3 => F::Float3,
+                4 => F::Float4,
+                n => {
+                    return Err(PyValueError::new_err(format!(
+                        "apply(): can't create \"{name}\" with {n} components"
+                    )));
+                }
+            };
+            let attr = geometry_attribute_create(name, format).map_err(rt)?;
+            return particles_ensure_attribute(self.entity, attr).map_err(rt);
+        }
+        let (out, comp) = self.resolve_operand(&val)?;
+        if comp != components {
+            return Err(PyValueError::new_err(format!(
+                "apply(): `out` has {comp} components but this writes {components}"
+            )));
+        }
+        Ok(out)
+    }
+
+    /// `out=` if given, otherwise in place.
+    fn dest(
+        &self,
+        kwargs: Option<&Bound<'_, PyDict>>,
+        in_place: Entity,
+        components: u32,
+    ) -> PyResult<Entity> {
         match kw(kwargs, "out") {
-            Some(v) => Ok(self.resolve_operand(&v)?.0),
+            Some(_) => self.output(kwargs, components),
             None => Ok(in_place),
         }
     }
 
-    /// Build a particle system (backs `create_particles`). Attributes default to
-    /// `position`; the rest (built-in or declared custom) materialize on demand.
+    /// Build a particle system (backs `create_particles`) from a count or a `Geometry`.
     pub(crate) fn create(
-        capacity: Option<u32>,
+        source: &Bound<'_, PyAny>,
         attributes: Option<Vec<PyRef<Attribute>>>,
-        geometry: Option<&Geometry>,
     ) -> PyResult<Self> {
         let attrs: Vec<Attribute> = match attributes {
             Some(list) => list.iter().map(|a| (**a).clone()).collect(),
@@ -528,22 +622,16 @@ impl Particles {
         };
         let attr_entities: Vec<Entity> = attrs.iter().map(|a| a.entity).collect();
 
-        let entity = match (capacity, geometry) {
-            (Some(cap), None) => particles_create(cap, attr_entities)
-                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
-            (None, Some(g)) => particles_create_from_geometry(g.entity, attr_entities)
-                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
-            (None, None) => {
-                return Err(PyRuntimeError::new_err(
-                    "create_particles() requires either capacity or geometry",
-                ));
-            }
-            (Some(_), Some(_)) => {
-                return Err(PyRuntimeError::new_err(
-                    "create_particles() accepts capacity or geometry, not both",
-                ));
-            }
-        };
+        let entity = if let Ok(geometry) = source.extract::<PyRef<Geometry>>() {
+            particles_create_from_geometry(geometry.entity, attr_entities)
+        } else if let Ok(capacity) = source.extract::<u32>() {
+            particles_create(capacity, attr_entities)
+        } else {
+            return Err(PyTypeError::new_err(
+                "create_particles(): pass a particle count or a Geometry",
+            ));
+        }
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         Ok(Self {
             entity,
@@ -565,7 +653,7 @@ impl Particles {
 
         if name.eq_ignore_ascii_case(c::MAP) {
             let (a, comp) = self.operand(kwargs, "a")?;
-            let out = self.dest(kwargs, a)?;
+            let out = self.dest(kwargs, a, comp)?;
             let op = kw_op(kwargs, MAP_AFFINE, parse_map_op)?;
             let mut valid = vec!["a", "out", "op"];
             valid.extend_from_slice(map_param_keys(op));
@@ -581,7 +669,7 @@ impl Particles {
                     "apply(combine): the first operand has {comp} components, so the second needs {comp} or 1, not {b_comp}"
                 )));
             }
-            let out = self.dest(kwargs, a)?;
+            let out = self.dest(kwargs, a, comp)?;
             let op = kw_op(kwargs, COMBINE_ADD, parse_combine_op)?;
             let b_scale = kw_f32(kwargs, "b_scale", 1.0)?;
             let b_offset = kw_f32(kwargs, "b_offset", 0.0)?;
@@ -596,15 +684,15 @@ impl Particles {
             let (t, t_comp) = self.operand(kwargs, "t")?;
             if b_comp != comp {
                 return Err(PyValueError::new_err(format!(
-                    "apply(mix): `a` has {comp} components but `b` has {b_comp} (must match)"
+                    "apply(mix): the first operand has {comp} components but the second has {b_comp}"
                 )));
             }
             if t_comp != 1 {
                 return Err(PyValueError::new_err(format!(
-                    "apply(mix): `t` must be a per-particle scalar (1 component), got {t_comp}"
+                    "apply(mix): the third operand must be one value per particle, not {t_comp} components"
                 )));
             }
-            let out = self.dest(kwargs, a)?;
+            let out = self.dest(kwargs, a, comp)?;
             let t_scale = kw_f32(kwargs, "t_scale", 1.0)?;
             let t_offset = kw_f32(kwargs, "t_offset", 0.0)?;
             let t_clamp = kw_bool(kwargs, "t_clamp", true)?;
@@ -624,7 +712,7 @@ impl Particles {
                 ],
             )?;
             let (a, in_comp) = self.operand(kwargs, "a")?;
-            let out = self.operand(kwargs, "out")?.0;
+            let out = self.output(kwargs, 4)?;
             let tex = kw(kwargs, "tex")
                 .ok_or_else(|| PyRuntimeError::new_err("apply(lookup): missing 'tex' Image"))?
                 .extract::<PyRef<Image>>()
@@ -650,29 +738,47 @@ impl Particles {
         } else if name.eq_ignore_ascii_case(c::REDUCE) {
             reject_unknown_kwargs(kwargs, &["a", "out", "op"])?;
             let (a, comp) = self.operand(kwargs, "a")?;
-            let out = self.operand(kwargs, "out")?.0;
+            let out = self.output(kwargs, 1)?;
             let op = kw_op(kwargs, REDUCE_LENGTH, parse_reduce_op)?;
             algebra_reduce(out, a, comp, op).map_err(rt)
         } else if name.eq_ignore_ascii_case(c::EXTRACT) {
             reject_unknown_kwargs(kwargs, &["a", "out", "index"])?;
             let (a, comp) = self.operand(kwargs, "a")?;
-            let out = self.operand(kwargs, "out")?.0;
+            let out = self.output(kwargs, 1)?;
             let index = kw_u32(kwargs, "index", 0)?;
             algebra_extract(out, a, comp, index).map_err(rt)
         } else if name.eq_ignore_ascii_case(c::PACK) {
             reject_unknown_kwargs(kwargs, &["out", "sources"])?;
-            let out = self.operand(kwargs, "out")?.0;
             let sources = kw(kwargs, "sources")
                 .ok_or_else(|| PyRuntimeError::new_err("apply(pack): missing 'sources' list"))?;
             let items: Vec<Bound<'_, PyAny>> = sources.extract()?;
+            let out = self.output(kwargs, items.len() as u32)?;
             let mut entities = Vec::with_capacity(items.len());
             for item in &items {
                 entities.push(self.resolve_operand(item)?.0);
             }
             algebra_pack(out, &entities).map_err(rt)
         } else if name.eq_ignore_ascii_case(c::GENERATE) {
-            reject_unknown_kwargs(kwargs, &["out", "mode", "seed", "scale", "offset"])?;
-            let (out, comp) = self.operand(kwargs, "out")?;
+            reject_unknown_kwargs(
+                kwargs,
+                &["out", "mode", "seed", "scale", "offset", "components"],
+            )?;
+            // nothing to infer from, so a new `out` needs `components=`
+            let (out, comp) = match kw(kwargs, "components") {
+                Some(c) => {
+                    let comp = c.extract::<u32>()?;
+                    (self.output(kwargs, comp)?, comp)
+                }
+                None => match kw(kwargs, "out").map(|v| self.resolve_operand(&v)) {
+                    Some(Ok(resolved)) => resolved,
+                    Some(Err(_)) => {
+                        return Err(PyValueError::new_err(
+                            "apply(generate): pass components= to create a new `out`",
+                        ));
+                    }
+                    None => return Err(PyTypeError::new_err("apply(): missing `out=`")),
+                },
+            };
             let mode = match kw(kwargs, "mode") {
                 Some(v) => parse_generate_mode(&v.extract::<String>()?)?,
                 None => GEN_UNIFORM,
@@ -695,13 +801,7 @@ impl Particles {
             let cell = grid.cell_size()?;
             let radius = kw_f32(kwargs, "radius", cell)?.min(cell);
 
-            let (out, out_comp) = self.operand(kwargs, "out")?;
             let (a, components) = if op == NEIGHBOR_COUNT {
-                if out_comp != 1 {
-                    return Err(PyValueError::new_err(
-                        "apply(neighbor, op=count/density): `out` must be a scalar (1 component)",
-                    ));
-                }
                 let a = match kw(kwargs, "a") {
                     Some(_) => self.operand(kwargs, "a")?.0,
                     None => {
@@ -713,14 +813,9 @@ impl Particles {
                 };
                 (a, 1u32)
             } else {
-                let (a, in_comp) = self.operand(kwargs, "a")?;
-                if in_comp != out_comp {
-                    return Err(PyValueError::new_err(format!(
-                        "apply(neighbor): source has {in_comp} components but out has {out_comp}"
-                    )));
-                }
-                (a, in_comp)
+                self.operand(kwargs, "a")?
             };
+            let out = self.output(kwargs, components)?;
             particles_gather(
                 self.entity,
                 grid.entity,
@@ -772,8 +867,8 @@ impl Particles {
 
     /// The GPU buffer for an attribute, materialized on demand. `attribute` is a
     /// built-in name (`"position"`, `"velocity"`, `"color"`, `"scale"`, `"life"`,
-    /// `"age"`, `"normal"`, `"uv"`, `"rotation"`), a declared custom attribute's
-    /// name, or an `Attribute`.
+    /// `"age"`, `"normal"`, `"uv"`, `"rotation"`), the name of any created
+    /// attribute, or an `Attribute`.
     pub fn buffer(&self, attribute: &Bound<'_, PyAny>) -> PyResult<Buffer> {
         let attr_entity = self.resolve_attribute(attribute)?;
         let buf = particles_ensure_attribute(self.entity, attr_entity)
@@ -811,13 +906,21 @@ impl Particles {
         particles_reset_indices(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    #[pyo3(signature = (kind, **kwargs))]
+    /// Run an operation: operands positionally, `out=` and options as keywords, e.g.
+    /// `p.apply(COMBINE, "velocity", "force", op="add")`.
+    #[pyo3(signature = (kind, *operands, **kwargs))]
     pub fn apply(
         &self,
         kind: &Bound<'_, PyAny>,
+        operands: &Bound<'_, PyTuple>,
         kwargs: Option<&Bound<'_, PyDict>>,
     ) -> PyResult<()> {
         if let Ok(compute) = kind.extract::<PyRef<Compute>>() {
+            if !operands.is_empty() {
+                return Err(PyTypeError::new_err(
+                    "apply(compute): pass kernel parameters as keywords",
+                ));
+            }
             if let Some(kwargs) = kwargs {
                 compute.set(Some(kwargs))?;
             }
@@ -829,7 +932,8 @@ impl Particles {
                 "apply(): first argument must be an operation constant or a Compute",
             )
         })?;
-        self.apply_named(&name, kwargs)
+        let kwargs = with_operands(&name, operands, kwargs)?;
+        self.apply_named(&name, kwargs.as_ref())
     }
 
     #[pyo3(signature = (n, **kwargs))]
@@ -841,12 +945,10 @@ impl Particles {
         let mut data: Vec<(Entity, Vec<u8>)> = Vec::new();
         for (key, value) in kwargs.iter() {
             let name: String = key.extract()?;
-            let (attr_entity, fmt) = self.name_to_attr.get(&name).copied().ok_or_else(|| {
-                PyRuntimeError::new_err(format!(
-                    "no attribute named '{name}' (registered: {:?})",
-                    self.name_to_attr.keys().collect::<Vec<_>>()
-                ))
-            })?;
+            let attr_entity = self.resolve_attribute(&key)?;
+            let (_, fmt) = geometry_attribute_info(attr_entity)
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+            let fmt = AttributeFormat::from_inner(fmt);
             let floats: Vec<f32> = value.extract()?;
             let expected = (n as usize) * fmt.float_count();
             if floats.len() != expected {

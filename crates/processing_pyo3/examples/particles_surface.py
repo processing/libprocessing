@@ -30,7 +30,7 @@ def setup():
     window_title(f"Particle surface — {N:,}-vertex Mobius strip")
     mode_3d()
 
-    p = create_particles(capacity=N, attributes=[Attribute.position()])
+    p = create_particles(N, attributes=[Attribute.position()])
 
 
 def draw():

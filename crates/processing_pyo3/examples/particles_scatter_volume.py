@@ -26,7 +26,7 @@ def setup():
     particle = Geometry.sphere(0.15, 4, 3)
 
     p = create_particles(
-        capacity=CAPACITY,
+        CAPACITY,
         attributes=[
             Attribute.position(),
             Attribute.scale(),
@@ -45,7 +45,7 @@ def draw():
     seed = (int(elapsed_time * 1000.0) ^ 0xC0FFEE) & 0xFFFFFFFF
     scatter.set(seed=seed)
     p.emit_gpu(BURST, scatter)
-    p.apply(MAP, a="scale", op=AFFINE, scale=0.985, offset=0.0)
+    p.apply(MAP, "scale", op=AFFINE, scale=0.985, offset=0.0)
 
 
 run()
