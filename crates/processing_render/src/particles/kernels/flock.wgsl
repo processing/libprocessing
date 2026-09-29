@@ -1,4 +1,4 @@
-import processing::particles::{cell_coords, cell_index};
+import processing::particles::{Grid, cell_coords, cell_index};
 
 struct FlockParams {
     sep_distance: f32,
@@ -11,21 +11,12 @@ struct FlockParams {
     min_speed: f32,
 }
 
-struct GridParams {
-    grid_min: vec3<f32>,
-    cell_size: f32,
-    dims_x: u32,
-    dims_y: u32,
-    dims_z: u32,
-    _pad: u32,
-}
-
 @group(0) @binding(0) var<storage, read>       position: array<f32>;
 @group(0) @binding(1) var<storage, read_write> velocity: array<f32>;
-@group(0) @binding(2) var<storage, read>       offsets:  array<u32>;
-@group(0) @binding(3) var<storage, read>       sorted:   array<u32>;
+@group(0) @binding(2) var<storage, read>       grid_offsets: array<u32>;
+@group(0) @binding(3) var<storage, read>       grid_sorted:  array<u32>;
 @group(0) @binding(4) var<uniform>             fp:       FlockParams;
-@group(0) @binding(5) var<uniform>             gp:       GridParams;
+@group(0) @binding(5) var<uniform>             grid:         Grid;
 
 fn limit_mag(v: vec3<f32>, m: f32) -> vec3<f32> {
     let len2 = dot(v, v);
@@ -59,8 +50,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let sep_d2 = fp.sep_distance * fp.sep_distance;
     let neighbor_d2 = fp.neighbor_distance * fp.neighbor_distance;
 
-    let dims = vec3<u32>(gp.dims_x, gp.dims_y, gp.dims_z);
-    let base = cell_coords(pos, gp.grid_min, gp.cell_size, dims);
+    let dims = grid.dims;
+    let base = cell_coords(pos, grid.origin, grid.cell_size, dims);
     let bx = base.x;
     let by = base.y;
     let bz = base.z;
@@ -73,19 +64,19 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     for (var dz = -1; dz <= 1; dz++) {
         let cz = bz + dz;
-        if cz < 0 || cz >= i32(gp.dims_z) { continue; }
+        if cz < 0 || cz >= i32(grid.dims.z) { continue; }
         for (var dy = -1; dy <= 1; dy++) {
             let cy = by + dy;
-            if cy < 0 || cy >= i32(gp.dims_y) { continue; }
+            if cy < 0 || cy >= i32(grid.dims.y) { continue; }
             for (var dx = -1; dx <= 1; dx++) {
                 let cx = bx + dx;
-                if cx < 0 || cx >= i32(gp.dims_x) { continue; }
+                if cx < 0 || cx >= i32(grid.dims.x) { continue; }
 
                 let cell = cell_index(vec3<u32>(u32(cx), u32(cy), u32(cz)), dims);
-                let start = offsets[cell];
-                let end = offsets[cell + 1u];
+                let start = grid_offsets[cell];
+                let end = grid_offsets[cell + 1u];
                 for (var s = start; s < end; s++) {
-                    let j = sorted[s];
+                    let j = grid_sorted[s];
                     if j == i { continue; }
 
                     let diff = pos - load_pos(j);

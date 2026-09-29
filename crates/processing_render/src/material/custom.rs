@@ -335,7 +335,7 @@ pub(crate) fn apply_reflect_field(
     Err(ProcessingError::UnknownShaderProperty(name.to_string()))
 }
 
-fn apply_field_coerced(field: &mut dyn PartialReflect, value: &dyn PartialReflect) {
+pub(crate) fn apply_field_coerced(field: &mut dyn PartialReflect, value: &dyn PartialReflect) {
     if let Some(coerced) = coerce_numeric(field, value) {
         field.apply(coerced.as_ref());
     } else {
@@ -495,9 +495,10 @@ pub(crate) fn shader_value_to_reflect(value: &ShaderValue) -> Result<Box<dyn Par
         ShaderValue::Texture(_)
         | ShaderValue::Buffer(_)
         | ShaderValue::MeshAttribute(..)
-        | ShaderValue::MeshIndex(_) => {
+        | ShaderValue::MeshIndex(_)
+        | ShaderValue::Grid(_) => {
             return Err(ProcessingError::InvalidArgument(
-                "Texture/Buffer/Mesh* must be bound via set_property, not as a uniform value"
+                "Texture/Buffer/Mesh*/Grid must be bound via set_property, not as a uniform value"
                     .to_string(),
             ));
         }

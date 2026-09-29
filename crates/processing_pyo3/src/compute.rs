@@ -291,8 +291,9 @@ fn shader_value_to_py<'py>(py: Python<'py>, sv: &ShaderValue) -> PyResult<Bound<
         ShaderValue::Texture(_)
         | ShaderValue::Buffer(_)
         | ShaderValue::MeshAttribute(..)
-        | ShaderValue::MeshIndex(_) => Err(PyRuntimeError::new_err(
-            "cannot convert Texture/Buffer/Mesh* to Python value",
+        | ShaderValue::MeshIndex(_)
+        | ShaderValue::Grid(_) => Err(PyRuntimeError::new_err(
+            "cannot convert Texture/Buffer/Mesh*/Grid to Python value",
         )),
     }
 }

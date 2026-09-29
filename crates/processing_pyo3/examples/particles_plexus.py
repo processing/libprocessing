@@ -65,7 +65,7 @@ def draw():
     grid.build(p.buffer("position"))
     p.reset_indices()
     link.set(indices=idx, draw_args=args, link_distance=LINK_DIST, max_links=MAX_LINKS)
-    grid.bind(link)
+    link.set(grid=grid)
     p.apply(link)
 
     particles(p, topology="lines")

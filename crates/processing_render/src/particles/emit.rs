@@ -6,7 +6,7 @@ use processing_core::app_mut;
 use processing_core::error;
 
 use crate::geometry;
-use crate::particles::grid::{Grid, grid_bind, grid_build};
+use crate::particles::grid::grid_build;
 use crate::particles::kernels::KernelRequires;
 use crate::particles::{Particles, particles_ensure_attribute};
 use crate::shader_value::ShaderValue;
@@ -146,7 +146,7 @@ pub fn particles_emit(
 pub fn particles_flock(
     particles_entity: Entity,
     flock_entity: Entity,
-    grid: &Grid,
+    grid: Entity,
 ) -> error::Result<()> {
     let position = app_mut(|app| {
         let world = app.world();
@@ -167,7 +167,7 @@ pub fn particles_flock(
     })?;
 
     grid_build(grid, position)?;
-    grid_bind(grid, flock_entity)?;
+    compute_set(flock_entity, "grid", ShaderValue::Grid(grid))?;
     particles_apply(particles_entity, flock_entity)
 }
 
@@ -186,7 +186,7 @@ fn neighbor_compute() -> error::Result<Entity> {
 
 pub fn particles_gather(
     particles_entity: Entity,
-    grid: &Grid,
+    grid: Entity,
     source: Entity,
     out: Entity,
     op: u32,
@@ -222,7 +222,7 @@ pub fn particles_gather(
 
     grid_build(grid, position)?;
     let neighbor = neighbor_compute()?;
-    grid_bind(grid, neighbor)?;
+    compute_set(neighbor, "grid", ShaderValue::Grid(grid))?;
     compute_set(neighbor, "position", ShaderValue::Buffer(position))?;
     compute_set(neighbor, "source", ShaderValue::Buffer(source))?;
     compute_set(neighbor, "out", ShaderValue::Buffer(out))?;
