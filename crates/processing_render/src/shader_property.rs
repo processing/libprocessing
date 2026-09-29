@@ -1,10 +1,12 @@
 use bevy::prelude::*;
+use bevy::reflect::ReflectMut;
 use bevy_naga_reflect::dynamic_shader::DynamicShader;
 use bevy_naga_reflect::reflect::ParameterCategory;
 
 use crate::compute::{Buffer, Compute, MeshBindingRef};
 use crate::image::Image as PImage;
-use crate::material::custom::{apply_reflect_field, shader_value_to_reflect};
+use crate::material::custom::{apply_field_coerced, apply_reflect_field, shader_value_to_reflect};
+use crate::particles::grid::Grid;
 use crate::render::filter::Filter;
 use crate::shader_value::ShaderValue;
 use processing_core::error::{ProcessingError, Result};
@@ -104,27 +106,81 @@ pub(crate) fn apply_shader_value(
     }
 }
 
+/// Binds `{name}_{suffix}` buffers and the fields of the `{name}` uniform struct.
+fn bind_struct(
+    shader: &mut DynamicShader,
+    name: &str,
+    type_name: &str,
+    buffers: &[(&str, Entity)],
+    values: &[(&str, ShaderValue)],
+    p_buffers: &mut Query<&mut Buffer>,
+    p_images: &Query<&PImage>,
+) -> Result<()> {
+    for (suffix, buffer) in buffers {
+        let binding = format!("{name}_{suffix}");
+        apply_shader_value(
+            shader,
+            &binding,
+            ShaderValue::Buffer(*buffer),
+            p_buffers,
+            p_images,
+        )?;
+    }
+    let wrong_type = || {
+        ProcessingError::InvalidArgument(format!(
+            "`{name}` must be a `particles::{type_name}` uniform"
+        ))
+    };
+    let param = shader
+        .field_mut(name)
+        .ok_or_else(|| ProcessingError::UnknownShaderProperty(name.to_string()))?;
+    let ReflectMut::Struct(fields) = param.reflect_mut() else {
+        return Err(wrong_type());
+    };
+    for (field, value) in values {
+        let target = fields.field_mut(field).ok_or_else(wrong_type)?;
+        apply_field_coerced(target, &*shader_value_to_reflect(value)?);
+    }
+    Ok(())
+}
+
 pub fn set_property(
     In((entity, name, value)): In<(Entity, String, ShaderValue)>,
     mut computes: Query<&mut Compute>,
     mut filters: Query<&mut Filter>,
     mut p_buffers: Query<&mut Buffer>,
     p_images: Query<&PImage>,
+    grids: Query<&Grid>,
 ) -> Result<bool> {
-    if let Ok(mut compute) = computes.get_mut(entity) {
-        match value {
-            ShaderValue::MeshAttribute(..) | ShaderValue::MeshIndex(..) => {
-                bind_compute_mesh(&mut compute, name, value)?;
-            }
-            other => {
-                apply_shader_value(&mut compute.shader, &name, other, &mut p_buffers, &p_images)?;
-            }
+    let shader = if let Ok(compute) = computes.get_mut(entity) {
+        if let ShaderValue::MeshAttribute(..) | ShaderValue::MeshIndex(..) = value {
+            bind_compute_mesh(compute.into_inner(), name, value)?;
+            return Ok(true);
         }
-        return Ok(true);
+        &mut compute.into_inner().shader
+    } else if let Ok(filter) = filters.get_mut(entity) {
+        &mut filter.into_inner().shader
+    } else {
+        return Ok(false);
+    };
+    match value {
+        ShaderValue::Grid(grid) => {
+            let grid = grids.get(grid).map_err(|_| ProcessingError::GridNotFound)?;
+            bind_struct(
+                shader,
+                &name,
+                "Grid",
+                &[("offsets", grid.offsets), ("sorted", grid.sorted)],
+                &[
+                    ("origin", ShaderValue::Float3(grid.params.min)),
+                    ("cell_size", ShaderValue::Float(grid.params.cell_size)),
+                    ("dims", ShaderValue::UInt3(grid.params.dims)),
+                ],
+                &mut p_buffers,
+                &p_images,
+            )?;
+        }
+        other => apply_shader_value(shader, &name, other, &mut p_buffers, &p_images)?,
     }
-    if let Ok(mut filter) = filters.get_mut(entity) {
-        apply_shader_value(&mut filter.shader, &name, value, &mut p_buffers, &p_images)?;
-        return Ok(true);
-    }
-    Ok(false)
+    Ok(true)
 }

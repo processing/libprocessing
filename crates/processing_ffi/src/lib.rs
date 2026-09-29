@@ -3442,6 +3442,27 @@ pub unsafe extern "C" fn processing_shader_set_buffer(
     });
 }
 
+/// Binds `{name}_offsets`, `{name}_sorted` and the `{name}` uniform.
+///
+/// # Safety
+/// - `name` must be non-null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn processing_shader_set_grid(
+    entity: u64,
+    name: *const std::ffi::c_char,
+    grid_id: u64,
+) {
+    error::clear_error();
+    error::check(|| {
+        let name = unsafe { cstr_to_str(name) }?;
+        shader_set(
+            Entity::from_bits(entity),
+            name,
+            ShaderValue::Grid(Entity::from_bits(grid_id)),
+        )
+    });
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn processing_compute_dispatch(compute_id: u64, x: u32, y: u32, z: u32) {
     error::clear_error();
@@ -3824,6 +3845,51 @@ pub extern "C" fn processing_particles_apply(particles_id: u64, compute_id: u64)
             Entity::from_bits(compute_id),
         )
     });
+}
+
+/// Returns the grid id, or 0 on error.
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_grid_create(
+    particles_id: u64,
+    min_x: f32,
+    min_y: f32,
+    min_z: f32,
+    cell_size: f32,
+    dims_x: u32,
+    dims_y: u32,
+    dims_z: u32,
+) -> u64 {
+    error::clear_error();
+    error::check(|| {
+        let capacity = particles_capacity(Entity::from_bits(particles_id))?;
+        grid_create(
+            GridParams {
+                min: [min_x, min_y, min_z],
+                cell_size,
+                dims: [dims_x, dims_y, dims_z],
+            },
+            capacity,
+        )
+    })
+    .map(|e| e.to_bits())
+    .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_grid_build(grid_id: u64, position_buf_id: u64) {
+    error::clear_error();
+    error::check(|| {
+        grid_build(
+            Entity::from_bits(grid_id),
+            Entity::from_bits(position_buf_id),
+        )
+    });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_particles_grid_destroy(grid_id: u64) {
+    error::clear_error();
+    error::check(|| grid_destroy(Entity::from_bits(grid_id)));
 }
 
 #[unsafe(no_mangle)]

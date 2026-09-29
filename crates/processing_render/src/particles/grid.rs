@@ -1,12 +1,16 @@
 use std::sync::Mutex;
 
-use bevy::prelude::Entity;
+use bevy::prelude::{Component, Entity};
 
-use processing_core::error::Result;
+use processing_core::app_mut;
+use processing_core::error::{ProcessingError, Result};
 
 use crate::particles::scan::prefix_sum_u32;
 use crate::shader_value::ShaderValue;
-use crate::{buffer_create, compute_create, compute_dispatch_no_update, compute_set, shader_load};
+use crate::{
+    buffer_create, buffer_destroy, compute_create, compute_dispatch_no_update, compute_set,
+    shader_load,
+};
 
 const CLEAR_SHADER: &str = "embedded://processing_render/particles/kernels/grid_clear.wgsl";
 const COUNT_SHADER: &str = "embedded://processing_render/particles/kernels/grid_count.wgsl";
@@ -41,7 +45,7 @@ impl GridParams {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Component, Clone, Copy)]
 pub struct Grid {
     pub offsets: Entity,
     pub cursor: Entity,
@@ -54,25 +58,36 @@ const CLEAR_WG: u32 = 256;
 const PARTICLE_WG: u32 = 64;
 const COPY_WG: u32 = 256;
 
-pub fn grid_create(params: GridParams, capacity: u32) -> Result<Grid> {
+pub fn grid_create(params: GridParams, capacity: u32) -> Result<Entity> {
     let num_cells = params.num_cells();
-    let offsets = buffer_create(((num_cells + 1) as u64) * 4)?;
-    let cursor = buffer_create((num_cells as u64) * 4)?;
-    let sorted = buffer_create((capacity.max(1) as u64) * 4)?;
-    Ok(Grid {
-        offsets,
-        cursor,
-        sorted,
+    let grid = Grid {
+        offsets: buffer_create(((num_cells + 1) as u64) * 4)?,
+        cursor: buffer_create((num_cells as u64) * 4)?,
+        sorted: buffer_create((capacity.max(1) as u64) * 4)?,
         params,
         capacity,
+    };
+    app_mut(|app| Ok(app.world_mut().spawn(grid).id()))
+}
+
+pub fn grid_get(entity: Entity) -> Result<Grid> {
+    app_mut(|app| {
+        app.world()
+            .get::<Grid>(entity)
+            .copied()
+            .ok_or(ProcessingError::GridNotFound)
     })
 }
 
-pub fn grid_bind(grid: &Grid, compute: Entity) -> Result<()> {
-    compute_set(compute, "offsets", ShaderValue::Buffer(grid.offsets))?;
-    compute_set(compute, "sorted", ShaderValue::Buffer(grid.sorted))?;
-    set_domain(compute, &grid.params)?;
-    Ok(())
+pub fn grid_destroy(entity: Entity) -> Result<()> {
+    let grid = grid_get(entity)?;
+    buffer_destroy(grid.offsets)?;
+    buffer_destroy(grid.cursor)?;
+    buffer_destroy(grid.sorted)?;
+    app_mut(|app| {
+        app.world_mut().despawn(entity);
+        Ok(())
+    })
 }
 
 fn set_domain(compute: Entity, params: &GridParams) -> Result<()> {
@@ -84,7 +99,8 @@ fn set_domain(compute: Entity, params: &GridParams) -> Result<()> {
     Ok(())
 }
 
-pub fn grid_build(grid: &Grid, position: Entity) -> Result<()> {
+pub fn grid_build(entity: Entity, position: Entity) -> Result<()> {
+    let grid = grid_get(entity)?;
     let (clear, count, copy, scatter) = grid_computes()?;
     let num_cells = grid.params.num_cells();
 

@@ -73,7 +73,7 @@ def draw():
         line_alpha=LINE_ALPHA,
         max_links=MAX_LINKS,
     )
-    grid.bind(link)
+    link.set(grid=grid)
     p.apply(link)
 
     blend_mode(ALPHA_OVER)
