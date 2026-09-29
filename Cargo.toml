@@ -213,6 +213,50 @@ name = "compute_readback"
 path = "examples/compute_readback.rs"
 
 [[example]]
+name = "scan_test"
+path = "examples/scan_test.rs"
+
+[[example]]
+name = "grid_test"
+path = "examples/grid_test.rs"
+
+[[example]]
+name = "map_test"
+path = "examples/map_test.rs"
+
+[[example]]
+name = "combine_mix_test"
+path = "examples/combine_mix_test.rs"
+
+[[example]]
+name = "lookup_test"
+path = "examples/lookup_test.rs"
+
+[[example]]
+name = "glue_test"
+path = "examples/glue_test.rs"
+
+[[example]]
+name = "sort_test"
+path = "examples/sort_test.rs"
+
+[[example]]
+name = "field_falloff_test"
+path = "examples/field_falloff_test.rs"
+
+[[example]]
+name = "group_compact_test"
+path = "examples/group_compact_test.rs"
+
+[[example]]
+name = "reduce_test"
+path = "examples/reduce_test.rs"
+
+[[example]]
+name = "compute_write_order"
+path = "examples/compute_write_order.rs"
+
+[[example]]
 name = "alias_spike"
 path = "examples/alias_spike.rs"
 
