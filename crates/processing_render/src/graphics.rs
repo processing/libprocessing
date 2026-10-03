@@ -8,7 +8,7 @@ use bevy::{
         CameraMainTextureUsages, CameraOutputMode, CameraProjection, ClearColorConfig, Hdr,
         ImageRenderTarget, MsaaWriteback, Projection, RenderTarget, visibility::RenderLayers,
     },
-    core_pipeline::tonemapping::Tonemapping,
+    core_pipeline::tonemapping::{DebandDither, Tonemapping},
     ecs::query::QueryEntityError,
     math::{Mat4, Vec3A},
     prelude::*,
@@ -210,6 +210,8 @@ pub fn create(
         },
         target,
         Tonemapping::None,
+        // dithering only applies after tonemapping
+        DebandDither::Disabled,
         // we need to be able to write to the texture
         CameraMainTextureUsages::default().with(TextureUsages::COPY_DST),
         Projection::custom(ProcessingProjection::new(width as f32, height as f32)),
@@ -510,11 +512,17 @@ pub fn tonemapping_from_u8(v: u8) -> Option<Tonemapping> {
 
 pub fn set_tonemapping(
     In((entity, tonemapping)): In<(Entity, Tonemapping)>,
-    mut query: Query<&mut Tonemapping>,
+    mut query: Query<(&mut Tonemapping, &mut DebandDither)>,
 ) -> Result<()> {
-    *query
+    let (mut current, mut dither) = query
         .get_mut(entity)
-        .map_err(|_| ProcessingError::GraphicsNotFound)? = tonemapping;
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+    *dither = if tonemapping == Tonemapping::None {
+        DebandDither::Disabled
+    } else {
+        DebandDither::Enabled
+    };
+    *current = tonemapping;
     Ok(())
 }
 

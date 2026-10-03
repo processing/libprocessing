@@ -5458,7 +5458,7 @@ dependencies = [
 
 [[package]]
 name = "processing"
-version = "0.0.9-alpha.2"
+version = "0.0.9-alpha.3"
 dependencies = [
  "bevy",
  "js-sys",
@@ -5527,7 +5527,7 @@ dependencies = [
 
 [[package]]
 name = "processing_pyo3"
-version = "0.0.9-alpha.2"
+version = "0.0.9-alpha.3"
 dependencies = [
  "bevy",
  "png",

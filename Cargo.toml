@@ -1,6 +1,6 @@
 [package]
 name = "processing"
-version = "0.0.9-alpha.2"
+version = "0.0.9-alpha.3"
 edition = "2024"
 autoexamples = false
 
@@ -36,6 +36,9 @@ bevy = { git = "https://github.com/processing/bevy", branch = "processing-batche
 
   # 3d
   "3d_bevy_render",
+
+  # glTF textures and load_image() are often JPEG
+  "jpeg",
 
   # ui
   "ui_api",

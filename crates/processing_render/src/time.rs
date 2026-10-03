@@ -40,7 +40,9 @@ pub fn advance_frame_count(
     let Some(elapsed) = time.map(|t| t.elapsed_secs_f64()) else {
         return;
     };
-    let dt = frame_time.last_elapsed.map_or(0.0, |last| (elapsed - last) as f32);
+    let dt = frame_time
+        .last_elapsed
+        .map_or(0.0, |last| (elapsed - last) as f32);
     frame_time.last_elapsed = Some(elapsed);
     frame_time.delta = dt;
     if dt > 0.0 {

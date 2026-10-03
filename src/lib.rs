@@ -21,11 +21,11 @@ fn create_app(config: Config) -> App {
             AssetSourceBuilder::platform_default(asset_path, None),
         );
     }
-    if config
+    // a sketch file is only set for live reload, the one user of file watching
+    let live_reload = config
         .get(ConfigKey::SketchFileName)
-        .is_some_and(|f| !f.is_empty())
-        && let Some(sketch_path) = config.get(ConfigKey::SketchRootPath)
-    {
+        .is_some_and(|f| !f.is_empty());
+    if live_reload && let Some(sketch_path) = config.get(ConfigKey::SketchRootPath) {
         app.register_asset_source(
             "sketch_directory",
             AssetSourceBuilder::platform_default(sketch_path, None),
@@ -35,6 +35,10 @@ fn create_app(config: Config) -> App {
     #[cfg(not(target_arch = "wasm32"))]
     let plugins = DefaultPlugins
         .build()
+        .set(AssetPlugin {
+            watch_for_changes_override: Some(live_reload),
+            ..default()
+        })
         .set(RenderPlugin {
             synchronous_pipeline_compilation: true,
             ..default()
@@ -160,7 +164,9 @@ fn setup_tracing(log_level: Option<&str>) -> error::Result<()> {
         use tracing_subscriber::EnvFilter;
         use tracing_subscriber::util::SubscriberInitExt;
 
-        let filter = EnvFilter::try_new(log_level.unwrap_or("info"))
+        // RUST_LOG wins so a quiet frontend can still be debugged
+        let filter = EnvFilter::try_from_default_env()
+            .or_else(|_| EnvFilter::try_new(log_level.unwrap_or("info")))
             .unwrap_or_else(|_| EnvFilter::new("info"));
         let subscriber = tracing_subscriber::FmtSubscriber::builder()
             .with_env_filter(filter)
