@@ -1,5 +1,6 @@
 """Processing math methods and vector/quaternion types."""
 import math as _math
+import random as _random
 from .mewnala import math as _native_math
 
 # extend native math so glob imports work
@@ -131,3 +132,41 @@ def dist(*args):
         dx, dy, dz = x2 - x1, y2 - y1, z2 - z1
         return sqrt(dx * dx + dy * dy + dz * dz)
     raise TypeError(f"dist() takes 4 or 6 arguments ({len(args)} given)")
+
+
+def random(low, high=None):
+    """`random(high)` is in [0, high), `random(low, high)` in [low, high)."""
+    if high is None:
+        low, high = 0.0, low
+    return low + _random.random() * (high - low)
+
+
+def random_gaussian():
+    return _random.gauss(0.0, 1.0)
+
+
+def random_seed(seed):
+    _random.seed(seed)
+
+
+def bezier_point(a, b, c, d, t):
+    u = 1.0 - t
+    return a * u * u * u + 3 * b * t * u * u + 3 * c * t * t * u + d * t * t * t
+
+
+def bezier_tangent(a, b, c, d, t):
+    return 3 * t * t * (-a + 3 * b - 3 * c + d) + 6 * t * (a - 2 * b + c) + 3 * (-a + b)
+
+
+# Catmull-Rom, matching `curve()` (Processing's curveTightness(0))
+def curve_point(a, b, c, d, t):
+    return 0.5 * (
+        2 * b
+        + (-a + c) * t
+        + (2 * a - 5 * b + 4 * c - d) * t * t
+        + (-a + 3 * b - 3 * c + d) * t * t * t
+    )
+
+
+def curve_tangent(a, b, c, d, t):
+    return 0.5 * ((-a + c) + 2 * (2 * a - 5 * b + 4 * c - d) * t + 3 * (-a + 3 * b - 3 * c + d) * t * t)

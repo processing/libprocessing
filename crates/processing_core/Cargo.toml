@@ -8,6 +8,7 @@ workspace = true
 
 [dependencies]
 bevy = { workspace = true }
+rand = { workspace = true }
 raw-window-handle = "0.6"
 thiserror = "2"
 tracing = "0.1"

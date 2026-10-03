@@ -465,6 +465,62 @@ impl ColorLike {
     }
 }
 
+/// A channel read back in the range `color_mode` set for its space, or the
+/// space's native range when the mode is a different space.
+fn channel_in_mode(mode: &ColorMode, space: ColorSpace, value: f32, ch: usize) -> f32 {
+    if mode.space == space {
+        value / space.default_maxes()[ch] * mode.max[ch]
+    } else {
+        value
+    }
+}
+
+pub fn red(color: Color, mode: &ColorMode) -> f32 {
+    channel_in_mode(mode, ColorSpace::Srgb, Srgba::from(color).red, 0)
+}
+
+pub fn green(color: Color, mode: &ColorMode) -> f32 {
+    channel_in_mode(mode, ColorSpace::Srgb, Srgba::from(color).green, 1)
+}
+
+pub fn blue(color: Color, mode: &ColorMode) -> f32 {
+    channel_in_mode(mode, ColorSpace::Srgb, Srgba::from(color).blue, 2)
+}
+
+pub fn alpha(color: Color, mode: &ColorMode) -> f32 {
+    color.alpha() * mode.max[3]
+}
+
+pub fn hue(color: Color, mode: &ColorMode) -> f32 {
+    channel_in_mode(mode, ColorSpace::Hsv, Hsva::from(color).hue, 0)
+}
+
+pub fn saturation(color: Color, mode: &ColorMode) -> f32 {
+    channel_in_mode(mode, ColorSpace::Hsv, Hsva::from(color).saturation, 1)
+}
+
+pub fn brightness(color: Color, mode: &ColorMode) -> f32 {
+    channel_in_mode(mode, ColorSpace::Hsv, Hsva::from(color).value, 2)
+}
+
+/// Interpolates in the `color_mode` space, as Processing's `lerpColor` does
+/// for RGB and HSB.
+pub fn lerp_color(from: Color, to: Color, amount: f32, mode: &ColorMode) -> Color {
+    let in_space = |c: Color| match mode.space {
+        ColorSpace::Srgb => Color::Srgba(c.into()),
+        ColorSpace::Linear => Color::LinearRgba(c.into()),
+        ColorSpace::Hsl => Color::Hsla(c.into()),
+        ColorSpace::Hsv => Color::Hsva(c.into()),
+        ColorSpace::Hwb => Color::Hwba(c.into()),
+        ColorSpace::Oklab => Color::Oklaba(c.into()),
+        ColorSpace::Oklch => Color::Oklcha(c.into()),
+        ColorSpace::Lab => Color::Laba(c.into()),
+        ColorSpace::Lch => Color::Lcha(c.into()),
+        ColorSpace::Xyz => Color::Xyza(c.into()),
+    };
+    in_space(from).mix(&in_space(to), amount.clamp(0.0, 1.0))
+}
+
 fn parse_hex(s: &str) -> PyResult<Color> {
     Srgba::hex(s)
         .map(Color::Srgba)

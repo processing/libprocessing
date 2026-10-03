@@ -830,6 +830,10 @@ impl Drop for Graphics {
 }
 
 impl Graphics {
+    pub(crate) fn current_color_mode(&self) -> PyResult<ColorMode> {
+        graphics_get_color_mode(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     /// Create an offscreen graphics buffer in the already-running app (no window,
     /// no `init`). Backs `create_graphics()` / `new_offscreen()`. The caller must
     /// ensure the app exists (i.e. `size()` was called first).
@@ -1133,6 +1137,93 @@ impl Graphics {
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
         )
         .map(crate::color::PyColor::from)
+    }
+
+    pub fn red(&self, color: crate::color::ColorLike) -> PyResult<f32> {
+        Ok(crate::color::red(
+            color.into_color()?,
+            &self.current_color_mode()?,
+        ))
+    }
+
+    pub fn green(&self, color: crate::color::ColorLike) -> PyResult<f32> {
+        Ok(crate::color::green(
+            color.into_color()?,
+            &self.current_color_mode()?,
+        ))
+    }
+
+    pub fn blue(&self, color: crate::color::ColorLike) -> PyResult<f32> {
+        Ok(crate::color::blue(
+            color.into_color()?,
+            &self.current_color_mode()?,
+        ))
+    }
+
+    pub fn alpha(&self, color: crate::color::ColorLike) -> PyResult<f32> {
+        Ok(crate::color::alpha(
+            color.into_color()?,
+            &self.current_color_mode()?,
+        ))
+    }
+
+    pub fn hue(&self, color: crate::color::ColorLike) -> PyResult<f32> {
+        Ok(crate::color::hue(
+            color.into_color()?,
+            &self.current_color_mode()?,
+        ))
+    }
+
+    pub fn saturation(&self, color: crate::color::ColorLike) -> PyResult<f32> {
+        Ok(crate::color::saturation(
+            color.into_color()?,
+            &self.current_color_mode()?,
+        ))
+    }
+
+    pub fn brightness(&self, color: crate::color::ColorLike) -> PyResult<f32> {
+        Ok(crate::color::brightness(
+            color.into_color()?,
+            &self.current_color_mode()?,
+        ))
+    }
+
+    pub fn lerp_color(
+        &self,
+        from: crate::color::ColorLike,
+        to: crate::color::ColorLike,
+        amount: f32,
+    ) -> PyResult<crate::color::PyColor> {
+        let color = crate::color::lerp_color(
+            from.into_color()?,
+            to.into_color()?,
+            amount,
+            &self.current_color_mode()?,
+        );
+        Ok(color.into())
+    }
+
+    /// `ARROW`, `CROSS`, `HAND`, `MOVE`, `TEXT` or `WAIT`. Also shows a hidden cursor.
+    #[pyo3(signature = (kind=constants::ARROW))]
+    pub fn cursor(&self, kind: &str) -> PyResult<()> {
+        use bevy::window::SystemCursorIcon;
+        let icon = match kind {
+            constants::ARROW => SystemCursorIcon::Default,
+            constants::CROSS => SystemCursorIcon::Crosshair,
+            constants::HAND => SystemCursorIcon::Pointer,
+            constants::MOVE => SystemCursorIcon::Move,
+            constants::TEXT => SystemCursorIcon::Text,
+            constants::WAIT => SystemCursorIcon::Wait,
+            _ => return Err(PyValueError::new_err(format!("unknown cursor: {kind:?}"))),
+        };
+        input_set_cursor_visible(self.surface.entity, true)
+            .and_then(|_| input_set_cursor_icon(self.surface.entity, icon))
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    pub fn no_cursor(&self) -> PyResult<()> {
+        input_set_cursor_visible(self.surface.entity, false)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     #[pyo3(signature = (*args))]

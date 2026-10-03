@@ -117,6 +117,9 @@ use std::env;
 pub(crate) struct LoopState {
     looping: bool,
     redraw_requested: bool,
+    exit_requested: bool,
+    /// Set by `frame_rate(fps)`. `run()` sleeps out the rest of each frame.
+    frame_interval: Option<std::time::Duration>,
 }
 
 impl Default for LoopState {
@@ -124,13 +127,31 @@ impl Default for LoopState {
         Self {
             looping: true,
             redraw_requested: false,
+            exit_requested: false,
+            frame_interval: None,
         }
     }
+}
+
+/// Input history the derived callbacks need across frames.
+#[derive(Clone, Copy, Default)]
+struct EventState {
+    /// Pressed and not dragged since, so the release is a click.
+    click_pending: bool,
+    canvas_size: Option<(u32, u32)>,
 }
 
 thread_local! {
     pub(crate) static LAST_GLOBALS: RefCell<HashMap<&'static str, Py<PyAny>>> = RefCell::new(HashMap::new());
     pub(crate) static LOOP_STATE: Cell<LoopState> = Cell::new(LoopState::default());
+    static EVENT_STATE: Cell<EventState> = Cell::new(EventState::default());
+    static NOISE: RefCell<processing_core::noise::Noise> = RefCell::new(
+        processing_core::noise::Noise::new(if processing_render::ci::enabled() {
+            0
+        } else {
+            rand::random()
+        }),
+    );
 }
 
 fn update_loop_state(f: impl FnOnce(&mut LoopState)) {
@@ -202,6 +223,14 @@ fn sync_globals(module: &Bound<'_, PyModule>, globals: &Bound<'_, PyAny>) -> PyR
     Ok(())
 }
 
+/// The main canvas's color mode, or the default before `size()`.
+fn current_color_mode(module: &Bound<'_, PyModule>) -> PyResult<color::ColorMode> {
+    match get_graphics(module)? {
+        Some(graphics) => graphics.current_color_mode(),
+        None => Ok(color::ColorMode::default()),
+    }
+}
+
 fn mouse_event(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
     // the graphics borrow has to end before the callback runs, which may draw
     let event = {
@@ -215,6 +244,10 @@ fn mouse_event(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
 
 fn key_event(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
     Ok(Py::new(module.py(), input::KeyEvent::current()?)?.into_any())
+}
+
+fn no_event(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
+    Ok(module.py().None())
 }
 
 /// Calls the sketch's `name` callback, with an event if it takes a parameter
@@ -253,17 +286,42 @@ fn dispatch_event_callbacks(
     let err =
         |e: processing::prelude::error::ProcessingError| PyRuntimeError::new_err(format!("{e}"));
 
-    if input_mouse_any_just_pressed().map_err(err)? {
-        call_event_callback(module, locals, "mouse_pressed", mouse_event)?;
+    let update_events = |f: &dyn Fn(&mut EventState)| {
+        EVENT_STATE.with(|s| {
+            let mut state = s.get();
+            f(&mut state);
+            s.set(state);
+        })
+    };
+
+    let size = {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        canvas_size(&graphics)?
+    };
+    let previous = EVENT_STATE.with(|s| s.get().canvas_size);
+    update_events(&|s| s.canvas_size = Some(size));
+    if previous.is_some_and(|p| p != size) {
+        call_event_callback(module, locals, "window_resized", no_event)?;
     }
-    if input_mouse_any_just_released().map_err(err)? {
-        call_event_callback(module, locals, "mouse_released", mouse_event)?;
+
+    if input_mouse_any_just_pressed().map_err(err)? {
+        update_events(&|s| s.click_pending = true);
+        call_event_callback(module, locals, "mouse_pressed", mouse_event)?;
     }
     if input_mouse_moved().map_err(err)? {
         if input_mouse_is_pressed().map_err(err)? {
+            update_events(&|s| s.click_pending = false);
             call_event_callback(module, locals, "mouse_dragged", mouse_event)?;
         } else {
             call_event_callback(module, locals, "mouse_moved", mouse_event)?;
+        }
+    }
+    if input_mouse_any_just_released().map_err(err)? {
+        call_event_callback(module, locals, "mouse_released", mouse_event)?;
+        if EVENT_STATE.with(|s| s.get().click_pending) {
+            update_events(&|s| s.click_pending = false);
+            call_event_callback(module, locals, "mouse_clicked", mouse_event)?;
         }
     }
     if input_mouse_scrolled().map_err(err)? {
@@ -271,6 +329,10 @@ fn dispatch_event_callbacks(
     }
     if input_key_any_just_pressed().map_err(err)? {
         call_event_callback(module, locals, "key_pressed", key_event)?;
+        // Processing's keyTyped: only keys that produce a character
+        if input_key().map_err(err)?.is_some_and(|c| !c.is_control()) {
+            call_event_callback(module, locals, "key_typed", key_event)?;
+        }
     }
     if input_key_any_just_released().map_err(err)? {
         call_event_callback(module, locals, "key_released", key_event)?;
@@ -920,6 +982,75 @@ pub mod mewnala {
         Ok(())
     }
 
+    /// Ends `run()` once the current `draw()` returns. Processing's `exit()`,
+    /// renamed so it doesn't shadow Python's builtin.
+    #[pyfunction]
+    fn exit_sketch() -> PyResult<()> {
+        update_loop_state(|s| s.exit_requested = true);
+        Ok(())
+    }
+
+    /// `frame_rate()` returns the measured frames per second. `frame_rate(fps)`
+    /// caps how fast `run()` draws (the display's vsync still applies above it).
+    #[pyfunction]
+    #[pyo3(signature = (fps=None))]
+    fn frame_rate(py: Python<'_>, fps: Option<f32>) -> PyResult<Py<PyAny>> {
+        match fps {
+            Some(fps) if fps > 0.0 => {
+                let interval = std::time::Duration::from_secs_f32(1.0 / fps);
+                update_loop_state(|s| s.frame_interval = Some(interval));
+                Ok(py.None())
+            }
+            Some(fps) => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "frame_rate must be positive, got {fps}"
+            ))),
+            None => {
+                let rate = processing::prelude::frame_rate()
+                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+                Ok(rate.into_pyobject(py)?.into_any().unbind())
+            }
+        }
+    }
+
+    /// Milliseconds since the sketch started.
+    #[pyfunction]
+    fn millis() -> PyResult<u64> {
+        let elapsed = processing::prelude::elapsed_time()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok((elapsed as f64 * 1000.0) as u64)
+    }
+
+    /// Processing's Perlin noise, in [0, 1).
+    #[pyfunction]
+    #[pyo3(signature = (x, y=0.0, z=0.0))]
+    fn noise(x: f32, y: f32, z: f32) -> f32 {
+        NOISE.with(|n| n.borrow().get(x, y, z))
+    }
+
+    /// `octaves` (default 4) and `falloff` (default 0.5) per octave.
+    #[pyfunction]
+    #[pyo3(signature = (octaves, falloff=None))]
+    fn noise_detail(octaves: i32, falloff: Option<f32>) {
+        NOISE.with(|n| n.borrow_mut().detail(octaves, falloff));
+    }
+
+    #[pyfunction]
+    fn noise_seed(seed: u64) {
+        NOISE.with(|n| n.borrow_mut().seed(seed));
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (kind=processing::prelude::constants::ARROW))]
+    fn cursor(module: &Bound<'_, PyModule>, kind: &str) -> PyResult<()> {
+        graphics!(module).cursor(kind)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn no_cursor(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).no_cursor()
+    }
+
     #[pyfunction]
     #[pyo3(pass_module)]
     fn window_title(module: &Bound<'_, PyModule>, title: &str) -> PyResult<()> {
@@ -1094,8 +1225,14 @@ pub mod mewnala {
             let setup_fn = locals.get_item("setup").ok();
             let mut draw_fn = locals.get_item("draw").ok();
 
+            update_loop_state(|s| s.exit_requested = false);
+            let exit_requested = || LOOP_STATE.with(|s| s.get().exit_requested);
+
             if let Some(ref setup) = setup_fn {
                 setup.call0()?;
+            }
+            if exit_requested() {
+                return Ok(());
             }
 
             ensure_graphics(module)?;
@@ -1132,6 +1269,9 @@ pub mod mewnala {
                         }
                     }
                     dispatch_event_callbacks(module, &locals)?;
+                    if exit_requested() {
+                        break;
+                    }
                     std::thread::sleep(std::time::Duration::from_millis(16));
                 }
 
@@ -1174,6 +1314,9 @@ pub mod mewnala {
                 }
 
                 dispatch_event_callbacks(module, &locals)?;
+                if exit_requested() {
+                    break;
+                }
 
                 let should_draw = first_frame
                     || LOOP_STATE.with(|s| {
@@ -1186,6 +1329,7 @@ pub mod mewnala {
                     continue;
                 }
                 first_frame = false;
+                let frame_start = std::time::Instant::now();
 
                 processing::prelude::advance_frame_count()
                     .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
@@ -1205,6 +1349,12 @@ pub mod mewnala {
                 }
 
                 update_loop_state(|s| s.redraw_requested = false);
+                if exit_requested() {
+                    break;
+                }
+                if let Some(interval) = LOOP_STATE.with(|s| s.get().frame_interval) {
+                    std::thread::sleep(interval.saturating_sub(frame_start.elapsed()));
+                }
             }
 
             Ok(())
@@ -1423,6 +1573,81 @@ pub mod mewnala {
             geometry.as_deref(),
             topology,
         )
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn red(module: &Bound<'_, PyModule>, color: super::color::ColorLike) -> PyResult<f32> {
+        Ok(super::color::red(
+            color.into_color()?,
+            &current_color_mode(module)?,
+        ))
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn green(module: &Bound<'_, PyModule>, color: super::color::ColorLike) -> PyResult<f32> {
+        Ok(super::color::green(
+            color.into_color()?,
+            &current_color_mode(module)?,
+        ))
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn blue(module: &Bound<'_, PyModule>, color: super::color::ColorLike) -> PyResult<f32> {
+        Ok(super::color::blue(
+            color.into_color()?,
+            &current_color_mode(module)?,
+        ))
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn alpha(module: &Bound<'_, PyModule>, color: super::color::ColorLike) -> PyResult<f32> {
+        Ok(super::color::alpha(
+            color.into_color()?,
+            &current_color_mode(module)?,
+        ))
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn hue(module: &Bound<'_, PyModule>, color: super::color::ColorLike) -> PyResult<f32> {
+        Ok(super::color::hue(
+            color.into_color()?,
+            &current_color_mode(module)?,
+        ))
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn saturation(module: &Bound<'_, PyModule>, color: super::color::ColorLike) -> PyResult<f32> {
+        Ok(super::color::saturation(
+            color.into_color()?,
+            &current_color_mode(module)?,
+        ))
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn brightness(module: &Bound<'_, PyModule>, color: super::color::ColorLike) -> PyResult<f32> {
+        Ok(super::color::brightness(
+            color.into_color()?,
+            &current_color_mode(module)?,
+        ))
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn lerp_color(
+        module: &Bound<'_, PyModule>,
+        from: super::color::ColorLike,
+        to: super::color::ColorLike,
+        amount: f32,
+    ) -> PyResult<super::color::PyColor> {
+        let mode = current_color_mode(module)?;
+        Ok(super::color::lerp_color(from.into_color()?, to.into_color()?, amount, &mode).into())
     }
 
     #[pyfunction(name = "color")]

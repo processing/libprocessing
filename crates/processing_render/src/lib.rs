@@ -81,6 +81,7 @@ impl Plugin for ProcessingRenderPlugin {
         let config = app.world().resource::<Config>().clone();
 
         app.init_resource::<time::ProcessingFrame>();
+        app.init_resource::<time::ProcessingFrameRate>();
 
         let has_sketch_file = config
             .get(ConfigKey::SketchFileName)
@@ -2242,6 +2243,10 @@ pub fn advance_frame_count() -> error::Result<()> {
             .unwrap();
         Ok(())
     })
+}
+
+pub fn frame_rate() -> error::Result<f32> {
+    app_mut(|app| Ok(app.world_mut().run_system_cached(time::frame_rate).unwrap()))
 }
 
 pub fn delta_time() -> error::Result<f32> {
