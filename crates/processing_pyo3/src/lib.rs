@@ -1300,6 +1300,7 @@ pub mod mewnala {
                     .end_draw()?;
 
                 loop {
+                    py.check_signals()?;
                     {
                         let mut graphics = get_graphics_mut(module)?
                             .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
@@ -1320,6 +1321,8 @@ pub mod mewnala {
             let mut first_frame = true;
 
             loop {
+                // also catches Ctrl-C while paused, when no Python code runs
+                py.check_signals()?;
                 {
                     let mut graphics = get_graphics_mut(module)?
                         .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
@@ -1390,6 +1393,17 @@ pub mod mewnala {
             }
 
             Ok(())
+        })
+        .or_else(|e: PyErr| {
+            // Ctrl-C quits the sketch like closing its window, rather than a
+            // traceback from wherever draw() happened to be
+            Python::attach(|py| {
+                if e.is_instance_of::<pyo3::exceptions::PyKeyboardInterrupt>(py) {
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            })
         });
 
         // tear down the app while the thread-local is still alive; the eager

@@ -1001,6 +1001,8 @@ impl Particles {
         for (key, value) in kwargs.iter() {
             let name: String = key.extract()?;
             let attr_entity = self.resolve_attribute(&key)?;
+            particles_ensure_attribute(self.entity, attr_entity)
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
             let (_, fmt) = geometry_attribute_info(attr_entity)
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
             let fmt = AttributeFormat::from_inner(fmt);
