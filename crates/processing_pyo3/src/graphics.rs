@@ -971,6 +971,17 @@ impl Graphics {
         self.surface.pixel_width()
     }
 
+    /// 0 for offscreen canvases, which have no window.
+    #[getter]
+    pub fn window_x(&self) -> i32 {
+        self.surface.position().map_or(0, |(x, _)| x)
+    }
+
+    #[getter]
+    pub fn window_y(&self) -> i32 {
+        self.surface.position().map_or(0, |(_, y)| y)
+    }
+
     #[getter]
     pub fn pixel_height(&self) -> PyResult<u32> {
         self.surface.pixel_height()
@@ -2608,11 +2619,6 @@ impl Graphics {
     #[getter]
     fn moved_y(&self) -> PyResult<f32> {
         input::moved_y()
-    }
-
-    #[getter]
-    fn mouse_wheel(&self) -> PyResult<f32> {
-        input::mouse_wheel()
     }
 
     #[getter]
