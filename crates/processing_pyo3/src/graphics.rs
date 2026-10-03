@@ -113,23 +113,6 @@ fn normalize_src_rect(entity: Entity, rect: Option<[f32; 4]>) -> PyResult<[f32; 
     }
 }
 
-/// Resolve a composite source (`Image`, `Webcam`, or `Graphics`) to a
-/// texture-bearing entity, plus the graphics entity that must be flushed first
-/// when the source is a graphics (so its latest content is what gets sampled).
-/// A `Graphics` source uses its render-target surface entity, which carries an
-/// `Image` component for offscreen graphics.
-fn resolve_composite_source(src: &Bound<'_, PyAny>) -> PyResult<(Entity, Option<Entity>)> {
-    if let Ok(img) = src.extract::<ImageRef>() {
-        return Ok((img.entity, None));
-    }
-    if let Ok(g) = src.extract::<PyRef<Graphics>>() {
-        return Ok((g.surface.entity, Some(g.entity)));
-    }
-    Err(PyValueError::new_err(
-        "composite source must be an Image, Webcam, or Graphics",
-    ))
-}
-
 /// Run the built-in composite filter: blend the `src` texture into the `dst`
 /// graphics target using `mode`, with normalized src/dst rects. This is the
 /// shader-based composite pass shared by `copy`/`blend`/`mask`.
@@ -536,8 +519,22 @@ impl Image {
     }
 }
 
+/// Anything that can be sampled as an image: an `Image`, a `Webcam`, or an
+/// offscreen `Graphics`.
 pub(crate) struct ImageRef {
-    pub entity: Entity,
+    entity: Entity,
+    graphics: Option<Entity>,
+}
+
+impl ImageRef {
+    /// The entity carrying the image. A `Graphics` source is flushed first, so
+    /// what it has drawn so far is what gets sampled.
+    pub(crate) fn texture(&self) -> PyResult<Entity> {
+        if let Some(graphics) = self.graphics {
+            graphics_flush(graphics).map_err(rt_err)?;
+        }
+        Ok(self.entity)
+    }
 }
 
 impl<'a, 'py> FromPyObject<'a, 'py> for ImageRef {
@@ -545,16 +542,27 @@ impl<'a, 'py> FromPyObject<'a, 'py> for ImageRef {
 
     fn extract(ob: pyo3::Borrowed<'a, 'py, PyAny>) -> PyResult<Self> {
         if let Ok(img) = ob.extract::<PyRef<Image>>() {
-            return Ok(ImageRef { entity: img.entity });
+            return Ok(ImageRef {
+                entity: img.entity,
+                graphics: None,
+            });
+        }
+        // an offscreen canvas's render target is an image on its surface entity
+        if let Ok(g) = ob.extract::<PyRef<Graphics>>() {
+            return Ok(ImageRef {
+                entity: g.surface.entity,
+                graphics: Some(g.entity),
+            });
         }
         #[cfg(feature = "webcam")]
         if let Ok(cam) = ob.extract::<PyRef<crate::webcam::Webcam>>() {
             return Ok(ImageRef {
                 entity: cam.image_entity()?,
+                graphics: None,
             });
         }
         Err(pyo3::exceptions::PyTypeError::new_err(
-            "expected an Image or Webcam",
+            "expected an Image, Graphics, or Webcam",
         ))
     }
 }
@@ -587,6 +595,26 @@ impl Image {
     fn sampler(&self, sampler: &Sampler) -> PyResult<()> {
         image_set_sampler(self.entity, sampler.filter, sampler.wrap_x, sampler.wrap_y)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Resize to `width` x `height` pixels. A 0 for either keeps the aspect ratio.
+    pub fn resize(&self, width: u32, height: u32) -> PyResult<()> {
+        let (w, h) = image_size(self.entity).map_err(rt_err)?;
+        let (width, height) = match (width, height) {
+            (0, 0) => return Err(PyValueError::new_err("resize() needs a non-zero size")),
+            (0, height) => ((w as f32 * height as f32 / h as f32).round() as u32, height),
+            (width, 0) => (width, (h as f32 * width as f32 / w as f32).round() as u32),
+            size => size,
+        };
+        image_resize(
+            self.entity,
+            Extent3d {
+                width: width.max(1),
+                height: height.max(1),
+                depth_or_array_layers: 1,
+            },
+        )
+        .map_err(rt_err)
     }
 
     /// Image width in pixels.
@@ -1234,19 +1262,25 @@ impl Graphics {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    /// A color (same arguments as `fill()`), or an `Image`, `Graphics` or
+    /// `Webcam` stretched over the canvas.
     #[pyo3(signature = (*args))]
     pub fn background(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        if args.len() == 1
+            && let Ok(image) = args.get_item(0)?.extract::<ImageRef>()
+        {
+            return graphics_record_command(
+                self.entity,
+                DrawCommand::BackgroundImage(image.texture()?),
+            )
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")));
+        }
         let color = extract_color_with_mode(
             args,
             &graphics_get_color_mode(self.entity)
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
         )?;
         graphics_record_command(self.entity, DrawCommand::BackgroundColor(color))
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
-    }
-
-    pub fn background_image(&self, image: &Image) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::BackgroundImage(image.entity))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
@@ -1927,7 +1961,7 @@ impl Graphics {
         graphics_record_command(
             self.entity,
             DrawCommand::Image {
-                entity: source.entity,
+                entity: source.texture()?,
                 dx,
                 dy,
                 d_width,
@@ -2316,7 +2350,7 @@ impl Graphics {
     }
 
     pub fn texture(&self, source: ImageRef) -> PyResult<()> {
-        graphics_record_command(self.entity, DrawCommand::Texture(source.entity))
+        graphics_record_command(self.entity, DrawCommand::Texture(source.texture()?))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
@@ -2443,10 +2477,7 @@ impl Graphics {
                  MULTIPLY, SCREEN, REPLACE)",
             )
         })?;
-        let (src_entity, flush) = resolve_composite_source(src)?;
-        if let Some(g) = flush {
-            graphics_flush(g).map_err(rt_err)?;
-        }
+        let src_entity = src.extract::<ImageRef>()?.texture()?;
         let sr = normalize_src_rect(src_entity, src_rect)?;
         let dr = normalize_rect(dst_rect, self.width as f32, self.height as f32);
         composite_apply(self.entity, src_entity, code, sr, dr, opacity)
@@ -2462,10 +2493,7 @@ impl Graphics {
         src_rect: Option<[f32; 4]>,
         dst_rect: Option<[f32; 4]>,
     ) -> PyResult<()> {
-        let (src_entity, flush) = resolve_composite_source(src)?;
-        if let Some(g) = flush {
-            graphics_flush(g).map_err(rt_err)?;
-        }
+        let src_entity = src.extract::<ImageRef>()?.texture()?;
         let sr = normalize_src_rect(src_entity, src_rect)?;
         let dr = normalize_rect(dst_rect, self.width as f32, self.height as f32);
         composite_apply(self.entity, src_entity, COMPOSITE_MODE_REPLACE, sr, dr, 1.0)
@@ -2489,10 +2517,7 @@ impl Graphics {
     /// Applies a mask source's brightness as this graphics' alpha channel
     /// (Processing `mask`). `mask` may be an `Image`, webcam, or `Graphics`.
     pub fn mask(&self, mask: &Bound<'_, PyAny>) -> PyResult<()> {
-        let (src_entity, flush) = resolve_composite_source(mask)?;
-        if let Some(g) = flush {
-            graphics_flush(g).map_err(rt_err)?;
-        }
+        let src_entity = mask.extract::<ImageRef>()?.texture()?;
         composite_apply(
             self.entity,
             src_entity,

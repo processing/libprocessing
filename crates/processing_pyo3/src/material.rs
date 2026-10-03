@@ -16,7 +16,7 @@ pub struct Material {
 
 pub(crate) fn py_to_shader_value(value: &Bound<'_, PyAny>) -> PyResult<shader_value::ShaderValue> {
     if let Ok(img_ref) = value.extract::<ImageRef>() {
-        return Ok(shader_value::ShaderValue::Texture(img_ref.entity));
+        return Ok(shader_value::ShaderValue::Texture(img_ref.texture()?));
     }
     if let Ok(int_val) = value.cast::<PyInt>() {
         if let Ok(v) = int_val.extract::<i32>() {
