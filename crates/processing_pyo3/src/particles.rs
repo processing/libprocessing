@@ -900,9 +900,10 @@ impl Particles {
     /// built-in name (`"position"`, `"velocity"`, `"color"`, `"scale"`, `"life"`,
     /// `"age"`, `"normal"`, `"uv"`, `"rotation"`), the name of any created
     /// attribute, or an `Attribute`.
-    pub fn buffer(&self, attribute: &Bound<'_, PyAny>) -> PyResult<Buffer> {
-        let attr_entity = self.resolve_attribute(attribute)?;
-        let buf = particles_ensure_attribute(self.entity, attr_entity)
+    pub fn buffer(slf: &Bound<'_, Self>, attribute: &Bound<'_, PyAny>) -> PyResult<Buffer> {
+        let this = slf.borrow();
+        let attr_entity = this.resolve_attribute(attribute)?;
+        let buf = particles_ensure_attribute(this.entity, attr_entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         let (_, fmt) = geometry_attribute_info(attr_entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
@@ -912,25 +913,25 @@ impl Particles {
             AttributeFormat::Float3 => shader_value::ShaderValue::Float3([0.0; 3]),
             AttributeFormat::Float4 => shader_value::ShaderValue::Float4([0.0; 4]),
         };
-        Ok(Buffer::from_entity(buf, Some(element_type)))
+        Ok(Buffer::from_entity(buf, Some(element_type)).with_owner(slf.clone().into_any().unbind()))
     }
 
-    pub fn index_buffer(&self, index_count: u32) -> PyResult<Buffer> {
-        let entity = particles_set_connectivity(self.entity, index_count)
+    pub fn index_buffer(slf: &Bound<'_, Self>, index_count: u32) -> PyResult<Buffer> {
+        let entity = particles_set_connectivity(slf.borrow().entity, index_count)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        Ok(Buffer::from_entity(
-            entity,
-            Some(shader_value::ShaderValue::UInt(0)),
-        ))
+        Ok(
+            Buffer::from_entity(entity, Some(shader_value::ShaderValue::UInt(0)))
+                .with_owner(slf.clone().into_any().unbind()),
+        )
     }
 
-    pub fn draw_args(&self) -> PyResult<Buffer> {
-        let entity = particles_connectivity_indirect(self.entity)
+    pub fn draw_args(slf: &Bound<'_, Self>) -> PyResult<Buffer> {
+        let entity = particles_connectivity_indirect(slf.borrow().entity)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        Ok(Buffer::from_entity(
-            entity,
-            Some(shader_value::ShaderValue::UInt(0)),
-        ))
+        Ok(
+            Buffer::from_entity(entity, Some(shader_value::ShaderValue::UInt(0)))
+                .with_owner(slf.clone().into_any().unbind()),
+        )
     }
 
     pub fn reset_indices(&self) -> PyResult<()> {

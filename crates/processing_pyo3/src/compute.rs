@@ -17,6 +17,8 @@ pub struct Buffer {
     element_type: Option<ShaderValue>,
     size: u64,
     borrowed: bool,
+    /// Keeps the object that owns a borrowed buffer alive.
+    owner: Option<Py<PyAny>>,
 }
 
 impl Buffer {
@@ -27,7 +29,13 @@ impl Buffer {
             element_type,
             size,
             borrowed: true,
+            owner: None,
         }
+    }
+
+    pub(crate) fn with_owner(mut self, owner: Py<PyAny>) -> Self {
+        self.owner = Some(owner);
+        self
     }
 
     pub(crate) fn components(&self) -> Option<u32> {
@@ -57,6 +65,7 @@ impl Buffer {
             element_type,
             size,
             borrowed: false,
+            owner: None,
         })
     }
 }
@@ -288,6 +297,7 @@ fn shader_value_to_py<'py>(py: Python<'py>, sv: &ShaderValue) -> PyResult<Bound<
         ShaderValue::UInt3(v) => list(py, v),
         ShaderValue::UInt4(v) => list(py, v),
         ShaderValue::Mat4(v) => list(py, v),
+        ShaderValue::Color(c) => Ok(crate::color::PyColor(*c).into_pyobject(py)?.into_any()),
         ShaderValue::Texture(_)
         | ShaderValue::Buffer(_)
         | ShaderValue::MeshAttribute(..)

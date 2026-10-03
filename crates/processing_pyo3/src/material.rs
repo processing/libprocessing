@@ -39,6 +39,10 @@ pub(crate) fn py_to_shader_value(value: &Bound<'_, PyAny>) -> PyResult<shader_va
     if let Ok(v) = value.extract::<PyRef<PyVec2>>() {
         return Ok(shader_value::ShaderValue::Float2(v.0.to_array()));
     }
+    // before the sequence fallbacks: a Color iterates in its own space (h, s, v, a for hsva)
+    if let Ok(c) = value.extract::<PyRef<PyColor>>() {
+        return Ok(shader_value::ShaderValue::Color(c.0));
+    }
 
     if let Ok(buf) = value.extract::<PyRef<Buffer>>() {
         return Ok(shader_value::ShaderValue::Buffer(buf.entity));

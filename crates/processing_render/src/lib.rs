@@ -82,6 +82,7 @@ impl Plugin for ProcessingRenderPlugin {
 
         app.init_resource::<time::ProcessingFrame>();
         app.init_resource::<time::ProcessingFrameRate>();
+        app.init_resource::<time::ProcessingFrameTime>();
 
         let has_sketch_file = config
             .get(ConfigKey::SketchFileName)

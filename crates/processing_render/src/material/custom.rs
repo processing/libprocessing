@@ -512,6 +512,7 @@ pub(crate) fn shader_value_to_reflect(value: &ShaderValue) -> Result<Box<dyn Par
         ShaderValue::UInt3(v) => Box::new(UVec3::from_array(*v)),
         ShaderValue::UInt4(v) => Box::new(UVec4::from_array(*v)),
         ShaderValue::Mat4(v) => Box::new(Mat4::from_cols_array(v)),
+        ShaderValue::Color(c) => Box::new(Vec4::from_array(c.to_linear().to_f32_array())),
         ShaderValue::Texture(_)
         | ShaderValue::Buffer(_)
         | ShaderValue::MeshAttribute(..)

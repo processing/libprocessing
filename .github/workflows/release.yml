@@ -178,7 +178,7 @@ jobs:
           submodules: true
       - uses: ./.github/actions/setup
       - name: Build FFI shared library
-        run: cargo build --release -p processing_ffi --features wayland,x11,webcam
+        run: cargo build --release -p processing_ffi --features wayland,x11
       - name: Stage release files
         run: |
           mkdir -p staging/lib staging/include
@@ -201,7 +201,7 @@ jobs:
           submodules: true
       - uses: dtolnay/rust-toolchain@stable
       - name: Build FFI shared library
-        run: cargo build --release -p processing_ffi --features webcam
+        run: cargo build --release -p processing_ffi
       - name: Stage release files
         run: |
           mkdir -p staging/lib staging/include
@@ -224,7 +224,7 @@ jobs:
           submodules: true
       - uses: dtolnay/rust-toolchain@stable
       - name: Build FFI shared library
-        run: cargo build --release -p processing_ffi --features webcam
+        run: cargo build --release -p processing_ffi
       - name: Stage release files
         shell: pwsh
         run: |
