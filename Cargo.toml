@@ -1,6 +1,6 @@
 [package]
 name = "processing"
-version = "0.0.8"
+version = "0.0.9-alpha.1"
 edition = "2024"
 autoexamples = false
 
