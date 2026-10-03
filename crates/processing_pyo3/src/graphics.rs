@@ -418,6 +418,36 @@ impl Light {
         let v = extract_vec3(args)?;
         transform_look_at(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
+
+    #[pyo3(signature = (*args))]
+    pub fn translate(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let v = extract_vec3(args)?;
+        transform_translate(self.entity, v).map_err(rt_err)
+    }
+
+    pub fn rotate_x(&self, angle: f32) -> PyResult<()> {
+        transform_rotate_x(self.entity, angle).map_err(rt_err)
+    }
+
+    pub fn rotate_y(&self, angle: f32) -> PyResult<()> {
+        transform_rotate_y(self.entity, angle).map_err(rt_err)
+    }
+
+    pub fn rotate_z(&self, angle: f32) -> PyResult<()> {
+        transform_rotate_z(self.entity, angle).map_err(rt_err)
+    }
+
+    /// Rotate by `angle` radians around `axis`.
+    #[pyo3(signature = (angle, *axis))]
+    pub fn rotate_axis(&self, angle: f32, axis: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let axis = extract_vec3(axis)?;
+        transform_rotate_axis(self.entity, angle, axis).map_err(rt_err)
+    }
+
+    /// Back to the origin with no rotation.
+    pub fn reset(&self) -> PyResult<()> {
+        transform_reset(self.entity).map_err(rt_err)
+    }
 }
 
 // TODO: implement `light_destroy`

@@ -47,6 +47,16 @@ pub(crate) fn py_to_shader_value(value: &Bound<'_, PyAny>) -> PyResult<shader_va
         return Ok(shader_value::ShaderValue::Grid(grid.entity));
     }
 
+    // row-major like `get_matrix()`, WGSL wants columns
+    if let Ok(rows) = value.extract::<[f32; 16]>() {
+        let m = bevy::math::Mat4::from_cols_array(&rows).transpose();
+        return Ok(shader_value::ShaderValue::Mat4(m.to_cols_array()));
+    }
+    if let Ok(rows) = value.extract::<[[f32; 4]; 4]>() {
+        let m = bevy::math::Mat4::from_cols_array_2d(&rows).transpose();
+        return Ok(shader_value::ShaderValue::Mat4(m.to_cols_array()));
+    }
+
     if let Ok(v) = value.extract::<[f32; 4]>() {
         return Ok(shader_value::ShaderValue::Float4(v));
     }
@@ -88,6 +98,32 @@ fn apply_albedo(entity: Entity, value: &Bound<'_, PyAny>) -> PyResult<()> {
     )))
 }
 
+fn apply_emissive(entity: Entity, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    let rt = |e| PyRuntimeError::new_err(format!("{e}"));
+    if let Ok(buf) = value.extract::<PyRef<Buffer>>() {
+        return material_set_emissive_buffer(entity, buf.entity).map_err(rt);
+    }
+    // emissive is a linear radiance, not an sRGB color
+    let linear: bevy::color::LinearRgba = if let Ok(c) = value.extract::<PyRef<PyColor>>() {
+        c.0.into()
+    } else if let Ok([r, g, b, a]) = value.extract::<[f32; 4]>() {
+        bevy::color::LinearRgba::new(r, g, b, a)
+    } else if let Ok([r, g, b]) = value.extract::<[f32; 3]>() {
+        bevy::color::LinearRgba::new(r, g, b, 1.0)
+    } else {
+        return Err(PyRuntimeError::new_err(format!(
+            "unsupported emissive type: {} (expected Color, Buffer, or [r,g,b,(a)])",
+            value.get_type().name()?
+        )));
+    };
+    material_set(
+        entity,
+        "emissive",
+        shader_value::ShaderValue::Float4([linear.red, linear.green, linear.blue, linear.alpha]),
+    )
+    .map_err(rt)
+}
+
 fn py_truthy(value: &Bound<'_, PyAny>) -> PyResult<bool> {
     value
         .extract::<bool>()
@@ -100,6 +136,7 @@ fn apply_kwargs(entity: Entity, kwargs: &Bound<'_, PyDict>) -> PyResult<()> {
         let rt = |e| PyRuntimeError::new_err(format!("{e}"));
         match name.as_str() {
             "albedo" => apply_albedo(entity, &value)?,
+            "emissive" => apply_emissive(entity, &value)?,
             "unlit" => material_set_unlit(entity, py_truthy(&value)?).map_err(rt)?,
             "double_sided" => material_set_double_sided(entity, py_truthy(&value)?).map_err(rt)?,
             "depth_write" => material_set_depth_write(entity, py_truthy(&value)?).map_err(rt)?,
@@ -165,6 +202,70 @@ impl Material {
             return Ok(());
         };
         apply_kwargs(self.entity, kwargs)
+    }
+
+    /// Base color: a `Color`, `[r, g, b, (a)]`, or a per-instance `Buffer`.
+    pub fn albedo(&self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        apply_albedo(self.entity, value)
+    }
+
+    pub fn metalness(&self, value: f32) -> PyResult<()> {
+        self.set_pbr("metallic", value)
+    }
+
+    pub fn roughness(&self, value: f32) -> PyResult<()> {
+        self.set_pbr("roughness", value)
+    }
+
+    pub fn reflectance(&self, value: f32) -> PyResult<()> {
+        self.set_pbr("reflectance", value)
+    }
+
+    /// Emitted light: a `Color`, linear `[r, g, b, (a)]`, or a per-instance `Buffer`.
+    pub fn emissive(&self, value: &Bound<'_, PyAny>) -> PyResult<()> {
+        apply_emissive(self.entity, value)
+    }
+
+    pub fn opaque(&self) -> PyResult<()> {
+        material_set_alpha_mode(self.entity, 0, 0.0).map_err(rt)
+    }
+
+    /// Discards fragments with alpha below `cutoff`.
+    #[pyo3(signature = (cutoff=0.5))]
+    pub fn mask(&self, cutoff: f32) -> PyResult<()> {
+        material_set_alpha_mode(self.entity, 1, cutoff).map_err(rt)
+    }
+
+    pub fn transparent(&self) -> PyResult<()> {
+        material_set_alpha_mode(self.entity, 2, 0.0).map_err(rt)
+    }
+
+    #[pyo3(signature = (on=true))]
+    pub fn double_sided(&self, on: bool) -> PyResult<()> {
+        material_set_double_sided(self.entity, on).map_err(rt)
+    }
+
+    #[pyo3(signature = (on=true))]
+    pub fn depth_write(&self, on: bool) -> PyResult<()> {
+        material_set_depth_write(self.entity, on).map_err(rt)
+    }
+
+    /// Blends with what's behind it using a `BlendMode` (`ADD`, `MULTIPLY`, a custom one, ...).
+    pub fn blend_mode(&self, mode: &crate::graphics::PyBlendMode) -> PyResult<()> {
+        let state = mode
+            .blend_state
+            .unwrap_or(bevy::render::render_resource::BlendState::ALPHA_BLENDING);
+        material_set_custom_blend(self.entity, state).map_err(rt)
+    }
+}
+
+fn rt(e: impl std::fmt::Display) -> PyErr {
+    PyRuntimeError::new_err(format!("{e}"))
+}
+
+impl Material {
+    fn set_pbr(&self, name: &str, value: f32) -> PyResult<()> {
+        material_set(self.entity, name, shader_value::ShaderValue::Float(value)).map_err(rt)
     }
 }
 
