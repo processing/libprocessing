@@ -412,13 +412,17 @@ pub fn ortho(
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
-    // we need a custom projection to support processing's coordinate system
-    // but this is in effect an orthographic projection with the given bounds
-    *projection = Projection::custom(ProcessingProjection {
-        width: right - left,
-        height: top - bottom,
+    // bounds are in the centered, Y-up view space of `mode_3d`. A fixed scaling
+    // mode keeps Bevy from rescaling them to the target size, and Bevy's own
+    // projection keeps the reverse-Z depth its 3D pipelines expect.
+    let (width, height) = (right - left, top - bottom);
+    *projection = Projection::Orthographic(OrthographicProjection {
         near,
         far,
+        viewport_origin: Vec2::new(-left / width, -bottom / height),
+        scaling_mode: bevy::camera::ScalingMode::Fixed { width, height },
+        scale: 1.0,
+        area: Rect::new(left, bottom, right, top),
     });
 
     Ok(())

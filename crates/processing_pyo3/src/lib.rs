@@ -1747,6 +1747,39 @@ pub mod mewnala {
     }
 
     #[pyfunction]
+    #[pyo3(pass_module, signature = (*args))]
+    fn camera(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        graphics!(module).camera(args)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (fov=None, aspect=None, near=None, far=None))]
+    fn perspective(
+        module: &Bound<'_, PyModule>,
+        fov: Option<f32>,
+        aspect: Option<f32>,
+        near: Option<f32>,
+        far: Option<f32>,
+    ) -> PyResult<()> {
+        graphics!(module).perspective(fov, aspect, near, far)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (left=None, right=None, bottom=None, top=None, near=None, far=None))]
+    fn ortho(
+        module: &Bound<'_, PyModule>,
+        left: Option<f32>,
+        right: Option<f32>,
+        bottom: Option<f32>,
+        top: Option<f32>,
+        near: Option<f32>,
+        far: Option<f32>,
+    ) -> PyResult<()> {
+        graphics!(module).ortho(left, right, bottom, top, near, far)
+    }
+
+    #[pyfunction]
     #[pyo3(pass_module, signature = (intensity=processing_render::graphics::DEFAULT_BLOOM_INTENSITY, threshold=0.0))]
     fn bloom(module: &Bound<'_, PyModule>, intensity: f32, threshold: f32) -> PyResult<()> {
         graphics!(module).bloom(intensity, threshold)

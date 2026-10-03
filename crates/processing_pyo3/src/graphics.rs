@@ -829,7 +829,15 @@ impl Drop for Graphics {
     }
 }
 
+/// `mode_3d()`'s field of view.
+const DEFAULT_FOV: f32 = std::f32::consts::FRAC_PI_3;
+
 impl Graphics {
+    /// How far `mode_3d()` puts the camera: where the canvas fills the view.
+    fn default_camera_z(&self) -> f32 {
+        (self.height as f32 / 2.0) / (DEFAULT_FOV / 2.0).tan()
+    }
+
     pub(crate) fn current_color_mode(&self) -> PyResult<ColorMode> {
         graphics_get_color_mode(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
@@ -2574,30 +2582,77 @@ impl Graphics {
         transform_look_at(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn perspective(&self, fov: f32, aspect: f32, near: f32, far: f32) -> PyResult<()> {
+    /// `camera()` restores the default `mode_3d()` view. `camera(eye, center, up)`
+    /// takes three vectors, or nine numbers as in Processing.
+    #[pyo3(signature = (*args))]
+    pub fn camera(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        let (eye, center, up) = match args.len() {
+            0 => (
+                Vec3::new(0.0, 0.0, self.default_camera_z()),
+                Vec3::ZERO,
+                Vec3::Y,
+            ),
+            3 | 9 => {
+                let n = args.len() / 3;
+                let part = |i: usize| extract_vec3(&args.get_slice(i * n, (i + 1) * n));
+                (part(0)?, part(1)?, part(2)?)
+            }
+            n => {
+                return Err(pyo3::exceptions::PyTypeError::new_err(format!(
+                    "camera() takes 0, 3 or 9 arguments ({n} given)"
+                )));
+            }
+        };
+        graphics_camera(self.entity, eye, center, up)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
+    /// Arguments left out take the `mode_3d()` defaults: 60 degree `fov`, the
+    /// canvas aspect, `near` 1 and `far` ten times the camera distance.
+    #[pyo3(signature = (fov=None, aspect=None, near=None, far=None))]
+    pub fn perspective(
+        &self,
+        fov: Option<f32>,
+        aspect: Option<f32>,
+        near: Option<f32>,
+        far: Option<f32>,
+    ) -> PyResult<()> {
+        let near = near.unwrap_or(1.0);
         graphics_perspective(
             self.entity,
-            fov,
-            aspect,
+            fov.unwrap_or(DEFAULT_FOV),
+            aspect.unwrap_or(self.width as f32 / self.height as f32),
             near,
-            far,
+            far.unwrap_or(self.default_camera_z() * 10.0),
             Vec4::new(0.0, 0.0, -1.0, -near),
         )
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    /// Defaults to the canvas bounds, `near` 0 and `far` ten times the camera
+    /// distance, as Processing's `ortho()`.
     #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (left=None, right=None, bottom=None, top=None, near=None, far=None))]
     pub fn ortho(
         &self,
-        left: f32,
-        right: f32,
-        bottom: f32,
-        top: f32,
-        near: f32,
-        far: f32,
+        left: Option<f32>,
+        right: Option<f32>,
+        bottom: Option<f32>,
+        top: Option<f32>,
+        near: Option<f32>,
+        far: Option<f32>,
     ) -> PyResult<()> {
-        graphics_ortho(self.entity, left, right, bottom, top, near, far)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        let (half_w, half_h) = (self.width as f32 / 2.0, self.height as f32 / 2.0);
+        graphics_ortho(
+            self.entity,
+            left.unwrap_or(-half_w),
+            right.unwrap_or(half_w),
+            bottom.unwrap_or(-half_h),
+            top.unwrap_or(half_h),
+            near.unwrap_or(0.0),
+            far.unwrap_or(self.default_camera_z() * 10.0),
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     pub fn orbit_camera(&self) -> PyResult<()> {
