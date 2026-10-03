@@ -23,6 +23,17 @@ pub fn particles_emit_gpu(
         return Ok(());
     }
 
+    let required: Vec<Entity> = app_mut(|app| {
+        Ok(app
+            .world()
+            .get::<KernelRequires>(compute_entity)
+            .map(|r| r.0.clone())
+            .unwrap_or_default())
+    })?;
+    for attr_entity in required {
+        particles_ensure_attribute(particles_entity, attr_entity)?;
+    }
+
     let (capacity, head, buffers) = app_mut(|app| {
         let world = app.world();
         let field = world

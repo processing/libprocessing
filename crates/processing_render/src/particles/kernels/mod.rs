@@ -15,7 +15,7 @@ use crate::{compute_create, compute_set, shader_load};
 #[derive(Component, Default, Clone)]
 pub struct KernelRequires(pub Vec<Entity>);
 
-fn set_requires(compute: Entity, names: &[&str]) -> error::Result<()> {
+pub(crate) fn set_requires(compute: Entity, names: &[&str]) -> error::Result<()> {
     app_mut(|app| {
         let world = app.world_mut();
         let attrs: Vec<Entity> = {

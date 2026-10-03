@@ -2291,6 +2291,15 @@ pub fn gltf_material(gltf_entity: Entity, name: &str) -> error::Result<Entity> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+pub fn gltf_texture(gltf_entity: Entity, name: &str) -> error::Result<Entity> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(gltf::texture, (gltf_entity, name.to_string()))
+            .unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub fn gltf_mesh_names(gltf_entity: Entity) -> error::Result<Vec<String>> {
     app_mut(|app| {
         app.world_mut()

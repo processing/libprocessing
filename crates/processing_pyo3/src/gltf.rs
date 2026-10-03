@@ -2,7 +2,7 @@ use bevy::prelude::Entity;
 use processing::prelude::*;
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
-use crate::graphics::{Geometry, Light};
+use crate::graphics::{Geometry, Image, Light};
 use crate::material::Material;
 
 #[pyclass(unsendable)]
@@ -33,6 +33,13 @@ impl Gltf {
         let entity = gltf_material(self.entity, name)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(Material { entity })
+    }
+
+    /// The texture on the named mesh, e.g. for `LOOKUP`.
+    pub fn texture(&self, name: &str) -> PyResult<Image> {
+        let entity = gltf_texture(self.entity, name)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(Image::wrap(entity))
     }
 
     pub fn mesh_names(&self) -> PyResult<Vec<String>> {

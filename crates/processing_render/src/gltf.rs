@@ -8,7 +8,7 @@ use bevy::{
     },
     camera::visibility::RenderLayers,
     ecs::system::RunSystemOnce,
-    gltf::{Gltf, GltfMaterial, GltfMeshName},
+    gltf::{Gltf, GltfMaterial, GltfMaterialName, GltfMeshName},
     pbr::ExtendedMaterial,
     prelude::*,
     world_serialization::WorldInstanceSpawner,
@@ -138,21 +138,7 @@ pub fn geometry(
     let instance_id = gltf_handle.instance_id;
 
     let (mesh_handle, global_transform) = {
-        let spawner = world.resource::<WorldInstanceSpawner>();
-
-        // find the mesh with the given name component that bevy added post-spawn
-        // name is derived from gltf node or computed
-        let mesh_entity = spawner
-            .iter_instance_entities(instance_id)
-            .find(|&e| {
-                world
-                    .get::<GltfMeshName>(e)
-                    .map(|n| n.0 == name)
-                    .unwrap_or(false)
-            })
-            .ok_or_else(|| {
-                ProcessingError::GltfLoadError(format!("Mesh '{}' not found in GLTF scene", name))
-            })?;
+        let mesh_entity = find_mesh_entity(world, instance_id, &name)?;
 
         let mesh3d = world.get::<Mesh3d>(mesh_entity).ok_or_else(|| {
             ProcessingError::GltfLoadError(format!(
@@ -180,6 +166,64 @@ pub fn geometry(
         ))
         .id();
     Ok(entity)
+}
+
+/// The scene entity bevy spawned for a mesh, by the name it gave that mesh (from the
+/// glTF node, or computed).
+fn find_mesh_entity(
+    world: &World,
+    instance_id: bevy::world_serialization::InstanceId,
+    name: &str,
+) -> Result<Entity> {
+    world
+        .resource::<WorldInstanceSpawner>()
+        .iter_instance_entities(instance_id)
+        .find(|&e| world.get::<GltfMeshName>(e).is_some_and(|n| n.0 == name))
+        .ok_or_else(|| {
+            ProcessingError::GltfLoadError(format!("Mesh '{}' not found in GLTF scene", name))
+        })
+}
+
+/// The base color texture of a mesh's material, as an [`Image`](crate::image::Image).
+pub fn texture(In((gltf_entity, name)): In<(Entity, String)>, world: &mut World) -> Result<Entity> {
+    let gltf_handle = world
+        .get::<GltfHandle>(gltf_entity)
+        .ok_or(ProcessingError::InvalidEntity)?;
+    let (instance_id, handle) = (gltf_handle.instance_id, gltf_handle.handle.clone());
+
+    let mesh_entity = find_mesh_entity(world, instance_id, &name)?;
+    let material_name = world
+        .get::<GltfMaterialName>(mesh_entity)
+        .ok_or_else(|| {
+            ProcessingError::GltfLoadError(format!("Mesh '{}' has no material", name))
+        })?
+        .0
+        .clone();
+
+    let texture = {
+        let gltf = world
+            .resource::<Assets<Gltf>>()
+            .get(&handle)
+            .ok_or_else(|| ProcessingError::GltfLoadError("GLTF asset not found".into()))?;
+        let material = gltf
+            .named_materials
+            .get(material_name.as_str())
+            .and_then(|h| world.resource::<Assets<GltfMaterial>>().get(h))
+            .ok_or_else(|| {
+                ProcessingError::GltfLoadError(format!(
+                    "Material '{}' not found in GLTF",
+                    material_name
+                ))
+            })?;
+        material.base_color_texture.clone().ok_or_else(|| {
+            ProcessingError::GltfLoadError(format!("Mesh '{}' has no texture", name))
+        })?
+    };
+
+    block_on_load(world, |w| w.get_asset_server().load_state(&texture))?;
+    world
+        .run_system_once_with(crate::image::from_handle, texture)
+        .unwrap()
 }
 
 /// Translate a bevy [`GltfMaterial`] into the [`StandardMaterial`] base of a
