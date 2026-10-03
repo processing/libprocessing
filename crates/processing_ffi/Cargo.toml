@@ -14,7 +14,8 @@ crate-type = ["cdylib", "staticlib"]
 default = []
 wayland = ["processing/wayland"]
 x11 = ["processing/x11"]
-webcam = ["processing/webcam"]
+# TEMP(bevy-020): webcam disabled
+# webcam = ["processing/webcam"]
 cuda = ["processing/cuda"]
 
 [dependencies]

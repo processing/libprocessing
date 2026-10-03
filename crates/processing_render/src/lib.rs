@@ -2405,7 +2405,11 @@ fn ensure_buffer_synced(app: &mut App, entity: Entity) -> error::Result<()> {
         let asset = buffers
             .get_mut_untracked(handle.id())
             .ok_or(error::ProcessingError::BufferNotFound)?;
-        asset.data = Some(bytes);
+        let buffer_size = bytes.len() as u64;
+        asset.data = bevy::render::storage::ShaderBufferData::Initialized {
+            data: bytes.into(),
+            buffer_size,
+        };
     }
 
     let mut buf = world
@@ -2502,7 +2506,7 @@ fn buffer_read_range(entity: Entity, offset: u64, len: u64) -> error::Result<Vec
             .resource::<Assets<bevy::render::storage::ShaderBuffer>>();
         let data = buffers
             .get(&handle)
-            .and_then(|a| a.data.as_ref())
+            .and_then(compute::shader_buffer_bytes)
             .ok_or(error::ProcessingError::BufferNotFound)?;
         Ok(data[offset as usize..(offset + len) as usize].to_vec())
     })

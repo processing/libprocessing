@@ -15,7 +15,7 @@ x11 = ["bevy/x11"]
 bevy = { workspace = true }
 bevy_naga_reflect = { workspace = true }
 # direct wgpu dep to reach `wgpu::util::TextureBlitter` (unifies to bevy's wgpu)
-wgpu = "29"
+wgpu = "30"
 naga = { workspace = true }
 wesl = { workspace = true }
 lyon = "1.0"

@@ -46,7 +46,7 @@ pub struct ParticlesPointRenderPlugin;
 
 impl Plugin for ParticlesPointRenderPlugin {
     fn build(&self, app: &mut App) {
-        embedded_asset!(app, "point.wgsl");
+        embedded_asset!(app, "point.wesl");
         app.add_plugins(ExtractComponentPlugin::<ParticleRasterDraw>::default());
 
         let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
@@ -73,6 +73,7 @@ impl Plugin for ParticlesPointRenderPlugin {
 #[derive(Component, Clone, ExtractComponent)]
 #[require(VisibilityClass)]
 #[component(on_add = visibility::add_visibility_class::<ParticleRasterDraw>)]
+#[extract_app(RenderApp)]
 pub struct ParticleRasterDraw {
     pub position: Handle<ShaderBuffer>,
     pub count: u32,
@@ -155,7 +156,7 @@ impl FromWorld for ParticleRasterPipeline {
         let render_device = world.resource::<RenderDevice>().clone();
         let asset_server = world.resource::<AssetServer>();
         let shader: Handle<Shader> =
-            asset_server.load("embedded://processing_render/particles/point.wgsl");
+            asset_server.load("embedded://processing_render/particles/point.wesl");
 
         let view_entries: Vec<_> = BindGroupLayoutEntries::single(
             ShaderStages::VERTEX,

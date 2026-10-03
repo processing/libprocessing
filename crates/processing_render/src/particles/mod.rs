@@ -325,8 +325,8 @@ fn make_buffer_with_usage(
     extra_usage: BufferUsages,
 ) -> Entity {
     let byte_size = initial.len() as u64;
-    let mut shader_buffer = ShaderBuffer::new(initial, RenderAssetUsages::all());
-    shader_buffer.buffer_description.usage |= extra_usage;
+    let mut shader_buffer = ShaderBuffer::new(initial.to_vec(), RenderAssetUsages::all());
+    shader_buffer.buffer_usage |= extra_usage;
     let handle = shader_buffers.add(shader_buffer);
     let readback = render_device.create_buffer(&BufferDescriptor {
         label: Some("Particles Buffer Readback"),

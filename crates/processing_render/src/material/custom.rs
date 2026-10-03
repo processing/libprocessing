@@ -25,9 +25,9 @@ use bevy::{
     mesh::MeshVertexBufferLayoutRef,
     pbr::{
         DrawMaterial, EntitiesNeedingSpecialization, MainPassOpaqueDrawFunction,
-        MainPassTransparentDrawFunction, MaterialBindGroupAllocator, MaterialBindGroupAllocators,
-        MaterialFragmentShader, MaterialVertexShader, MeshPipelineKey, PreparedMaterial,
-        RenderMaterialBindings, RenderMaterialInstance, RenderMaterialInstances, base_specialize,
+        MainPassTransparentDrawFunction, MaterialFragmentShader, MaterialVertexShader,
+        MeshPipelineKey, PreparedMaterial, RenderMaterialInstance, RenderMaterialInstances,
+        base_specialize,
     },
     prelude::*,
     reflect::{PartialReflect, ReflectMut, ReflectRef, structs::Struct},
@@ -37,8 +37,12 @@ use bevy::{
         erased_render_asset::{ErasedRenderAsset, ErasedRenderAssetPlugin, PrepareAssetError},
         render_asset::RenderAssets,
         render_phase::DrawFunctions,
+        material_bind_groups::{
+            MaterialBindGroupAllocator, MaterialBindGroupAllocators, RenderMaterialBindings,
+        },
         render_resource::{
-            BindGroupLayoutDescriptor, BindingResources, BlendState, Face, UnpreparedBindGroup,
+            BindGroupBuilder, BindGroupLayoutDescriptor, BlendState, Face, OwnedBindingResource,
+            UnpreparedBindingResource,
         },
         renderer::RenderDevice,
         storage::GpuShaderBuffer,
@@ -630,9 +634,27 @@ impl ErasedRenderAsset for CustomMaterial {
             gpu_buffers,
         );
 
-        let unprepared = UnpreparedBindGroup {
-            bindings: BindingResources(bindings),
-        };
+        let mut unprepared = BindGroupBuilder::default();
+        for (index, resource) in bindings {
+            let resource = match resource {
+                OwnedBindingResource::Buffer(buffer) => UnpreparedBindingResource::Buffer(buffer),
+                OwnedBindingResource::ShaderBuffer(handle) => {
+                    UnpreparedBindingResource::ShaderBuffer(handle)
+                }
+                OwnedBindingResource::TextureView(dimension, view) => {
+                    UnpreparedBindingResource::TextureView(dimension, view)
+                }
+                OwnedBindingResource::Sampler(kind, sampler) => {
+                    UnpreparedBindingResource::Sampler(kind, sampler)
+                }
+                OwnedBindingResource::Data(data) => {
+                    let start = unprepared.data_buffer.len() as u32;
+                    unprepared.data_buffer.extend_from_slice(&data.0);
+                    UnpreparedBindingResource::Data(start..unprepared.data_buffer.len() as u32)
+                }
+            };
+            unprepared.binding_resources.push((index, resource));
+        }
 
         let bind_group_allocator = bind_group_allocators
             .get_mut(&TypeId::of::<CustomMaterial>())
@@ -642,12 +664,13 @@ impl ErasedRenderAsset for CustomMaterial {
             Entry::Occupied(mut occupied_entry) => {
                 bind_group_allocator.free(*occupied_entry.get());
                 let new_binding =
-                    bind_group_allocator.allocate_unprepared(unprepared, &bind_group_layout);
+                    bind_group_allocator.allocate_unprepared(&mut unprepared, &bind_group_layout);
                 *occupied_entry.get_mut() = new_binding;
                 new_binding
             }
-            Entry::Vacant(vacant_entry) => *vacant_entry
-                .insert(bind_group_allocator.allocate_unprepared(unprepared, &bind_group_layout)),
+            Entry::Vacant(vacant_entry) => *vacant_entry.insert(
+                bind_group_allocator.allocate_unprepared(&mut unprepared, &bind_group_layout),
+            ),
         };
 
         let draw_function = opaque_draw_functions.read().id::<DrawMaterial>();

@@ -15,7 +15,7 @@ use bevy::{
             PipelineCache, PollType,
         },
         renderer::{RenderDevice, RenderQueue},
-        storage::{GpuShaderBuffer, ShaderBuffer},
+        storage::{GpuShaderBuffer, ShaderBuffer, ShaderBufferData},
         texture::GpuImage,
     },
 };
@@ -59,7 +59,7 @@ pub fn create_buffer(
     render_device: Res<RenderDevice>,
 ) -> Entity {
     let handle = buffers.add(ShaderBuffer::new(
-        &vec![0u8; size as usize],
+        vec![0u8; size as usize],
         RenderAssetUsages::all(),
     ));
     commands
@@ -79,8 +79,8 @@ pub fn create_buffer_with_usage(
     mut buffers: ResMut<Assets<ShaderBuffer>>,
     render_device: Res<RenderDevice>,
 ) -> Entity {
-    let mut shader_buffer = ShaderBuffer::new(&vec![0u8; size as usize], RenderAssetUsages::all());
-    shader_buffer.buffer_description.usage |= extra_usage;
+    let mut shader_buffer = ShaderBuffer::new(vec![0u8; size as usize], RenderAssetUsages::all());
+    shader_buffer.buffer_usage |= extra_usage;
     let handle = buffers.add(shader_buffer);
     commands
         .spawn(Buffer {
@@ -100,7 +100,7 @@ pub fn create_buffer_with_data(
     render_device: Res<RenderDevice>,
 ) -> Entity {
     let size = data.len() as u64;
-    let handle = buffers.add(ShaderBuffer::new(&data, RenderAssetUsages::all()));
+    let handle = buffers.add(ShaderBuffer::new(data, RenderAssetUsages::all()));
     commands
         .spawn(Buffer {
             handle,
@@ -142,8 +142,19 @@ pub fn write_buffer_asset(
     patched.ok_or(ProcessingError::BufferNotFound)?
 }
 
+/// The CPU copy of a buffer's contents, if it has one.
+pub fn shader_buffer_bytes(asset: &ShaderBuffer) -> Option<&[u8]> {
+    match &asset.data {
+        ShaderBufferData::Initialized { data, .. } => Some(data.as_slice()),
+        ShaderBufferData::Uninitialized(_) => None,
+    }
+}
+
 fn patch_asset(asset: &mut ShaderBuffer, offset: u64, data: &[u8]) -> Result<()> {
-    let dst = asset.data.as_mut().ok_or(ProcessingError::BufferNotFound)?;
+    let ShaderBufferData::Initialized { data: dst, .. } = &mut asset.data else {
+        return Err(ProcessingError::BufferNotFound);
+    };
+    let dst = dst.as_mut_slice();
     let start = offset as usize;
     dst[start..start + data.len()].copy_from_slice(data);
     Ok(())
@@ -178,7 +189,10 @@ pub fn read_buffer_gpu(
         .map_err(|e| ProcessingError::BufferMapError(format!("map channel closed: {e}")))?
         .map_err(|e| ProcessingError::BufferMapError(format!("map failed: {e}")))?;
 
-    let bytes = buffer_slice.get_mapped_range().to_vec();
+    let bytes = buffer_slice
+        .get_mapped_range()
+        .map_err(|e| ProcessingError::BufferMapError(format!("map range failed: {e}")))?
+        .to_vec();
     readback_buffer.unmap();
     Ok(bytes)
 }
@@ -302,6 +316,7 @@ pub fn create_compute(app: &mut App, shader_entity: Entity) -> Result<Entity> {
         shader: shader_handle.clone(),
         shader_defs: Vec::new(),
         entry_point: Some(entry_point.clone().into()),
+        constants: Vec::new(),
         zero_initialize_workgroup_memory: true,
     };
 

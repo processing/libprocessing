@@ -20,7 +20,7 @@ pub struct ParticlesMaterialPlugin;
 
 impl Plugin for ParticlesMaterialPlugin {
     fn build(&self, app: &mut App) {
-        embedded_asset!(app, "particles.wgsl");
+        embedded_asset!(app, "particles.wesl");
         app.add_plugins(MaterialPlugin::<ParticlesMaterial>::default());
     }
 }
@@ -53,11 +53,11 @@ pub struct ParticlesExtension {
 
 impl MaterialExtension for ParticlesExtension {
     fn fragment_shader() -> ShaderRef {
-        "embedded://processing_render/particles/particles.wgsl".into()
+        "embedded://processing_render/particles/particles.wesl".into()
     }
 
     fn deferred_fragment_shader() -> ShaderRef {
-        "embedded://processing_render/particles/particles.wgsl".into()
+        "embedded://processing_render/particles/particles.wesl".into()
     }
 
     fn specialize(

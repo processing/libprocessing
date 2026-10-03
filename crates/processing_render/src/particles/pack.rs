@@ -1,22 +1,17 @@
 use std::num::NonZeroU64;
 
-use bevy::core_pipeline::Core3d;
-use bevy::pbr::{
-    MeshCullingDataBuffer, MeshInputUniform, MeshUniform, early_gpu_preprocess,
-    gpu_instance_batch::GpuInstanceBatchReservations,
-};
+use bevy::pbr::gpu_instance_batch::{GpuInstanceBatchReservations, GpuInstanceBatchSystems};
 use bevy::platform::collections::HashMap;
 use bevy::prelude::*;
 use bevy::render::{
     Extract, ExtractSchedule, Render, RenderApp, RenderSystems,
-    batching::gpu_preprocessing::BatchedInstanceBuffers,
     render_asset::RenderAssets,
     render_resource::{
         BindGroup, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
         BufferBindingType, CachedComputePipelineId, CachedPipelineState, ComputePassDescriptor,
         ComputePipelineDescriptor, PipelineCache, ShaderStages, ShaderType, UniformBuffer,
     },
-    renderer::{RenderContext, RenderDevice, RenderQueue},
+    renderer::{RenderContext, RenderDevice, RenderGraph, RenderQueue},
     storage::{GpuShaderBuffer, ShaderBuffer},
     sync_world::{MainEntity, MainEntityHashMap},
 };
@@ -35,9 +30,9 @@ impl Plugin for ParticlesPackPlugin {
     fn build(&self, app: &mut App) {
         let shader = {
             let mut shaders = app.world_mut().resource_mut::<Assets<Shader>>();
-            shaders.add(Shader::from_wgsl(
-                include_str!("pack.wgsl"),
-                "processing_render/particles/pack.wgsl",
+            shaders.add(Shader::from_wesl(
+                include_str!("pack.wesl"),
+                "processing_render/particles/pack.wesl",
             ))
         };
         app.insert_resource(ParticlesPackShader(shader.clone()));
@@ -55,7 +50,12 @@ impl Plugin for ParticlesPackPlugin {
                 Render,
                 prepare_pack_bind_groups.in_set(RenderSystems::PrepareBindGroups),
             )
-            .add_systems(Core3d, dispatch_pack.before(early_gpu_preprocess));
+            // Publish into each draw's persistent `GpuMeshInstance` output; the
+            // renderer materializes those into mesh inputs before any view.
+            .add_systems(
+                RenderGraph,
+                dispatch_pack.in_set(GpuInstanceBatchSystems::Publish),
+            );
     }
 }
 
@@ -81,10 +81,10 @@ pub struct ParticlesPackPipelines {
 
 #[derive(Copy, Clone, Default, ShaderType)]
 struct ParticlesPackParams {
-    base_input_index: u32,
     count: u32,
     _pad0: u32,
     _pad1: u32,
+    _pad2: u32,
 }
 
 pub struct ExtractedParticlesData {
@@ -128,21 +128,18 @@ fn pack_layout_entries(key: PackPipelineKey) -> Vec<BindGroupLayoutEntry> {
         min_binding_size: NonZeroU64::new(16),
     };
 
-    let mut entries = vec![
-        layout_entry(0, storage_rw),
-        layout_entry(1, storage_rw),
-        layout_entry(2, storage_r),
-    ];
+    // 0: the draw's `GpuMeshInstance` output, 1..: particle attributes, last: params.
+    let mut entries = vec![layout_entry(0, storage_rw), layout_entry(1, storage_r)];
     if key.has_rotation {
-        entries.push(layout_entry(3, storage_r));
+        entries.push(layout_entry(2, storage_r));
     }
     if key.has_scale {
-        entries.push(layout_entry(4, storage_r));
+        entries.push(layout_entry(3, storage_r));
     }
     if key.has_life {
-        entries.push(layout_entry(5, storage_r));
+        entries.push(layout_entry(4, storage_r));
     }
-    entries.push(layout_entry(6, uniform));
+    entries.push(layout_entry(5, uniform));
     entries
 }
 
@@ -264,28 +261,16 @@ fn prepare_pack_bind_groups(
     pipeline_cache: Res<PipelineCache>,
     extracted: Res<ExtractedParticlesDraws>,
     reservations: Res<GpuInstanceBatchReservations>,
-    batched_instance_buffers: Res<BatchedInstanceBuffers<MeshUniform, MeshInputUniform>>,
-    culling_data_buffer: Res<MeshCullingDataBuffer>,
     gpu_buffers: Res<RenderAssets<GpuShaderBuffer>>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
     mut bind_groups: ResMut<ParticlesPackBindGroups>,
 ) {
+    // Rebuilt every frame: a resized reservation replaces its output buffer.
     bind_groups.per_batch.clear();
 
-    let Some(input_buffer) = batched_instance_buffers
-        .current_input_buffer
-        .buffer()
-        .buffer()
-    else {
-        return;
-    };
-    let Some(culling_buffer) = culling_data_buffer.buffer() else {
-        return;
-    };
-
     for (main_entity, data) in extracted.by_main.iter() {
-        let Some(reservation) = reservations.by_entity.get(main_entity) else {
+        let Some(reservation) = reservations.get(*main_entity) else {
             continue;
         };
         let Some(gpu_position) = gpu_buffers.get(&data.position) else {
@@ -315,8 +300,7 @@ fn prepare_pack_bind_groups(
         let cached = pipelines.by_key.get(&data.key).unwrap();
 
         let params = ParticlesPackParams {
-            base_input_index: reservation.input_buffer_base,
-            count: reservation.max_capacity,
+            count: reservation.max_capacity(),
             ..default()
         };
         let mut uniform = UniformBuffer::from(params);
@@ -325,37 +309,33 @@ fn prepare_pack_bind_groups(
         let mut entries: Vec<BindGroupEntry> = vec![
             BindGroupEntry {
                 binding: 0,
-                resource: input_buffer.as_entire_binding(),
+                resource: reservation.output_buffer().as_entire_binding(),
             },
             BindGroupEntry {
                 binding: 1,
-                resource: culling_buffer.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 2,
                 resource: gpu_position.buffer.as_entire_binding(),
             },
         ];
         if let Some(gpu_rotation) = gpu_rotation {
             entries.push(BindGroupEntry {
-                binding: 3,
+                binding: 2,
                 resource: gpu_rotation.buffer.as_entire_binding(),
             });
         }
         if let Some(gpu_scale) = gpu_scale {
             entries.push(BindGroupEntry {
-                binding: 4,
+                binding: 3,
                 resource: gpu_scale.buffer.as_entire_binding(),
             });
         }
         if let Some(gpu_life) = gpu_life {
             entries.push(BindGroupEntry {
-                binding: 5,
+                binding: 4,
                 resource: gpu_life.buffer.as_entire_binding(),
             });
         }
         entries.push(BindGroupEntry {
-            binding: 6,
+            binding: 5,
             resource: uniform.binding().unwrap(),
         });
 
@@ -365,7 +345,7 @@ fn prepare_pack_bind_groups(
             &entries,
         );
 
-        let dispatch_count = reservation.max_capacity.div_ceil(WORKGROUP_SIZE);
+        let dispatch_count = reservation.max_capacity().div_ceil(WORKGROUP_SIZE);
         bind_groups.per_batch.insert(
             *main_entity,
             PerBatchBindGroup {

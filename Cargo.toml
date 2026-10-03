@@ -11,19 +11,23 @@ workspace = true
 default = ["wayland", "x11"]
 wayland = ["processing_render/wayland"]
 x11 = ["processing_render/x11"]
-webcam = ["dep:processing_webcam"]
+# TEMP(bevy-020): nannou_webcam pins bevy 0.19
+# webcam = ["dep:processing_webcam"]
 cuda = ["dep:processing_cuda", "processing_cuda/cuda"]
 
 [workspace]
 resolver = "3"
 members = ["crates/*", "tools/*"]
+# TEMP(bevy-020): midi/audio pin bevy 0.19
+# TEMP(bevy-020): nannou_webcam pins bevy 0.19
+exclude = ["crates/processing_audio", "crates/processing_midi", "crates/processing_webcam"]
 
 [workspace.lints.clippy]
 type_complexity = "allow"
 too_many_arguments = "allow"
 
 [workspace.dependencies]
-bevy = { git = "https://github.com/processing/bevy", branch = "main", default-features = false, features = [
+bevy = { git = "https://github.com/processing/bevy", branch = "processing-batches", default-features = false, features = [
   # 2d
   "2d_bevy_render",
   "default_app",
@@ -48,12 +52,11 @@ bevy = { git = "https://github.com/processing/bevy", branch = "main", default-fe
   "wayland",
   "webgl2",
   "x11",
-  "shader_format_wesl",
   "free_camera",
   "pan_camera",
   
 ] }
-bevy_naga_reflect = { git = "https://github.com/tychedelia/bevy_naga_reflect" }
+bevy_naga_reflect = { git = "https://github.com/tychedelia/bevy_naga_reflect", branch = "bevy-020-fixes" }
 bevy_cuda = { git = "https://github.com/tychedelia/bevy_cuda" }
 naga = { version = "29", features = ["wgsl-in"] }
 wesl = { version = "0.3", default-features = false }
@@ -64,11 +67,13 @@ processing_core = { path = "crates/processing_core" }
 processing_cuda = { path = "crates/processing_cuda" }
 processing_pyo3 = { path = "crates/processing_pyo3" }
 processing_render = { path = "crates/processing_render" }
-processing_midi = { path = "crates/processing_midi" }
-processing_audio = { path = "crates/processing_audio" }
+# TEMP(bevy-020): midi/audio pin bevy 0.19
+# processing_midi = { path = "crates/processing_midi" }
+# processing_audio = { path = "crates/processing_audio" }
 processing_input = { path = "crates/processing_input" }
 processing_glfw = { path = "crates/processing_glfw" }
-processing_webcam = { path = "crates/processing_webcam" }
+# TEMP(bevy-020): nannou_webcam pins bevy 0.19
+# processing_webcam = { path = "crates/processing_webcam" }
 rand = "0.10"
 rand_distr = "0.6"
 
@@ -76,10 +81,12 @@ rand_distr = "0.6"
 bevy = { workspace = true }
 processing_core = { workspace = true }
 processing_render = { workspace = true }
-processing_midi = { workspace = true }
-processing_audio = { workspace = true }
+# TEMP(bevy-020)
+# processing_midi = { workspace = true }
+# processing_audio = { workspace = true }
 processing_input = { workspace = true }
-processing_webcam = { workspace = true, optional = true }
+# TEMP(bevy-020)
+# processing_webcam = { workspace = true, optional = true }
 processing_cuda = { workspace = true, optional = true }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -98,22 +105,22 @@ processing_glfw = { workspace = true, features = ["wayland", "x11"] }
 
 ## TODO: Remove these patches once we've moved back to depending on upstream bevy
 [patch."https://github.com/bevyengine/bevy"]
-bevy = { git = "https://github.com/processing/bevy", branch = "main" }
+bevy = { git = "https://github.com/processing/bevy", branch = "processing-batches" }
 
 [patch.crates-io]
-bevy = { git = "https://github.com/processing/bevy", branch = "main" }
+bevy = { git = "https://github.com/processing/bevy", branch = "processing-batches" }
 # bevy_seedling depends on bevy sub-crates directly, so they must be patched too
-bevy_app = { git = "https://github.com/processing/bevy", branch = "main" }
-bevy_asset = { git = "https://github.com/processing/bevy", branch = "main" }
-bevy_diagnostic = { git = "https://github.com/processing/bevy", branch = "main" }
-bevy_ecs = { git = "https://github.com/processing/bevy", branch = "main" }
-bevy_log = { git = "https://github.com/processing/bevy", branch = "main" }
-bevy_math = { git = "https://github.com/processing/bevy", branch = "main" }
-bevy_platform = { git = "https://github.com/processing/bevy", branch = "main" }
-bevy_reflect = { git = "https://github.com/processing/bevy", branch = "main" }
-bevy_time = { git = "https://github.com/processing/bevy", branch = "main" }
-bevy_transform = { git = "https://github.com/processing/bevy", branch = "main" }
-bevy_utils = { git = "https://github.com/processing/bevy", branch = "main" }
+bevy_app = { git = "https://github.com/processing/bevy", branch = "processing-batches" }
+bevy_asset = { git = "https://github.com/processing/bevy", branch = "processing-batches" }
+bevy_diagnostic = { git = "https://github.com/processing/bevy", branch = "processing-batches" }
+bevy_ecs = { git = "https://github.com/processing/bevy", branch = "processing-batches" }
+bevy_log = { git = "https://github.com/processing/bevy", branch = "processing-batches" }
+bevy_math = { git = "https://github.com/processing/bevy", branch = "processing-batches" }
+bevy_platform = { git = "https://github.com/processing/bevy", branch = "processing-batches" }
+bevy_reflect = { git = "https://github.com/processing/bevy", branch = "processing-batches" }
+bevy_time = { git = "https://github.com/processing/bevy", branch = "processing-batches" }
+bevy_transform = { git = "https://github.com/processing/bevy", branch = "processing-batches" }
+bevy_utils = { git = "https://github.com/processing/bevy", branch = "processing-batches" }
 
 [[example]]
 name = "rectangle"
@@ -163,10 +170,11 @@ path = "examples/midi.rs"
 name = "gltf_load"
 path = "examples/gltf_load.rs"
 
-[[example]]
-name = "webcam"
-path = "examples/webcam.rs"
-required-features = ["webcam"]
+# TEMP(bevy-020): webcam disabled
+# [[example]]
+# name = "webcam"
+# path = "examples/webcam.rs"
+# required-features = ["webcam"]
 
 [[example]]
 name = "stroke_2d"

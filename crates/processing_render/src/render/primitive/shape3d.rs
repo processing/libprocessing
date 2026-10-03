@@ -17,35 +17,35 @@ fn ensure_vertex_colors(mesh: &mut Mesh) {
 }
 
 pub fn box_mesh(width: f32, height: f32, depth: f32) -> Mesh {
-    let cuboid = bevy::math::primitives::Cuboid::new(width, height, depth);
+    let cuboid = bevy::shape::Cuboid::new(width, height, depth);
     let mut mesh = Mesh::from(cuboid);
     ensure_vertex_colors(&mut mesh);
     mesh
 }
 
 pub fn sphere_mesh(radius: f32, sectors: u32, stacks: u32) -> Mesh {
-    let sphere = bevy::math::primitives::Sphere::new(radius);
+    let sphere = bevy::shape::Sphere::new(radius);
     let mut mesh = sphere.mesh().uv(sectors, stacks);
     ensure_vertex_colors(&mut mesh);
     mesh
 }
 
 pub fn cylinder_mesh(radius: f32, height: f32, detail: u32) -> Mesh {
-    let cylinder = bevy::math::primitives::Cylinder::new(radius, height);
+    let cylinder = bevy::shape::Cylinder::new(radius, height);
     let mut mesh = cylinder.mesh().resolution(detail).build();
     ensure_vertex_colors(&mut mesh);
     mesh
 }
 
 pub fn cone_mesh(radius: f32, height: f32, detail: u32) -> Mesh {
-    let cone = bevy::math::primitives::Cone::new(radius, height);
+    let cone = bevy::shape::Cone::new(radius, height);
     let mut mesh = cone.mesh().resolution(detail).build();
     ensure_vertex_colors(&mut mesh);
     mesh
 }
 
 pub fn torus_mesh(radius: f32, tube_radius: f32, major_segments: u32, minor_segments: u32) -> Mesh {
-    let torus = bevy::math::primitives::Torus::new(tube_radius, radius);
+    let torus = bevy::shape::Torus::new(tube_radius, radius);
     let mut mesh = torus
         .mesh()
         .major_resolution(major_segments as usize)
@@ -56,7 +56,7 @@ pub fn torus_mesh(radius: f32, tube_radius: f32, major_segments: u32, minor_segm
 }
 
 pub fn capsule_mesh(radius: f32, length: f32, detail: u32) -> Mesh {
-    let capsule = bevy::math::primitives::Capsule3d::new(radius, length);
+    let capsule = bevy::shape::Capsule3d::new(radius, length);
     let mut mesh = capsule
         .mesh()
         .longitudes(detail)
@@ -67,7 +67,7 @@ pub fn capsule_mesh(radius: f32, length: f32, detail: u32) -> Mesh {
 }
 
 pub fn conical_frustum_mesh(radius_top: f32, radius_bottom: f32, height: f32, detail: u32) -> Mesh {
-    let frustum = bevy::math::primitives::ConicalFrustum {
+    let frustum = bevy::shape::ConicalFrustum {
         radius_top,
         radius_bottom,
         height,
@@ -79,7 +79,7 @@ pub fn conical_frustum_mesh(radius_top: f32, radius_bottom: f32, height: f32, de
 
 pub fn tetrahedron_mesh(radius: f32) -> Mesh {
     let r = radius;
-    let tetrahedron = bevy::math::primitives::Tetrahedron::new(
+    let tetrahedron = bevy::shape::Tetrahedron::new(
         bevy::math::Vec3::new(r, r, r),
         bevy::math::Vec3::new(r, -r, -r),
         bevy::math::Vec3::new(-r, r, -r),
@@ -122,7 +122,7 @@ pub fn grid_mesh(nx: u32, ny: u32, nz: u32, spacing: f32) -> Mesh {
 }
 
 pub fn plane_mesh(width: f32, height: f32) -> Mesh {
-    let plane = bevy::math::primitives::Plane3d::default();
+    let plane = bevy::shape::Plane3d::default();
     let mut mesh = plane.mesh().size(width, height).build();
     ensure_vertex_colors(&mut mesh);
     mesh

@@ -700,7 +700,10 @@ pub fn readback_raw(
 
     r.recv().expect("Failed to receive the map_async message");
 
-    let data = buffer_slice.get_mapped_range().to_vec();
+    let data = buffer_slice
+        .get_mapped_range()
+        .expect("Failed to get mapped range for readback")
+        .to_vec();
 
     graphics.readback_buffer.unmap();
 
