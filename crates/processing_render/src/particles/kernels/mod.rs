@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use processing_core::app_mut;
 use processing_core::error::{self, ProcessingError};
 
-use crate::geometry::{BuiltinAttributes, Geometry};
+use crate::geometry::Geometry;
 use crate::shader_value::ShaderValue;
 use crate::{compute_create, compute_set, shader_load};
 
@@ -16,13 +16,18 @@ use crate::{compute_create, compute_set, shader_load};
 pub struct KernelRequires(pub Vec<Entity>);
 
 pub(crate) fn set_requires(compute: Entity, names: &[&str]) -> error::Result<()> {
+    let attrs = names
+        .iter()
+        .map(|name| {
+            crate::geometry_attribute_find(*name)?.ok_or_else(|| {
+                ProcessingError::InvalidArgument(format!("no attribute named `{name}`"))
+            })
+        })
+        .collect::<error::Result<Vec<Entity>>>()?;
     app_mut(|app| {
-        let world = app.world_mut();
-        let attrs: Vec<Entity> = {
-            let builtins = world.resource::<BuiltinAttributes>();
-            names.iter().filter_map(|n| builtins.by_name(n)).collect()
-        };
-        world.entity_mut(compute).insert(KernelRequires(attrs));
+        app.world_mut()
+            .entity_mut(compute)
+            .insert(KernelRequires(attrs));
         Ok(())
     })
 }
@@ -266,7 +271,8 @@ pub fn particles_kernel_orient() -> error::Result<Entity> {
 pub fn particles_kernel_field() -> error::Result<Entity> {
     let shader = shader_load("embedded://processing_render/particles/kernels/field.wgsl")?;
     let entity = compute_create(shader)?;
-    set_requires(entity, &["position"])?;
+    crate::geometry_attribute_create("weight", crate::geometry::AttributeFormat::Float)?;
+    set_requires(entity, &["position", "weight"])?;
     compute_set(entity, "center", ShaderValue::Float3([0.0; 3]))?;
     compute_set(entity, "radius", ShaderValue::Float(1.0))?;
     compute_set(

@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Mutex;
 
 use bevy::prelude::*;
@@ -5,14 +6,75 @@ use bevy::prelude::*;
 use processing_core::app_mut;
 use processing_core::error;
 
+use crate::compute::Compute;
 use crate::geometry;
 use crate::particles::grid::grid_build;
 use crate::particles::kernels::KernelRequires;
 use crate::particles::{Particles, particles_ensure_attribute};
 use crate::shader_value::ShaderValue;
 use crate::{buffer_write_element, compute_create, compute_dispatch, compute_set, shader_load};
+use bevy_naga_reflect::reflect::ParameterCategory;
 
 const WORKGROUP_SIZE: u32 = 64;
+
+/// Creates every column `compute_entity` reads or writes that the system doesn't
+/// have yet: the kernel's declared requirements, plus any storage array the shader
+/// names after a known attribute. A storage array left unbound would make the
+/// bind group incomplete, which wgpu treats as fatal, so an unknown name is an error.
+fn ensure_columns(particles_entity: Entity, compute_entity: Entity) -> error::Result<()> {
+    let (required, missing) = app_mut(|app| {
+        let world = app.world();
+        let required = world
+            .get::<KernelRequires>(compute_entity)
+            .map(|r| r.0.clone())
+            .unwrap_or_default();
+        let compute = world
+            .get::<Compute>(compute_entity)
+            .ok_or(error::ProcessingError::ComputeNotFound)?;
+        let particles = world
+            .get::<Particles>(particles_entity)
+            .ok_or(error::ProcessingError::ParticlesNotFound)?;
+        let have: HashSet<&str> = particles
+            .buffers
+            .keys()
+            .filter_map(|&e| world.get::<geometry::Attribute>(e).map(|a| a.name))
+            .chain(
+                particles
+                    .neighbor_lists
+                    .map(|_| ["neighbors", "neighbor_count"])
+                    .into_iter()
+                    .flatten(),
+            )
+            .collect();
+        let missing: Vec<String> = compute
+            .shader
+            .reflection()
+            .parameters()
+            .filter(|p| matches!(p.category(), ParameterCategory::Storage { .. }))
+            .filter_map(|p| p.name().map(str::to_string))
+            .filter(|name| {
+                !have.contains(name.as_str())
+                    && compute.shader.buffer_handle(name).is_none()
+                    && !compute.mesh_bindings.contains_key(name)
+            })
+            .collect();
+        Ok((required, missing))
+    })?;
+
+    for attr_entity in required {
+        particles_ensure_attribute(particles_entity, attr_entity)?;
+    }
+    for name in missing {
+        let attr = crate::geometry_attribute_find(name.as_str())?.ok_or_else(|| {
+            error::ProcessingError::InvalidArgument(format!(
+                "the shader uses a column named `{name}` that these particles don't have. \
+                 Create the column before applying it"
+            ))
+        })?;
+        particles_ensure_attribute(particles_entity, attr)?;
+    }
+    Ok(())
+}
 
 pub fn particles_emit_gpu(
     particles_entity: Entity,
@@ -23,16 +85,7 @@ pub fn particles_emit_gpu(
         return Ok(());
     }
 
-    let required: Vec<Entity> = app_mut(|app| {
-        Ok(app
-            .world()
-            .get::<KernelRequires>(compute_entity)
-            .map(|r| r.0.clone())
-            .unwrap_or_default())
-    })?;
-    for attr_entity in required {
-        particles_ensure_attribute(particles_entity, attr_entity)?;
-    }
+    ensure_columns(particles_entity, compute_entity)?;
 
     let (capacity, head, buffers) = app_mut(|app| {
         let world = app.world();
@@ -219,16 +272,7 @@ pub fn particles_gather(
 }
 
 pub fn particles_apply(particles_entity: Entity, compute_entity: Entity) -> error::Result<()> {
-    let required: Vec<Entity> = app_mut(|app| {
-        Ok(app
-            .world()
-            .get::<KernelRequires>(compute_entity)
-            .map(|r| r.0.clone())
-            .unwrap_or_default())
-    })?;
-    for attr_entity in required {
-        particles_ensure_attribute(particles_entity, attr_entity)?;
-    }
+    ensure_columns(particles_entity, compute_entity)?;
 
     let (capacity, buffers) = app_mut(|app| {
         let world = app.world();

@@ -21,6 +21,7 @@ use bevy::{
 };
 
 use bevy_naga_reflect::dynamic_shader::DynamicShader;
+use bevy_naga_reflect::reflect::ParameterCategory;
 
 use crate::geometry::{Attribute, Geometry};
 use crate::material::custom::Shader;
@@ -384,6 +385,15 @@ pub fn dispatch(
         };
         if !ready {
             return Err(ProcessingError::ResourceNotReady(name.to_string()));
+        }
+        // wgpu treats an incomplete bind group as fatal, so fail here instead
+        if matches!(param.category(), ParameterCategory::Storage { .. })
+            && shader.buffer_handle(name).is_none()
+            && !mesh_bindings.iter().any(|(n, _)| n == name)
+        {
+            return Err(ProcessingError::InvalidArgument(format!(
+                "nothing is bound to the shader's storage array `{name}`"
+            )));
         }
     }
 
