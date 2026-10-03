@@ -5,8 +5,11 @@ export PROCESSING_ASSET_ROOT := canonicalize("./assets")
 default:
     @just --list
 
-py-build *args:
+py-build *args: py-shaders
     cd crates/processing_pyo3; uv run maturin develop --release {{args}}
+
+py-shaders:
+    cargo run -p bundle_shaders
 
 py-stubs: py-build
     cargo run --release -p generate_stubs

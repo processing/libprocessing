@@ -1,0 +1,5 @@
+[package]
+name = "bundle_shaders"
+version = "0.0.8"
+edition = "2024"
+publish = false

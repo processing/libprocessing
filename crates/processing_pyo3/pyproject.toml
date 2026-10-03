@@ -48,6 +48,8 @@ include = [
     { path = "mewnala/*.pyi", format = "wheel" },
     { path = "mewnala/py.typed", format = "sdist" },
     { path = "mewnala/py.typed", format = "wheel" },
+    { path = "mewnala/shaders/**/*", format = "sdist" },
+    { path = "mewnala/shaders/**/*", format = "wheel" },
 ]
 
 [tool.uv]

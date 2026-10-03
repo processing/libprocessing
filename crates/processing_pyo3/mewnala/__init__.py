@@ -18,6 +18,7 @@ if _color is not None:
 import importlib as _importlib
 math = _importlib.import_module(f"{__name__}.math")  # noqa: E402
 from .math import *  # noqa: E402,F401,F403
+from ._shaders import shader_workspace  # noqa: E402,F401
 
 # global var handling. for wildcard import of our module, we copy into globals, otherwise
 # we dispatch to get attr and call the underlying getter method

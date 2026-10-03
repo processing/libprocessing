@@ -2,5 +2,6 @@
 /site/
 crates/processing_ffi/include/
 crates/processing_pyo3/mewnala/*.pyi
+crates/processing_pyo3/mewnala/shaders/
 .DS_Store
 .ipynb_checkpoints/
