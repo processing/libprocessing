@@ -18,7 +18,7 @@ def setup():
     mode_3d()
 
     p = create_particles(
-        capacity=N,
+        N,
         attributes=[
             Attribute.position(),
             Attribute.color(),

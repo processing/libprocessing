@@ -23,7 +23,7 @@ def setup():
     mode_3d()
 
     p = create_particles(
-        capacity=N,
+        N,
         attributes=[Attribute.position()],
     )
     p.buffer("position").write([list(knot(i / N * tau, 0.0)) for i in range(N)])

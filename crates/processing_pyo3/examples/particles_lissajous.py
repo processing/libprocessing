@@ -34,10 +34,10 @@ def setup():
     window_title(f"Lissajous — all points connected — {N:,} pts")
     mode_3d()
 
-    p = create_particles(capacity=N, attributes=[Attribute.position(), Attribute.color()])
+    p = create_particles(N, attributes=[Attribute.position(), Attribute.color()])
     # One line = 2 vertices; up to N*MAX_LINKS lines.
     edges = create_particles(
-        capacity=N * MAX_LINKS * 2, attributes=[Attribute.position(), Attribute.color()]
+        N * MAX_LINKS * 2, attributes=[Attribute.position(), Attribute.color()]
     )
     idx = edges.index_buffer(N * MAX_LINKS * 2)  # link fills indices + the dynamic count
 
