@@ -28,7 +28,7 @@ pub use particles::algebra::{
     generate, lookup, map, mix, pack, reduce_components,
 };
 pub use particles::compact::compact;
-pub use particles::grid::{Grid, GridParams, grid_bind, grid_build, grid_create};
+pub use particles::grid::{Grid, GridParams, grid_build, grid_create, grid_destroy, grid_get};
 pub use particles::reduce::{REDUCE_OP_MAX, REDUCE_OP_MIN, REDUCE_OP_SUM, reduce};
 pub use particles::sort::bitonic_sort_by_key;
 pub use particles::{
@@ -2443,7 +2443,7 @@ fn buffer_write_range(
             .get::<compute::Buffer>(entity)
             .ok_or(error::ProcessingError::BufferNotFound)?
             .synced;
-        // next read will refresh 
+        // next read will refresh
         if on_gpu && !synced {
             return Ok(());
         }

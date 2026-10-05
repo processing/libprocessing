@@ -23,7 +23,7 @@ pub use compact::compact;
 pub use emit::{
     particles_apply, particles_emit, particles_emit_gpu, particles_flock, particles_gather,
 };
-pub use grid::{Grid, GridParams, grid_bind, grid_build, grid_create};
+pub use grid::{Grid, GridParams, grid_build, grid_create, grid_destroy, grid_get};
 pub use kernels::{
     BOUNDS_CLAMP, BOUNDS_REFLECT, BOUNDS_SOFT, BOUNDS_WRAP, COMBINE_ADD, COMBINE_DIV, COMBINE_MAX,
     COMBINE_MIN, COMBINE_MUL, COMBINE_POW, COMBINE_SUB, FALLOFF_CONST, FALLOFF_CUBIC,
