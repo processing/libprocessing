@@ -5,7 +5,7 @@ use bevy::prelude::Entity;
 use processing_core::error::{ProcessingError, Result};
 
 use crate::shader_value::ShaderValue;
-use crate::{buffer_size, compute_dispatch, compute_set, shader_create_with_features};
+use crate::{buffer_size, compute_dispatch_no_update, compute_set, shader_create_with_features};
 
 const WG: u32 = 64;
 
@@ -96,7 +96,7 @@ static MAP: Mutex<Option<(Entity, Entity)>> = Mutex::new(None);
 
 fn dispatch_particles(compute: Entity, floats: u64, components: u32) -> Result<()> {
     let n = (floats / components as u64) as u32;
-    compute_dispatch(compute, n.div_ceil(WG), 1, 1)
+    compute_dispatch_no_update(compute, n.div_ceil(WG), 1, 1)
 }
 
 fn check_components(verb: &str, components: u32) -> Result<()> {
@@ -373,7 +373,7 @@ pub fn lookup(
     compute_set(c, "tex", ShaderValue::Texture(tex))?;
     compute_set(c, "samp", ShaderValue::Texture(tex))?;
     let n = (buffer_size(dst)? / 16) as u32;
-    compute_dispatch(c, n.div_ceil(WG), 1, 1)
+    compute_dispatch_no_update(c, n.div_ceil(WG), 1, 1)
 }
 
 pub const REDUCE_LENGTH: u32 = 0;
@@ -430,7 +430,7 @@ pub fn reduce_components(dst: Entity, src: Entity, components: u32, op: u32) -> 
     compute_set(c, "components", ShaderValue::UInt(components))?;
     compute_set(c, "op", ShaderValue::UInt(op))?;
     let n = (buffer_size(dst)? / 4) as u32;
-    compute_dispatch(c, n.div_ceil(WG), 1, 1)
+    compute_dispatch_no_update(c, n.div_ceil(WG), 1, 1)
 }
 
 const EXTRACT_SRC: &str = r#"
@@ -465,7 +465,7 @@ pub fn extract(dst: Entity, src: Entity, components: u32, index: u32) -> Result<
     compute_set(c, "components", ShaderValue::UInt(components))?;
     compute_set(c, "index", ShaderValue::UInt(index))?;
     let n = (buffer_size(dst)? / 4) as u32;
-    compute_dispatch(c, n.div_ceil(WG), 1, 1)
+    compute_dispatch_no_update(c, n.div_ceil(WG), 1, 1)
 }
 
 const PACK_SRC: &str = r#"
@@ -534,7 +534,7 @@ pub fn pack(dst: Entity, sources: &[Entity]) -> Result<()> {
     compute_set(c, "dst", ShaderValue::Buffer(dst))?;
     compute_set(c, "components", ShaderValue::UInt(components))?;
     let n = (buffer_size(sources[0])? / 4) as u32;
-    compute_dispatch(c, n.div_ceil(WG), 1, 1)
+    compute_dispatch_no_update(c, n.div_ceil(WG), 1, 1)
 }
 
 pub const GEN_UNIFORM: u32 = 0;
