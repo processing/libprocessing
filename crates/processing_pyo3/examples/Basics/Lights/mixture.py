@@ -1,0 +1,43 @@
+# Mixture
+# by Simon Greenwold.
+#
+# Display a box with three different kinds of lights.
+from mewnala import *
+
+point = None
+directional = None
+spot = None
+
+
+def setup():
+    global point, directional, spot
+    size(640, 360)
+    mode_3d()
+    no_stroke()
+
+    # Lights are created once; the world is y-up, so the y of every
+    # position and direction is flipped
+    # Orange point light on the right
+    point = point_light((0.59, 0.39, 0.0), 3000000000.0, 600.0, 1.0,  # Color
+                        position=(200, 150, 0))  # Position
+
+    # Blue directional light from the left
+    directional = directional_light((0.0, 0.4, 1.0), 4000.0,  # Color
+                                    look_at=(1, 0, 0))  # The x-, y-, z-axis direction
+
+    # Yellow spotlight from the front
+    spot = spot_light((1.0, 1.0, 0.43), 2000000000.0, 600.0, 1.0,  # Color
+                      PI / 4, PI / 2,  # Angle, concentration
+                      position=(0, -40, 200),  # Position
+                      look_at=(0, -40 + 0.5, 200 - 0.5))  # Direction
+    roughness(0.6)
+
+
+def draw():
+    background(0.0)
+    rotate_y(remap(mouse_x, 0, width, 0, PI))
+    rotate_x(remap(mouse_y, 0, height, 0, PI))
+    box(150)
+
+
+run()
