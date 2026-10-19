@@ -30,8 +30,7 @@ def draw():
         perspective(PI / 3.0, width / height, 10, far)
     else:
         ortho(-width / 2.0, width / 2.0, -height / 2.0, height / 2.0, 10, far)
-    # Rotations about x run the other way in the y-up world
-    rotate_x(PI / 6)
+    rotate_x(-PI / 6)
     rotate_y(PI / 3)
     box(180)
 

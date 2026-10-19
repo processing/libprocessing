@@ -32,12 +32,11 @@ def setup():
                           int(random(-10, 10)), int(random(-140, 140)),
                           int(random(-140, 140)), int(random(-140, 140))))
 
-    # Set up some different colored lights, placed relative to the top-left
-    # corner as in the original (the world is centered and y-up)
+    # Set up some different colored lights, in the original's top-left coordinates
     blue_light = point_light((0.2, 0.4, 1.0), 3000000000.0, 600.0, 1.0,
-                             position=(65 - width / 2, height / 2 - 60, 100))
+                             position=(65 - width / 2, 60 - height / 2, 100))
     red_light = point_light((0.78, 0.16, 0.24), 3000000000.0, 600.0, 1.0,
-                            position=(-65 - width / 2, height / 2 + 60, -150))
+                            position=(-65 - width / 2, -60 - height / 2, -150))
 
     # Raise overall light in scene
     ambient_light(0.27, 0.27, 0.04)  # GAP: ambient_light()

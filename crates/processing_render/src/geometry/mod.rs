@@ -83,6 +83,8 @@ pub struct Geometry {
     pub current_color: [f32; 4],
     pub current_uv: [f32; 2],
     pub custom_current: HashMap<MeshVertexAttributeId, AttributeValue>,
+    /// set once a color with alpha below one is used; never cleared
+    pub translucent: bool,
 }
 
 impl Geometry {
@@ -94,6 +96,7 @@ impl Geometry {
             current_color: [1.0, 1.0, 1.0, 1.0],
             current_uv: [0.0, 0.0],
             custom_current: HashMap::new(),
+            translucent: false,
         }
     }
 }
@@ -259,6 +262,9 @@ pub fn color(world: &mut World, entity: Entity, color: Vec4) -> Result<()> {
         .get_mut::<Geometry>(entity)
         .ok_or(ProcessingError::GeometryNotFound)?;
     geometry.current_color = color.to_array();
+    if color.w < 1.0 {
+        geometry.translucent = true;
+    }
     Ok(())
 }
 

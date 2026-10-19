@@ -44,12 +44,12 @@ def draw():
     canvas.no_stroke()
     canvas.background(0.0)
     # pointLight(204, 204, 204, 1000, 1000, 1000) under rotateY(frameCount * 0.01),
-    # converted from Processing's corner-origin, y-down space to the centered y-up world
+    # in the original's top-left coordinates
     angle = frame_count * 0.01
     lx = 1000 * cos(angle) + 1000 * sin(angle)
     ly = 1000
     lz = -1000 * sin(angle) + 1000 * cos(angle)
-    glossy.set(light_position=(lx - canvas.width / 2, canvas.height / 2 - ly, lz))
+    glossy.set(light_position=(lx - canvas.width / 2, ly - canvas.height / 2, lz))
     canvas.material(glossy)
     x = 0
     while x < canvas.width + 100:
@@ -58,7 +58,7 @@ def draw():
             z = 0
             while z < 400:
                 canvas.push_matrix()
-                canvas.translate(x - canvas.width / 2, canvas.height / 2 - y, -z)
+                canvas.translate(x - canvas.width / 2, y - canvas.height / 2, -z)
                 canvas.draw_geometry(ball)
                 canvas.pop_matrix()
                 z += 100

@@ -22,7 +22,7 @@ def draw():
     global ry
     background(0.0)
 
-    translate(0, -100, -200)
+    translate(0, 100, -200)
     rotate_z(PI)
     rotate_y(ry)
     shape(rocket)  # GAP: shape(model) draws a loaded model

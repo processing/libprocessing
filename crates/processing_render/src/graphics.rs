@@ -10,7 +10,7 @@ use bevy::{
     },
     core_pipeline::tonemapping::Tonemapping,
     ecs::query::QueryEntityError,
-    math::{Mat4, Vec3A},
+    math::{Mat4, Vec3A, Vec4},
     prelude::*,
     render::{
         RenderApp,
@@ -44,6 +44,7 @@ pub struct GraphicsPlugin;
 impl Plugin for GraphicsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RenderLayersManager>()
+            .add_systems(First, crate::image::clear_background_blits)
             .add_systems(PostUpdate, sync_to_surface);
     }
 }
@@ -77,49 +78,75 @@ macro_rules! graphics_mut {
 #[derive(Component)]
 pub struct SurfaceSize(pub u32, pub u32);
 
-/// Custom orthographic projection for Processing's coordinate system.
-/// Origin at top-left, Y-axis down, in pixel units (aka screen space).
+/// Screen-space y flip applied after projection, so the world is y-down (origin top-left in 2D,
+/// canvas center in 3D) like Processing's and p5.js WEBGL's, with transforms, cameras and lights
+/// left untouched. The reflection mirrors triangle winding; every pipeline compensates with
+/// `material::apply_processing_winding`.
+pub(crate) const Y_FLIP: Mat4 = Mat4::from_cols(
+    Vec4::new(1.0, 0.0, 0.0, 0.0),
+    Vec4::new(0.0, -1.0, 0.0, 0.0),
+    Vec4::new(0.0, 0.0, 1.0, 0.0),
+    Vec4::new(0.0, 0.0, 0.0, 1.0),
+);
+
+/// Orthographic projection over a y-down world: `bottom` is the smallest visible y (screen
+/// top), `top` the largest (screen bottom), as in Processing's `ortho(left, right, bottom, top)`.
 #[derive(Debug, Clone, Reflect)]
 pub struct ProcessingProjection {
-    pub width: f32,
-    pub height: f32,
+    pub left: f32,
+    pub right: f32,
+    pub bottom: f32,
+    pub top: f32,
     pub near: f32,
     pub far: f32,
+    /// a 2D canvas follows the render target size; an explicit `ortho()` keeps its bounds
+    pub fit_canvas: bool,
 }
 
 impl ProcessingProjection {
+    /// The 2D canvas: pixel units from the top-left corner.
     pub fn new(width: f32, height: f32) -> Self {
         Self {
-            width,
-            height,
-            near: 0.0,
+            left: 0.0,
+            right: width,
+            bottom: 0.0,
+            top: height,
+            // like bevy's 2d camera: the canvas plane sits mid-range, draw layers grow toward
+            // the camera
+            near: -1000.0,
             far: 1000.0,
+            fit_canvas: true,
         }
     }
 }
 
 impl CameraProjection for ProcessingProjection {
     fn get_clip_from_view(&self) -> Mat4 {
-        Mat4::orthographic_rh(
-            0.0,
-            self.width,
-            self.height, // bottom = height
-            0.0,         // top = 0
-            self.near,
-            self.far,
-        )
+        // far/near swapped for reverse-z, which the depth compare (GreaterEqual) assumes
+        Y_FLIP
+            * Mat4::orthographic_rh(
+                self.left,
+                self.right,
+                self.bottom,
+                self.top,
+                self.far,
+                self.near,
+            )
     }
 
     fn get_clip_from_view_for_sub(&self, _sub_view: &bevy::camera::SubCameraView) -> Mat4 {
-        // TODO: implement sub-view support if needed (probably not)
+        // sub-views are not supported on the canvas
         self.get_clip_from_view()
     }
 
-    fn update(&mut self, _width: f32, _height: f32) {
-        // this gets called with the render target's physical dimensions (i.e. accounting for
-        // scale factor), but our projection is in logical pixel units
-        self.width = _width;
-        self.height = _height;
+    /// Bevy passes the logical viewport size, which is the canvas's pixel unit.
+    fn update(&mut self, width: f32, height: f32) {
+        if self.fit_canvas {
+            self.left = 0.0;
+            self.right = width;
+            self.bottom = 0.0;
+            self.top = height;
+        }
     }
 
     fn far(&self) -> f32 {
@@ -128,24 +155,51 @@ impl CameraProjection for ProcessingProjection {
 
     fn get_frustum_corners(&self, z_near: f32, z_far: f32) -> [Vec3A; 8] {
         // order: bottom-right, top-right, top-left, bottom-left for near, then far
-        let near_center = Vec3A::new(self.width / 2.0, self.height / 2.0, z_near);
-        let far_center = Vec3A::new(self.width / 2.0, self.height / 2.0, z_far);
-
-        let half_width = self.width / 2.0;
-        let half_height = self.height / 2.0;
-
+        let (l, r, b, t) = (self.left, self.right, self.bottom, self.top);
         [
-            // near plane
-            near_center + Vec3A::new(half_width, half_height, 0.0), // bottom-right
-            near_center + Vec3A::new(half_width, -half_height, 0.0), // top-right
-            near_center + Vec3A::new(-half_width, -half_height, 0.0), // top-left
-            near_center + Vec3A::new(-half_width, half_height, 0.0), // bottom-left
-            // far plane
-            far_center + Vec3A::new(half_width, half_height, 0.0), // bottom-right
-            far_center + Vec3A::new(half_width, -half_height, 0.0), // top-right
-            far_center + Vec3A::new(-half_width, -half_height, 0.0), // top-left
-            far_center + Vec3A::new(-half_width, half_height, 0.0), // bottom-left
+            Vec3A::new(r, b, z_near),
+            Vec3A::new(r, t, z_near),
+            Vec3A::new(l, t, z_near),
+            Vec3A::new(l, b, z_near),
+            Vec3A::new(r, b, z_far),
+            Vec3A::new(r, t, z_far),
+            Vec3A::new(l, t, z_far),
+            Vec3A::new(l, b, z_far),
         ]
+    }
+}
+
+/// Perspective projection over the same y-down world (3D mode): bevy's reverse-z infinite
+/// perspective with the screen-space y flip.
+#[derive(Debug, Clone, Reflect)]
+pub struct ProcessingPerspective {
+    pub inner: PerspectiveProjection,
+    /// the default 3D camera follows the canvas aspect; an explicit `perspective()` keeps its own
+    pub fit_canvas: bool,
+}
+
+impl CameraProjection for ProcessingPerspective {
+    fn get_clip_from_view(&self) -> Mat4 {
+        Y_FLIP * self.inner.get_clip_from_view()
+    }
+
+    fn get_clip_from_view_for_sub(&self, sub_view: &bevy::camera::SubCameraView) -> Mat4 {
+        Y_FLIP * self.inner.get_clip_from_view_for_sub(sub_view)
+    }
+
+    fn update(&mut self, width: f32, height: f32) {
+        if self.fit_canvas {
+            self.inner.update(width, height);
+        }
+    }
+
+    fn far(&self) -> f32 {
+        self.inner.far()
+    }
+
+    fn get_frustum_corners(&self, z_near: f32, z_far: f32) -> [Vec3A; 8] {
+        // the frustum is symmetric about the view axis, so the flip leaves the corner set as is
+        self.inner.get_frustum_corners(z_near, z_far)
     }
 }
 
@@ -203,7 +257,8 @@ pub fn create(
     let mut entity_commands = commands.spawn((
         Camera3d::default(),
         Camera {
-            // always load the previous frame (provides sketch like behavior)
+            // the previous frame is kept unless a pass opens with `background()`; see
+            // `flush_draw_commands`
             clear_color: ClearColorConfig::None,
             msaa_writeback: MsaaWriteback::Auto,
             ..default()
@@ -217,6 +272,7 @@ pub fn create(
         render_layer,
         CommandBuffer::new(),
         RenderState::default(),
+        crate::image::BackgroundBlit::default(),
         crate::color::ColorMode::default(),
         SurfaceSize(width, height),
         Graphics {
@@ -315,18 +371,23 @@ pub fn mode_3d(
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
-    *projection = Projection::Perspective(PerspectiveProjection {
-        fov,
-        aspect_ratio: aspect,
-        near,
-        far,
-        near_clip_plane,
+    *projection = Projection::custom(ProcessingPerspective {
+        inner: PerspectiveProjection {
+            fov,
+            aspect_ratio: aspect,
+            near,
+            far,
+            near_clip_plane,
+        },
+        fit_canvas: true,
     });
 
     let mut transform = transforms
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
+    // origin at the canvas center, +z toward the viewer; the projection's y flip makes +y
+    // point down the screen
     *transform = Transform::from_xyz(0.0, 0.0, camera_z).looking_at(Vec3::ZERO, Vec3::Y);
 
     Ok(())
@@ -358,28 +419,16 @@ pub fn mode_2d(
 }
 
 pub fn perspective(
-    In((
-        entity,
-        PerspectiveProjection {
-            fov,
-            aspect_ratio,
-            near,
-            far,
-            near_clip_plane,
-        },
-    )): In<(Entity, PerspectiveProjection)>,
+    In((entity, inner)): In<(Entity, PerspectiveProjection)>,
     mut projections: Query<&mut Projection>,
 ) -> Result<()> {
     let mut projection = projections
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
-    *projection = Projection::Perspective(PerspectiveProjection {
-        fov,
-        aspect_ratio,
-        near,
-        far,
-        near_clip_plane,
+    *projection = Projection::custom(ProcessingPerspective {
+        inner,
+        fit_canvas: false,
     });
 
     Ok(())
@@ -412,13 +461,14 @@ pub fn ortho(
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
-    // we need a custom projection to support processing's coordinate system
-    // but this is in effect an orthographic projection with the given bounds
     *projection = Projection::custom(ProcessingProjection {
-        width: right - left,
-        height: top - bottom,
+        left,
+        right,
+        bottom,
+        top,
         near,
         far,
+        fit_canvas: false,
     });
 
     Ok(())
@@ -579,7 +629,16 @@ pub fn screen_point(
 
 pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
     graphics_mut!(app, entity).insert(Flush);
-    app.update();
+    // a mid-frame `background()` leaves the rest of the commands for another pass
+    loop {
+        app.update();
+        let pending = graphics_mut!(app, entity)
+            .get::<CommandBuffer>()
+            .is_some_and(|buffer| !buffer.commands.is_empty());
+        if !pending {
+            break;
+        }
+    }
     graphics_mut!(app, entity).remove::<Flush>();
     Ok(())
 }
@@ -588,21 +647,19 @@ pub fn apply_filter(app: &mut App, graphics: Entity, filter: Entity) -> Result<(
     filter::apply(app, graphics, filter)
 }
 
+/// Only the pass that drains the command buffer writes to the camera's output
+#[derive(Component)]
+pub struct Present;
+
 pub fn present(app: &mut App, entity: Entity) -> Result<()> {
+    graphics_mut!(app, entity).insert(Present);
+    let result = flush(app, entity);
     graphics_mut!(app, entity)
-        .get_mut::<Camera>()
-        .ok_or(ProcessingError::GraphicsNotFound)?
-        .output_mode = CameraOutputMode::Write {
-        blend_state: None,
-        clear_color: ClearColorConfig::None,
-    };
-    flush(app, entity)?;
-    graphics_mut!(app, entity)
+        .remove::<Present>()
         .get_mut::<Camera>()
         .ok_or(ProcessingError::GraphicsNotFound)?
         .output_mode = CameraOutputMode::Skip;
-
-    Ok(())
+    result
 }
 
 /// End the current draw
@@ -626,7 +683,7 @@ pub fn warmup(app: &mut App, entity: Entity) -> Result<()> {
                 (entity, DrawCommand::BackgroundColor(DEFAULT_CLEAR_COLOR)),
             )
             .unwrap()?;
-        flush(app, entity)?;
+        present(app, entity)?;
     }
     Ok(())
 }
@@ -868,16 +925,18 @@ mod tests {
     #[test]
     fn test_processing_projection() {
         let proj = ProcessingProjection {
-            width: 800.0,
-            height: 600.0,
             near: 0.1,
             far: 1000.0,
+            ..ProcessingProjection::new(800.0, 600.0)
         };
         let clip_matrix = proj.get_clip_from_view();
-        // Check some values in the matrix to ensure it's correct
-        // In [0,1] depth orthographic projection, w_axis.z = -near/(far-near)
-        let expected: f32 = -0.1 / (1000.0 - 0.1);
-        assert!((clip_matrix.w_axis.z - expected).abs() < 1e-6);
+        // reverse-z [0,1] depth: the near plane maps to 1 and the far plane to 0
+        let ndc_z = |z_view: f32| {
+            let c = clip_matrix * Vec4::new(0.0, 0.0, z_view, 1.0);
+            c.z / c.w
+        };
+        assert!((ndc_z(-0.1) - 1.0).abs() < 1e-6);
+        assert!(ndc_z(-1000.0).abs() < 1e-6);
     }
 
     #[test]
@@ -890,5 +949,55 @@ mod tests {
         manager.free(layer1);
         let layer3 = manager.allocate();
         assert_eq!(layer1_clone, layer3);
+    }
+}
+
+#[cfg(test)]
+mod projection_tests {
+    use super::*;
+
+    /// Reverse-z like bevy's cameras: near maps to NDC 1, far to NDC 0, so GreaterEqual
+    /// depth compares make nearer draws win.
+    #[test]
+    fn processing_projection_is_reverse_z() {
+        let proj = ProcessingProjection::new(640.0, 360.0);
+        let clip = proj.get_clip_from_view();
+        let ndc = |z_view: f32| {
+            let c = clip * Vec4::new(0.0, 0.0, z_view, 1.0);
+            c.z / c.w
+        };
+        assert!((ndc(-proj.far) - 0.0).abs() < 1e-6);
+        assert!((ndc(-proj.near) - 1.0).abs() < 1e-6);
+        // the canvas plane (z = 0) sits between them and a layer toward the camera is "nearer"
+        assert!(ndc(0.0) > ndc(-1.0) && ndc(0.0) < ndc(1.0));
+        // top-left of the canvas maps to NDC (-1, 1)
+        let corner = clip * Vec4::new(0.0, 0.0, 0.0, 1.0);
+        assert!((corner.x / corner.w + 1.0).abs() < 1e-6 && (corner.y / corner.w - 1.0).abs() < 1e-6);
+    }
+
+    /// 3D is the same y-down world: a point above the origin (negative y) projects to the top
+    /// of the screen, +x stays on the right, and nearer points get a larger reverse-z depth.
+    #[test]
+    fn processing_perspective_is_y_down_reverse_z() {
+        let proj = ProcessingPerspective {
+            inner: PerspectiveProjection {
+                fov: std::f32::consts::PI / 3.0,
+                aspect_ratio: 16.0 / 9.0,
+                near: 1.0,
+                far: 1000.0,
+                near_clip_plane: Vec4::new(0.0, 0.0, -1.0, -1.0),
+            },
+            fit_canvas: true,
+        };
+        let clip = proj.get_clip_from_view();
+        let ndc = |v: Vec3| {
+            let c = clip * v.extend(1.0);
+            c.truncate() / c.w
+        };
+        let up = ndc(Vec3::new(0.0, -10.0, -100.0));
+        let right = ndc(Vec3::new(10.0, 0.0, -100.0));
+        assert!(up.y > 0.0, "negative world y must be screen-up, got {up}");
+        assert!(right.x > 0.0, "positive world x must be screen-right, got {right}");
+        assert!(ndc(Vec3::new(0.0, 0.0, -10.0)).z > ndc(Vec3::new(0.0, 0.0, -100.0)).z);
     }
 }

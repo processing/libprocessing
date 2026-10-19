@@ -28,8 +28,7 @@ def draw():
     rotate_z(remap(mouse_y, 0, height, 0, -PI))
     no_stroke()
     fill(1.0, 1.0, 1.0)
-    # The world is y-up: the cylinder hangs down from y=40
-    translate(0, 40, 0)
+    translate(0, -40, 0)
     draw_geometry(cylinder)
 
 
@@ -52,15 +51,15 @@ def build_cylinder(top_radius, bottom_radius, tall, sides):
     g = create_geometry(topology=TRIANGLES)
     angle = 0
     angle_increment = TWO_PI / sides
-    # The sides: one quad per step around the axis (going down to y=-tall)
+    # The sides: one quad per step around the axis (going down to y=tall)
     for i in range(sides):
         a0 = angle
         a1 = angle + angle_increment
         add_quad(g,
                  Vec3(top_radius * cos(a0), 0, top_radius * sin(a0)),
-                 Vec3(top_radius * cos(a1), 0, top_radius * sin(a1)),
-                 Vec3(bottom_radius * cos(a1), -tall, bottom_radius * sin(a1)),
-                 Vec3(bottom_radius * cos(a0), -tall, bottom_radius * sin(a0)))
+                 Vec3(bottom_radius * cos(a0), tall, bottom_radius * sin(a0)),
+                 Vec3(bottom_radius * cos(a1), tall, bottom_radius * sin(a1)),
+                 Vec3(top_radius * cos(a1), 0, top_radius * sin(a1)))
         angle += angle_increment
 
     # If it is not a cone, draw the circular top cap as a fan around the center
@@ -69,18 +68,18 @@ def build_cylinder(top_radius, bottom_radius, tall, sides):
         center = Vec3(0, 0, 0)
         for i in range(sides):
             add_triangle(g, center,
-                         Vec3(top_radius * cos(angle + angle_increment), 0, top_radius * sin(angle + angle_increment)),
-                         Vec3(top_radius * cos(angle), 0, top_radius * sin(angle)))
+                         Vec3(top_radius * cos(angle), 0, top_radius * sin(angle)),
+                         Vec3(top_radius * cos(angle + angle_increment), 0, top_radius * sin(angle + angle_increment)))
             angle += angle_increment
 
     # If it is not a cone, draw the circular bottom cap
     if bottom_radius != 0:
         angle = 0
-        center = Vec3(0, -tall, 0)
+        center = Vec3(0, tall, 0)
         for i in range(sides):
             add_triangle(g, center,
-                         Vec3(bottom_radius * cos(angle), -tall, bottom_radius * sin(angle)),
-                         Vec3(bottom_radius * cos(angle + angle_increment), -tall, bottom_radius * sin(angle + angle_increment)))
+                         Vec3(bottom_radius * cos(angle + angle_increment), tall, bottom_radius * sin(angle + angle_increment)),
+                         Vec3(bottom_radius * cos(angle), tall, bottom_radius * sin(angle)))
             angle += angle_increment
     return g
 

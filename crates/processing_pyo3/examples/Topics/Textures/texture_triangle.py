@@ -14,15 +14,14 @@ def setup():
     img = load_image("data/berlin-1.jpg")
     no_stroke()
 
-    # uv coordinates are the image coordinates divided by the image size,
-    # and the world is y-up (the top edge is +100)
+    # uv coordinates are the image coordinates divided by the image size
     tri = create_geometry(topology=TRIANGLES)
     tri.uv(0, 0)
-    tri.vertex(-100, 100, 0)
+    tri.vertex(-100, -100, 0)
     tri.uv(300 / img.width, 120 / img.height)
-    tri.vertex(100, 40, 0)
+    tri.vertex(100, -40, 0)
     tri.uv(200 / img.width, 400 / img.height)
-    tri.vertex(0, -100, 0)
+    tri.vertex(0, 100, 0)
 
 
 def draw():

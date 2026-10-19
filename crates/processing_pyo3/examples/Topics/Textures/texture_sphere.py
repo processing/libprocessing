@@ -62,10 +62,9 @@ def key_pressed():
 
 def draw():
     background(0.0)
-    # The world is centered and y-up, so the eye and center lose the
-    # width/2, height/2 offsets and flip their y
+    # The origin is centered: the eye and center lose the width/2, height/2 offsets
     camera(remap(mouse_x, 0, width, -2 * width, 2 * width),
-           -remap(mouse_y, 0, height, -height, height),
+           remap(mouse_y, 0, height, -height, height),
            height / 2 / tan(PI * 30.0 / 180.0),
            width / 2, 0, 0,
            0, 1, 0)
@@ -118,7 +117,6 @@ def texture_sphere(rx, ry, rz, t):
     u = 0  # Width variable for the texture
     v = 0  # Height variable for the texture
 
-    # The world is y-up, so the y of every vertex and normal is flipped
     g = create_geometry(topology=TRIANGLE_STRIP)
     for i in range(num_points_h - 1):  # For all the rings but top and bottom
         # Goes into the array here instead of loop to save time
@@ -129,12 +127,12 @@ def texture_sphere(rx, ry, rz, t):
         multxz_plus = mult_xz[i + 1]
 
         for j in range(num_points_w):  # For all the pts in the ring
-            g.normal(-coor_x[j] * multxz, coory, -coor_z[j] * multxz)
+            g.normal(-coor_x[j] * multxz, -coory, -coor_z[j] * multxz)
             g.uv(u, v)
-            g.vertex(coor_x[j] * multxz * rx, -coory * ry, coor_z[j] * multxz * rz)
-            g.normal(-coor_x[j] * multxz_plus, coory_plus, -coor_z[j] * multxz_plus)
+            g.vertex(coor_x[j] * multxz * rx, coory * ry, coor_z[j] * multxz * rz)
+            g.normal(-coor_x[j] * multxz_plus, -coory_plus, -coor_z[j] * multxz_plus)
             g.uv(u, v + change_v)
-            g.vertex(coor_x[j] * multxz_plus * rx, -coory_plus * ry, coor_z[j] * multxz_plus * rz)
+            g.vertex(coor_x[j] * multxz_plus * rx, coory_plus * ry, coor_z[j] * multxz_plus * rz)
             u += change_u
         v += change_v
         u = 0

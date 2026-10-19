@@ -30,7 +30,7 @@ def draw():
     no_fill()
     stroke(1.0)
     push_matrix()
-    translate(500 - width / 2, height / 2 - height * 0.35, -200)
+    translate(500 - width / 2, height * 0.35 - height / 2, -200)
     sphere(280)
     pop_matrix()
 

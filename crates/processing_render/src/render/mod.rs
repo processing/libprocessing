@@ -8,11 +8,13 @@ pub mod transform;
 
 use bevy::{
     camera::{
+        CameraOutputMode, ClearColorConfig,
         primitives::Aabb,
         visibility::{NoFrustumCulling, RenderLayers},
     },
-    ecs::system::SystemParam,
-    math::{Affine2, Affine3A, Mat4, Vec3A, Vec4},
+    camera::Camera3dDepthLoadOp,
+    ecs::{query::Has, system::SystemParam},
+    math::{Affine2, Affine3A, Vec3A},
     pbr::gpu_instance_batch::GpuBatchedMesh3d,
     prelude::*,
     render::render_resource::BlendState,
@@ -87,6 +89,8 @@ pub struct RenderState {
     pub style: StyleStack,
     pub transform: TransformStack,
     pub shape_builder: Option<ShapeBuilder>,
+    /// Like Processing, every frame starts with a fresh depth buffer
+    pub clear_depth: bool,
 }
 
 impl RenderState {
@@ -95,6 +99,7 @@ impl RenderState {
             style: StyleStack::new(),
             transform: TransformStack::new(),
             shape_builder: None,
+            clear_depth: true,
         }
     }
 
@@ -108,6 +113,7 @@ impl RenderState {
         self.transform = TransformStack::new();
         self.style.clear_saved();
         self.shape_builder = None;
+        self.clear_depth = true;
     }
 
     pub fn fill_is_transparent(&self) -> bool {
@@ -140,8 +146,10 @@ pub fn flush_draw_commands(
             &mut CommandBuffer,
             &mut RenderState,
             &RenderLayers,
-            &Projection,
-            &Transform,
+            &mut Camera,
+            &mut Camera3d,
+            &mut crate::image::BackgroundBlit,
+            Has<crate::graphics::Present>,
         ),
         With<Flush>,
     >,
@@ -161,9 +169,25 @@ pub fn flush_draw_commands(
         )>,
     >,
 ) {
-    for (graphics_entity, mut cmd_buffer, mut state, render_layers, projection, camera_transform) in
-        graphics.iter_mut()
+    for (
+        graphics_entity,
+        mut cmd_buffer,
+        mut state,
+        render_layers,
+        mut camera,
+        mut camera_3d,
+        mut background_blit,
+        presents,
+    ) in graphics.iter_mut()
     {
+        // color is kept unless `background()` opens the pass; depth is kept only within a frame
+        camera.clear_color = ClearColorConfig::None;
+        camera_3d.depth_load_op = if std::mem::take(&mut state.clear_depth) {
+            Camera3dDepthLoadOp::Clear(0.0)
+        } else {
+            Camera3dDepthLoadOp::Load
+        };
+
         for (raster_entity, raster_layers) in p_raster_draws.iter() {
             if raster_layers.intersects(render_layers) {
                 res.commands
@@ -172,13 +196,15 @@ pub fn flush_draw_commands(
             }
         }
 
-        let clip_from_view = projection.get_clip_from_view();
-        let view_from_world = camera_transform.to_matrix().inverse();
-        let world_from_clip = (clip_from_view * view_from_world).inverse();
         let draw_commands = std::mem::take(&mut cmd_buffer.commands);
         let mut batch = BatchState::new(graphics_entity, render_layers.clone());
+        let mut pending = draw_commands.into_iter();
+        let mut drained = true;
 
-        for cmd in draw_commands {
+        while let Some(cmd) = pending.next() {
+            // check whether we are the first flush after a present 
+            let opens_pass =
+                |batch: &BatchState| batch.draw_index == 0 && batch.current_mesh.is_none();
             match cmd {
                 DrawCommand::Fill(color) => {
                     state.style.fill = Fill::Color(color);
@@ -847,57 +873,27 @@ pub fn flush_draw_commands(
                     flush_batch(&mut res, &mut batch, &p_material_handles);
                 }
                 DrawCommand::BackgroundColor(color) => {
-                    flush_batch(&mut res, &mut batch, &p_material_handles);
-
-                    let mesh = create_ndc_background_quad(world_from_clip, color, false);
-                    let mesh_handle = res.meshes.add(mesh);
-
-                    let material_key = MaterialKey::Color {
-                        transparent: color.alpha() < 1.0,
-                        background_image: None,
-                        uv_transform: Affine2::IDENTITY,
-                        blend_state: Some(BlendState::REPLACE),
-                    };
-                    let material_handle = material_key.to_material(&mut res.materials);
-
-                    res.commands.spawn((
-                        Mesh3d(mesh_handle),
-                        UntypedMaterial(material_handle),
-                        BelongsToGraphics(batch.graphics_entity),
-                        Transform::IDENTITY,
-                        batch.render_layers.clone(),
-                    ));
-
-                    batch.draw_index += 1;
+                    if !opens_pass(&batch) {
+                        cmd_buffer.commands = std::iter::once(cmd).chain(pending).collect();
+                        drained = false;
+                        break;
+                    }
+                    camera.clear_color = ClearColorConfig::Custom(color);
+                    camera_3d.depth_load_op = Camera3dDepthLoadOp::Clear(0.0);
                 }
                 DrawCommand::BackgroundImage(entity) => {
                     let Some(p_image) = p_images.get(entity).ok() else {
                         warn!("Could not find PImage for entity {:?}", entity);
                         continue;
                     };
-
-                    flush_batch(&mut res, &mut batch, &p_material_handles);
-
-                    let mesh = create_ndc_background_quad(world_from_clip, Color::WHITE, true);
-                    let mesh_handle = res.meshes.add(mesh);
-
-                    let material_key = MaterialKey::Color {
-                        transparent: false,
-                        background_image: Some(p_image.handle.clone()),
-                        uv_transform: Affine2::IDENTITY,
-                        blend_state: Some(BlendState::REPLACE),
-                    };
-                    let material_handle = material_key.to_material(&mut res.materials);
-
-                    res.commands.spawn((
-                        Mesh3d(mesh_handle),
-                        UntypedMaterial(material_handle),
-                        BelongsToGraphics(batch.graphics_entity),
-                        Transform::IDENTITY,
-                        batch.render_layers.clone(),
-                    ));
-
-                    batch.draw_index += 1;
+                    if !opens_pass(&batch) {
+                        cmd_buffer.commands = std::iter::once(cmd).chain(pending).collect();
+                        drained = false;
+                        break;
+                    }
+                    // the image is blitted over the target before the pass, which loads it
+                    camera_3d.depth_load_op = Camera3dDepthLoadOp::Clear(0.0);
+                    background_blit.0 = Some(p_image.handle.clone());
                 }
                 DrawCommand::PushMatrix => state.transform.push(),
                 DrawCommand::PopMatrix => state.transform.pop(),
@@ -918,7 +914,10 @@ pub fn flush_draw_commands(
                         continue;
                     };
 
-                    let material_key = material_key_with_fill(&state);
+                    let mut material_key = material_key_with_fill(&state);
+                    if geometry.translucent {
+                        material_key = material_key.transparent();
+                    }
                     let material_handle = match &material_key {
                         MaterialKey::Custom {
                             entity: mat_entity,
@@ -934,12 +933,13 @@ pub fn flush_draw_commands(
                                 *blend_state,
                             )
                         }
-                        _ => material_key.to_material(&mut res.materials),
+                        _ => material_key
+                            .to_material(&mut res.materials, sort_bias(batch.draw_index)),
                     };
 
                     flush_batch(&mut res, &mut batch, &p_material_handles);
 
-                    let z_offset = -(batch.draw_index as f32 * BATCH_INDEX_STEP);
+                    let z_offset = layer_z(batch.draw_index);
                     let mut transform = state.transform.to_bevy_transform();
 
                     // if the "source" geometry was parented in a gltf scene, we need to make sure that
@@ -1090,7 +1090,8 @@ pub fn flush_draw_commands(
                                     *blend_state,
                                 )
                             }
-                            _ => material_key.to_material(&mut res.materials),
+                            _ => material_key
+                                .to_material(&mut res.materials, sort_bias(batch.draw_index)),
                         }
                     };
 
@@ -1391,6 +1392,17 @@ pub fn flush_draw_commands(
         }
 
         flush_batch(&mut res, &mut batch, &p_material_handles);
+
+        // a pass cut short by a mid-frame `background()` is wiped by the next one, so it
+        // must not reach the window
+        camera.output_mode = if presents && drained {
+            CameraOutputMode::Write {
+                blend_state: None,
+                clear_color: ClearColorConfig::None,
+            }
+        } else {
+            CameraOutputMode::Skip
+        };
     }
 }
 
@@ -1443,7 +1455,7 @@ fn spawn_mesh(
             };
             clone_custom_material_with_blend(&mut res.custom_materials, &untyped.0, *blend_state)
         }
-        _ => key.to_material(&mut res.materials),
+        _ => key.to_material(&mut res.materials, sort_bias(batch.draw_index)),
     };
 
     res.commands.spawn((
@@ -1614,7 +1626,7 @@ fn flush_batch(
     material_handles: &Query<&UntypedMaterial>,
 ) {
     if let Some(mesh) = batch.current_mesh.take() {
-        let z_offset = -(batch.draw_index as f32 * BATCH_INDEX_STEP);
+        let z_offset = layer_z(batch.draw_index);
         spawn_mesh(res, batch, mesh, z_offset, material_handles);
         batch.draw_index += 1;
     }
@@ -1649,16 +1661,17 @@ fn add_shape3d(
         // TODO: in 2d, we use vertex colors. `to_material` becomes complicated if we also encode
         // a base color in the material, so for simplicity we just create a new material here
         // that is unlit and uses the fill color as the base color
-        MaterialKey::Color { transparent, .. } => {
+        MaterialKey::Color { .. } => {
             let base = StandardMaterial {
                 base_color: fill_color,
                 unlit: true,
                 cull_mode: None,
-                alpha_mode: if state.style.blend_state.is_some() || *transparent {
+                alpha_mode: if state.style.blend_state.is_some() || state.fill_is_transparent() {
                     AlphaMode::Blend
                 } else {
                     AlphaMode::Opaque
                 },
+                depth_bias: sort_bias(batch.draw_index),
                 ..default()
             };
             let extended = ProcessingExtendedMaterial {
@@ -1672,11 +1685,11 @@ fn add_shape3d(
         }
         _ => {
             let key = material_key_with_fill(state);
-            key.to_material(&mut res.materials)
+            key.to_material(&mut res.materials, sort_bias(batch.draw_index))
         }
     };
 
-    let z_offset = -(batch.draw_index as f32 * BATCH_INDEX_STEP);
+    let z_offset = layer_z(batch.draw_index);
     let mut transform = state.transform.to_bevy_transform();
     transform.translation.z += z_offset;
 
@@ -1704,51 +1717,13 @@ fn add_shape3d(
     batch.draw_index += 1;
 }
 
-/// fullscreen quad built by transforming NDC corners by the inverse clip-from-world matrix,
-/// so the vertex shader's `clip_from_world` brings them back to NDC.
-fn create_ndc_background_quad(world_from_clip: Mat4, color: Color, with_uvs: bool) -> Mesh {
-    use bevy::asset::RenderAssetUsages;
-    use bevy::mesh::{Indices, PrimitiveTopology};
-
-    let ndc_z = f32::EPSILON;
-    let ndc_corners = [
-        Vec4::new(-1.0, -1.0, ndc_z, 1.0), // bl
-        Vec4::new(1.0, -1.0, ndc_z, 1.0),  // br
-        Vec4::new(1.0, 1.0, ndc_z, 1.0),   // tr
-        Vec4::new(-1.0, 1.0, ndc_z, 1.0),  // tl
-    ];
-
-    let world_positions: Vec<[f32; 3]> = ndc_corners
-        .iter()
-        .map(|ndc| {
-            let world = world_from_clip * *ndc;
-            [world.x / world.w, world.y / world.w, world.z / world.w]
-        })
-        .collect();
-
-    let uvs: Vec<[f32; 2]> = vec![
-        [0.0, 1.0], // bl
-        [1.0, 1.0], // br
-        [1.0, 0.0], // tr
-        [0.0, 0.0], // tl
-    ];
-
-    let color_array: [f32; 4] = color.to_linear().to_f32_array();
-    let colors: Vec<[f32; 4]> = vec![color_array; 4];
-
-    let indices: Vec<u32> = vec![0, 1, 2, 0, 2, 3];
-
-    let mut mesh = Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    );
-
-    mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, world_positions);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
-    if with_uvs {
-        mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-    }
-    mesh.insert_indices(Indices::U32(indices));
-
-    mesh
+/// Each draw gets its own world-z layer, growing toward the default camera
+fn layer_z(draw_index: u32) -> f32 {
+    draw_index as f32 * BATCH_INDEX_STEP
 }
+
+/// Tiebreak for the blended phase's depth sort
+fn sort_bias(draw_index: u32) -> f32 {
+    draw_index as f32 * 1e-6
+}
+
