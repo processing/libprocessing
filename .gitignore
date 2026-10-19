@@ -4,3 +4,7 @@ crates/processing_ffi/include/
 crates/processing_pyo3/mewnala/*.pyi
 .DS_Store
 .ipynb_checkpoints/
+crates/processing_node/node_modules/
+crates/processing_node/*.node
+crates/processing_node/index.js
+crates/processing_node/index.d.ts

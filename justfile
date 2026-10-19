@@ -36,6 +36,9 @@ wasm-release:
 wasm-serve: wasm-build
     python3 -m http.server 8000
 
+node-build *args:
+    cd crates/processing_node; npx napi build --platform {{args}}
+
 visual-render out="target/visual/actual" *args:
     python3 tests/visual/visual.py render --out {{out}} {{args}}
 

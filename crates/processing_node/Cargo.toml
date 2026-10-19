@@ -1,0 +1,28 @@
+[package]
+name = "processing_node"
+version = "0.0.5"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = []
+wayland = ["processing/wayland", "processing_glfw/wayland"]
+x11 = ["processing/x11", "processing_glfw/x11"]
+webcam = ["processing/webcam"]
+cuda = ["processing/cuda"]
+
+[dependencies]
+processing = { workspace = true }
+processing_glfw = { workspace = true, features = ["static-link"] }
+bevy = { workspace = true }
+half = "2.7"
+napi = { version = "3", default-features = false, features = ["napi6"] }
+napi-derive = "3"
+
+[build-dependencies]
+napi-build = "2"
