@@ -140,6 +140,37 @@ just wasm-serve
 ```
 _Note: you'll need python installed on your machine to run this command_
 
+## Building for WSL
+
+Errors you may encouter:
+
+1. Missing Libraries
+
+```bash
+Could not run pkg-config ... alsa-sys ...
+The system library `libudev` required by crate `libudev-sys` was not found.
+```
+
+Fix:
+
+```bash
+sudo apt update
+sudo apt install pkg-config libasound2-dev libudev-dev cmake build-essential xorg-dev
+```
+
+2. glfw incompatible version
+
+```bash
+Package dependency requirement 'glfw3 >= 3.4.0' could not be satisfied.
+Package 'glfw3' has version '3.3.10', required version is '>= 3.4.0'
+```
+
+```bash
+cd /tmp
+wget http://archive.ubuntu.com/ubuntu/pool/universe/g/glfw3/libglfw3_3.4-4_amd64.deb
+wget http://archive.ubuntu.com/ubuntu/pool/universe/g/glfw3/libglfw3-dev_3.4-4_amd64.deb
+sudo dpkg -i libglfw3_3.4-4_amd64.deb libglfw3-dev_3.4-4_amd64.deb
+```
 
 ## Contributing
 
