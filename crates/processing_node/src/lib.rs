@@ -76,7 +76,7 @@ fn linear_to_floats(colors: &[LinearRgba]) -> Float32Array {
 
 fn floats_to_linear(pixels: &[f32], space: u8) -> Vec<LinearRgba> {
     pixels
-        .chunks_exact(4)
+        .as_chunks::<4>().0.iter()
         .map(|p| {
             Color {
                 c1: p[0],
@@ -1074,7 +1074,7 @@ pub fn js_clear_text_features(graphics_id: BigInt) -> Result<()> {
 #[napi(js_name = "textGlyphColors")]
 pub fn js_text_glyph_colors(graphics_id: BigInt, colors: Float32Array) -> Result<()> {
     let colors = colors
-        .chunks_exact(4)
+        .as_chunks::<4>().0.iter()
         .map(|c| bevy::color::Color::srgba(c[0], c[1], c[2], c[3]))
         .collect();
     check(graphics_text_glyph_colors(ent(graphics_id), colors))
