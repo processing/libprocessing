@@ -2280,9 +2280,9 @@ pub fn js_geometry_attribute_scale() -> u64 {
     geometry_attribute_scale().to_bits()
 }
 
-#[wasm_bindgen(js_name = "geometryAttributeDead")]
-pub fn js_geometry_attribute_dead() -> u64 {
-    geometry_attribute_dead().to_bits()
+#[wasm_bindgen(js_name = "geometryAttributeLife")]
+pub fn js_geometry_attribute_life() -> u64 {
+    geometry_attribute_life().to_bits()
 }
 
 #[wasm_bindgen(js_name = "particlesCreate")]
