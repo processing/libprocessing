@@ -1,7 +1,7 @@
 # Mouse Functions.
 #
 # Click on the box and drag it across the screen.
-from mewnala import *
+from processing_py import *
 
 bx = 0.0
 by = 0.0

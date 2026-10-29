@@ -3,7 +3,7 @@
 #
 # Vary the specular reflection component of a material
 # with the horizontal position of the mouse.
-from mewnala import *
+from processing_py import *
 
 light = None
 

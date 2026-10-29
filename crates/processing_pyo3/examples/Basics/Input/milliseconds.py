@@ -4,7 +4,7 @@
 # Processing keeps track of the number of milliseconds a program has run.
 # By modifying this number with the modulo(%) operator,
 # different patterns in time are created.
-from mewnala import *
+from processing_py import *
 
 unit = 0
 

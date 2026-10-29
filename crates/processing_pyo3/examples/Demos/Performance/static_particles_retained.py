@@ -2,7 +2,7 @@
 #
 # 50000 textured sprites at fixed random positions, built once into a
 # single geometry and drawn with one call per frame.
-from mewnala import *
+from processing_py import *
 
 particles_geom = None
 sprite = None

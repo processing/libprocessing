@@ -9,7 +9,7 @@
 # the program, it is recommended to write the expression as
 # 4+(2*8). The order of evaluation can be controlled through
 # adding parenthesis in the code.
-from mewnala import *
+from processing_py import *
 
 # The highest precedence is at the top of the list and
 # the lowest is at the bottom.

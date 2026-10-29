@@ -12,12 +12,12 @@
 # fragment shader.
 #
 # This example shows how custom blend shaders can be loaded and used in
-# mewnala.
+# processing_py.
 # For detailed information on how to implement Photoshop-like blending modes,
 # check the following pages (a bit old but still useful):
 # http://www.pegtop.net/delphi/articles/blendmodes/index.htm
 # http://mouaif.wordpress.com/2009/01/05/photoshop-math-with-glsl-shaders/
-from mewnala import *
+from processing_py import *
 
 dest_image = None
 src_image = None

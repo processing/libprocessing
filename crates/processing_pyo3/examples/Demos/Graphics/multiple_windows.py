@@ -3,7 +3,7 @@
 #
 # Demonstration of a multiple window sketch, including resource
 # sharing across windows. Press a key to open the other windows.
-from mewnala import *
+from processing_py import *
 
 child_a = None
 child_b = None

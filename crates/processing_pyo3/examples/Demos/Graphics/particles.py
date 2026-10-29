@@ -3,7 +3,7 @@
 # Each particle is a textured quad (the sprite image) that fades
 # out over its lifespan; dead particles are reborn at the mouse.
 # Ported 1:1 on the CPU: the quads are drawn with image() and tint().
-from mewnala import *
+from processing_py import *
 
 ps = None
 sprite = None

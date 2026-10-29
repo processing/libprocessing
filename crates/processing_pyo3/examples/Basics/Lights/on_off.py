@@ -3,7 +3,7 @@
 # Uses the default lights to show a simple box. The lights() function
 # is used to turn on the default lighting. Click the mouse to turn the
 # lights off.
-from mewnala import *
+from processing_py import *
 
 spin = 0.0
 light = None

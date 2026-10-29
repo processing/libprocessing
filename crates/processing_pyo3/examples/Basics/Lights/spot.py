@@ -2,7 +2,7 @@
 #
 # Move the mouse the change the position and concentation
 # of a blue spot light.
-from mewnala import *
+from processing_py import *
 
 bottom = None
 orange = None

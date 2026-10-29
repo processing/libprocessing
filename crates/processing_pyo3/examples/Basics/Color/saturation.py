@@ -4,7 +4,7 @@
 # amount of gray in proportion to the hue. A "saturated" color is pure
 # and an "unsaturated" color has a large percentage of gray.
 # Move the cursor vertically over each bar to alter its saturation.
-from mewnala import *
+from processing_py import *
 
 bar_width = 20
 last_bar = -1

@@ -3,7 +3,7 @@
 # From CoffeeBreakStudios.com (CBS)
 # Ported from the webGL version in GLSL Sandbox:
 # http://glsl.heroku.com/e#3265.2
-from mewnala import *
+from processing_py import *
 
 nebula = None
 

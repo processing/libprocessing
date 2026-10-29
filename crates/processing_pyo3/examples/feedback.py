@@ -19,7 +19,7 @@ frame, it persists and feeds back into itself. So:
     faded feedback;
   - the canvas persists, closing the loop.
 """
-from mewnala import *
+from processing_py import *
 from math import sin, cos
 
 t = 0.0

@@ -5,7 +5,7 @@
 # when hitting a surface squarely and weaker if it hits at a
 # a gentle angle. After hitting a surface, a directional lights
 # scatters in all directions.
-from mewnala import *
+from processing_py import *
 
 light = None
 

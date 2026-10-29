@@ -1,7 +1,7 @@
 # Quad Rendering
 #
 # Draws 50000 nearly transparent squares per frame.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

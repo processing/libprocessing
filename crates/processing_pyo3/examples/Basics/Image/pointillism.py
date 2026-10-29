@@ -4,7 +4,7 @@
 # Mouse horizontal location controls size of dots.
 # Creates a simple pointillist effect using ellipses colored
 # according to pixels in an image.
-from mewnala import *
+from processing_py import *
 
 img = None
 small_point = 0

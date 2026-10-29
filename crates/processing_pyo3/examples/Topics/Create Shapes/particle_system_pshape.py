@@ -1,7 +1,7 @@
 # ParticleSystemPShape
 #
 # A particle system optimized for drawing using PShape
-from mewnala import *
+from processing_py import *
 
 # Particle System object
 ps = None

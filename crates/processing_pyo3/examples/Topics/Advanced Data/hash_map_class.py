@@ -13,7 +13,7 @@
 #
 # In this example, words that appear in one book (Dracula) only are colored white
 # while words the other (Frankenstein) are colored black.
-from mewnala import *
+from processing_py import *
 import os
 
 words = {}  # dict object

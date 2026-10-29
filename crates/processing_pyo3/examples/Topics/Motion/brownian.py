@@ -1,7 +1,7 @@
 # Brownian motion.
 #
 # Recording random movement as a continuous line.
-from mewnala import *
+from processing_py import *
 
 num = 2000
 step_range = 6

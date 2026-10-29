@@ -15,7 +15,7 @@
 # 'x' key initial polygon radius++
 # 'w' key toggle wireframe/solid shading
 # 'h' key toggle sphere/helix
-from mewnala import *
+from processing_py import *
 
 pts = 40
 angle = 0

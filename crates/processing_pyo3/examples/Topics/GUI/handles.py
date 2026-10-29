@@ -1,7 +1,7 @@
 # Handles.
 #
 # Click and drag the white boxes to change their position.
-from mewnala import *
+from processing_py import *
 
 handles = []
 

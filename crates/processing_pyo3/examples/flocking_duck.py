@@ -3,7 +3,7 @@
 # in a `home` attribute; a homing force that is negligible near home but
 # grows quadratically with distance lets the boids swirl and flock locally
 # while the swarm as a whole never loses the duck's shape.
-from mewnala import *
+from processing_py import *
 from math import cos, sin
 from random import uniform
 

@@ -3,7 +3,7 @@
 # Based on code by GeneKao (https://github.com/GeneKao)
 # A second window is opened with create_window(); it is drawn through
 # its own Graphics methods inside draw(), and its mouse is polled.
-from mewnala import *
+from processing_py import *
 
 child = None
 mouse_pressed_on_parent = False

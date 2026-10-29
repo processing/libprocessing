@@ -2,7 +2,7 @@
 # http://glsl.heroku.com/e#207.3
 # Exemplifies the use of the previous frame's pixels in the shader: a
 # filter samples the canvas as it was before the filter ran.
-from mewnala import *
+from processing_py import *
 
 conway = None
 pg = None

@@ -1,7 +1,7 @@
 # WigglePShape
 #
 # How to move the individual vertices of a retained geometry
-from mewnala import *
+from processing_py import *
 
 # A "Wiggler" object
 w = None

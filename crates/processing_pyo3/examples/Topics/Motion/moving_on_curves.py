@@ -2,7 +2,7 @@
 #
 # In this example, the circles moves along the curve y = x^4.
 # Click the mouse to have it move to a new position.
-from mewnala import *
+from processing_py import *
 
 begin_x = 20.0  # Initial x-coordinate
 begin_y = 10.0  # Initial y-coordinate

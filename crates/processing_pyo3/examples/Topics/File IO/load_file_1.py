@@ -2,7 +2,7 @@
 #
 # Loads a text file that contains two numbers separated by a tab ('\t').
 # A new pair of numbers is loaded each frame and used to draw a point on the screen.
-from mewnala import *
+from processing_py import *
 import os
 
 lines = []

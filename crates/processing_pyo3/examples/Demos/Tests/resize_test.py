@@ -2,7 +2,7 @@
 #
 # The window can be resized by dragging its edges; the ellipse
 # stays centered because width and height follow the window.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

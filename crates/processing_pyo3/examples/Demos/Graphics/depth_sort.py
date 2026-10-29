@@ -3,7 +3,7 @@
 #
 # Processing sorts the translucent triangles back to front while the
 # mouse is not pressed (hint(ENABLE_DEPTH_SORT)); hints have no equivalent here.
-from mewnala import *
+from processing_py import *
 
 tris = []  # one triangle per hue
 

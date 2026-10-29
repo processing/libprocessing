@@ -4,7 +4,7 @@
 # Mouse horizontal location controls breaking apart of image and
 # Maps pixels from a 2D image into 3D space. Pixel brightness controls
 # translation along z axis.
-from mewnala import *
+from processing_py import *
 
 img = None  # The source image
 cellsize = 2  # Dimensions of each cell in the grid

@@ -1,7 +1,7 @@
 # Image Mask
 #
 # Move the mouse to reveal the image through the dynamic mask.
-from mewnala import *
+from processing_py import *
 
 mask_shader = None
 src_image = None

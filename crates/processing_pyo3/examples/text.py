@@ -1,5 +1,5 @@
 """Drawing type through the global text API (text, text_size, text_align, ...)."""
-from mewnala import *
+from processing_py import *
 from math import sin
 
 

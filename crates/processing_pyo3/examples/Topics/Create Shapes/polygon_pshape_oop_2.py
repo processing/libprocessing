@@ -3,7 +3,7 @@
 # Wrapping a retained geometry inside a custom class
 # and demonstrating how we can have a multiple objects each
 # using the same geometry.
-from mewnala import *
+from processing_py import *
 
 # A list of objects
 polygons = []

@@ -6,7 +6,7 @@
 # end_draw() is necessary to finish. Use this if you need to draw
 # into an off-screen graphics buffer or to maintain two
 # drawing surfaces with different properties.
-from mewnala import *
+from processing_py import *
 
 pg = None
 

@@ -3,7 +3,7 @@
 # The code inside the draw() function runs continuously
 # from top to bottom until the program is stopped. The
 # code in setup() is run once when the program starts.
-from mewnala import *
+from processing_py import *
 
 y = 180
 

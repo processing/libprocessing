@@ -2,7 +2,7 @@
 #
 # Draws letters to the screen. This requires loading a font,
 # setting the font, and then drawing the letters.
-from mewnala import *
+from processing_py import *
 
 f = None
 

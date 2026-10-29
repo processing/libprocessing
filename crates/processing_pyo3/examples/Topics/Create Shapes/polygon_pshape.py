@@ -1,7 +1,7 @@
 # PolygonPShape
 #
 # Using a retained geometry to display a custom polygon.
-from mewnala import *
+from processing_py import *
 
 # The retained shape
 star = None

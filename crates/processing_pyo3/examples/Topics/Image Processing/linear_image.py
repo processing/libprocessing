@@ -2,7 +2,7 @@
 #
 # Click and drag mouse up and down to control the signal.
 # Press and hold any key to watch the scanning.
-from mewnala import *
+from processing_py import *
 
 img = None
 direction = 1

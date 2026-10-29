@@ -1,6 +1,6 @@
 """Processing math methods and vector/quaternion types."""
 import math as _math
-from .mewnala import math as _native_math
+from .processing_py import math as _native_math
 
 # extend native math so glob imports work
 for _name in dir(_native_math):

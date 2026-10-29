@@ -3,7 +3,7 @@
 # The draw_target() function makes it easy to draw many distinct targets.
 # Each call to draw_target() specifies the position, size, and number of
 # rings for each target.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

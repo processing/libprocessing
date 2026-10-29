@@ -4,7 +4,7 @@
 # Demonstration of some basic vector math: subtraction,
 # normalization, scaling. Normalizing a vector sets
 # its length to 1.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

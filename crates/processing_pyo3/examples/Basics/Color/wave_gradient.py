@@ -2,7 +2,7 @@
 # by Ira Greenberg.
 #
 # Generate a gradient along a sin() wave.
-from mewnala import *
+from processing_py import *
 
 amplitude = 30
 fill_gap = 2.5

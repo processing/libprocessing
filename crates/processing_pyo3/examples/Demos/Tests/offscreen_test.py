@@ -1,7 +1,7 @@
 # Offscreen Test
 #
 # Draws into an offscreen buffer and displays it on the main canvas.
-from mewnala import *
+from processing_py import *
 
 pg = None
 

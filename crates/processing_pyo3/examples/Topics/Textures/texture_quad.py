@@ -2,7 +2,7 @@
 #
 # Load an image and draw it onto a quad. The texture() function sets
 # the texture image. The uv() function maps the image to the geometry.
-from mewnala import *
+from processing_py import *
 
 img = None
 quad = None

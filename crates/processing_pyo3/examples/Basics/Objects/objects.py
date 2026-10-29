@@ -3,7 +3,7 @@
 #
 # Move the cursor across the image to change the speed and positions
 # of the geometry. The class MRect defines a group of lines.
-from mewnala import *
+from processing_py import *
 
 r1 = None
 r2 = None

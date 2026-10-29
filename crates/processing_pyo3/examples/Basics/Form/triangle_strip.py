@@ -4,7 +4,7 @@
 # Generate a closed ring using the vertex() function and
 # begin_shape(TRIANGLE_STRIP) mode. The outside_radius and inside_radius
 # variables control ring's radii respectively.
-from mewnala import *
+from processing_py import *
 
 x = 0
 y = 0

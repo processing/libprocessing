@@ -5,7 +5,7 @@
 # numbers from the mouse position to control the size or color of a shape.
 # In this example, the mouse's x-coordinate (numbers between 0 and 360) are scaled to
 # new numbers to define the color and size of a circle.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

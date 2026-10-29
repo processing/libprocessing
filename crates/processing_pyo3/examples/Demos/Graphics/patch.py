@@ -5,7 +5,7 @@
 # Original code: http://paulbourke.net/geometry/bezier/
 #
 # Press space to build a new random patch.
-from mewnala import *
+from processing_py import *
 
 ni = 4
 nj = 5

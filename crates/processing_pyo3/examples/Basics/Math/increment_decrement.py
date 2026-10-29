@@ -2,7 +2,7 @@
 #
 # Writing "a++" is equivalent to "a = a + 1".
 # Writing "a--" is equivalent to "a = a - 1".
-from mewnala import *
+from processing_py import *
 
 a = 0
 b = 0

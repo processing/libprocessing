@@ -4,7 +4,7 @@
 # Rotating cubes in space using a custom Cube class.
 # Color controlled by light sources. Move the mouse left
 # and right to zoom.
-from mewnala import *
+from processing_py import *
 
 # Used for oveall rotation
 angle = 0

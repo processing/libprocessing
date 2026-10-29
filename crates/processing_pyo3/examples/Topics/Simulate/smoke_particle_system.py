@@ -3,7 +3,7 @@
 #
 # A basic smoke effect using a particle system. Each particle
 # is rendered as an alpha masked image.
-from mewnala import *
+from processing_py import *
 
 ps = None
 

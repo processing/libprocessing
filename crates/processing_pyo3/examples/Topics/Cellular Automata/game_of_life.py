@@ -6,7 +6,7 @@
 # cells. Press 'R' to randomly reset the cells' grid.
 # Press 'C' to clear the cells' grid. The original Game
 # of Life was created by John Conway in 1970.
-from mewnala import *
+from processing_py import *
 
 # Size of cells
 cell_size = 5

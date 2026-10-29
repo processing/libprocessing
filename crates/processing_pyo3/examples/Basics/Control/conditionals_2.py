@@ -4,7 +4,7 @@
 # example by adding the keyword "else". This allows conditionals
 # to ask two or more sequential questions, each with a different
 # action.
-from mewnala import *
+from processing_py import *
 
 size(640, 360)
 background(0.0)

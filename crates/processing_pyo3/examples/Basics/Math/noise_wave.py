@@ -2,7 +2,7 @@
 # by Daniel Shiffman.
 #
 # Using Perlin Noise to generate a wave-like pattern.
-from mewnala import *
+from processing_py import *
 
 yoff = 0.0  # 2nd dimension of perlin noise
 

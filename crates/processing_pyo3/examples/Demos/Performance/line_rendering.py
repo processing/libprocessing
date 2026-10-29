@@ -1,7 +1,7 @@
 # Line Rendering
 #
 # Draws 50000 translucent random lines per frame.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

@@ -3,7 +3,7 @@
 # The load_model() command is used to read OBJ (Object) files into a
 # sketch. This example loads an OBJ file of a rocket and displays it
 # to the screen.
-from mewnala import *
+from processing_py import *
 
 rocket = None
 ry = 0.0

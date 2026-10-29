@@ -2,7 +2,7 @@
 # modified from an example by Simon Greenwold.
 #
 # Display a 2D grid of boxes with three different kinds of lights.
-from mewnala import *
+from processing_py import *
 
 point = None
 directional = None

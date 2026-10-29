@@ -8,7 +8,7 @@
 # In this example, three lists of integers are created.  One is a pool of numbers
 # that is shuffled and picked randomly from.  One is the list of "picked" numbers.
 # And one is a lottery "ticket" which includes 5 numbers that are trying to be matched.
-from mewnala import *
+from processing_py import *
 from random import shuffle
 
 # Three lists of integers

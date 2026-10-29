@@ -5,7 +5,7 @@
 # that can be used to extract it from the "parent" file.
 # This example loads a map of the United States and creates
 # two new Shape objects by extracting the data from two states.
-from mewnala import *
+from processing_py import *
 
 usa = None
 michigan = None

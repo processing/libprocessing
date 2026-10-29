@@ -3,7 +3,7 @@
 # Apply a custom shader to the filter() function to affect the geometry drawn to the screen.
 #
 # Press the mouse to turn the filter on and off.
-from mewnala import *
+from processing_py import *
 
 edges = None
 apply_filter = True

@@ -4,7 +4,7 @@
 # Applies a convolution matrix to a portion of an image. Move mouse to
 # apply filter to different parts of the image. Click mouse to cycle
 # through different effects (kernels).
-from mewnala import *
+from processing_py import *
 
 img = None
 effect = 0

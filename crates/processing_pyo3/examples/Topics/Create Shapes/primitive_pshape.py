@@ -1,7 +1,7 @@
 # PrimitivePShape
 #
 # Using a PShape to display a primitive shape (in this case, ellipse).
-from mewnala import *
+from processing_py import *
 
 # The PShape object
 circle = None

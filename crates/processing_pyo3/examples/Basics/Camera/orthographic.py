@@ -6,7 +6,7 @@
 # origin away from the viewer and will clip the geometry.
 # Click a mouse button to switch between the perspective and
 # orthographic projections.
-from mewnala import *
+from processing_py import *
 
 show_perspective = False
 light = None
