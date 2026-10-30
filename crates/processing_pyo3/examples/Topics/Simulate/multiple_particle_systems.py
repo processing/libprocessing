@@ -7,7 +7,7 @@
 # Each burst is one instance of a particle system
 # with Particles and CrazyParticles (a subclass of Particle).
 # Note use of Inheritance and Polymorphism.
-from mewnala import *
+from processing_py import *
 
 systems = []
 

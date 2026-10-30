@@ -2,7 +2,7 @@
 # by Daniel Shiffman.
 #
 # Render a simple sine wave.
-from mewnala import *
+from processing_py import *
 
 xspacing = 16  # How far apart should each horizontal location be spaced
 w = 0  # Width of entire wave

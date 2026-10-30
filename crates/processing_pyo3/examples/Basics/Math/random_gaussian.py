@@ -1,7 +1,7 @@
 # Random Gaussian.
 #
 # This sketch draws ellipses with x and y locations tied to a gaussian distribution of random numbers.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

@@ -7,7 +7,7 @@
 # rules of avoidance, alignment, and coherence.
 #
 # Click the mouse to add a new boid.
-from mewnala import *
+from processing_py import *
 
 flock = None
 

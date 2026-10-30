@@ -4,7 +4,7 @@
 # In this example, sin() and cos() values are used to set the
 # position of the hands.
 from datetime import datetime
-from mewnala import *
+from processing_py import *
 
 cx = 0
 cy = 0

@@ -3,7 +3,7 @@
 #
 # This example demonstrates how to use save_frame() to render
 # out an image sequence that you can assemble into a movie.
-from mewnala import *
+from processing_py import *
 
 # A boolean to track whether we are recording are not
 recording = False

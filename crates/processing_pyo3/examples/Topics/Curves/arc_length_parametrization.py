@@ -7,7 +7,7 @@
 # To demonstrate the technique, a cubic Bezier curve is used.
 # However, this technique is applicable to any kind of
 # parametric curve.
-from mewnala import *
+from processing_py import *
 from bisect import bisect_left
 
 curve = None

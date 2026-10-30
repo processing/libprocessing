@@ -2,7 +2,7 @@
 #
 # Move the mouse across the screen to move the circle.
 # The program constrains the circle to its box.
-from mewnala import *
+from processing_py import *
 
 mx = 0.0
 my = 0.0

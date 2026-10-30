@@ -7,7 +7,7 @@
 # When the thread is started, the draw() loop will continue while
 # the code inside the function passed to the Thread will operate
 # in the background.
-from mewnala import *
+from processing_py import *
 import threading
 from urllib.request import Request, urlopen
 

@@ -4,7 +4,7 @@
 # to apply a "toon" effect on the scene. Based on the glsl tutorial
 # from lighthouse 3D:
 # http://www.lighthouse3d.com/tutorials/glsl-tutorial/toon-shader-version-ii/
-from mewnala import *
+from processing_py import *
 
 toon = None
 plain = None

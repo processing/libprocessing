@@ -1,4 +1,4 @@
-# Pycessing
+# processing-py
 
 Prototype for python bindings to libprocessing
 
@@ -19,6 +19,10 @@ $ maturin develop
 # ...
 #
 $ python
->>> import processing
->>> processing.size(500, 500)
+>>> import processing_py
+>>> processing_py.size(500, 500)
 ```
+
+## Acknowledgements
+
+Thank you to [Faruk Hammoud](https://github.com/FarukHammoud) for generously handing over the `processing-py` name. Their original [processing_py](https://github.com/FarukHammoud/processing_py) project, a Python graphics library based on Processing, was published under this name from 2020 to 2021 (versions 0.1.0–0.3.7).

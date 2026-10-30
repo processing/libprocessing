@@ -1,4 +1,4 @@
-from mewnala import *
+from processing_py import *
 from math import sin, cos, pi
 
 second_window = None

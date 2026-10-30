@@ -438,7 +438,7 @@ fn detect_environment(module: &Bound<'_, PyModule>) -> PyResult<String> {
 }
 
 #[pymodule]
-pub mod mewnala {
+pub mod processing_py {
     use super::*;
 
     #[pymodule_export]
@@ -543,7 +543,7 @@ pub mod mewnala {
         }
     }
 
-    // top-level so `from mewnala import *` exposes hsva/srgb/etc. directly;
+    // top-level so `from processing_py import *` exposes hsva/srgb/etc. directly;
     // a `color` submodule would clash with the `color()` function
 
     #[pyfunction]

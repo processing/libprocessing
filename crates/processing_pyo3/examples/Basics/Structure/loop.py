@@ -4,7 +4,7 @@
 # is only run once. In this example, click the mouse
 # to run the loop() function to cause the draw() the
 # run continuously.
-from mewnala import *
+from processing_py import *
 
 y = 180
 

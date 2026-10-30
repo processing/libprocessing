@@ -2,7 +2,7 @@
 #
 # Images can be loaded and displayed to the screen at their actual size
 # or any other size.
-from mewnala import *
+from processing_py import *
 
 img = None
 

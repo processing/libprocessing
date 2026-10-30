@@ -4,7 +4,7 @@
 # first point in the curve and the last two parameters specify
 # the last point. The middle parameters set the control points
 # that define the shape of the curve.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

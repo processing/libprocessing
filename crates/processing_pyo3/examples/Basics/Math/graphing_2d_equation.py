@@ -4,7 +4,7 @@
 # Graphics the following equation:
 # sin(n*cos(r) + 5*theta)
 # where n is a function of horizontal mouse location.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

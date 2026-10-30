@@ -1,7 +1,7 @@
 # Texture Cylinder.
 #
 # Load an image and draw it onto a cylinder and a quad.
-from mewnala import *
+from processing_py import *
 
 tube_res = 32
 tube_x = []

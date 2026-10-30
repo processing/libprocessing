@@ -3,7 +3,7 @@
 # The text() function is used for writing words to the screen.
 # The letters can be aligned left, center, or right with the
 # text_align() function.
-from mewnala import *
+from processing_py import *
 
 f = None
 

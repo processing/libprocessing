@@ -3,7 +3,7 @@
 # This example presents the fastest way to load a background image
 # into Processing. To load an image as the background, it must be
 # the same width and height as the program.
-from mewnala import *
+from processing_py import *
 
 bg = None
 y = 0

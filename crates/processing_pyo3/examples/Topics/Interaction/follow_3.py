@@ -4,7 +4,7 @@
 # A segmented line follows the mouse. The relative angle from
 # each segment to the next is calculated with atan2() and the
 # position of the next is calculated with sin() and cos().
-from mewnala import *
+from processing_py import *
 
 x = [0.0] * 20
 y = [0.0] * 20

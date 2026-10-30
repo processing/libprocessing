@@ -5,7 +5,7 @@
 # of a body. This example is not object-oriented
 # See AccelerationWithVectors for an example of how
 # to simulate motion using vectors in an object.
-from mewnala import *
+from processing_py import *
 
 location = None  # Location of shape
 velocity = None  # Velocity of shape

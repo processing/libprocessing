@@ -23,7 +23,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: type-stubs
-          path: crates/processing_pyo3/mewnala/*.pyi
+          path: crates/processing_pyo3/processing_py/*.pyi
 
   linux:
     runs-on: ubuntu-22.04
@@ -42,7 +42,7 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: type-stubs
-          path: crates/processing_pyo3/mewnala
+          path: crates/processing_pyo3/processing_py
       - name: Setup QEMU
         if: matrix.target == 'aarch64'
         uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
@@ -91,7 +91,7 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: type-stubs
-          path: crates/processing_pyo3/mewnala
+          path: crates/processing_pyo3/processing_py
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
@@ -116,7 +116,7 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: type-stubs
-          path: crates/processing_pyo3/mewnala
+          path: crates/processing_pyo3/processing_py
       - name: Build wheels
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
@@ -138,7 +138,7 @@ jobs:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: type-stubs
-          path: crates/processing_pyo3/mewnala
+          path: crates/processing_pyo3/processing_py
       - name: Build sdist
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:

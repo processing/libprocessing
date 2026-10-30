@@ -1,4 +1,4 @@
-from mewnala import *
+from processing_py import *
 
 TITLES = ["window controls", "🪟 hello", "still alive"]
 POSITIONS = [(100, 100), (300, 200), (50, 50)]

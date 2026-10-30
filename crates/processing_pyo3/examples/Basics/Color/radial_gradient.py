@@ -2,7 +2,7 @@
 #
 # Draws a series of concentric circles to create a gradient
 # from one color to another.
-from mewnala import *
+from processing_py import *
 
 dim = 0
 

@@ -1,7 +1,7 @@
 # Scrollbar.
 #
 # Move the scrollbars left and right to change the positions of the images.
-from mewnala import *
+from processing_py import *
 
 # True if a mouse button was pressed while no other button was.
 first_mouse_press = False

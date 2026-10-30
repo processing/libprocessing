@@ -4,7 +4,7 @@
 # Numbers between 0 and PI*2 (TWO_PI which angles roughly 6.28)
 # are put into these functions and numbers between -1 and 1 are
 # returned. These values are then scaled to produce larger movements.
-from mewnala import *
+from processing_py import *
 
 x1 = 0.0
 x2 = 0.0

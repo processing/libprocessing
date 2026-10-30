@@ -3,7 +3,7 @@
 # The redraw() function makes draw() execute once.
 # In this example, draw() is executed once every time
 # the mouse is clicked.
-from mewnala import *
+from processing_py import *
 
 y = 0.0
 

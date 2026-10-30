@@ -3,7 +3,7 @@
 # The logical operators for AND (and) and OR (or) are used to
 # combine simple relational statements into more complex expressions.
 # The NOT (not) operator is used to negate a boolean statement.
-from mewnala import *
+from processing_py import *
 
 size(640, 360)
 background(0.49)

@@ -5,7 +5,7 @@
 # The box() and sphere() functions each have one parameter
 # which is used to specify their size. These shapes are
 # positioned using the translate() function.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

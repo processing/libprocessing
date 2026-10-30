@@ -6,7 +6,7 @@
 # symbol and the cursor. If the distance is larger than
 # 1 pixel, the symbol moves part of the distance (0.05) from its
 # current position toward the cursor.
-from mewnala import *
+from processing_py import *
 
 x = 0.0
 y = 0.0

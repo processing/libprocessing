@@ -4,7 +4,7 @@
 # A two-segmented arm follows the cursor position. The relative
 # angle between the segments is calculated with atan2() and the
 # position calculated with sin() and cos().
-from mewnala import *
+from processing_py import *
 
 x = [0.0, 0.0]
 y = [0.0, 0.0]

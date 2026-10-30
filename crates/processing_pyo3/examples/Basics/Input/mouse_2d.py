@@ -1,7 +1,7 @@
 # Mouse 2D.
 #
 # Moving the mouse changes the position and size of each box.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

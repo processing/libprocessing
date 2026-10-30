@@ -3,7 +3,7 @@
 # (slight modification by l8l)
 #
 # Simple rendering of the Mandelbrot set.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

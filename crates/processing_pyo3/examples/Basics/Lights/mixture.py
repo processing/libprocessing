@@ -2,7 +2,7 @@
 # by Simon Greenwold.
 #
 # Display a box with three different kinds of lights.
-from mewnala import *
+from processing_py import *
 
 point = None
 directional = None

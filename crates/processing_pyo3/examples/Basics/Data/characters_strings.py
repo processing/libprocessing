@@ -12,7 +12,7 @@
 #
 # A string is actually a class with its own methods, some of which are
 # featured below.
-from mewnala import *
+from processing_py import *
 
 letter = ""
 words = "Begin..."

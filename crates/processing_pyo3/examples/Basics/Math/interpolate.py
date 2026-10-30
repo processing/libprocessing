@@ -4,7 +4,7 @@
 # Between drawing each frame of the animation, the ellipse moves
 # part of the distance (0.05) from its current position toward
 # the cursor using the lerp() function.
-from mewnala import *
+from processing_py import *
 
 x = 0.0
 y = 0.0

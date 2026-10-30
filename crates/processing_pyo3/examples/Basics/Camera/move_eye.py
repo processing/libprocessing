@@ -2,7 +2,7 @@
 # by Simon Greenwold.
 #
 # The camera lifts up (controlled by mouseY) while looking at the same point.
-from mewnala import *
+from processing_py import *
 
 light = None
 

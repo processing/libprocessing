@@ -6,7 +6,7 @@
 # The origin (0, 0) is the coordinate is in the upper left
 # of the window and the coordinate in the lower right is
 # (width-1, height-1).
-from mewnala import *
+from processing_py import *
 
 # Sets the screen to be 640 pixels wide and 360 pixels high
 size(640, 360)

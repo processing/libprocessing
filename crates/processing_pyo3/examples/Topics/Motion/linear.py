@@ -4,7 +4,7 @@
 # When the line moves off the edge of the window,
 # the variable is set to 0, which places the line
 # back at the bottom of the screen.
-from mewnala import *
+from processing_py import *
 
 a = 0.0
 

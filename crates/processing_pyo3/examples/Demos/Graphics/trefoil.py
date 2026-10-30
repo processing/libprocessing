@@ -2,7 +2,7 @@
 #
 # A parametric surface is textured procedurally
 # by drawing on an offscreen Graphics surface.
-from mewnala import *
+from processing_py import *
 
 pg = None
 trefoil = None

@@ -4,7 +4,7 @@
 # and is typically referred to as the name of the color such as
 # red, blue, or yellow. In this example, move the cursor vertically
 # over each bar to alter its hue.
-from mewnala import *
+from processing_py import *
 
 bar_width = 20
 last_bar = -1

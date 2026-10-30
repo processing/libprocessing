@@ -3,7 +3,7 @@
 # Move the mouse across the image to obscure and reveal the matrix.
 # Measures the distance from the mouse to each square and sets the
 # size proportionally.
-from mewnala import *
+from processing_py import *
 
 max_distance = 0.0
 

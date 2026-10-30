@@ -1,7 +1,7 @@
-from mewnala import *
+from processing_py import *
 from math import cos, sin
 
-from mewnala.mewnala import TRIANGLES
+from processing_py.processing_py import TRIANGLES
 
 p = None
 rest = None

@@ -2,7 +2,7 @@
 #
 # Move the mouse left and right to control the
 # speed and direction of the moving shapes.
-from mewnala import *
+from processing_py import *
 
 xpos1 = 0.0
 xpos2 = 0.0

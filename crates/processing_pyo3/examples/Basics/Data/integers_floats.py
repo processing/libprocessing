@@ -5,7 +5,7 @@
 # a decimal point. A float is a floating-point number, which means
 # it is a number that has a decimal place. Floats are used when
 # more precision is needed.
-from mewnala import *
+from processing_py import *
 
 a = 0  # Create a variable "a" of the datatype "int"
 b = 0.0  # Create a variable "b" of the datatype "float"

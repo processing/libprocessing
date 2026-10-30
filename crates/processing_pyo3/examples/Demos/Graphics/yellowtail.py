@@ -9,7 +9,7 @@
 # line's shape and quality of movement. Each line repeats according to its
 # own period, producing an ever-changing and responsive display of lively,
 # worm-like textures.
-from mewnala import *
+from processing_py import *
 
 gesture_array = []
 n_gestures = 36  # Number of gestures

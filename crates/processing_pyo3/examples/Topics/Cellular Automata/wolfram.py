@@ -5,7 +5,7 @@
 # cellular automata. When the system reaches bottom
 # of the window, it restarts with a new ruleset.
 # Mouse click restarts as well.
-from mewnala import *
+from processing_py import *
 
 ca = None  # An instance object to the cellular automata
 

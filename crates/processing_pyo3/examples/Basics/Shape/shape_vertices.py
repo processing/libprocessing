@@ -7,7 +7,7 @@
 #
 # You should iterate through the children and then
 # iterate through their vertices.
-from mewnala import *
+from processing_py import *
 
 # The shape
 uk = None

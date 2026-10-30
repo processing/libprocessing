@@ -2,7 +2,7 @@
 #
 # Draws an image larger than the screen, and saves the image as nine tiles.
 # The scale_value variable sets amount of scaling: 1 is 100%, 2 is 200%, etc.
-from mewnala import *
+from processing_py import *
 
 scale_value = 3  # Multiplication factor
 xoffset = 0  # x-axis offset

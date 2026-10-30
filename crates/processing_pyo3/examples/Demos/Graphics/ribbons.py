@@ -4,7 +4,7 @@
 # This sketch loads 3D atomic coordinates of a protein molecule
 # from a file in PDB format (http://www.pdb.org/) and displays
 # the structure using a ribbon representation.
-from mewnala import *
+from processing_py import *
 import os
 
 pdb_file = "data/4HHB.pdb"  # PDB file to read

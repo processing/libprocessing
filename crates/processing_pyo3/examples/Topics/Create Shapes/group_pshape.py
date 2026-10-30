@@ -1,7 +1,7 @@
 # GroupPShape
 #
 # How to group multiple PShapes into one PShape
-from mewnala import *
+from processing_py import *
 
 # A PShape that will group PShapes
 group = None

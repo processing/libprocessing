@@ -11,7 +11,7 @@
 # The version of perspective without parameters sets the default
 # perspective and the version with four parameters allows the programmer
 # to set the area precisely.
-from mewnala import *
+from processing_py import *
 
 light = None
 
