@@ -1,172 +1,73 @@
-use processing_glfw::GlfwContext;
+use processing::{Graphics, Result, Settings, Sketch};
 
-use bevy::math::{Vec2, Vec3};
-use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
-
-fn main() {
-    sketch().unwrap();
-    exit(0).unwrap();
+struct Stroke3d {
+    angle: f32,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(600, 400, false)?;
-    init(Config::default())?;
-
-    let surface = glfw_ctx.create_surface(600, 400, false)?;
-    let graphics = graphics_create(surface, 600, 400, TextureFormat::Rgba16Float)?;
-
-    graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(200.0, -150.0, 350.0))?;
-    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
-
-    let light =
-        light_create_directional(graphics, bevy::color::Color::srgb(0.9, 0.85, 0.8), 800.0)?;
-
-    let mut angle: f32 = 0.0;
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-        graphics_light(graphics, light)?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.08, 0.08, 0.12)),
-        )?;
-
-        // thin wireframe box
-        graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Translate(Vec2::new(-80.0, 0.0).extend(0.0)),
-        )?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Rotate {
-                angle: -angle,
-                axis: Vec3::Z,
-            },
-        )?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Fill(bevy::color::Color::srgb(0.3, 0.4, 0.7)),
-        )?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::StrokeColor(bevy::color::Color::srgb(1.0, 1.0, 1.0)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::StrokeWeight(1.0))?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Box {
-                width: 60.0,
-                height: 60.0,
-                depth: 60.0,
-            },
-        )?;
-        graphics_record_command(graphics, DrawCommand::PopMatrix)?;
-
-        // thick wireframe box
-        graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(graphics, DrawCommand::Translate(Vec2::ZERO.extend(0.0)))?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Rotate {
-                angle: -angle * 0.7,
-                axis: Vec3::Z,
-            },
-        )?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Fill(bevy::color::Color::srgb(0.7, 0.3, 0.4)),
-        )?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::StrokeColor(bevy::color::Color::srgb(1.0, 0.9, 0.2)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::StrokeWeight(3.0))?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Box {
-                width: 50.0,
-                height: 70.0,
-                depth: 50.0,
-            },
-        )?;
-        graphics_record_command(graphics, DrawCommand::PopMatrix)?;
-
-        // thick wireframe sphere
-        graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Translate(Vec2::new(80.0, 0.0).extend(0.0)),
-        )?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Rotate {
-                angle: -angle * 0.5,
-                axis: Vec3::Z,
-            },
-        )?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Fill(bevy::color::Color::srgb(0.3, 0.7, 0.4)),
-        )?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::StrokeColor(bevy::color::Color::srgb(0.9, 0.4, 1.0)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::StrokeWeight(2.0))?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Sphere {
-                radius: 35.0,
-                sectors: 16,
-                stacks: 12,
-            },
-        )?;
-        graphics_record_command(graphics, DrawCommand::PopMatrix)?;
-
-        // wireframe-only sphere (no fill)
-        graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Translate(Vec2::new(160.0, 0.0).extend(0.0)),
-        )?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Rotate {
-                angle: angle * 0.3,
-                axis: Vec3::Z,
-            },
-        )?;
-
-        graphics_record_command(graphics, DrawCommand::NoFill)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::StrokeColor(bevy::color::Color::srgb(0.2, 0.8, 1.0)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::StrokeWeight(1.5))?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Sphere {
-                radius: 30.0,
-                sectors: 24,
-                stacks: 16,
-            },
-        )?;
-        graphics_record_command(graphics, DrawCommand::PopMatrix)?;
-
-        graphics_end_draw(graphics)?;
-        angle += 0.015;
+impl Sketch for Stroke3d {
+    fn settings() -> Settings {
+        Settings::size(600, 400)
     }
 
-    Ok(())
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.camera_position((200, -150, 350));
+        g.camera_look_at((0, 0, 0));
+        Ok(Stroke3d { angle: 0.0 })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        let angle = self.angle;
+        g.background((0.08, 0.08, 0.12));
+        g.directional_light((0.9, 0.85, 0.8), 800);
+
+        // thin wireframe box
+        {
+            let mut g = g.push();
+            g.translate((-80, 0));
+            g.rotate(-angle);
+            g.fill((0.3, 0.4, 0.7));
+            g.stroke(255);
+            g.stroke_weight(1);
+            g.cube(60);
+        }
+
+        // thick wireframe box
+        {
+            let mut g = g.push();
+            g.rotate(-angle * 0.7);
+            g.fill((0.7, 0.3, 0.4));
+            g.stroke((1.0, 0.9, 0.2));
+            g.stroke_weight(3);
+            g.cube((50, 70, 50));
+        }
+
+        // thick wireframe sphere
+        {
+            let mut g = g.push();
+            g.translate((80, 0));
+            g.rotate(-angle * 0.5);
+            g.fill((0.3, 0.7, 0.4));
+            g.stroke((0.9, 0.4, 1.0));
+            g.stroke_weight(2);
+            g.sphere(35).detail(16, 12);
+        }
+
+        // wireframe-only sphere
+        {
+            let mut g = g.push();
+            g.translate((160, 0));
+            g.rotate(angle * 0.3);
+            g.no_fill();
+            g.stroke((0.2, 0.8, 1.0));
+            g.stroke_weight(1.5);
+            g.sphere(30).detail(24, 16);
+        }
+
+        self.angle += 0.015;
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<Stroke3d>()
 }

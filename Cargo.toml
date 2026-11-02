@@ -10,8 +10,8 @@ workspace = true
 
 [features]
 default = ["wayland", "x11"]
-wayland = ["processing_render/wayland"]
-x11 = ["processing_render/x11"]
+wayland = ["processing_render/wayland", "processing_glfw/wayland"]
+x11 = ["processing_render/x11", "processing_glfw/x11"]
 webcam = ["dep:processing_webcam"]
 cuda = ["dep:processing_cuda", "processing_cuda/cuda"]
 
@@ -90,6 +90,9 @@ processing_cuda = { workspace = true, optional = true }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+processing_glfw = { workspace = true }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
@@ -132,6 +135,10 @@ path = "examples/background_image.rs"
 [[example]]
 name = "update_pixels"
 path = "examples/update_pixels.rs"
+
+[[example]]
+name = "create_graphics"
+path = "examples/create_graphics.rs"
 
 [[example]]
 name = "transforms"

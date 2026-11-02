@@ -1,5 +1,40 @@
 pub mod prelude;
 
+#[cfg(not(target_arch = "wasm32"))]
+mod args;
+#[cfg(not(target_arch = "wasm32"))]
+mod color;
+#[cfg(not(target_arch = "wasm32"))]
+mod draw;
+#[cfg(not(target_arch = "wasm32"))]
+mod graphics;
+#[cfg(not(target_arch = "wasm32"))]
+mod image;
+#[cfg(not(target_arch = "wasm32"))]
+mod input;
+#[cfg(not(target_arch = "wasm32"))]
+mod shape;
+#[cfg(not(target_arch = "wasm32"))]
+mod sketch;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use crate::{
+    args::{IntoExtent, IntoPoint, Scalar},
+    color::{Channel, Color, ColorArg, ColorSpace, IntoChannel, IntoColorMax},
+    draw::{Arc, BeginDraw, Detail, ImageDraw, LightDraw, Push, Rect, Text},
+    graphics::{ColorModeBuilder, Graphics, Light, TextAlign},
+    image::{AsImage, Font, Image},
+    input::{Key, MouseButton},
+    shape::{Contour, Shape},
+    sketch::{Settings, Sketch, run},
+};
+pub use bevy::math::{Affine3A, Mat4, Vec2, Vec3};
+pub use processing_core::error::{ProcessingError as Error, Result};
+pub use processing_render::render::command::{
+    ArcMode, BlendMode, ShapeKind, ShapeMode, StrokeCapMode as StrokeCap,
+    StrokeJoinMode as StrokeJoin, TextAlignH, TextAlignV, TextStyle, TextWrapMode,
+};
+
 use std::num::NonZero;
 
 use bevy::app::{App, AppExit};

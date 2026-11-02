@@ -1,125 +1,72 @@
-use processing_glfw::GlfwContext;
 use std::f32::consts::PI;
 
-use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
+use processing::{Graphics, Result, Settings, Sketch};
 
-fn main() {
-    sketch().unwrap();
-    exit(0).unwrap();
+struct Primitives2d {
+    t: f32,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(600, 600, false)?;
-    init(Config::default())?;
+impl Sketch for Primitives2d {
+    fn settings() -> Settings {
+        Settings::size(600, 600)
+    }
 
-    let surface = glfw_ctx.create_surface(600, 600, false)?;
-    let graphics = graphics_create(surface, 600, 600, TextureFormat::Rgba16Float)?;
+    fn setup(_g: &mut Graphics) -> Result<Self> {
+        Ok(Primitives2d { t: 0.0 })
+    }
 
-    let mut t: f32 = 0.0;
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.95, 0.93, 0.9)),
-        )?;
-
+    fn draw(&mut self, g: &mut Graphics) {
+        let t = self.t;
         let cx = 300.0;
         let cy = 300.0;
+        g.background((0.95, 0.93, 0.9));
 
-        graphics_record_command(graphics, DrawCommand::NoFill)?;
-        graphics_record_command(graphics, DrawCommand::StrokeWeight(2.0))?;
-
+        // concentric arcs
+        g.no_fill();
+        g.stroke_weight(2);
         for i in 0..12 {
             let r = 40.0 + i as f32 * 18.0;
-            let offset = t + i as f32 * 0.15;
+            let start = t + i as f32 * 0.15;
             let v = 0.2 + (i as f32 / 12.0) * 0.4;
-            graphics_record_command(
-                graphics,
-                DrawCommand::StrokeColor(bevy::color::Color::srgb(v, v * 0.8, v * 0.6)),
-            )?;
-            graphics_record_command(
-                graphics,
-                DrawCommand::Arc {
-                    cx,
-                    cy,
-                    w: r * 2.0,
-                    h: r * 2.0,
-                    start: offset,
-                    stop: offset + PI * 1.2,
-                    mode: ArcMode::Open,
-                },
-            )?;
+            g.stroke((v, v * 0.8, v * 0.6));
+            g.arc(cx, cy, r * 2.0, r * 2.0, start, start + PI * 1.2);
         }
 
-        graphics_record_command(graphics, DrawCommand::NoStroke)?;
+        // dots riding the arcs
+        g.no_stroke();
         for i in 0..12 {
             let r = 40.0 + i as f32 * 18.0;
             let angle = t + i as f32 * 0.15;
-            let x = cx + r * angle.cos();
-            let y = cy + r * angle.sin();
-            graphics_record_command(
-                graphics,
-                DrawCommand::Fill(bevy::color::Color::srgb(0.85, 0.3 + i as f32 / 24.0, 0.2)),
-            )?;
-            graphics_record_command(
-                graphics,
-                DrawCommand::Ellipse {
-                    cx: x,
-                    cy: y,
-                    w: 6.0,
-                    h: 6.0,
-                },
-            )?;
+            g.fill((0.85, 0.3 + i as f32 / 24.0, 0.2));
+            g.circle(cx + r * angle.cos(), cy + r * angle.sin(), 6);
         }
 
-        graphics_record_command(
-            graphics,
-            DrawCommand::Fill(bevy::color::Color::srgba(0.1, 0.1, 0.1, 0.15)),
-        )?;
+        // orbiting triangles
+        g.fill((0.1, 0.1, 0.1, 0.15));
         for i in 0..6 {
             let angle = t * 0.5 + i as f32 * PI / 3.0;
-            let d = 250.0;
-            let px = cx + d * angle.cos();
-            let py = cy + d * angle.sin();
+            let x = cx + 250.0 * angle.cos();
+            let y = cy + 250.0 * angle.sin();
             let s = 20.0;
-            graphics_record_command(
-                graphics,
-                DrawCommand::Triangle {
-                    x1: px,
-                    y1: py - s,
-                    x2: px - s * 0.866,
-                    y2: py + s * 0.5,
-                    x3: px + s * 0.866,
-                    y3: py + s * 0.5,
-                },
-            )?;
+            g.triangle(
+                x,
+                y - s,
+                x - s * 0.866,
+                y + s * 0.5,
+                x + s * 0.866,
+                y + s * 0.5,
+            );
         }
 
+        // pulsing diamond
         let d = 15.0 + 5.0 * (t * 3.0).sin();
-        graphics_record_command(
-            graphics,
-            DrawCommand::Fill(bevy::color::Color::srgba(0.9, 0.4, 0.1, 0.4)),
-        )?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Quad {
-                x1: cx,
-                y1: cy - d,
-                x2: cx + d,
-                y2: cy,
-                x3: cx,
-                y3: cy + d,
-                x4: cx - d,
-                y4: cy,
-            },
-        )?;
+        g.fill((0.9, 0.4, 0.1, 0.4));
+        g.quad(cx, cy - d, cx + d, cy, cx, cy + d, cx - d, cy);
 
-        graphics_end_draw(graphics)?;
-        t += 0.01;
+        self.t += 0.01;
     }
+}
 
-    Ok(())
+fn main() -> Result<()> {
+    processing::run::<Primitives2d>()
 }

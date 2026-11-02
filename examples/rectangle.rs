@@ -1,45 +1,21 @@
-use processing_glfw::GlfwContext;
+use processing::{Graphics, Result, Settings, Sketch};
 
-use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
+struct Rectangle;
 
-fn main() {
-    match sketch() {
-        Ok(_) => {
-            eprintln!("Sketch completed successfully");
-            exit(0).unwrap();
-        }
-        Err(e) => {
-            eprintln!("Sketch error: {:?}", e);
-            exit(1).unwrap();
-        }
-    };
+impl Sketch for Rectangle {
+    fn settings() -> Settings {
+        Settings::size(400, 400)
+    }
+
+    fn setup(_g: &mut Graphics) -> Result<Self> {
+        Ok(Rectangle)
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        g.rect(10, 10, 100, 100);
+    }
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(400, 400, false)?;
-    init(Config::default())?;
-
-    let width = 400;
-    let height = 400;
-    let surface = glfw_ctx.create_surface(width, height, false)?;
-    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Rect {
-                x: 10.0,
-                y: 10.0,
-                w: 100.0,
-                h: 100.0,
-                radii: [0.0, 0.0, 0.0, 0.0],
-            },
-        )?;
-
-        graphics_end_draw(graphics)?;
-    }
-    Ok(())
+fn main() -> Result<()> {
+    processing::run::<Rectangle>()
 }

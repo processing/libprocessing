@@ -1,162 +1,80 @@
-use processing_glfw::GlfwContext;
 use std::f32::consts::PI;
 
-use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
+use processing::{Graphics, Result, Settings, ShapeKind, Sketch};
 
-fn main() {
-    sketch().unwrap();
-    exit(0).unwrap();
+struct Shapes {
+    t: f32,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(600, 600, false)?;
-    init(Config::default())?;
+impl Sketch for Shapes {
+    fn settings() -> Settings {
+        Settings::size(600, 600)
+    }
 
-    let surface = glfw_ctx.create_surface(600, 600, false)?;
-    let graphics = graphics_create(surface, 600, 600, TextureFormat::Rgba16Float)?;
+    fn setup(_g: &mut Graphics) -> Result<Self> {
+        Ok(Shapes { t: 0.0 })
+    }
 
-    let mut t: f32 = 0.0;
+    fn draw(&mut self, g: &mut Graphics) {
+        let t = self.t;
+        g.background((235, 230, 222));
 
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.92, 0.90, 0.87)),
-        )?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Fill(bevy::color::Color::srgba(0.2, 0.3, 0.5, 0.25)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::StrokeWeight(1.5))?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::StrokeColor(bevy::color::Color::srgb(0.15, 0.2, 0.35)),
-        )?;
-
+        // a wobbling blob made of curve vertices
+        g.fill((0.2, 0.3, 0.5, 0.25));
+        g.stroke_weight(1.5);
+        g.stroke((38, 51, 89));
         let n = 8;
-        graphics_record_command(
-            graphics,
-            DrawCommand::BeginShape {
-                kind: ShapeKind::Polygon,
-            },
-        )?;
-
+        let mut blob = g.begin_shape(ShapeKind::Polygon);
         for i in 0..n + 3 {
             let idx = (i + n - 1) % n;
             let angle = idx as f32 * 2.0 * PI / n as f32;
             let r = 100.0 + 30.0 * (t * 2.0 + idx as f32 * 0.8).sin();
-            graphics_record_command(
-                graphics,
-                DrawCommand::ShapeCurveVertex {
-                    x: 170.0 + r * angle.cos(),
-                    y: 200.0 + r * angle.sin(),
-                },
-            )?;
+            blob.curve_vertex(170.0 + r * angle.cos(), 200.0 + r * angle.sin());
         }
+        blob.close();
 
-        graphics_record_command(graphics, DrawCommand::EndShape { close: true })?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Fill(bevy::color::Color::srgba(0.15, 0.5, 0.3, 0.2)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::StrokeWeight(1.0))?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::StrokeColor(bevy::color::Color::srgb(0.1, 0.35, 0.2)),
-        )?;
-
-        let pcx = 430.0;
-        let pcy = 200.0;
+        // a pulsing lens made of two bezier segments
+        g.fill((0.15, 0.5, 0.3, 0.2));
+        g.stroke_weight(1);
+        g.stroke((26, 89, 51));
+        let cx = 430.0;
+        let cy = 200.0;
         let s = 70.0 + 10.0 * (t * 1.5).sin();
+        let mut lens = g.begin_shape(ShapeKind::Polygon);
+        lens.vertex(cx, cy - s);
+        lens.bezier_vertex(cx + s, cy - s, cx + s, cy + s, cx, cy + s);
+        lens.bezier_vertex(cx - s, cy + s, cx - s, cy - s, cx, cy - s);
+        lens.close();
 
-        graphics_record_command(
-            graphics,
-            DrawCommand::BeginShape {
-                kind: ShapeKind::Polygon,
-            },
-        )?;
-        graphics_record_command(graphics, DrawCommand::ShapeVertex { x: pcx, y: pcy - s })?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::ShapeBezierVertex {
-                cx1: pcx + s,
-                cy1: pcy - s,
-                cx2: pcx + s,
-                cy2: pcy + s,
-                x: pcx,
-                y: pcy + s,
-            },
-        )?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::ShapeBezierVertex {
-                cx1: pcx - s,
-                cy1: pcy + s,
-                cx2: pcx - s,
-                cy2: pcy - s,
-                x: pcx,
-                y: pcy - s,
-            },
-        )?;
-        graphics_record_command(graphics, DrawCommand::EndShape { close: true })?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Fill(bevy::color::Color::srgba(0.8, 0.35, 0.1, 0.15)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::NoStroke)?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::BeginShape {
-                kind: ShapeKind::TriangleFan,
-            },
-        )?;
-        graphics_record_command(graphics, DrawCommand::ShapeVertex { x: 170.0, y: 450.0 })?;
+        // a flower as a triangle fan
+        g.fill((0.8, 0.35, 0.1, 0.15));
+        g.no_stroke();
+        let mut fan = g.begin_shape(ShapeKind::TriangleFan);
+        fan.vertex(170, 450);
         for i in 0..=16 {
             let angle = i as f32 * 2.0 * PI / 16.0;
             let r = 60.0 + 20.0 * (t * 3.0 + angle * 2.0).sin();
-            graphics_record_command(
-                graphics,
-                DrawCommand::ShapeVertex {
-                    x: 170.0 + r * angle.cos(),
-                    y: 450.0 + r * angle.sin(),
-                },
-            )?;
+            fan.vertex(170.0 + r * angle.cos(), 450.0 + r * angle.sin());
         }
-        graphics_record_command(graphics, DrawCommand::EndShape { close: true })?;
+        fan.close();
 
-        graphics_record_command(
-            graphics,
-            DrawCommand::Fill(bevy::color::Color::srgba(0.5, 0.2, 0.6, 0.2)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::StrokeWeight(0.5))?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::StrokeColor(bevy::color::Color::srgba(0.3, 0.1, 0.4, 0.4)),
-        )?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::BeginShape {
-                kind: ShapeKind::TriangleStrip,
-            },
-        )?;
+        // a wave as a triangle strip
+        g.fill((0.5, 0.2, 0.6, 0.2));
+        g.stroke_weight(0.5);
+        g.stroke((77, 26, 102, 102));
+        let mut strip = g.begin_shape(ShapeKind::TriangleStrip);
         for i in 0..16 {
             let x = 320.0 + i as f32 * 17.0;
             let wave = 30.0 * (t * 2.0 + i as f32 * 0.4).sin();
-            graphics_record_command(graphics, DrawCommand::ShapeVertex { x, y: 420.0 + wave })?;
-            graphics_record_command(graphics, DrawCommand::ShapeVertex { x, y: 480.0 + wave })?;
+            strip.vertex(x, 420.0 + wave);
+            strip.vertex(x, 480.0 + wave);
         }
-        graphics_record_command(graphics, DrawCommand::EndShape { close: false })?;
+        strip.end();
 
-        graphics_end_draw(graphics)?;
-        t += 0.02;
+        self.t += 0.02;
     }
+}
 
-    Ok(())
+fn main() -> Result<()> {
+    processing::run::<Shapes>()
 }
