@@ -8,14 +8,12 @@ from mewnala import *
 ico1 = None
 ico2 = None
 ico3 = None
-light = None
 
 
 def setup():
-    global ico1, ico2, ico3, light
+    global ico1, ico2, ico3
     size(640, 360)
     mode_3d()
-    light = directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     roughness(0.6)
     ico1 = Icosahedron(75)
     ico2 = Icosahedron(75)
@@ -23,6 +21,7 @@ def setup():
 
 
 def draw():
+    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     background(0.0)
 
     push_matrix()

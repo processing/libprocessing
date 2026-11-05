@@ -21,23 +21,22 @@ vertices = []
 is_pyramid = False
 
 angle_inc = 0
-light = None
 tube = None
 ends = None
 
 
 def setup():
-    global angle_inc, light
+    global angle_inc
     size(640, 360)
     mode_3d()
     no_stroke()
     angle_inc = PI / 300.0
-    light = directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     roughness(0.6)
     build_shape()
 
 
 def draw():
+    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     background(0.67, 0.37, 0.37)
     fill(1.0, 0.78, 0.78)
     rotate_x(frame_count * angle_inc)

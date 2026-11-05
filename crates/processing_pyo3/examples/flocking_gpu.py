@@ -22,6 +22,7 @@ RULES = [
 p = None
 boid = None
 mat = None
+sun = None
 grid = None
 title_last_time = 0.0
 title_last_frame = 0
@@ -49,13 +50,13 @@ def boid_geometry(half_width, length, droop):
 
 
 def setup():
-    global p, boid, mat, grid
+    global p, boid, mat, sun, grid
 
     size(900, 700)
     window_title(f"GPU Flocking — {BOID_COUNT:,} boids")
     mode_3d()
 
-    directional_light((0.95, 0.9, 0.85), 800.0)
+    sun = create_directional_light((0.95, 0.9, 0.85), 800.0)
 
     p = create_particles(BOID_COUNT)
 
@@ -134,6 +135,7 @@ def draw():
     camera_position(cos(t) * r, BOUND * 0.8, sin(t) * r)
     camera_look_at(0.0, 0.0, 0.0)
     background(10, 12, 18)
+    light(sun)
 
     flock()
 

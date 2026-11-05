@@ -1,14 +1,16 @@
 from mewnala import *                                                                                                                    
                                                                                                                                          
 angle = 0.0                                                                                                                              
-mode = 0                                                                                                                                 
+mode = 0
+dir_light = None
                                                                                                                                          
-def setup():                                                                                                                             
+def setup():
+    global dir_light
     size(800, 600)
     mode_3d()
     orbit_camera()                                                                                                                       
 
-    dir_light = directional_light((1.0, 0.98, 0.95), 1500.0)                                                                        
+    dir_light = create_directional_light((1.0, 0.98, 0.95), 1500.0)                                                                        
     dir_light.position(300.0, 400.0, 300.0)
     dir_light.look_at(0.0, 0.0, 0.0)                                                                                                     
                 
@@ -29,6 +31,7 @@ def draw():
         mode = 2                                                                                                                         
                 
     background(13, 13, 18)
+    light(dir_light)
     if mode < 2:
         fill(255, 217, 145)
         roughness(0.3)                                                                                                                   

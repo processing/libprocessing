@@ -14,12 +14,12 @@ def setup():
     size(640, 360)
     mode_3d()
     no_stroke()
-    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     roughness(0.6)
 
 
 def draw():
     global a
+    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     background(0.0, 0.0, 0.1)
 
     for i in range(num):

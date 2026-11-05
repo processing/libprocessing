@@ -1,14 +1,16 @@
 from mewnala import *
 
 mat = None
+dir_light = None
+p_light = None
 
 def setup():
-    global mat
+    global mat, dir_light, p_light
     size(800, 600)
     mode_3d()
 
-    dir_light = directional_light((1.0, 0.98, 0.95), 1500.0)
-    p_light = point_light((1.0, 1.0, 1.0), 100000.0, 800.0, 0.0)
+    dir_light = create_directional_light((1.0, 0.98, 0.95), 1500.0)
+    p_light = create_point_light((1.0, 1.0, 1.0), 100000.0, 800.0, 0.0)
     p_light.position(200.0, 200.0, 400.0)
 
     mat = create_material(
@@ -21,6 +23,8 @@ def draw():
     camera_position(0.0, 0.0, 200.0)
     camera_look_at(0.0, 0.0, 0.0)
     background(12, 12, 18)
+    light(dir_light)
+    light(p_light)
 
     material(mat)
     sphere(50.0)

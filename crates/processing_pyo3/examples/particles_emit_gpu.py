@@ -4,6 +4,7 @@ import math
 p = None
 particle = None
 mat = None
+sun = None
 spawn = None
 motion = None
 
@@ -16,12 +17,12 @@ SPEED = 5.0
 
 
 def setup():
-    global p, particle, mat, spawn, motion
+    global p, particle, mat, sun, spawn, motion
 
     size(900, 700)
     mode_3d()
 
-    directional_light((0.95, 0.9, 0.85), 800.0)
+    sun = create_directional_light((0.95, 0.9, 0.85), 800.0)
 
     particle = Geometry.sphere(0.12, 8, 6)
 
@@ -50,6 +51,7 @@ def draw():
     camera_position(0.0, 4.0, 16.0)
     camera_look_at(0.0, 2.0, 0.0)
     background(10, 10, 18)
+    light(sun)
 
     material(mat)
     particles(p, particle)

@@ -6,19 +6,17 @@
 from mewnala import *
 
 spin = 0.0
-light = None
 
 
 def setup():
-    global light
     size(640, 360)
     mode_3d()
     no_stroke()
-    light = directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
 
 
 def draw():
     global spin
+    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     background(0.2)
 
     # A lit material turns the lights on; unlit() turns them off

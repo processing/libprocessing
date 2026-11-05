@@ -31,12 +31,12 @@ def setup():
         planets.append(Planet(random(0.1, 2), random(-width / 2, width / 2), random(-height / 2, height / 2), random(-100, 100)))
     # A single sun
     s = Sun()
-    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     roughness(0.6)
 
 
 def draw():
     global angle
+    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     background(0.0)
     # Setup the scene
     rotate_y(angle)

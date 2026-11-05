@@ -120,6 +120,9 @@ fn sketch() -> error::Result<()> {
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;
+        graphics_light(graphics, red)?;
+        graphics_light(graphics, green)?;
+        graphics_light(graphics, blue)?;
         graphics_record_command(
             graphics,
             DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.04, 0.04, 0.07)),

@@ -33,6 +33,7 @@ use crate::{
     geometry::Geometry,
     gltf::GltfNodeTransform,
     image::Image,
+    light::ProcessingLight,
     material::ProcessingMaterial,
     material::custom::CustomMaterial,
     particles::{Particles, ParticlesDraw},
@@ -42,13 +43,23 @@ use crate::{
 
 pub(crate) const BATCH_INDEX_STEP: f32 = 0.001;
 
+/// Despawned at the graphics' next flush.
 #[derive(Component)]
-#[relationship(relationship_target = TransientMeshes)]
-pub struct BelongsToGraphics(pub Entity);
+#[relationship(relationship_target = FlushTransients)]
+pub struct FlushTransient(pub Entity);
 
 #[derive(Component, Default)]
-#[relationship_target(relationship = BelongsToGraphics, linked_spawn)]
-pub struct TransientMeshes(Vec<Entity>);
+#[relationship_target(relationship = FlushTransient, linked_spawn)]
+pub struct FlushTransients(Vec<Entity>);
+
+/// Despawned when the graphics begins its next draw.
+#[derive(Component)]
+#[relationship(relationship_target = DrawTransients)]
+pub struct DrawTransient(pub Entity);
+
+#[derive(Component, Default)]
+#[relationship_target(relationship = DrawTransient, linked_spawn)]
+pub struct DrawTransients(Vec<Entity>);
 
 #[derive(SystemParam)]
 pub struct RenderResources<'w, 's> {
@@ -160,6 +171,7 @@ pub fn flush_draw_commands(
             With<ParticlesDraw>,
         )>,
     >,
+    p_lights: Query<(&ProcessingLight, &Transform)>,
 ) {
     for (graphics_entity, mut cmd_buffer, mut state, render_layers, projection, camera_transform) in
         graphics.iter_mut()
@@ -180,6 +192,18 @@ pub fn flush_draw_commands(
 
         for cmd in draw_commands {
             match cmd {
+                DrawCommand::Light(entity) => {
+                    if let Ok((light, transform)) = p_lights.get(entity) {
+                        let placed = crate::light::place(state.transform.current(), transform);
+                        crate::light::spawn_bevy_light(
+                            &mut res.commands,
+                            graphics_entity,
+                            render_layers,
+                            light.0,
+                            placed,
+                        );
+                    }
+                }
                 DrawCommand::Fill(color) => {
                     state.style.fill = Fill::Color(color);
                 }
@@ -863,7 +887,7 @@ pub fn flush_draw_commands(
                     res.commands.spawn((
                         Mesh3d(mesh_handle),
                         UntypedMaterial(material_handle),
-                        BelongsToGraphics(batch.graphics_entity),
+                        FlushTransient(batch.graphics_entity),
                         Transform::IDENTITY,
                         batch.render_layers.clone(),
                     ));
@@ -892,7 +916,7 @@ pub fn flush_draw_commands(
                     res.commands.spawn((
                         Mesh3d(mesh_handle),
                         UntypedMaterial(material_handle),
-                        BelongsToGraphics(batch.graphics_entity),
+                        FlushTransient(batch.graphics_entity),
                         Transform::IDENTITY,
                         batch.render_layers.clone(),
                     ));
@@ -954,7 +978,7 @@ pub fn flush_draw_commands(
                     res.commands.spawn((
                         Mesh3d(geometry.handle.clone()),
                         UntypedMaterial(material_handle),
-                        BelongsToGraphics(batch.graphics_entity),
+                        FlushTransient(batch.graphics_entity),
                         transform,
                         batch.render_layers.clone(),
                     ));
@@ -1401,13 +1425,13 @@ pub fn activate_cameras(mut cameras: Query<(&mut Camera, Option<&Flush>)>) {
     }
 }
 
-pub fn clear_transient_meshes(
+pub fn clear_flush_transients(
     mut commands: Commands,
-    surfaces: Query<&TransientMeshes, With<Flush>>,
+    surfaces: Query<&FlushTransients, With<Flush>>,
 ) {
-    for transient_meshes in surfaces.iter() {
-        for &mesh_entity in transient_meshes.0.iter() {
-            commands.entity(mesh_entity).despawn();
+    for transients in surfaces.iter() {
+        for &entity in transients.0.iter() {
+            commands.entity(entity).despawn();
         }
     }
 }
@@ -1449,7 +1473,7 @@ fn spawn_mesh(
     res.commands.spawn((
         Mesh3d(mesh_handle),
         UntypedMaterial(material_handle),
-        BelongsToGraphics(batch.graphics_entity),
+        FlushTransient(batch.graphics_entity),
         transform,
         batch.render_layers.clone(),
     ));
@@ -1683,7 +1707,7 @@ fn add_shape3d(
     let mut entity = res.commands.spawn((
         Mesh3d(mesh_handle),
         UntypedMaterial(material_handle),
-        BelongsToGraphics(batch.graphics_entity),
+        FlushTransient(batch.graphics_entity),
         transform,
         batch.render_layers.clone(),
     ));

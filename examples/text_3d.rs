@@ -48,6 +48,7 @@ fn sketch() -> error::Result<()> {
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;
+        graphics_light(graphics, dir_light)?;
 
         graphics_record_command(
             graphics,

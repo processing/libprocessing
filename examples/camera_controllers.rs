@@ -56,6 +56,7 @@ fn sketch() -> error::Result<()> {
         }
 
         graphics_begin_draw(graphics)?;
+        graphics_light(graphics, dir_light)?;
 
         graphics_record_command(
             graphics,

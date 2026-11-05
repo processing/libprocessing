@@ -1,25 +1,30 @@
 from mewnala import *
 
 angle = 0.0
+dir_light = None
+point_light_a = None
+point_light_b = None
+spot_light_a = None
 
 def setup():
+    global dir_light, point_light_a, point_light_b, spot_light_a
     size(800, 600)
     mode_3d()
 
     # Directional Light
-    dir_light = directional_light((0.5, 0.24, 1.0), 1500.0)
+    dir_light = create_directional_light((0.5, 0.24, 1.0), 1500.0)
 
     # Point Lights
-    point_light_a = point_light((1.0, 0.5, 0.25), 1000000.0, 200.0, 0.5)
+    point_light_a = create_point_light((1.0, 0.5, 0.25), 1000000.0, 200.0, 0.5)
     point_light_a.position(-25.0, 5.0, 51.0)
     point_light_a.look_at(0.0, 0.0, 0.0)
 
-    point_light_b = point_light((0.0, 0.5, 0.75), 2000000.0, 200.0, 0.25)
+    point_light_b = create_point_light((0.0, 0.5, 0.75), 2000000.0, 200.0, 0.25)
     point_light_b.position(0.0, 5.0, 50.5)
     point_light_b.look_at(0.0, 0.0, 0.0)
 
     # Spot Light
-    spot_light_a = spot_light((0.25, 0.8, 0.19), 15.0 * 1000000.0, 200.0, 0.84, 0.0, 0.7854)
+    spot_light_a = create_spot_light((0.25, 0.8, 0.19), 15.0 * 1000000.0, 200.0, 0.84, 0.0, 0.7854)
     spot_light_a.position(40.0, 0.0, 70.0)
     spot_light_a.look_at(0.0, 0.0, 0.0)
 
@@ -28,6 +33,10 @@ def draw():
     camera_position(100.0, 100.0, 300.0)
     camera_look_at(0.0, 0.0, 0.0)
     background(220)
+    light(dir_light)
+    light(point_light_a)
+    light(point_light_b)
+    light(spot_light_a)
 
     roughness(0.0)
     push_matrix()

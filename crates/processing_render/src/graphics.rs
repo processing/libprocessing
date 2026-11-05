@@ -29,7 +29,7 @@ use crate::{
     Flush,
     image::{Image, create_readback_buffer, pixel_size, pixels_to_bytes},
     render::{
-        BATCH_INDEX_STEP, RenderState,
+        BATCH_INDEX_STEP, DrawTransients, RenderState,
         command::{CommandBuffer, DrawCommand},
         filter,
     },
@@ -529,11 +529,16 @@ pub fn destroy(
     Ok(())
 }
 
-pub fn begin_draw(In(entity): In<Entity>, mut state_query: Query<&mut RenderState>) -> Result<()> {
+pub fn begin_draw(
+    In(entity): In<Entity>,
+    mut commands: Commands,
+    mut state_query: Query<&mut RenderState>,
+) -> Result<()> {
     let mut state = state_query
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
     state.begin_frame();
+    commands.entity(entity).despawn_related::<DrawTransients>();
     Ok(())
 }
 

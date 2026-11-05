@@ -29,11 +29,8 @@ fn sketch() -> error::Result<()> {
     let pbr_mat = material_create_pbr()?;
     material_set(pbr_mat, "roughness", shader_value::ShaderValue::Float(0.0))?;
 
-    // We will only declare lights in `setup`
-    // rather than calling some sort of `light()` method inside of `draw`
-
     // create a directional light
-    let _dir_light =
+    let dir_light =
         light_create_directional(graphics, bevy::color::Color::srgb(0.35, 0.25, 0.5), 500.0)?;
 
     // create a point light
@@ -79,6 +76,10 @@ fn sketch() -> error::Result<()> {
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;
+        graphics_light(graphics, dir_light)?;
+        graphics_light(graphics, point_light_a)?;
+        graphics_light(graphics, point_light_b)?;
+        graphics_light(graphics, spot_light)?;
 
         graphics_record_command(
             graphics,

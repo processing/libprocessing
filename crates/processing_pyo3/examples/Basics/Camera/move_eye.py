@@ -4,19 +4,16 @@
 # The camera lifts up (controlled by mouseY) while looking at the same point.
 from mewnala import *
 
-light = None
-
 
 def setup():
-    global light
     size(640, 360)
     mode_3d()
     fill(0.8)
-    light = directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     roughness(0.6)
 
 
 def draw():
+    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     background(0.0)
 
     # Change height of the camera with mouseY (the world is y-up)

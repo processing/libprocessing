@@ -499,8 +499,31 @@ impl BlendMode {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum LightKind {
+    Directional {
+        color: Color,
+        illuminance: f32,
+    },
+    Point {
+        color: Color,
+        intensity: f32,
+        range: f32,
+        radius: f32,
+    },
+    Spot {
+        color: Color,
+        intensity: f32,
+        range: f32,
+        radius: f32,
+        inner_angle: f32,
+        outer_angle: f32,
+    },
+}
+
 #[derive(Debug, Clone)]
 pub enum DrawCommand {
+    Light(Entity),
     BackgroundColor(Color),
     BackgroundImage(Entity),
     Fill(Color),

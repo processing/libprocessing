@@ -15,12 +15,8 @@ limit = 500
 # Array for all cubes
 cubes = []
 
-blue_light = None
-red_light = None
-
 
 def setup():
-    global blue_light, red_light
     size(640, 360)
     mode_3d()
     background(0.0)
@@ -32,15 +28,6 @@ def setup():
                           int(random(-10, 10)), int(random(-140, 140)),
                           int(random(-140, 140)), int(random(-140, 140))))
 
-    # Set up some different colored lights, placed relative to the top-left
-    # corner as in the original (the world is centered and y-up)
-    blue_light = point_light((0.2, 0.4, 1.0), 3000000000.0, 600.0, 1.0,
-                             position=(65 - width / 2, height / 2 - 60, 100))
-    red_light = point_light((0.78, 0.16, 0.24), 3000000000.0, 600.0, 1.0,
-                            position=(-65 - width / 2, height / 2 + 60, -150))
-
-    # Raise overall light in scene
-    ambient_light(0.27, 0.27, 0.04)  # GAP: ambient_light()
     roughness(0.6)
 
 
@@ -48,6 +35,16 @@ def draw():
     global angle
     background(0.0)
     fill(0.78)
+
+    # Set up some different colored lights, placed relative to the top-left
+    # corner as in the original (the world is centered and y-up)
+    point_light((0.2, 0.4, 1.0), 3000000000.0, 600.0, 1.0,
+                position=(65 - width / 2, height / 2 - 60, 100))
+    point_light((0.78, 0.16, 0.24), 3000000000.0, 600.0, 1.0,
+                position=(-65 - width / 2, height / 2 + 60, -150))
+
+    # Raise overall light in scene
+    ambient_light(0.27, 0.27, 0.04)  # GAP: ambient_light()
 
     # Center geometry in display windwow.
     # you can changlee 3rd argument ('0')

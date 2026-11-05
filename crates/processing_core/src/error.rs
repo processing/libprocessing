@@ -32,6 +32,10 @@ pub enum ProcessingError {
     TransformNotFound,
     #[error("Material not found")]
     MaterialNotFound,
+    #[error("Light not found")]
+    LightNotFound,
+    #[error("Light belongs to another graphics")]
+    LightOnOtherGraphics,
     #[error("Unknown shader property: {0}")]
     UnknownShaderProperty(String),
     #[error("GLTF load error: {0}")]

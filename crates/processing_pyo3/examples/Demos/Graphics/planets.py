@@ -11,12 +11,9 @@ surftex1 = None
 cloudtex = None
 surftex2 = None
 
-sun_light = None
-planet_light = None
-
 
 def setup():
-    global starfield, suntex, surftex1, surftex2, sun_light, planet_light
+    global starfield, suntex, surftex1, surftex2
     size(1024, 768)
     mode_3d()
 
@@ -32,15 +29,15 @@ def setup():
     no_stroke()
     fill(1.0)
 
-    # pointLight(255, 255, 255, 0, 0, 0) at the sun's position, and
-    # pointLight(255, 255, 255, 0, 0, -150) at the screen corner for planet1
-    sun_light = point_light((1.0, 1.0, 1.0), 1000000.0, 1200.0, 1.0, position=(0, 0, -300))
-    planet_light = point_light((1.0, 1.0, 1.0), 1000000.0, 1200.0, 1.0, position=(-width / 2, height / 2, -150))
-
 
 def draw():
     # The star field is drawn as the background so it never occludes the 3D objects
     background(starfield)
+
+    # pointLight(255, 255, 255, 0, 0, 0) at the sun's position, and
+    # pointLight(255, 255, 255, 0, 0, -150) at the screen corner for planet1
+    point_light((1.0, 1.0, 1.0), 1000000.0, 1200.0, 1.0, position=(0, 0, -300))
+    point_light((1.0, 1.0, 1.0), 1000000.0, 1200.0, 1.0, position=(-width / 2, height / 2, -150))
 
     push_matrix()
     translate(0, 0, -300)
