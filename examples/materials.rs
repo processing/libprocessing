@@ -1,110 +1,73 @@
-use processing_glfw::GlfwContext;
+use processing::{Color, Geometry, Graphics, Light, Material, Result, Settings, Sketch};
 
-use bevy::math::{Vec2, Vec3};
-use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
+const COLS: usize = 11;
+const ROWS: usize = 5;
+const SPACING: f32 = 70.0;
 
-fn main() {
-    match sketch() {
-        Ok(_) => {
-            eprintln!("Sketch completed successfully");
-            exit(0).unwrap();
-        }
-        Err(e) => {
-            eprintln!("Sketch error: {:?}", e);
-            exit(1).unwrap();
-        }
-    };
+struct Materials {
+    sphere: Geometry,
+    materials: Vec<Material>,
+    sun: Light,
+    lamp: Light,
 }
 
-fn sketch() -> error::Result<()> {
-    let width = 800;
-    let height = 600;
-    let mut glfw_ctx = GlfwContext::new(width, height, false)?;
-    init(Config::default())?;
-
-    let surface = glfw_ctx.create_surface(width, height, false)?;
-    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
-    let sphere = geometry_sphere(30.0, 32, 18)?;
-
-    graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, 0.0, 600.0))?;
-    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
-
-    let dir_light =
-        light_create_directional(graphics, bevy::color::Color::srgb(1.0, 0.98, 0.95), 1_500.0)?;
-    transform_set_position(dir_light, Vec3::new(300.0, -400.0, 300.0))?;
-    transform_look_at(dir_light, Vec3::new(0.0, 0.0, 0.0))?;
-
-    let point_light =
-        light_create_point(graphics, bevy::color::Color::WHITE, 100_000.0, 800.0, 0.0)?;
-    transform_set_position(point_light, Vec3::new(200.0, -200.0, 400.0))?;
-
-    // Grid of materials varying roughness (x) and metallic (y)
-    let cols = 11;
-    let rows = 5;
-    let mut materials = Vec::new();
-
-    for row in 0..rows {
-        for col in 0..cols {
-            let mat = material_create_pbr()?;
-            let roughness = col as f32 / (cols - 1) as f32;
-            let metallic = row as f32 / (rows - 1) as f32;
-
-            material_set(
-                mat,
-                "roughness",
-                shader_value::ShaderValue::Float(roughness),
-            )?;
-            material_set(mat, "metallic", shader_value::ShaderValue::Float(metallic))?;
-            materials.push(mat);
-        }
+impl Sketch for Materials {
+    fn settings() -> Settings {
+        Settings::size(800, 600)
     }
 
-    let base_color = bevy::color::Color::srgb(1.0, 0.85, 0.57);
-    let spacing = 70.0;
-    let offset_x = (cols - 1) as f32 * spacing / 2.0;
-    let offset_y = (rows - 1) as f32 * spacing / 2.0;
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.camera_position((0, 0, 600));
+        g.camera_look_at((0, 0, 0));
 
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-        graphics_light(graphics, dir_light)?;
-        graphics_light(graphics, point_light)?;
+        let sun = g.create_directional_light((1.0, 0.98, 0.95), 1500);
+        sun.position((300, -400, 300)).look_at((0, 0, 0));
+        let lamp = g.create_point_light(Color::WHITE, 100_000, 800, 0);
+        lamp.position((200, -200, 400));
 
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.05, 0.05, 0.07)),
-        )?;
-
-        graphics_record_command(graphics, DrawCommand::Fill(base_color))?;
-
-        for row in 0..rows {
-            for col in 0..cols {
-                let mat = materials[row * cols + col];
-
-                graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-                graphics_record_command(
-                    graphics,
-                    DrawCommand::Translate(
-                        Vec2::new(
-                            col as f32 * spacing - offset_x,
-                            offset_y - row as f32 * spacing,
-                        )
-                        .extend(0.0),
-                    ),
-                )?;
-                graphics_record_command(graphics, DrawCommand::Material(mat))?;
-                graphics_record_command(graphics, DrawCommand::Geometry(sphere))?;
-                graphics_record_command(graphics, DrawCommand::PopMatrix)?;
+        // roughness across, metallic down
+        let mut materials = Vec::new();
+        for row in 0..ROWS {
+            for col in 0..COLS {
+                let mut material = Material::pbr()?;
+                material.set("roughness", col as f32 / (COLS - 1) as f32);
+                material.set("metallic", row as f32 / (ROWS - 1) as f32);
+                materials.push(material);
             }
         }
 
-        graphics_end_draw(graphics)?;
+        let sphere = Geometry::sphere(30, 32, 18)?;
+        Ok(Materials {
+            sphere,
+            materials,
+            sun,
+            lamp,
+        })
     }
 
-    for mat in materials {
-        material_destroy(mat)?;
-    }
+    fn draw(&mut self, g: &mut Graphics) {
+        g.light(&self.sun);
+        g.light(&self.lamp);
+        g.background((0.05, 0.05, 0.07));
+        g.fill((1.0, 0.85, 0.57));
 
-    Ok(())
+        let offset_x = (COLS - 1) as f32 * SPACING / 2.0;
+        let offset_y = (ROWS - 1) as f32 * SPACING / 2.0;
+        for row in 0..ROWS {
+            for col in 0..COLS {
+                let mut g = g.push();
+                g.translate((
+                    col as f32 * SPACING - offset_x,
+                    offset_y - row as f32 * SPACING,
+                ));
+                g.material(&self.materials[row * COLS + col]);
+                g.model(&self.sphere);
+            }
+        }
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<Materials>()
 }

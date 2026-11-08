@@ -1,5 +1,3 @@
-//! Keyboard and mouse identifiers.
-
 use bevy::input::keyboard::KeyCode;
 use bevy::input::mouse::MouseButton as BevyMouseButton;
 
@@ -28,7 +26,7 @@ impl From<BevyMouseButton> for MouseButton {
 
 macro_rules! keys {
     ($($key:ident => $code:ident),* $(,)?) => {
-        /// A physical key, named by its position on a US keyboard.
+        /// By position on a US keyboard.
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub enum Key {
             $($key,)*

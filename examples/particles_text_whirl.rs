@@ -1,16 +1,13 @@
-use processing_glfw::GlfwContext;
-use std::time::Instant;
-
-use bevy::math::Vec3;
-use processing::prelude::*;
-use processing_render::render::command::{DrawCommand, TextStyle};
+use processing::{
+    Attribute, Buffer, Compute, Geometry, Graphics, Material, Particles, Result, Settings, Shader,
+    Sketch, TextStyle,
+};
 
 const BASE_COUNT: u32 = 6000;
 const TRAIL_LEN_MIN: u32 = 8;
 const TRAIL_LEN_MAX: u32 = 150;
 const TRAIL_LEN: u32 = TRAIL_LEN_MAX;
 const CAPACITY: u32 = BASE_COUNT * TRAIL_LEN;
-const TRAIL_STRIDE: u32 = 1;
 
 const NOISE_STRENGTH: f32 = 50.5;
 const SPHERE_RADIUS: f32 = 1.05;
@@ -255,189 +252,148 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 "#;
 
-fn main() {
-    sketch().unwrap();
-    exit(0).unwrap();
+const TEXT_PT: f32 = 700.0;
+const EXTRUSION: f32 = 70.0;
+
+struct TextWhirl {
+    particles: Particles,
+    particle: Geometry,
+    sim: Compute,
+    fade: Compute,
+    mat: Material,
+    // read by the sim kernel
+    _source: Geometry,
+    _buffers: Vec<Buffer>,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(1200, 800, false)?;
-    init(Config::default())?;
-
-    let surface = glfw_ctx.create_surface(1200, 800, false)?;
-    let graphics = graphics_create(surface, 1200, 800, TextureFormat::Rgba16Float)?;
-
-    graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, 0.0, 1700.0))?;
-    transform_look_at(graphics, Vec3::ZERO)?;
-    graphics_orbit_camera(graphics)?;
-
-    const TEXT_PT: f32 = 700.0;
-    const EXTRUSION: f32 = 70.0;
-    processing_core::app_mut(|app| {
-        let mut state = app
-            .world_mut()
-            .get_mut::<processing_render::render::RenderState>(graphics)
-            .ok_or(error::ProcessingError::GraphicsNotFound)?;
-        state.style.text_size = TEXT_PT;
-        Ok(())
-    })?;
-    graphics_record_command(graphics, DrawCommand::TextStyle(TextStyle::Bold))?;
-
-    let text = "processing5";
-    let w = graphics_text_width(graphics, text)?;
-    println!("text width = {w} (size = {TEXT_PT}, extrusion = {EXTRUSION})");
-    let mesh = graphics_text_to_model(graphics, text, -w / 2.0, TEXT_PT * 0.4, EXTRUSION)?;
-    let source = geometry_create_from_mesh(mesh)?;
-
-    let (cdf_bytes, indices_bytes, face_count) = processing_core::app_mut(|app| {
-        app.world_mut()
-            .run_system_cached_with(processing_render::particles::prepare_scatter_source, source)
-            .unwrap()
-    })?;
-    let cdf_buf = buffer_create_with_data(cdf_bytes)?;
-    let idx_buf = buffer_create_with_data(indices_bytes)?;
-
-    let head_pos_buf = buffer_create(BASE_COUNT as u64 * 3 * 4)?;
-    let anchor_normal_buf = buffer_create(BASE_COUNT as u64 * 3 * 4)?;
-    let trail_len_buf = buffer_create(BASE_COUNT as u64 * 4)?;
-    let trail_head_buf = buffer_create(BASE_COUNT as u64 * 4)?;
-
-    let particle = geometry_sphere(SPHERE_RADIUS, 5, 4)?;
-
-    let p = particles_create(
-        CAPACITY,
-        vec![
-            geometry_attribute_position(),
-            geometry_attribute_scale(),
-            geometry_attribute_life(),
-            geometry_attribute_color(),
-        ],
-    )?;
-
-    let sim_src = sim_shader();
-    let sim_shader_e = shader_create(&sim_src)?;
-    let sim = compute_create(sim_shader_e)?;
-    compute_set(
-        sim,
-        "source_position",
-        shader_value::ShaderValue::MeshAttribute(source, geometry_attribute_position()),
-    )?;
-    compute_set(
-        sim,
-        "source_indices",
-        shader_value::ShaderValue::Buffer(idx_buf),
-    )?;
-    compute_set(sim, "cdf", shader_value::ShaderValue::Buffer(cdf_buf))?;
-    compute_set(
-        sim,
-        "head_pos",
-        shader_value::ShaderValue::Buffer(head_pos_buf),
-    )?;
-    compute_set(
-        sim,
-        "anchor_normal",
-        shader_value::ShaderValue::Buffer(anchor_normal_buf),
-    )?;
-    compute_set(
-        sim,
-        "trail_len_buf",
-        shader_value::ShaderValue::Buffer(trail_len_buf),
-    )?;
-    compute_set(
-        sim,
-        "trail_head_buf",
-        shader_value::ShaderValue::Buffer(trail_head_buf),
-    )?;
-    compute_set(
-        sim,
-        "base_count",
-        shader_value::ShaderValue::UInt(BASE_COUNT),
-    )?;
-    compute_set(
-        sim,
-        "trail_len_max",
-        shader_value::ShaderValue::UInt(TRAIL_LEN_MAX),
-    )?;
-    compute_set(
-        sim,
-        "trail_len_min",
-        shader_value::ShaderValue::UInt(TRAIL_LEN_MIN),
-    )?;
-    compute_set(
-        sim,
-        "face_count",
-        shader_value::ShaderValue::UInt(face_count),
-    )?;
-    compute_set(sim, "seed", shader_value::ShaderValue::UInt(0xc0ffeeu32))?;
-    compute_set(sim, "noise_scale", shader_value::ShaderValue::Float(0.005))?;
-    compute_set(
-        sim,
-        "noise_strength",
-        shader_value::ShaderValue::Float(NOISE_STRENGTH),
-    )?;
-    compute_set(sim, "step_speed", shader_value::ShaderValue::Float(0.05))?;
-
-    compute_set(sim, "time", shader_value::ShaderValue::Float(0.0))?;
-    particles_apply(p, sim)?;
-
-    let color_buf = particles_buffer(p, geometry_attribute_color())?
-        .ok_or(error::ProcessingError::ParticlesNotFound)?;
-    let mat = material_create_unlit()?;
-    material_set_albedo_buffer(mat, color_buf)?;
-
-    let fade_shader_e = shader_create(COLOR_FADE)?;
-    let fade = compute_create(fade_shader_e)?;
-    compute_set(
-        fade,
-        "base_count",
-        shader_value::ShaderValue::UInt(BASE_COUNT),
-    )?;
-    compute_set(
-        fade,
-        "trail_len_max",
-        shader_value::ShaderValue::UInt(TRAIL_LEN_MAX),
-    )?;
-    compute_set(
-        fade,
-        "trail_len_buf",
-        shader_value::ShaderValue::Buffer(trail_len_buf),
-    )?;
-    compute_set(
-        fade,
-        "trail_head_buf",
-        shader_value::ShaderValue::Buffer(trail_head_buf),
-    )?;
-
-    particles_apply(p, fade)?;
-
-    let start = Instant::now();
-    let mut render_frame: u32 = 0;
-    while glfw_ctx.poll_events() {
-        if render_frame % TRAIL_STRIDE == 0 {
-            let t = start.elapsed().as_secs_f32();
-            compute_set(sim, "time", shader_value::ShaderValue::Float(t * 0.015))?;
-            particles_apply(p, sim)?;
-            particles_apply(p, fade)?;
-        }
-        render_frame = render_frame.wrapping_add(1);
-
-        graphics_begin_draw(graphics)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.02, 0.02, 0.04)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::Material(mat))?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Particles {
-                particles: p,
-                geometry: Some(particle),
-                topology: Default::default(),
-            },
-        )?;
-        graphics_end_draw(graphics)?;
+impl Sketch for TextWhirl {
+    fn settings() -> Settings {
+        Settings::size(1200, 800)
     }
 
-    Ok(())
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.camera_position((0, 0, 1700));
+        g.camera_look_at((0, 0, 0));
+        g.orbit_camera();
+
+        g.text_size(TEXT_PT);
+        g.text_style(TextStyle::Bold);
+
+        let text = "processing5";
+        let w = g.text_width(text);
+        println!("text width = {w} (size = {TEXT_PT}, extrusion = {EXTRUSION})");
+        let source = g.text_to_model(text, -w / 2.0, TEXT_PT * 0.4, EXTRUSION)?;
+
+        let positions = source.positions();
+        let mut indices = source.indices();
+        if indices.is_empty() {
+            for i in 0..source.vertex_count() {
+                indices.push(i);
+            }
+        }
+        let face_count = (indices.len() / 3) as u32;
+
+        // area-weighted CDF
+        let mut cdf = Vec::new();
+        let mut total = 0.0;
+        for face in 0..face_count as usize {
+            let p0 = positions[indices[face * 3] as usize];
+            let p1 = positions[indices[face * 3 + 1] as usize];
+            let p2 = positions[indices[face * 3 + 2] as usize];
+            let area = 0.5 * (p1 - p0).cross(p2 - p0).length();
+            total += area;
+            cdf.push(total);
+        }
+        let inv = 1.0 / total;
+        for value in cdf.iter_mut() {
+            *value *= inv;
+        }
+
+        let cdf_buf = Buffer::from_slice(&cdf)?;
+        let idx_buf = Buffer::from_slice(&indices)?;
+
+        let head_pos_buf = Buffer::new(BASE_COUNT as u64 * 3 * 4)?;
+        let anchor_normal_buf = Buffer::new(BASE_COUNT as u64 * 3 * 4)?;
+        let trail_len_buf = Buffer::new(BASE_COUNT as u64 * 4)?;
+        let trail_head_buf = Buffer::new(BASE_COUNT as u64 * 4)?;
+
+        let particle = Geometry::sphere(SPHERE_RADIUS, 5, 4)?;
+
+        let mut particles = Particles::new(
+            CAPACITY,
+            &[
+                Attribute::position(),
+                Attribute::scale(),
+                Attribute::life(),
+                Attribute::color(),
+            ],
+        )?;
+
+        let mut sim = Compute::new(&Shader::new(&sim_shader())?)?;
+        sim.set(
+            "source_position",
+            source.attribute_data(Attribute::position()),
+        );
+        sim.set("source_indices", &idx_buf);
+        sim.set("cdf", &cdf_buf);
+        sim.set("head_pos", &head_pos_buf);
+        sim.set("anchor_normal", &anchor_normal_buf);
+        sim.set("trail_len_buf", &trail_len_buf);
+        sim.set("trail_head_buf", &trail_head_buf);
+        sim.set("base_count", BASE_COUNT);
+        sim.set("trail_len_max", TRAIL_LEN_MAX);
+        sim.set("trail_len_min", TRAIL_LEN_MIN);
+        sim.set("face_count", face_count);
+        sim.set("seed", 0xc0ffee_u32);
+        sim.set("noise_scale", 0.005);
+        sim.set("noise_strength", NOISE_STRENGTH);
+        sim.set("step_speed", 0.05);
+
+        sim.set("time", 0.0);
+        particles.apply(&sim);
+
+        let mut mat = Material::unlit()?;
+        mat.albedo_buffer(&particles.buffer(Attribute::color()));
+
+        let mut fade = Compute::new(&Shader::new(COLOR_FADE)?)?;
+        fade.set("base_count", BASE_COUNT);
+        fade.set("trail_len_max", TRAIL_LEN_MAX);
+        fade.set("trail_len_buf", &trail_len_buf);
+        fade.set("trail_head_buf", &trail_head_buf);
+
+        particles.apply(&fade);
+
+        Ok(TextWhirl {
+            particles,
+            particle,
+            sim,
+            fade,
+            mat,
+            _source: source,
+            _buffers: vec![
+                cdf_buf,
+                idx_buf,
+                head_pos_buf,
+                anchor_normal_buf,
+                trail_len_buf,
+                trail_head_buf,
+            ],
+        })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        let t = g.elapsed_time();
+        self.sim.set("time", t * 0.015);
+        self.particles.apply(&self.sim);
+        self.particles.apply(&self.fade);
+
+        g.background((0.02, 0.02, 0.04));
+        g.material(&self.mat);
+        g.particles(&self.particles).geometry(&self.particle);
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<TextWhirl>()
 }

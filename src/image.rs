@@ -1,5 +1,3 @@
-//! Images and fonts.
-
 use bevy::prelude::Entity;
 use bevy::render::render_resource::{Extent3d, TextureFormat};
 use processing_core::error::Result;
@@ -10,7 +8,6 @@ use processing_render::{
 
 use crate::Color;
 
-/// A texture you can draw with `g.image(..)` or use as a `g.texture(..)`.
 #[derive(Debug)]
 pub struct Image {
     pub(crate) entity: Entity,
@@ -19,7 +16,6 @@ pub struct Image {
 }
 
 impl Image {
-    /// Loads an image relative to the sketch's asset directory.
     pub fn load(path: &str) -> Result<Self> {
         let entity = image_load(path)?;
         let (width, height) = image_size(entity)?;
@@ -30,7 +26,7 @@ impl Image {
         })
     }
 
-    /// A blank, transparent image.
+    /// Transparent.
     pub fn create(width: u32, height: u32) -> Result<Self> {
         let size = Extent3d {
             width,
@@ -54,7 +50,7 @@ impl Image {
         self.height
     }
 
-    /// Reads the pixels back from the GPU, row-major.
+    /// Row-major.
     pub fn pixels(&self) -> Result<Vec<Color>> {
         Ok(image_readback(self.entity)?
             .into_iter()
@@ -62,7 +58,7 @@ impl Image {
             .collect())
     }
 
-    /// Replaces every pixel; `pixels.len()` must be `width * height`.
+    /// `pixels.len()` must be `width * height`.
     pub fn set_pixels(&mut self, pixels: &[Color]) -> Result<()> {
         let linear: Vec<_> = pixels.iter().map(|c| c.to_linear()).collect();
         image_update(self.entity, &linear)
@@ -75,7 +71,7 @@ impl Drop for Image {
     }
 }
 
-/// Anything that can be drawn with `g.image(..)` or used as a `g.texture(..)`.
+/// Anything `g.image(..)` can draw.
 pub trait AsImage {
     #[doc(hidden)]
     fn image_entity(&self) -> Entity;
@@ -87,22 +83,20 @@ impl AsImage for Image {
     }
 }
 
-/// A font for `g.text_font(..)`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Font(pub(crate) Entity);
 
 impl Font {
-    /// Loads a font file relative to the sketch's asset directory.
     pub fn load(path: &str) -> Result<Self> {
         font_load(path).map(Self)
     }
 
-    /// Looks up an installed system font by family name.
+    /// An installed font, by family name.
     pub fn system(name: &str) -> Result<Self> {
         font_create(name).map(Self)
     }
 
-    /// Family names of the installed system fonts.
+    /// Installed font families.
     pub fn list() -> Result<Vec<String>> {
         font_list()
     }

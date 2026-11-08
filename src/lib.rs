@@ -7,29 +7,51 @@ mod color;
 #[cfg(not(target_arch = "wasm32"))]
 mod draw;
 #[cfg(not(target_arch = "wasm32"))]
+mod filter;
+#[cfg(not(target_arch = "wasm32"))]
+mod geometry;
+#[cfg(not(target_arch = "wasm32"))]
+mod gltf;
+#[cfg(not(target_arch = "wasm32"))]
 mod graphics;
 #[cfg(not(target_arch = "wasm32"))]
 mod image;
 #[cfg(not(target_arch = "wasm32"))]
 mod input;
 #[cfg(not(target_arch = "wasm32"))]
+pub mod midi;
+#[cfg(not(target_arch = "wasm32"))]
+mod particles;
+#[cfg(not(target_arch = "wasm32"))]
+mod shader;
+#[cfg(not(target_arch = "wasm32"))]
 mod shape;
 #[cfg(not(target_arch = "wasm32"))]
 mod sketch;
+#[cfg(all(feature = "webcam", not(target_arch = "wasm32")))]
+mod webcam;
 
+#[cfg(all(feature = "webcam", not(target_arch = "wasm32")))]
+pub use crate::webcam::Webcam;
 #[cfg(not(target_arch = "wasm32"))]
 pub use crate::{
     args::{IntoExtent, IntoPoint, Scalar},
     color::{Channel, Color, ColorArg, ColorSpace, IntoChannel, IntoColorMax},
-    draw::{Arc, BeginDraw, Detail, ImageDraw, LightDraw, Push, Rect, Text},
+    draw::{Arc, BeginDraw, Detail, ImageDraw, LightDraw, ParticlesDraw, Push, Rect, Text},
+    filter::Filter,
+    geometry::{Attribute, AttributeValue, Geometry, GeometryData, Layout},
+    gltf::Gltf,
     graphics::{ColorModeBuilder, Graphics, Light, TextAlign},
     image::{AsImage, Font, Image},
     input::{Key, MouseButton},
+    particles::Particles,
+    shader::{Buffer, BufferElement, Compute, IntoShaderValue, Material, Shader},
     shape::{Contour, Shape},
     sketch::{Settings, Sketch, run},
 };
-pub use bevy::math::{Affine3A, Mat4, Vec2, Vec3};
+pub use bevy::math::{Affine3A, Mat4, Vec2, Vec3, Vec4};
 pub use processing_core::error::{ProcessingError as Error, Result};
+pub use processing_render::geometry::{AttributeFormat, Topology};
 pub use processing_render::render::command::{
     ArcMode, BlendMode, ShapeKind, ShapeMode, StrokeCapMode as StrokeCap,
     StrokeJoinMode as StrokeJoin, TextAlignH, TextAlignV, TextStyle, TextWrapMode,

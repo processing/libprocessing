@@ -1,24 +1,6 @@
-use processing::prelude::*;
+use processing::{Buffer, Compute, Graphics, Result, Settings, Shader, Sketch};
 
-fn main() {
-    match run() {
-        Ok(_) => exit(0).unwrap(),
-        Err(e) => {
-            eprintln!("{e:?}");
-            exit(1).unwrap();
-        }
-    }
-}
-
-fn run() -> error::Result<()> {
-    init(Config::default())?;
-
-    let surface = surface_create_offscreen(1, 1, 1.0, TextureFormat::Rgba8Unorm)?;
-    let _graphics = graphics_create(surface, 1, 1, TextureFormat::Rgba8Unorm)?;
-
-    let buf = buffer_create(16)?;
-
-    let shader_src = r#"
+const FILL: &str = r#"
 @group(0) @binding(0)
 var<storage, read_write> output: array<u32>;
 
@@ -30,21 +12,8 @@ fn main() {
     output[3] = 4u;
 }
 "#;
-    let shader = shader_create(shader_src)?;
-    let compute = compute_create(shader)?;
-    compute_set(compute, "output", shader_value::ShaderValue::Buffer(buf))?;
 
-    compute_dispatch(compute, 1, 1, 1)?;
-
-    let data = buffer_read(buf)?;
-    let values: Vec<u32> = data
-        .chunks_exact(4)
-        .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-        .collect();
-
-    assert_eq!(values, vec![1, 2, 3, 4]);
-
-    let double_src = r#"
+const DOUBLE: &str = r#"
 @group(0) @binding(0)
 var<storage, read_write> data: array<f32>;
 
@@ -53,29 +22,35 @@ fn main(@builtin(global_invocation_id) id: vec3<u32>) {
     data[id.x] = data[id.x] * 2.0;
 }
 "#;
-    let buf2_data: Vec<u8> = [1.0f32, 2.0, 3.0, 4.0]
-        .iter()
-        .flat_map(|f| f.to_le_bytes())
-        .collect();
-    let buf2 = buffer_create_with_data(buf2_data)?;
-    let shader2 = shader_create(double_src)?;
-    let compute2 = compute_create(shader2)?;
-    compute_set(compute2, "data", shader_value::ShaderValue::Buffer(buf2))?;
-    compute_dispatch(compute2, 1, 1, 1)?;
 
-    let data2 = buffer_read(buf2)?;
-    let floats: Vec<f32> = data2
-        .chunks_exact(4)
-        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-        .collect();
-    assert_eq!(floats, vec![2.0, 4.0, 6.0, 8.0]);
+struct ComputeReadback;
 
-    compute_destroy(compute)?;
-    compute_destroy(compute2)?;
-    shader_destroy(shader)?;
-    shader_destroy(shader2)?;
-    buffer_destroy(buf)?;
-    buffer_destroy(buf2)?;
+impl Sketch for ComputeReadback {
+    fn settings() -> Settings {
+        Settings::size(1, 1).headless()
+    }
 
-    Ok(())
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        let output = Buffer::new(16)?;
+        let mut fill = Compute::new(&Shader::new(FILL)?)?;
+        fill.set("output", &output);
+        fill.dispatch(1, 1, 1);
+        let values: Vec<u32> = output.read()?;
+        assert_eq!(values, vec![1, 2, 3, 4]);
+
+        let data = Buffer::from_slice(&[1.0f32, 2.0, 3.0, 4.0])?;
+        let mut double = Compute::new(&Shader::new(DOUBLE)?)?;
+        double.set("data", &data);
+        double.dispatch(1, 1, 1);
+        let doubled: Vec<f32> = data.read()?;
+        assert_eq!(doubled, vec![2.0, 4.0, 6.0, 8.0]);
+
+        println!("{values:?} {doubled:?}");
+        g.exit();
+        Ok(ComputeReadback)
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<ComputeReadback>()
 }

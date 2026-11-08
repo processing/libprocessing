@@ -2821,11 +2821,28 @@ fn text_query_state(
     render::primitive::text::OwnedTextParams,
     text::font::TextContext,
 )> {
-    let state = app
-        .world()
+    let world = app.world();
+    let state = world
         .get::<render::RenderState>(graphics_entity)
         .ok_or(error::ProcessingError::GraphicsNotFound)?;
-    let params = render::primitive::text::OwnedTextParams::from_render_state(state, max_w, max_h);
+    // include text settings recorded since the last flush
+    let mut style = state.style.clone();
+    if let Some(buffer) = world.get::<render::command::CommandBuffer>(graphics_entity) {
+        for cmd in &buffer.commands {
+            match cmd {
+                DrawCommand::PushStyle => style.push(),
+                DrawCommand::PopStyle => style.pop(),
+                cmd => {
+                    style.apply_text(cmd, |font| {
+                        world
+                            .get::<text::font::Font>(font)
+                            .map(|f| f.family_name.clone())
+                    });
+                }
+            }
+        }
+    }
+    let params = render::primitive::text::OwnedTextParams::from_style(&style, max_w, max_h);
     let text_cx = app.world().resource::<text::font::TextContext>().clone();
     Ok((params, text_cx))
 }

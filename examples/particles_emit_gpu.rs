@@ -1,10 +1,7 @@
-use processing_glfw::GlfwContext;
-use std::time::Instant;
-
-use bevy::math::Vec3;
-use processing::prelude::*;
-use processing_render::geometry::AttributeFormat;
-use processing_render::render::command::DrawCommand;
+use processing::{
+    Attribute, Compute, Geometry, Graphics, Light, Material, Particles, Result, Settings, Shader,
+    Sketch,
+};
 
 const SPAWN_SHADER: &str = r#"
 struct Spawn {
@@ -104,8 +101,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     position[i * 3u + 1u] = position[i * 3u + 1u] + velocity[i * 3u + 1u] * params.dt;
     position[i * 3u + 2u] = position[i * 3u + 2u] + velocity[i * 3u + 2u] * params.dt;
 
-    let life = clamp(1.0 - age[i] / params.ttl, 0.0, 1.0);
-    let s = life * life;
+    let remaining = clamp(1.0 - age[i] / params.ttl, 0.0, 1.0);
+    let s = remaining * remaining;
     scale[i * 3u + 0u] = s;
     scale[i * 3u + 1u] = s;
     scale[i * 3u + 2u] = s;
@@ -114,106 +111,84 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 "#;
 
-fn main() {
-    sketch().unwrap();
-    exit(0).unwrap();
+const BURST: u32 = 120;
+const DT: f32 = 1.0 / 60.0;
+const TTL: f32 = 2.5;
+const GRAVITY: f32 = -9.8;
+const SPEED: f32 = 5.0;
+
+struct ParticlesEmitGpu {
+    sun: Light,
+    particle: Geometry,
+    particles: Particles,
+    mat: Material,
+    spawn: Compute,
+    motion: Compute,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(900, 700, false)?;
-    init(Config::default())?;
-
-    let surface = glfw_ctx.create_surface(900, 700, false)?;
-    let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
-
-    graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, -4.0, 16.0))?;
-    transform_look_at(graphics, Vec3::new(0.0, -2.0, 0.0))?;
-
-    let light =
-        light_create_directional(graphics, bevy::color::Color::srgb(0.95, 0.9, 0.85), 800.0)?;
-
-    let particle = geometry_sphere(0.12, 8, 6)?;
-
-    let capacity: u32 = 40000;
-    let position_attr = geometry_attribute_position();
-    let color_attr = geometry_attribute_color();
-    let scale_attr = geometry_attribute_scale();
-    let life_attr = geometry_attribute_life();
-    let velocity_attr = geometry_attribute_create("velocity", AttributeFormat::Float3)?;
-    let age_attr = geometry_attribute_create("age", AttributeFormat::Float)?;
-
-    let p = particles_create(
-        capacity,
-        vec![
-            position_attr,
-            color_attr,
-            scale_attr,
-            life_attr,
-            velocity_attr,
-            age_attr,
-        ],
-    )?;
-
-    let color_buf =
-        particles_buffer(p, color_attr)?.ok_or(error::ProcessingError::ParticlesNotFound)?;
-    let mat = {
-        let m = material_create_pbr()?;
-        material_set_albedo_buffer(m, color_buf)?;
-        m
-    };
-
-    let spawn_shader = shader_create(SPAWN_SHADER)?;
-    let spawn = compute_create(spawn_shader)?;
-
-    let motion_shader = shader_create(MOTION_SHADER)?;
-    let motion = compute_create(motion_shader)?;
-
-    let burst: u32 = 120;
-    let dt: f32 = 1.0 / 60.0;
-    let ttl: f32 = 2.5;
-    let gravity: f32 = -9.8;
-    let speed: f32 = 5.0;
-    let start = Instant::now();
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-        graphics_light(graphics, light)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.04, 0.04, 0.07)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::Material(mat))?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Particles {
-                particles: p,
-                geometry: Some(particle),
-                topology: Default::default(),
-            },
-        )?;
-        graphics_end_draw(graphics)?;
-
-        let t = start.elapsed().as_secs_f32();
-        let sx = t.cos() * 0.4;
-        let sz = t.sin() * 0.4;
-        compute_set(
-            spawn,
-            "pos",
-            shader_value::ShaderValue::Float4([sx, -7.0, sz, 0.0]),
-        )?;
-        compute_set(
-            spawn,
-            "speed",
-            shader_value::ShaderValue::Float4([speed, 0.0, 0.0, 0.0]),
-        )?;
-        particles_emit_gpu(p, burst, spawn)?;
-
-        compute_set(motion, "dt", shader_value::ShaderValue::Float(dt))?;
-        compute_set(motion, "ttl", shader_value::ShaderValue::Float(ttl))?;
-        compute_set(motion, "gravity", shader_value::ShaderValue::Float(gravity))?;
-        particles_apply(p, motion)?;
+impl Sketch for ParticlesEmitGpu {
+    fn settings() -> Settings {
+        Settings::size(900, 700)
     }
 
-    Ok(())
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.camera_position((0.0, -4.0, 16.0));
+        g.camera_look_at((0.0, -2.0, 0.0));
+
+        let sun = g.create_directional_light((0.95, 0.9, 0.85), 800.0);
+
+        let particle = Geometry::sphere(0.12, 8, 6)?;
+
+        let capacity: u32 = 40000;
+        let particles = Particles::new(
+            capacity,
+            &[
+                Attribute::position(),
+                Attribute::color(),
+                Attribute::scale(),
+                Attribute::life(),
+                Attribute::velocity(),
+                Attribute::age(),
+            ],
+        )?;
+
+        let mut mat = Material::pbr()?;
+        mat.albedo_buffer(&particles.buffer(Attribute::color()));
+
+        let spawn = Compute::new(&Shader::new(SPAWN_SHADER)?)?;
+        let motion = Compute::new(&Shader::new(MOTION_SHADER)?)?;
+
+        Ok(ParticlesEmitGpu {
+            sun,
+            particle,
+            particles,
+            mat,
+            spawn,
+            motion,
+        })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        g.light(&self.sun);
+        g.background((0.04, 0.04, 0.07));
+        g.material(&self.mat);
+        g.particles(&self.particles).geometry(&self.particle);
+
+        let t = g.elapsed_time();
+        let sx = t.cos() * 0.4;
+        let sz = t.sin() * 0.4;
+        self.spawn.set("pos", (sx, -7.0, sz, 0.0));
+        self.spawn.set("speed", (SPEED, 0.0, 0.0, 0.0));
+        self.particles.emit_gpu(BURST, &self.spawn);
+
+        self.motion.set("dt", DT);
+        self.motion.set("ttl", TTL);
+        self.motion.set("gravity", GRAVITY);
+        self.particles.apply(&self.motion);
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<ParticlesEmitGpu>()
 }

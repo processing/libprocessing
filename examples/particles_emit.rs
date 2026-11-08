@@ -1,77 +1,55 @@
-use processing_glfw::GlfwContext;
+use processing::{Attribute, Geometry, Graphics, Material, Particles, Result, Settings, Sketch};
 
-use bevy::math::Vec3;
-use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
-
-fn main() {
-    sketch().unwrap();
-    exit(0).unwrap();
+struct ParticlesEmit {
+    sphere: Geometry,
+    particles: Particles,
+    material: Material,
+    frame: u32,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(900, 700, false)?;
-    init(Config::default())?;
+impl Sketch for ParticlesEmit {
+    fn settings() -> Settings {
+        Settings::size(900, 700)
+    }
 
-    let surface = glfw_ctx.create_surface(900, 700, false)?;
-    let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.camera_position((0.0, -4.0, 14.0));
+        g.camera_look_at((0, 0, 0));
 
-    graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, -4.0, 14.0))?;
-    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
+        let sphere = Geometry::sphere(0.08, 8, 6)?;
 
-    let sphere = geometry_sphere(0.08, 8, 6)?;
+        let capacity: u32 = 2000;
+        let particles = Particles::new(capacity, &[Attribute::position(), Attribute::color()])?;
 
-    let capacity: u32 = 2000;
-    let position_attr = geometry_attribute_position();
-    let color_attr = geometry_attribute_color();
-    let p = particles_create(capacity, vec![position_attr, color_attr])?;
-    let position_buf =
-        particles_buffer(p, position_attr)?.ok_or(error::ProcessingError::ParticlesNotFound)?;
-    let color_buf =
-        particles_buffer(p, color_attr)?.ok_or(error::ProcessingError::ParticlesNotFound)?;
+        // offscreen until emitted
+        let far_away: Vec<f32> = vec![1.0e6; capacity as usize * 3];
+        particles.buffer(Attribute::position()).write(&far_away);
 
-    let init_positions: Vec<f32> = (0..capacity * 3).map(|_| 1.0e6).collect();
-    buffer_write(
-        position_buf,
-        init_positions
-            .iter()
-            .flat_map(|f| f.to_le_bytes())
-            .collect(),
-    )?;
+        let mut material = Material::unlit()?;
+        material.albedo_buffer(&particles.buffer(Attribute::color()));
 
-    let mat = {
-        let m = material_create_unlit()?;
-        material_set_albedo_buffer(m, color_buf)?;
-        m
-    };
+        Ok(ParticlesEmit {
+            sphere,
+            particles,
+            material,
+            frame: 0,
+        })
+    }
 
-    let mut frame: u32 = 0;
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.06, 0.06, 0.08)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::Material(mat))?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Particles {
-                particles: p,
-                geometry: Some(sphere),
-                topology: Default::default(),
-            },
-        )?;
-        graphics_end_draw(graphics)?;
+    fn draw(&mut self, g: &mut Graphics) {
+        g.background((0.06, 0.06, 0.08));
+        g.material(&self.material);
+        g.particles(&self.particles).geometry(&self.sphere);
 
         let burst = 4u32;
         let mut positions: Vec<f32> = Vec::with_capacity(burst as usize * 3);
         let mut colors: Vec<f32> = Vec::with_capacity(burst as usize * 4);
         for k in 0..burst {
-            let i = frame * burst + k;
+            let i = self.frame * burst + k;
             let t = i as f32 * 0.05;
             let radius = 1.5 + (t * 0.02).min(3.0);
-            let height = -((t * 0.1).sin()) * 2.0;
+            let height = -(t * 0.1).sin() * 2.0;
             positions.push(t.cos() * radius);
             positions.push(height);
             positions.push(t.sin() * radius);
@@ -83,17 +61,15 @@ fn sketch() -> error::Result<()> {
             colors.push(1.0);
         }
 
-        let position_bytes: Vec<u8> = positions.iter().flat_map(|f| f.to_le_bytes()).collect();
-        let color_bytes: Vec<u8> = colors.iter().flat_map(|f| f.to_le_bytes()).collect();
-        particles_emit(
-            p,
+        self.particles.emit(
             burst,
-            vec![(position_attr, position_bytes), (color_attr, color_bytes)],
-        )?;
-        frame += 1;
+            &[
+                (Attribute::position(), &positions),
+                (Attribute::color(), &colors),
+            ],
+        );
+        self.frame += 1;
     }
-
-    Ok(())
 }
 
 fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (f32, f32, f32) {
@@ -110,4 +86,8 @@ fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (f32, f32, f32) {
         4 => (t, p, v),
         _ => (v, p, q),
     }
+}
+
+fn main() -> Result<()> {
+    processing::run::<ParticlesEmit>()
 }

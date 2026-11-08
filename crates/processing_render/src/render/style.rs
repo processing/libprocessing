@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use bevy::{math::Affine2, prelude::*, render::render_resource::BlendState};
 
-use super::command::{ShapeMode, TextAlignH, TextAlignV, TextStyle, TextWrapMode};
+use super::command::{DrawCommand, ShapeMode, TextAlignH, TextAlignV, TextStyle, TextWrapMode};
 use super::material::MaterialKey;
 use super::primitive::StrokeConfig;
 
@@ -46,6 +46,54 @@ pub struct Style {
     pub text_leading: Option<f32>,
     pub text_wrap: TextWrapMode,
     pub text_glyph_colors: Option<Vec<Color>>,
+}
+
+impl Style {
+    /// False if `cmd` isn't a text setting.
+    pub fn apply_text(
+        &mut self,
+        cmd: &DrawCommand,
+        font_family: impl FnOnce(Entity) -> Option<String>,
+    ) -> bool {
+        match cmd {
+            DrawCommand::TextFont(Some(font)) => {
+                if let Some(family) = font_family(*font) {
+                    self.text_font_family = Some(family);
+                }
+            }
+            DrawCommand::TextFont(None) => self.text_font_family = None,
+            DrawCommand::TextStyle(style) => self.text_style = *style,
+            DrawCommand::TextWeight(weight) => self.text_weight = Some(*weight),
+            DrawCommand::TextVariation { tag, value } => {
+                match self.text_variations.iter_mut().find(|(t, _)| t == tag) {
+                    Some(existing) => existing.1 = *value,
+                    None => self.text_variations.push((*tag, *value)),
+                }
+            }
+            DrawCommand::ClearTextVariations => self.text_variations.clear(),
+            DrawCommand::TextFeature { tag, value } => {
+                match self.text_features.iter_mut().find(|(t, _)| t == tag) {
+                    Some(existing) => existing.1 = *value,
+                    None => self.text_features.push((*tag, *value)),
+                }
+            }
+            DrawCommand::NoTextFeature { tag } => self.text_features.retain(|(t, _)| t != tag),
+            DrawCommand::ClearTextFeatures => self.text_features.clear(),
+            DrawCommand::TextSize(size) => {
+                self.text_size = *size;
+                self.text_leading = None;
+            }
+            DrawCommand::TextAlign { h, v } => {
+                self.text_align_h = *h;
+                self.text_align_v = *v;
+            }
+            DrawCommand::TextLeading(leading) => self.text_leading = Some(*leading),
+            DrawCommand::TextWrap(mode) => self.text_wrap = *mode,
+            DrawCommand::TextGlyphColors(colors) => self.text_glyph_colors = Some(colors.clone()),
+            _ => return false,
+        }
+        true
+    }
 }
 
 impl Default for Style {

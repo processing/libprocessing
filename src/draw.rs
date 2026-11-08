@@ -1,15 +1,15 @@
-//! Builders for draw calls with optional trailing arguments. Each draws when dropped.
+//! Draw-on-drop builders.
 
 use std::ops::{Deref, DerefMut};
 
 use bevy::prelude::{Entity, Transform, Vec3};
+use processing_render::geometry::Topology;
 use processing_render::graphics_immediate_light;
 use processing_render::render::command::{ArcMode, DrawCommand, LightKind};
 
 use crate::graphics::expect;
-use crate::{Graphics, IntoPoint, Scalar};
+use crate::{Geometry, Graphics, IntoPoint, Scalar};
 
-/// Returned by [`Graphics::rect`] and [`Graphics::square`].
 pub struct Rect<'g> {
     g: &'g mut Graphics,
     rect: [f32; 4],
@@ -25,13 +25,12 @@ impl<'g> Rect<'g> {
         }
     }
 
-    /// Rounds every corner.
     pub fn radius(mut self, r: impl Scalar) -> Self {
         self.radii = [r.to_f32(); 4];
         self
     }
 
-    /// Rounds each corner: top-left, top-right, bottom-right, bottom-left.
+    /// Top-left, top-right, bottom-right, bottom-left.
     pub fn radii(
         mut self,
         tl: impl Scalar,
@@ -57,7 +56,6 @@ impl Drop for Rect<'_> {
     }
 }
 
-/// Returned by [`Graphics::arc`].
 pub struct Arc<'g> {
     g: &'g mut Graphics,
     bounds: [f32; 4],
@@ -98,7 +96,6 @@ impl Drop for Arc<'_> {
     }
 }
 
-/// Returned by [`Graphics::directional_light`], [`Graphics::point_light`] and [`Graphics::spot_light`].
 pub struct LightDraw<'g> {
     g: &'g mut Graphics,
     kind: LightKind,
@@ -135,7 +132,44 @@ impl Drop for LightDraw<'_> {
     }
 }
 
-/// Returned by [`Graphics::image`].
+pub struct ParticlesDraw<'g> {
+    g: &'g mut Graphics,
+    particles: Entity,
+    geometry: Option<Entity>,
+    topology: Topology,
+}
+
+impl<'g> ParticlesDraw<'g> {
+    pub(crate) fn new(g: &'g mut Graphics, particles: Entity) -> Self {
+        Self {
+            g,
+            particles,
+            geometry: None,
+            topology: Topology::PointList,
+        }
+    }
+
+    pub fn geometry(mut self, geometry: &Geometry) -> Self {
+        self.geometry = Some(geometry.0);
+        self
+    }
+
+    pub fn topology(mut self, topology: Topology) -> Self {
+        self.topology = topology;
+        self
+    }
+}
+
+impl Drop for ParticlesDraw<'_> {
+    fn drop(&mut self) {
+        self.g.record(DrawCommand::Particles {
+            particles: self.particles,
+            geometry: self.geometry,
+            topology: self.topology,
+        });
+    }
+}
+
 pub struct ImageDraw<'g> {
     g: &'g mut Graphics,
     entity: Entity,
@@ -157,13 +191,12 @@ impl<'g> ImageDraw<'g> {
         }
     }
 
-    /// Draws at this size instead of the image's own.
     pub fn size(mut self, w: impl Scalar, h: impl Scalar) -> Self {
         self.size = Some([w.to_f32(), h.to_f32()]);
         self
     }
 
-    /// Draws only this pixel region of the image.
+    /// Pixel region of the image.
     pub fn source(
         mut self,
         x: impl Scalar,
@@ -194,7 +227,6 @@ impl Drop for ImageDraw<'_> {
     }
 }
 
-/// Returned by [`Graphics::text`].
 pub struct Text<'g> {
     g: &'g mut Graphics,
     content: String,
@@ -223,13 +255,11 @@ impl<'g> Text<'g> {
         self
     }
 
-    /// Wraps the text at `w` wide.
     pub fn max_width(mut self, w: impl Scalar) -> Self {
         self.max_w = Some(w.to_f32());
         self
     }
 
-    /// Wraps the text inside a `w` by `h` box.
     pub fn bounds(mut self, w: impl Scalar, h: impl Scalar) -> Self {
         self.max_w = Some(w.to_f32());
         self.max_h = Some(h.to_f32());
@@ -250,7 +280,6 @@ impl Drop for Text<'_> {
     }
 }
 
-/// A 3D primitive with tessellation detail; chain `.detail(..)`.
 pub struct Detail<'g, const N: usize> {
     g: &'g mut Graphics,
     size: [f32; 3],
@@ -294,7 +323,7 @@ impl<const N: usize> Drop for Detail<'_, N> {
     }
 }
 
-/// Returned by [`Graphics::push`]; restores style and transform when dropped.
+/// Pops when dropped.
 pub struct Push<'g> {
     g: &'g mut Graphics,
 }
@@ -326,7 +355,7 @@ impl Drop for Push<'_> {
     }
 }
 
-/// Returned by [`Graphics::begin_draw`]; ends drawing when dropped.
+/// Ends drawing when dropped.
 pub struct BeginDraw<'g> {
     g: &'g mut Graphics,
 }

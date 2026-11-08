@@ -1,12 +1,10 @@
-//! `begin_shape` / `end_shape` as a value: vertices only exist inside a shape.
-
 use std::ops::{Deref, DerefMut};
 
 use processing_render::render::command::{DrawCommand, ShapeKind};
 
 use crate::{Graphics, Scalar};
 
-/// Returned by [`Graphics::begin_shape`]. Ends with [`Shape::end`], [`Shape::close`], or when dropped.
+/// Ends open when dropped.
 pub struct Shape<'g> {
     g: &'g mut Graphics,
     close: bool,
@@ -66,16 +64,14 @@ impl<'g> Shape<'g> {
         });
     }
 
-    /// Starts a hole; it ends when the returned guard is dropped.
+    /// A hole, ended when dropped.
     pub fn contour(&mut self) -> Contour<'_, 'g> {
         self.g.record(DrawCommand::BeginContour);
         Contour { shape: self }
     }
 
-    /// Ends the shape open; same as dropping it.
     pub fn end(self) {}
 
-    /// Ends the shape, joining the last vertex to the first.
     pub fn close(mut self) {
         self.close = true;
     }
@@ -87,7 +83,6 @@ impl Drop for Shape<'_> {
     }
 }
 
-/// Returned by [`Shape::contour`].
 pub struct Contour<'s, 'g> {
     shape: &'s mut Shape<'g>,
 }

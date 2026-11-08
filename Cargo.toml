@@ -87,6 +87,7 @@ processing_audio = { workspace = true }
 processing_input = { workspace = true }
 processing_webcam = { workspace = true, optional = true }
 processing_cuda = { workspace = true, optional = true }
+bytemuck = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

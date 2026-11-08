@@ -1,12 +1,9 @@
-//! Argument traits that stand in for Processing's numeric and arity overloads.
-
 use bevy::math::{Vec2, Vec3};
 
 mod sealed {
     pub trait Sealed {}
 }
 
-/// Any primitive number, converted to `f32`.
 pub trait Scalar: sealed::Sealed + Copy {
     fn to_f32(self) -> f32;
 }
@@ -24,7 +21,7 @@ macro_rules! scalar {
 }
 scalar!(u8, u16, u32, u64, usize, i8, i16, i32, i64, isize, f32, f64);
 
-/// A 2D or 3D point: `(x, y)`, `(x, y, z)`, `Vec2` or `Vec3`. 2D points get `z = 0`.
+/// `(x, y)`, `(x, y, z)`, `Vec2` or `Vec3`.
 pub trait IntoPoint {
     fn into_point(self) -> Vec3;
 }
@@ -53,7 +50,7 @@ impl IntoPoint for Vec3 {
     }
 }
 
-/// A per-axis size: one number for all axes, or `(x, y)` / `(x, y, z)`. Missing axes are `1`.
+/// One number, `(x, y)` or `(x, y, z)`.
 pub trait IntoExtent {
     fn into_extent(self) -> Vec3;
 }

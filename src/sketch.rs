@@ -1,5 +1,3 @@
-//! The sketch runner: opens a window and calls `setup` once and `draw` every frame.
-
 use std::path::PathBuf;
 
 use bevy::render::render_resource::TextureFormat;
@@ -10,13 +8,13 @@ use processing_render::{advance_frame_count, graphics_create, surface_set_title}
 
 use crate::Graphics;
 
-/// Window and app options, returned from [`Sketch::settings`].
 #[derive(Debug, Clone)]
 pub struct Settings {
     width: u32,
     height: u32,
     title: String,
     transparent: bool,
+    headless: bool,
     assets: Option<PathBuf>,
     log_level: Option<String>,
 }
@@ -28,6 +26,7 @@ impl Settings {
             height,
             title: "Processing".to_string(),
             transparent: false,
+            headless: false,
             assets: None,
             log_level: None,
         }
@@ -38,19 +37,24 @@ impl Settings {
         self
     }
 
-    /// A window with a transparent background.
     pub fn transparent(mut self) -> Self {
         self.transparent = true;
         self
     }
 
-    /// Where `Image::load` and `Font::load` look for files.
+    /// No window; runs until [`Graphics::exit`].
+    pub fn headless(mut self) -> Self {
+        self.headless = true;
+        self
+    }
+
+    /// The asset directory.
     pub fn assets(mut self, dir: impl Into<PathBuf>) -> Self {
         self.assets = Some(dir.into());
         self
     }
 
-    /// A `tracing` filter such as `"warn"` or `"processing=debug"`.
+    /// A `tracing` filter, e.g. `"warn"`.
     pub fn log_level(mut self, level: impl Into<String>) -> Self {
         self.log_level = Some(level.into());
         self
@@ -63,22 +67,27 @@ impl Default for Settings {
     }
 }
 
-/// A Processing sketch. State lives on `Self`.
 pub trait Sketch: Sized {
     fn settings() -> Settings {
         Settings::default()
     }
 
-    /// Runs once, before the first `draw`, with the window ready to draw into.
     fn setup(g: &mut Graphics) -> Result<Self>;
 
     fn draw(&mut self, _g: &mut Graphics) {}
 }
 
-/// Runs `S` until its window closes.
 pub fn run<S: Sketch>() -> Result<()> {
     let settings = S::settings();
-    let mut window = GlfwContext::new(settings.width, settings.height, settings.transparent)?;
+    let mut window = if settings.headless {
+        None
+    } else {
+        Some(GlfwContext::new(
+            settings.width,
+            settings.height,
+            settings.transparent,
+        )?)
+    };
 
     let mut config = Config::new();
     if let Some(dir) = &settings.assets {
@@ -89,12 +98,18 @@ pub fn run<S: Sketch>() -> Result<()> {
     }
     crate::init(config)?;
 
-    let result = run_loop::<S>(&mut window, &settings);
+    let result = match &mut window {
+        Some(window) => {
+            open_window(window, &settings).and_then(|g| run_frames::<S>(g, || window.poll_events()))
+        }
+        None => Graphics::create(settings.width, settings.height)
+            .and_then(|g| run_frames::<S>(g, || true)),
+    };
     crate::exit(if result.is_ok() { 0 } else { 1 })?;
     result
 }
 
-fn run_loop<S: Sketch>(window: &mut GlfwContext, settings: &Settings) -> Result<()> {
+fn open_window(window: &mut GlfwContext, settings: &Settings) -> Result<Graphics> {
     let surface = window.create_surface(settings.width, settings.height, settings.transparent)?;
     let entity = graphics_create(
         surface,
@@ -103,9 +118,16 @@ fn run_loop<S: Sketch>(window: &mut GlfwContext, settings: &Settings) -> Result<
         TextureFormat::Rgba16Float,
     )?;
     surface_set_title(surface, settings.title.clone())?;
-    let mut g = Graphics::new(entity, surface, settings.width, settings.height);
+    Ok(Graphics::new(
+        entity,
+        surface,
+        settings.width,
+        settings.height,
+    ))
+}
 
-    if !window.poll_events() {
+fn run_frames<S: Sketch>(mut g: Graphics, mut poll: impl FnMut() -> bool) -> Result<()> {
+    if !poll() {
         return Ok(());
     }
     advance_frame_count()?;
@@ -114,14 +136,14 @@ fn run_loop<S: Sketch>(window: &mut GlfwContext, settings: &Settings) -> Result<
     sketch.draw(&mut g);
     g.end_frame();
 
-    while !g.exit_requested() && window.poll_events() {
+    while !g.exit_requested() && poll() {
         advance_frame_count()?;
         g.begin_frame();
         sketch.draw(&mut g);
         g.end_frame();
     }
 
-    // handles release engine resources, so drop them while the app is still alive
+    // handles must drop while the app is alive
     drop(sketch);
     drop(g);
     Ok(())

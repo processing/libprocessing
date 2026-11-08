@@ -1,11 +1,8 @@
-//! Colors and the `fill(..)`-style color arguments.
-
 use bevy::color::{Alpha, Color as BevyColor, Hsla, Hsva, LinearRgba, Mix, Oklcha, Srgba};
 use processing_render::color::ColorMode;
 
 pub use processing_render::color::ColorSpace;
 
-/// A resolved color.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Color(pub(crate) BevyColor);
 
@@ -14,22 +11,22 @@ impl Color {
     pub const WHITE: Color = Color::rgb(1.0, 1.0, 1.0);
     pub const TRANSPARENT: Color = Color::rgba(0.0, 0.0, 0.0, 0.0);
 
-    /// sRGB, channels 0-1.
+    /// 0-1.
     pub const fn rgb(r: f32, g: f32, b: f32) -> Self {
         Self::rgba(r, g, b, 1.0)
     }
 
-    /// sRGB with alpha, channels 0-1.
+    /// 0-1.
     pub const fn rgba(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self(BevyColor::Srgba(Srgba::new(r, g, b, a)))
     }
 
-    /// sRGB, channels 0-255.
+    /// 0-255.
     pub const fn rgb8(r: u8, g: u8, b: u8) -> Self {
         Self::rgba8(r, g, b, 255)
     }
 
-    /// sRGB with alpha, channels 0-255.
+    /// 0-255.
     pub const fn rgba8(r: u8, g: u8, b: u8, a: u8) -> Self {
         Self::rgba(
             r as f32 / 255.0,
@@ -54,17 +51,17 @@ impl Color {
         )
     }
 
-    /// Hue in degrees, saturation and lightness 0-1.
+    /// Hue in degrees, the rest 0-1.
     pub const fn hsl(h: f32, s: f32, l: f32) -> Self {
         Self(BevyColor::Hsla(Hsla::new(h, s, l, 1.0)))
     }
 
-    /// Hue in degrees, saturation and value 0-1.
+    /// Hue in degrees, the rest 0-1.
     pub const fn hsv(h: f32, s: f32, v: f32) -> Self {
         Self(BevyColor::Hsva(Hsva::new(h, s, v, 1.0)))
     }
 
-    /// Lightness 0-1, chroma 0-~0.4, hue in degrees.
+    /// Hue in degrees, chroma 0-~0.4.
     pub const fn oklch(l: f32, c: f32, h: f32) -> Self {
         Self(BevyColor::Oklcha(Oklcha::new(l, c, h, 1.0)))
     }
@@ -75,7 +72,7 @@ impl Color {
         Self(c)
     }
 
-    /// Interpolates in Oklab, like Processing's `lerpColor`.
+    /// In Oklab.
     pub fn lerp(self, other: Color, t: f32) -> Self {
         let a: bevy::color::Oklaba = self.0.into();
         let b: bevy::color::Oklaba = other.0.into();
@@ -113,7 +110,7 @@ pub enum Channel {
     Float(f32),
 }
 
-/// A single color channel: integers are 0-255, floats are 0-1, unless `color_mode().max(..)` is set.
+/// Ints 0-255, floats 0-1, unless `color_mode().max(..)` is set.
 pub trait IntoChannel: Copy {
     fn into_channel(self) -> Channel;
 }
@@ -141,7 +138,6 @@ impl IntoChannel for f64 {
     }
 }
 
-/// An unresolved color, interpreted against the current color mode when used.
 #[derive(Debug, Clone, Copy)]
 pub enum ColorArg {
     Color(Color),
@@ -187,7 +183,6 @@ impl<A: IntoChannel, B: IntoChannel, C: IntoChannel, D: IntoChannel> From<(A, B,
     }
 }
 
-/// Ranges for color channels: one number for all four, or `(c1, c2, c3)` / `(c1, c2, c3, alpha)`.
 pub trait IntoColorMax {
     fn into_color_max(self, space: ColorSpace) -> [f32; 4];
 }
@@ -222,7 +217,6 @@ impl<A: crate::Scalar, B: crate::Scalar, C: crate::Scalar, D: crate::Scalar> Int
     }
 }
 
-/// The color mode as seen by a `Graphics`; `explicit_max` means `.max(..)` was set.
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct ColorState {
     pub mode: ColorMode,

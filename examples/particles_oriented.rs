@@ -1,8 +1,7 @@
-use processing_glfw::GlfwContext;
-
-use bevy::math::Vec3;
-use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
+use processing::{
+    Attribute, Compute, Geometry, Graphics, Light, Material, Particles, Result, Settings, Shader,
+    Sketch,
+};
 
 const SPIN_SHADER: &str = r#"
 @group(0) @binding(0) var<storage, read_write> rotation: array<f32>;
@@ -39,107 +38,88 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 "#;
 
-fn main() {
-    sketch().unwrap();
-    exit(0).unwrap();
+struct ParticlesOriented {
+    sun: Light,
+    cube: Geometry,
+    particles: Particles,
+    pbr: Material,
+    spin: Compute,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(900, 700, false)?;
-    init(Config::default())?;
+impl Sketch for ParticlesOriented {
+    fn settings() -> Settings {
+        Settings::size(900, 700)
+    }
 
-    let surface = glfw_ctx.create_surface(900, 700, false)?;
-    let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.camera_position((0.0, -6.0, 18.0));
+        g.camera_look_at((0, 0, 0));
 
-    graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, -6.0, 18.0))?;
-    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
+        let sun = g.create_directional_light((0.9, 0.85, 0.8), 300.0);
 
-    let light =
-        light_create_directional(graphics, bevy::color::Color::srgb(0.9, 0.85, 0.8), 300.0)?;
+        let cube = Geometry::cube((0.6, 0.6, 0.6))?;
 
-    let cube = geometry_box(0.6, 0.6, 0.6)?;
-
-    let capacity: u32 = 125;
-    let mut positions: Vec<f32> = Vec::with_capacity(capacity as usize * 3);
-    let mut rotations: Vec<f32> = Vec::with_capacity(capacity as usize * 4);
-    let mut scales: Vec<f32> = Vec::with_capacity(capacity as usize * 3);
-    for x in 0..5 {
-        for y in 0..5 {
-            for z in 0..5 {
-                positions.push((x as f32 - 2.0) * 1.6);
-                positions.push((2.0 - y as f32) * 1.6);
-                positions.push((z as f32 - 2.0) * 1.6);
-                rotations.push(0.0);
-                rotations.push(0.0);
-                rotations.push(0.0);
-                rotations.push(1.0);
-                let s = 0.5 + ((x + y + z) as f32 * 0.06);
-                scales.push(s);
-                scales.push(s);
-                scales.push(s);
+        let capacity: u32 = 125;
+        let mut positions: Vec<f32> = Vec::with_capacity(capacity as usize * 3);
+        let mut rotations: Vec<f32> = Vec::with_capacity(capacity as usize * 4);
+        let mut scales: Vec<f32> = Vec::with_capacity(capacity as usize * 3);
+        for x in 0..5 {
+            for y in 0..5 {
+                for z in 0..5 {
+                    positions.push((x as f32 - 2.0) * 1.6);
+                    positions.push((2.0 - y as f32) * 1.6);
+                    positions.push((z as f32 - 2.0) * 1.6);
+                    rotations.push(0.0);
+                    rotations.push(0.0);
+                    rotations.push(0.0);
+                    rotations.push(1.0);
+                    let s = 0.5 + ((x + y + z) as f32 * 0.06);
+                    scales.push(s);
+                    scales.push(s);
+                    scales.push(s);
+                }
             }
         }
-    }
 
-    let position_attr = geometry_attribute_position();
-    let rotation_attr = geometry_attribute_rotation();
-    let scale_attr = geometry_attribute_scale();
-    let p = particles_create(capacity, vec![position_attr, rotation_attr, scale_attr])?;
-    let position_buf =
-        particles_buffer(p, position_attr)?.ok_or(error::ProcessingError::ParticlesNotFound)?;
-    let rotation_buf =
-        particles_buffer(p, rotation_attr)?.ok_or(error::ProcessingError::ParticlesNotFound)?;
-    let scale_buf =
-        particles_buffer(p, scale_attr)?.ok_or(error::ProcessingError::ParticlesNotFound)?;
-    buffer_write(
-        position_buf,
-        positions.iter().flat_map(|f| f.to_le_bytes()).collect(),
-    )?;
-    buffer_write(
-        rotation_buf,
-        rotations.iter().flat_map(|f| f.to_le_bytes()).collect(),
-    )?;
-    buffer_write(
-        scale_buf,
-        scales.iter().flat_map(|f| f.to_le_bytes()).collect(),
-    )?;
-
-    let pbr = material_create_pbr()?;
-    material_set(pbr, "roughness", shader_value::ShaderValue::Float(0.4))?;
-
-    let spin_shader = shader_create(SPIN_SHADER)?;
-    let spin = compute_create(spin_shader)?;
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-        graphics_light(graphics, light)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.06, 0.06, 0.08)),
+        let particles = Particles::new(
+            capacity,
+            &[
+                Attribute::position(),
+                Attribute::rotation(),
+                Attribute::scale(),
+            ],
         )?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Fill(bevy::color::Color::srgb(0.9, 0.5, 0.3)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::Material(pbr))?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Particles {
-                particles: p,
-                geometry: Some(cube),
-                topology: Default::default(),
-            },
-        )?;
-        graphics_end_draw(graphics)?;
+        particles.buffer(Attribute::position()).write(&positions);
+        particles.buffer(Attribute::rotation()).write(&rotations);
+        particles.buffer(Attribute::scale()).write(&scales);
 
-        compute_set(
+        let mut pbr = Material::pbr()?;
+        pbr.set("roughness", 0.4);
+
+        let spin = Compute::new(&Shader::new(SPIN_SHADER)?)?;
+
+        Ok(ParticlesOriented {
+            sun,
+            cube,
+            particles,
+            pbr,
             spin,
-            "params",
-            shader_value::ShaderValue::Float4([0.015, 0.0, 0.0, 0.0]),
-        )?;
-        particles_apply(p, spin)?;
+        })
     }
 
-    Ok(())
+    fn draw(&mut self, g: &mut Graphics) {
+        g.light(&self.sun);
+        g.background((0.06, 0.06, 0.08));
+        g.fill((0.9, 0.5, 0.3));
+        g.material(&self.pbr);
+        g.particles(&self.particles).geometry(&self.cube);
+
+        self.spin.set("params", (0.015, 0.0, 0.0, 0.0));
+        self.particles.apply(&self.spin);
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<ParticlesOriented>()
 }

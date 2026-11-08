@@ -1,9 +1,6 @@
-use processing_glfw::GlfwContext;
-
-use bevy::math::Vec3;
-use processing::prelude::*;
-use processing_render::geometry::AttributeFormat;
-use processing_render::render::command::DrawCommand;
+use processing::{
+    Attribute, Compute, Geometry, Graphics, Material, Particles, Result, Settings, Shader, Sketch,
+};
 
 const AGING_SHADER: &str = r#"
 @group(0) @binding(0) var<storage, read_write> age: array<f32>;
@@ -41,72 +38,68 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 "#;
 
-fn main() {
-    sketch().unwrap();
-    exit(0).unwrap();
+const BURST: u32 = 6;
+const DT: f32 = 1.0 / 60.0;
+const TTL: f32 = 1.0;
+
+struct ParticlesLifecycle {
+    sphere: Geometry,
+    particles: Particles,
+    mat: Material,
+    aging: Compute,
+    frame: u32,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(900, 700, false)?;
-    init(Config::default())?;
+impl Sketch for ParticlesLifecycle {
+    fn settings() -> Settings {
+        Settings::size(900, 700)
+    }
 
-    let surface = glfw_ctx.create_surface(900, 700, false)?;
-    let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.camera_position((0.0, -2.0, 14.0));
+        g.camera_look_at((0, 0, 0));
 
-    graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, -2.0, 14.0))?;
-    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
+        let sphere = Geometry::sphere(0.1, 8, 6)?;
 
-    let sphere = geometry_sphere(0.1, 8, 6)?;
-
-    let capacity: u32 = 800;
-    let position_attr = geometry_attribute_position();
-    let color_attr = geometry_attribute_color();
-    let scale_attr = geometry_attribute_scale();
-    let life_attr = geometry_attribute_life();
-    let age_attr = geometry_attribute_create("age", AttributeFormat::Float)?;
-
-    let p = particles_create(
-        capacity,
-        vec![position_attr, color_attr, scale_attr, life_attr, age_attr],
-    )?;
-    let color_buf =
-        particles_buffer(p, color_attr)?.ok_or(error::ProcessingError::ParticlesNotFound)?;
-
-    let mat = {
-        let m = material_create_unlit()?;
-        material_set_albedo_buffer(m, color_buf)?;
-        m
-    };
-    let aging_shader = shader_create(AGING_SHADER)?;
-    let aging = compute_create(aging_shader)?;
-
-    let burst: u32 = 6;
-    let dt: f32 = 1.0 / 60.0;
-    let ttl: f32 = 1.0;
-    let mut frame: u32 = 0;
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.04, 0.04, 0.07)),
+        let capacity: u32 = 800;
+        let particles = Particles::new(
+            capacity,
+            &[
+                Attribute::position(),
+                Attribute::color(),
+                Attribute::scale(),
+                Attribute::life(),
+                Attribute::age(),
+            ],
         )?;
-        graphics_record_command(graphics, DrawCommand::Material(mat))?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Particles {
-                particles: p,
-                geometry: Some(sphere),
-                topology: Default::default(),
-            },
-        )?;
-        graphics_end_draw(graphics)?;
 
-        let mut positions: Vec<f32> = Vec::with_capacity(burst as usize * 3);
-        let mut colors: Vec<f32> = Vec::with_capacity(burst as usize * 4);
-        for k in 0..burst {
-            let i = frame * burst + k;
+        let mut mat = Material::unlit()?;
+        mat.albedo_buffer(&particles.buffer(Attribute::color()));
+
+        let aging = Compute::new(&Shader::new(AGING_SHADER)?)?;
+
+        Ok(ParticlesLifecycle {
+            sphere,
+            particles,
+            mat,
+            aging,
+            frame: 0,
+        })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        g.background((0.04, 0.04, 0.07));
+        g.material(&self.mat);
+        g.particles(&self.particles).geometry(&self.sphere);
+
+        let mut positions: Vec<f32> = Vec::with_capacity(BURST as usize * 3);
+        let mut colors: Vec<f32> = Vec::with_capacity(BURST as usize * 4);
+        let mut scales: Vec<f32> = Vec::with_capacity(BURST as usize * 3);
+        let mut ages: Vec<f32> = Vec::with_capacity(BURST as usize);
+        let mut lives: Vec<f32> = Vec::with_capacity(BURST as usize);
+        for k in 0..BURST {
+            let i = self.frame * BURST + k;
             let u = ((i.wrapping_mul(2654435761) >> 8) & 0xFFFF) as f32 / 65535.0;
             let v = ((i.wrapping_mul(40503) >> 8) & 0xFFFF) as f32 / 65535.0;
             let theta = u * std::f32::consts::TAU;
@@ -120,42 +113,32 @@ fn sketch() -> error::Result<()> {
             colors.push(cg);
             colors.push(cb);
             colors.push(1.0);
+            scales.push(1.0);
+            scales.push(1.0);
+            scales.push(1.0);
+            ages.push(0.0);
+            lives.push(1.0);
         }
-        let position_bytes: Vec<u8> = positions.iter().flat_map(|f| f.to_le_bytes()).collect();
-        let color_bytes: Vec<u8> = colors.iter().flat_map(|f| f.to_le_bytes()).collect();
-        let zero_floats: Vec<u8> = (0..burst).flat_map(|_| 0.0_f32.to_le_bytes()).collect();
-        let one_floats: Vec<u8> = (0..burst).flat_map(|_| 1.0_f32.to_le_bytes()).collect();
-        let one_scale: Vec<u8> = (0..burst)
-            .flat_map(|_| {
-                [1.0_f32, 1.0, 1.0]
-                    .iter()
-                    .flat_map(|f| f.to_le_bytes())
-                    .collect::<Vec<u8>>()
-            })
-            .collect();
-        particles_emit(
-            p,
-            burst,
-            vec![
-                (position_attr, position_bytes),
-                (color_attr, color_bytes),
-                (scale_attr, one_scale),
-                (age_attr, zero_floats),
-                (life_attr, one_floats),
+        self.particles.emit(
+            BURST,
+            &[
+                (Attribute::position(), &positions),
+                (Attribute::color(), &colors),
+                (Attribute::scale(), &scales),
+                (Attribute::age(), &ages),
+                (Attribute::life(), &lives),
             ],
-        )?;
+        );
 
-        compute_set(
-            aging,
-            "params",
-            shader_value::ShaderValue::Float4([dt, ttl, 0.0, 0.0]),
-        )?;
-        particles_apply(p, aging)?;
+        self.aging.set("params", (DT, TTL, 0.0, 0.0));
+        self.particles.apply(&self.aging);
 
-        frame += 1;
+        self.frame += 1;
     }
+}
 
-    Ok(())
+fn main() -> Result<()> {
+    processing::run::<ParticlesLifecycle>()
 }
 
 fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (f32, f32, f32) {

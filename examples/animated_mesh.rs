@@ -1,102 +1,71 @@
-use processing_glfw::GlfwContext;
+use processing::{Geometry, Graphics, Result, Settings, Sketch, Topology};
 
-use bevy::math::{Vec3, Vec4};
-use processing::prelude::*;
-use processing_render::geometry::Topology;
-use processing_render::render::command::DrawCommand;
+const GRID: u32 = 20;
+const SPACING: f32 = 10.0;
 
-fn main() {
-    match sketch() {
-        Ok(_) => {
-            eprintln!("Sketch completed successfully");
-            exit(0).unwrap();
-        }
-        Err(e) => {
-            eprintln!("Sketch error: {:?}", e);
-            exit(1).unwrap();
-        }
-    };
+struct AnimatedMesh {
+    mesh: Geometry,
+    time: f32,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(600, 600, false)?;
-    init(Config::default())?;
-
-    let width = 600;
-    let height = 600;
-    let surface = glfw_ctx.create_surface(width, height, false)?;
-    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
-
-    let grid_size = 20;
-    let spacing = 10.0;
-    let offset = (grid_size as f32 * spacing) / 2.0;
-
-    let mesh = geometry_create(Topology::TriangleList)?;
-
-    for z in 0..grid_size {
-        for x in 0..grid_size {
-            let px = x as f32 * spacing - offset;
-            let pz = z as f32 * spacing - offset;
-            geometry_color(
-                mesh,
-                Vec4::new(
-                    x as f32 / grid_size as f32,
-                    0.5,
-                    z as f32 / grid_size as f32,
-                    1.0,
-                ),
-            )?;
-            geometry_normal(mesh, Vec3::new(0.0, -1.0, 0.0))?;
-            geometry_vertex(mesh, Vec3::new(px, 0.0, pz))?;
-        }
+impl Sketch for AnimatedMesh {
+    fn settings() -> Settings {
+        Settings::size(600, 600)
     }
 
-    for z in 0..(grid_size - 1) {
-        for x in 0..(grid_size - 1) {
-            let tl = z * grid_size + x;
-            let tr = tl + 1;
-            let bl = (z + 1) * grid_size + x;
-            let br = bl + 1;
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.camera_position((150, -150, 150));
+        g.camera_look_at((0, 0, 0));
 
-            geometry_index(mesh, tl)?;
-            geometry_index(mesh, bl)?;
-            geometry_index(mesh, tr)?;
-
-            geometry_index(mesh, tr)?;
-            geometry_index(mesh, bl)?;
-            geometry_index(mesh, br)?;
-        }
-    }
-
-    graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(150.0, -150.0, 150.0))?;
-    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
-
-    let mut time = 0.0f32;
-
-    while glfw_ctx.poll_events() {
-        for z in 0..grid_size {
-            for x in 0..grid_size {
-                let idx = z * grid_size + x;
-                let px = x as f32 * spacing - offset;
-                let pz = z as f32 * spacing - offset;
-                let wave = (px * 0.1 + time).sin() * (pz * 0.1 + time).cos() * 20.0;
-                geometry_set_vertex(mesh, idx, Vec3::new(px, -wave, pz))?;
+        let offset = GRID as f32 * SPACING / 2.0;
+        let mut mesh = Geometry::new(Topology::TriangleList)?;
+        for z in 0..GRID {
+            for x in 0..GRID {
+                let px = x as f32 * SPACING - offset;
+                let pz = z as f32 * SPACING - offset;
+                mesh.color((x as f32 / GRID as f32, 0.5, z as f32 / GRID as f32));
+                mesh.normal((0, -1, 0));
+                mesh.vertex((px, 0.0, pz));
             }
         }
 
-        graphics_begin_draw(graphics)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.05, 0.05, 0.1)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::Geometry(mesh))?;
-        graphics_end_draw(graphics)?;
+        for z in 0..GRID - 1 {
+            for x in 0..GRID - 1 {
+                let top_left = z * GRID + x;
+                let top_right = top_left + 1;
+                let bottom_left = (z + 1) * GRID + x;
+                let bottom_right = bottom_left + 1;
+                mesh.index(top_left);
+                mesh.index(bottom_left);
+                mesh.index(top_right);
+                mesh.index(top_right);
+                mesh.index(bottom_left);
+                mesh.index(bottom_right);
+            }
+        }
 
-        time += 0.05;
+        Ok(AnimatedMesh { mesh, time: 0.0 })
     }
 
-    geometry_destroy(mesh)?;
+    fn draw(&mut self, g: &mut Graphics) {
+        let offset = GRID as f32 * SPACING / 2.0;
+        for z in 0..GRID {
+            for x in 0..GRID {
+                let px = x as f32 * SPACING - offset;
+                let pz = z as f32 * SPACING - offset;
+                let wave = (px * 0.1 + self.time).sin() * (pz * 0.1 + self.time).cos() * 20.0;
+                self.mesh.set_vertex(z * GRID + x, (px, -wave, pz));
+            }
+        }
 
-    Ok(())
+        g.background((0.05, 0.05, 0.1));
+        g.model(&self.mesh);
+
+        self.time += 0.05;
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<AnimatedMesh>()
 }

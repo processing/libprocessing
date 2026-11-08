@@ -1,5 +1,3 @@
-//! The drawing surface and its Processing-style drawing methods.
-
 use std::fmt::Display;
 
 use bevy::math::{Affine3A, Vec3, Vec4};
@@ -17,28 +15,29 @@ use processing_render::render::command::{
 };
 use processing_render::{
     camera_reset, camera_set_center, camera_set_distance, delta_time, elapsed_time, frame_count,
-    graphics_begin_draw, graphics_create, graphics_destroy, graphics_disable_camera_controller,
-    graphics_end_draw, graphics_flush, graphics_free_camera, graphics_get_matrix, graphics_light,
-    graphics_mode_2d, graphics_mode_3d, graphics_orbit_camera, graphics_ortho, graphics_pan_camera,
-    graphics_perspective, graphics_readback, graphics_record_command, graphics_screen_point,
-    graphics_set_color_mode, graphics_text_ascent, graphics_text_descent, graphics_text_width,
+    geometry_create_from_mesh, graphics_apply_filter, graphics_begin_draw, graphics_create,
+    graphics_destroy, graphics_disable_camera_controller, graphics_end_draw, graphics_flush,
+    graphics_free_camera, graphics_get_matrix, graphics_light, graphics_mode_2d, graphics_mode_3d,
+    graphics_orbit_camera, graphics_ortho, graphics_pan_camera, graphics_perspective,
+    graphics_readback, graphics_record_command, graphics_screen_point, graphics_set_color_mode,
+    graphics_text_ascent, graphics_text_descent, graphics_text_to_model, graphics_text_width,
     graphics_update, graphics_update_region, light_create_directional, light_create_point,
     light_create_spot, light_destroy, surface_create_offscreen, surface_destroy,
     surface_physical_height, surface_physical_width, transform_look_at, transform_set_position,
 };
 
 use crate::color::{ColorArg, ColorSpace, ColorState, IntoColorMax};
-use crate::draw::{Arc, BeginDraw, Detail, ImageDraw, LightDraw, Push, Rect, Text};
+use crate::draw::{Arc, BeginDraw, Detail, ImageDraw, LightDraw, ParticlesDraw, Push, Rect, Text};
 use crate::input::{Key, MouseButton};
 use crate::shape::Shape;
 use crate::{AsImage, Color, Font, IntoExtent, IntoPoint, Scalar};
+use crate::{Buffer, Filter, Geometry, Material, Particles};
 
-/// Panics on engine errors that a valid handle can't produce.
 pub(crate) fn expect<T>(r: Result<T>) -> T {
     r.unwrap_or_else(|e| panic!("processing: {e}"))
 }
 
-/// A drawing surface: the sketch window passed to [`crate::Sketch::draw`], or one made with [`Graphics::create`].
+/// The sketch window, or an offscreen surface.
 pub struct Graphics {
     pub(crate) entity: Entity,
     pub(crate) surface: Entity,
@@ -64,8 +63,7 @@ impl Graphics {
         }
     }
 
-    /// An offscreen drawing surface (Processing's `createGraphics`). Draw into it inside
-    /// [`Graphics::begin_draw`], then show it with `g.image(&pg, x, y)`.
+    /// Processing's `createGraphics`.
     pub fn create(width: u32, height: u32) -> Result<Self> {
         let format = TextureFormat::Rgba8UnormSrgb;
         let surface = surface_create_offscreen(width, height, 1.0, format)?;
@@ -75,7 +73,6 @@ impl Graphics {
         Ok(g)
     }
 
-    /// Starts drawing into a [`Graphics::create`]d surface; drawing ends when the guard drops.
     pub fn begin_draw(&mut self) -> BeginDraw<'_> {
         assert!(
             self.offscreen,
@@ -102,8 +99,6 @@ impl Graphics {
         self.color.resolve(color.into()).0
     }
 
-    // -- size & time --------------------------------------------------------
-
     pub fn width(&self) -> f32 {
         self.width as f32
     }
@@ -112,16 +107,15 @@ impl Graphics {
         self.height as f32
     }
 
-    /// Width in physical pixels; larger than `width()` on high-DPI displays.
+    /// In physical pixels.
     pub fn pixel_width(&self) -> u32 {
         if self.offscreen {
-            // offscreen surfaces are created at scale 1
             return self.width;
         }
         expect(surface_physical_width(self.surface))
     }
 
-    /// Height in physical pixels; larger than `height()` on high-DPI displays.
+    /// In physical pixels.
     pub fn pixel_height(&self) -> u32 {
         if self.offscreen {
             return self.height;
@@ -129,22 +123,25 @@ impl Graphics {
         expect(surface_physical_height(self.surface))
     }
 
-    /// Frames drawn so far, starting at 1 in the first `draw`.
+    /// Starts at 1.
     pub fn frame_count(&self) -> u32 {
         expect(frame_count())
     }
 
-    /// Seconds since the previous frame.
+    /// In seconds.
     pub fn delta_time(&self) -> f32 {
         expect(delta_time())
     }
 
-    /// Milliseconds since the sketch started.
+    /// In seconds.
+    pub fn elapsed_time(&self) -> f32 {
+        expect(elapsed_time())
+    }
+
     pub fn millis(&self) -> u32 {
         (expect(elapsed_time()) * 1000.0) as u32
     }
 
-    /// Stops the sketch after this frame.
     pub fn exit(&mut self) {
         self.exit_requested = true;
     }
@@ -153,9 +150,6 @@ impl Graphics {
         self.exit_requested
     }
 
-    // -- color & style ------------------------------------------------------
-
-    /// Sets how color arguments are read. Chain `.max(..)` to set channel ranges.
     pub fn color_mode(&mut self, space: ColorSpace) -> ColorModeBuilder<'_> {
         ColorModeBuilder {
             g: self,
@@ -164,7 +158,6 @@ impl Graphics {
         }
     }
 
-    /// Resolves color arguments against the current color mode.
     pub fn color(&self, color: impl Into<ColorArg>) -> Color {
         self.color.resolve(color.into())
     }
@@ -233,9 +226,6 @@ impl Graphics {
         self.record(DrawCommand::ImageMode(mode));
     }
 
-    // -- 2D primitives ------------------------------------------------------
-
-    /// Chain `.radius(r)` or `.radii(tl, tr, br, bl)` for rounded corners.
     pub fn rect(
         &mut self,
         x: impl Scalar,
@@ -265,7 +255,6 @@ impl Graphics {
         self.ellipse(x, y, d, d);
     }
 
-    /// Chain `.mode(ArcMode::Pie)` or `.mode(ArcMode::Chord)` to close the arc.
     pub fn arc(
         &mut self,
         x: impl Scalar,
@@ -387,19 +376,14 @@ impl Graphics {
         });
     }
 
-    /// Starts a custom shape; it ends (open) when dropped, or call `.close()`.
     pub fn begin_shape(&mut self, kind: ShapeKind) -> Shape<'_> {
         Shape::new(self, kind)
     }
 
-    // -- images & text ------------------------------------------------------
-
-    /// Chain `.size(w, h)` to scale, `.source(x, y, w, h)` to draw a sub-region.
     pub fn image(&mut self, image: &impl AsImage, x: impl Scalar, y: impl Scalar) -> ImageDraw<'_> {
         ImageDraw::new(self, image.image_entity(), x.to_f32(), y.to_f32())
     }
 
-    /// Chain `.z(z)` to place in depth, `.max_width(w)` or `.bounds(w, h)` to wrap.
     pub fn text(&mut self, content: impl Display, x: impl Scalar, y: impl Scalar) -> Text<'_> {
         Text::new(self, content.to_string(), x.to_f32(), y.to_f32())
     }
@@ -416,7 +400,6 @@ impl Graphics {
         self.record(DrawCommand::TextLeading(leading.to_f32()));
     }
 
-    /// `text_align(TextAlignH::Center)` or `text_align((TextAlignH::Center, TextAlignV::Top))`.
     pub fn text_align(&mut self, align: impl Into<TextAlign>) {
         let TextAlign(h, v) = align.into();
         self.record(DrawCommand::TextAlign { h, v });
@@ -442,9 +425,6 @@ impl Graphics {
         expect(graphics_text_descent(self.entity))
     }
 
-    // -- transforms ---------------------------------------------------------
-
-    /// Saves style and transform until the returned guard is dropped.
     pub fn push(&mut self) -> Push<'_> {
         self.push_style();
         self.push_matrix();
@@ -498,7 +478,6 @@ impl Graphics {
         });
     }
 
-    /// `scale(2)`, `scale((2, 1))` or `scale((1, 2, 3))`.
     pub fn scale(&mut self, factor: impl IntoExtent) {
         self.record(DrawCommand::Scale(factor.into_extent()));
     }
@@ -527,12 +506,9 @@ impl Graphics {
         expect(graphics_get_matrix(self.entity))
     }
 
-    /// Where a point in the current transform lands on screen.
     pub fn screen_point(&self, point: impl IntoPoint) -> Vec3 {
         expect(graphics_screen_point(self.entity, point.into_point()))
     }
-
-    // -- 3D -----------------------------------------------------------------
 
     pub fn mode_3d(&mut self) {
         expect(graphics_mode_3d(self.entity));
@@ -542,7 +518,6 @@ impl Graphics {
         expect(graphics_mode_2d(self.entity));
     }
 
-    /// `cube(size)` or `cube((w, h, d))`.
     pub fn cube(&mut self, size: impl IntoExtent) {
         let s = size.into_extent();
         self.record(DrawCommand::Box {
@@ -552,7 +527,6 @@ impl Graphics {
         });
     }
 
-    /// Chain `.detail(sectors, stacks)`.
     pub fn sphere(&mut self, radius: impl Scalar) -> Detail<'_, 2> {
         Detail::new(
             self,
@@ -566,7 +540,6 @@ impl Graphics {
         )
     }
 
-    /// Chain `.detail(n)`.
     pub fn cylinder(&mut self, radius: impl Scalar, height: impl Scalar) -> Detail<'_, 1> {
         let size = [radius.to_f32(), height.to_f32(), 0.0];
         Detail::new(self, size, [24], |[radius, height, _], [detail]| {
@@ -578,7 +551,6 @@ impl Graphics {
         })
     }
 
-    /// Chain `.detail(n)`.
     pub fn cone(&mut self, radius: impl Scalar, height: impl Scalar) -> Detail<'_, 1> {
         let size = [radius.to_f32(), height.to_f32(), 0.0];
         Detail::new(self, size, [24], |[radius, height, _], [detail]| {
@@ -590,7 +562,6 @@ impl Graphics {
         })
     }
 
-    /// Chain `.detail(major, minor)`.
     pub fn torus(&mut self, radius: impl Scalar, tube_radius: impl Scalar) -> Detail<'_, 2> {
         let size = [radius.to_f32(), tube_radius.to_f32(), 0.0];
         Detail::new(
@@ -606,7 +577,6 @@ impl Graphics {
         )
     }
 
-    /// Chain `.detail(n)`.
     pub fn capsule(&mut self, radius: impl Scalar, length: impl Scalar) -> Detail<'_, 1> {
         let size = [radius.to_f32(), length.to_f32(), 0.0];
         Detail::new(self, size, [16], |[radius, length, _], [detail]| {
@@ -618,7 +588,6 @@ impl Graphics {
         })
     }
 
-    /// A cone with its tip cut off. Chain `.detail(n)`.
     pub fn conical_frustum(
         &mut self,
         radius_top: impl Scalar,
@@ -723,7 +692,6 @@ impl Graphics {
         ));
     }
 
-    /// Mouse-driven orbit around `camera_center`.
     pub fn orbit_camera(&mut self) {
         expect(graphics_orbit_camera(self.entity));
     }
@@ -752,12 +720,10 @@ impl Graphics {
         expect(camera_reset(self.entity));
     }
 
-    /// Adds a light to the frame.
     pub fn light(&mut self, light: &Light) {
         expect(graphics_light(self.entity, light.0));
     }
 
-    /// Adds a directional light to the frame.
     pub fn directional_light(
         &mut self,
         color: impl Into<ColorArg>,
@@ -773,7 +739,6 @@ impl Graphics {
         )
     }
 
-    /// Adds a point light to the frame.
     pub fn point_light(
         &mut self,
         color: impl Into<ColorArg>,
@@ -793,7 +758,6 @@ impl Graphics {
         )
     }
 
-    /// Adds a spot light to the frame.
     pub fn spot_light(
         &mut self,
         color: impl Into<ColorArg>,
@@ -817,7 +781,6 @@ impl Graphics {
         )
     }
 
-    /// Creates a directional light.
     pub fn create_directional_light(
         &mut self,
         color: impl Into<ColorArg>,
@@ -831,7 +794,6 @@ impl Graphics {
         )))
     }
 
-    /// Creates a point light.
     pub fn create_point_light(
         &mut self,
         color: impl Into<ColorArg>,
@@ -849,7 +811,6 @@ impl Graphics {
         )))
     }
 
-    /// Creates a spot light.
     pub fn create_spot_light(
         &mut self,
         color: impl Into<ColorArg>,
@@ -871,9 +832,42 @@ impl Graphics {
         )))
     }
 
-    // -- pixels -------------------------------------------------------------
+    pub fn model(&mut self, geometry: &Geometry) {
+        self.record(DrawCommand::Geometry(geometry.0));
+    }
 
-    /// Reads the current frame back from the GPU, row-major.
+    pub fn material(&mut self, material: &Material) {
+        self.record(DrawCommand::Material(material.0));
+    }
+
+    /// One color per particle.
+    pub fn fill_buffer(&mut self, buffer: &Buffer) {
+        self.record(DrawCommand::FillBuffer(buffer.entity));
+    }
+
+    /// Points unless given a geometry.
+    pub fn particles(&mut self, particles: &Particles) -> ParticlesDraw<'_> {
+        ParticlesDraw::new(self, particles.0)
+    }
+
+    pub fn filter(&mut self, filter: Filter) {
+        let entity = expect(filter.entity());
+        expect(graphics_apply_filter(self.entity, entity));
+    }
+
+    pub fn text_to_model(
+        &self,
+        content: &str,
+        x: impl Scalar,
+        y: impl Scalar,
+        depth: impl Scalar,
+    ) -> Result<Geometry> {
+        let mesh =
+            graphics_text_to_model(self.entity, content, x.to_f32(), y.to_f32(), depth.to_f32())?;
+        geometry_create_from_mesh(mesh).map(Geometry)
+    }
+
+    /// Row-major.
     pub fn pixels(&self) -> Result<Vec<Color>> {
         Ok(graphics_readback(self.entity)?
             .into_iter()
@@ -881,15 +875,13 @@ impl Graphics {
             .collect())
     }
 
-    /// Replaces every pixel; `pixels.len()` must be `pixel_width() * pixel_height()`.
+    /// `pixels.len()` must be `pixel_width() * pixel_height()`.
     pub fn set_pixels(&mut self, pixels: &[Color]) -> Result<()> {
         let linear: Vec<_> = pixels.iter().map(|c| c.to_linear()).collect();
-        // draw what's recorded so far so the write lands on top of it
         graphics_flush(self.entity)?;
         graphics_update(self.entity, &linear)
     }
 
-    /// Replaces a `w` by `h` block of pixels with its top-left corner at `(x, y)`.
     pub fn set_pixels_region(
         &mut self,
         x: u32,
@@ -902,8 +894,6 @@ impl Graphics {
         graphics_flush(self.entity)?;
         graphics_update_region(self.entity, x, y, w, h, &linear)
     }
-
-    // -- input --------------------------------------------------------------
 
     pub fn mouse_x(&self) -> f32 {
         expect(input_mouse_x(self.surface)).clamp(0.0, self.width())
@@ -941,17 +931,14 @@ impl Graphics {
         expect(input_mouse_button()).map(MouseButton::from)
     }
 
-    /// Whether any key is held.
     pub fn key_pressed(&self) -> bool {
         expect(input_key_is_pressed())
     }
 
-    /// The character of the most recent key press.
     pub fn key(&self) -> Option<char> {
         expect(input_key())
     }
 
-    /// The most recent key press, if it's one [`Key`] names.
     pub fn key_code(&self) -> Option<Key> {
         expect(processing_input::input_key_code()).and_then(Key::from_code)
     }
@@ -960,7 +947,6 @@ impl Graphics {
         expect(input_key_is_down(key.code()))
     }
 
-    /// True only in the frame `key` went down.
     pub fn key_just_pressed(&self, key: Key) -> bool {
         expect(input_key_just_pressed(key.code()))
     }
@@ -973,7 +959,6 @@ impl Graphics {
 
 impl AsImage for Graphics {
     fn image_entity(&self) -> Entity {
-        // an offscreen surface is backed by an image
         assert!(
             self.offscreen,
             "processing: only Graphics::create surfaces can be drawn as images"
@@ -991,7 +976,6 @@ impl Drop for Graphics {
     }
 }
 
-/// Built by [`Graphics::color_mode`]; applies when dropped.
 pub struct ColorModeBuilder<'g> {
     g: &'g mut Graphics,
     space: ColorSpace,
@@ -999,7 +983,7 @@ pub struct ColorModeBuilder<'g> {
 }
 
 impl ColorModeBuilder<'_> {
-    /// `max(255)` for every channel, or `max((360, 100, 100))` / `max((360, 100, 100, 1))`.
+    /// `max(255)`, `max((360, 100, 100))` or `max((360, 100, 100, 1))`.
     pub fn max(mut self, max: impl IntoColorMax) -> Self {
         self.max = Some(max.into_color_max(self.space));
         self
@@ -1023,7 +1007,6 @@ impl Drop for ColorModeBuilder<'_> {
     }
 }
 
-/// Horizontal alignment, optionally paired with vertical.
 #[derive(Debug, Clone, Copy)]
 pub struct TextAlign(TextAlignH, TextAlignV);
 
@@ -1039,9 +1022,8 @@ impl From<(TextAlignH, TextAlignV)> for TextAlign {
     }
 }
 
-/// A light, added to a frame with [`Graphics::light`].
 #[derive(Debug)]
-pub struct Light(Entity);
+pub struct Light(pub(crate) Entity);
 
 impl Light {
     pub fn position(&self, position: impl IntoPoint) -> &Self {
