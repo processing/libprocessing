@@ -56,7 +56,7 @@ fn sketch() -> error::Result<()> {
 
     graphics_mode_3d(graphics)?;
     let extent = (GRID as f32) * SPACING * 0.5;
-    transform_set_position(graphics, Vec3::new(0.0, extent * 0.6, extent * 2.5))?;
+    transform_set_position(graphics, Vec3::new(0.0, -extent * 0.6, extent * 2.5))?;
     transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
     graphics_orbit_camera(graphics)?;
 
@@ -66,7 +66,7 @@ fn sketch() -> error::Result<()> {
 
     let green =
         light_create_directional(graphics, bevy::color::Color::srgb(0.0, 1.0, 0.0), 1000.0)?;
-    transform_set_position(green, Vec3::new(0.0, 1.0, 0.0))?;
+    transform_set_position(green, Vec3::new(0.0, -1.0, 0.0))?;
     transform_look_at(green, Vec3::ZERO)?;
 
     let blue = light_create_directional(graphics, bevy::color::Color::srgb(0.0, 0.0, 1.0), 1000.0)?;
@@ -88,7 +88,7 @@ fn sketch() -> error::Result<()> {
         let ry = hash_unit(i.wrapping_mul(40503).wrapping_add(0x68E1));
         let rz = hash_unit(i.wrapping_mul(2246822519).wrapping_add(0xC2B2));
         positions.push((rx * 2.0 - 1.0) * extent_half);
-        positions.push((ry * 2.0 - 1.0) * extent_half);
+        positions.push((1.0 - ry * 2.0) * extent_half);
         positions.push((rz * 2.0 - 1.0) * extent_half);
         colors.push(rx);
         colors.push(ry);

@@ -13,13 +13,13 @@ def setup():
     geometry.normal(0.0, 0.0, 1.0)
 
     geometry.uv(0.0, 0.0)
-    geometry.vertex(-80.0, -80.0, 0.0)
+    geometry.vertex(-80.0, 80.0, 0.0)
 
     geometry.uv(1.0, 0.0)
-    geometry.vertex(80.0, -80.0, 0.0)
+    geometry.vertex(80.0, 80.0, 0.0)
 
     geometry.uv(0.5, 1.0)
-    geometry.vertex(0.0, 80.0, 0.0)
+    geometry.vertex(0.0, -80.0, 0.0)
 
     geometry.index(0)
     geometry.index(1)

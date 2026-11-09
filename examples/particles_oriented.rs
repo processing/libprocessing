@@ -52,7 +52,7 @@ fn sketch() -> error::Result<()> {
     let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, 6.0, 18.0))?;
+    transform_set_position(graphics, Vec3::new(0.0, -6.0, 18.0))?;
     transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
     let _light =
@@ -68,7 +68,7 @@ fn sketch() -> error::Result<()> {
         for y in 0..5 {
             for z in 0..5 {
                 positions.push((x as f32 - 2.0) * 1.6);
-                positions.push((y as f32 - 2.0) * 1.6);
+                positions.push((2.0 - y as f32) * 1.6);
                 positions.push((z as f32 - 2.0) * 1.6);
                 rotations.push(0.0);
                 rotations.push(0.0);

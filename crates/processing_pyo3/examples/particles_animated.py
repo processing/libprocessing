@@ -32,7 +32,7 @@ def setup():
 
 
 def draw():
-    camera_position(0.0, 8.0, 25.0)
+    camera_position(0.0, -8.0, 25.0)
     camera_look_at(0.0, 0.0, 0.0)
     background(15, 15, 20)
     fill(230, 128, 75)

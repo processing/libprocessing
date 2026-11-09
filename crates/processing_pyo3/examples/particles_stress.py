@@ -16,12 +16,12 @@ def setup():
     mode_3d()
 
     extent = GRID * SPACING * 0.5
-    camera_position(0.0, extent * 0.6, extent * 2.5)
+    camera_position(0.0, -extent * 0.6, extent * 2.5)
     camera_look_at(0.0, 0.0, 0.0)
     orbit_camera()
 
     directional_light((1.0, 0.0, 0.0), 1000.0, position=Vec3.X, look_at=Vec3.ZERO)
-    directional_light((0.0, 1.0, 0.0), 1000.0, position=Vec3.Y, look_at=Vec3.ZERO)
+    directional_light((0.0, 1.0, 0.0), 1000.0, position=Vec3(0.0, -1.0, 0.0), look_at=Vec3.ZERO)
     directional_light((0.0, 0.0, 1.0), 1000.0, position=Vec3.Z, look_at=Vec3.ZERO)
 
     p = create_particles(

@@ -9,9 +9,11 @@ use bevy::{
     camera::visibility::RenderLayers,
     ecs::system::RunSystemOnce,
     gltf::{Gltf, GltfMaterial, GltfMeshName},
+    mesh::VertexAttributeValues,
     pbr::ExtendedMaterial,
+    platform::collections::HashSet,
     prelude::*,
-    world_serialization::WorldInstanceSpawner,
+    world_serialization::{InstanceId, WorldInstanceSpawner},
 };
 
 use crate::geometry::{BuiltinAttributes, Geometry, layout::VertexLayout};
@@ -23,6 +25,66 @@ use processing_core::error::{ProcessingError, Result};
 
 #[derive(Component)]
 pub struct GltfNodeTransform(pub Transform);
+
+/// Mesh assets already mirrored into the y-down world; a glTF loaded twice shares them
+#[derive(Resource, Default)]
+struct MirroredMeshes(HashSet<AssetId<Mesh>>);
+
+/// `M * T * M` for the y mirror `M`: conjugating every local transform mirrors the hierarchy
+fn mirror_y(t: Transform) -> Transform {
+    let q = t.rotation;
+    Transform {
+        translation: Vec3::new(t.translation.x, -t.translation.y, t.translation.z),
+        rotation: Quat::from_xyzw(-q.x, q.y, -q.z, q.w),
+        scale: t.scale,
+    }
+}
+
+fn mirror_mesh(mesh: &mut Mesh) {
+    for attr in [Mesh::ATTRIBUTE_POSITION, Mesh::ATTRIBUTE_NORMAL] {
+        if let Some(VertexAttributeValues::Float32x3(v)) = mesh.attribute_mut(attr) {
+            for p in v.iter_mut() {
+                p[1] = -p[1];
+            }
+        }
+    }
+    // the bitangent is `cross(normal, tangent) * w`, and a mirror flips that handedness
+    if let Some(VertexAttributeValues::Float32x4(v)) = mesh.attribute_mut(Mesh::ATTRIBUTE_TANGENT) {
+        for t in v.iter_mut() {
+            t[1] = -t[1];
+            t[3] = -t[3];
+        }
+    }
+}
+
+/// glTF is y-up and the Processing world is y-down, so a scene is mirrored on import to
+/// render as authored. The clockwise front face already matches the mirrored winding.
+fn mirror_instance(world: &mut World, instance_id: InstanceId) {
+    world.init_resource::<MirroredMeshes>();
+    let entities: Vec<Entity> = world
+        .resource::<WorldInstanceSpawner>()
+        .iter_instance_entities(instance_id)
+        .collect();
+    for &e in &entities {
+        if let Some(mut t) = world.get_mut::<Transform>(e) {
+            *t = mirror_y(*t);
+        }
+    }
+    let handles: Vec<Handle<Mesh>> = entities
+        .iter()
+        .filter_map(|&e| world.get::<Mesh3d>(e).map(|m| m.0.clone()))
+        .collect();
+    world.resource_scope(|world, mut meshes: Mut<Assets<Mesh>>| {
+        let mut done = world.resource_mut::<MirroredMeshes>();
+        for handle in handles {
+            if done.0.insert(handle.id())
+                && let Some(mut mesh) = meshes.get_mut(&handle)
+            {
+                mirror_mesh(&mut mesh);
+            }
+        }
+    });
+}
 
 fn resolve_asset_path(config: &Config, path: &str) -> AssetPath<'static> {
     let asset_path = AssetPath::parse(path).into_owned();
@@ -117,6 +179,8 @@ pub fn load(
             world.entity_mut(e).remove::<Camera>();
         }
     }
+
+    mirror_instance(world, instance_id);
 
     let entity = world
         .spawn(GltfHandle {
@@ -320,8 +384,8 @@ pub fn camera(In((gltf_entity, index)): In<(Entity, usize)>, world: &mut World) 
                         graphics::OrthoArgs {
                             left: o.area.min.x,
                             right: o.area.max.x,
-                            bottom: o.area.min.y,
-                            top: o.area.max.y,
+                            bottom: -o.area.max.y,
+                            top: -o.area.min.y,
                             near: o.near,
                             far: o.far,
                         },

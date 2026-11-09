@@ -25,10 +25,10 @@ def draw():
 
     radius = 1.5
     lx = math.cos(t) * radius
-    ly = 1.5
+    ly = -1.5
     lz = math.sin(t) * radius
     light.position(lx, ly, lz)
-    light.look_at(0.0, 0.8, 0.0)
+    light.look_at(0.0, -0.8, 0.0)
 
     r = math.sin(t * 8.0) * 0.5 + 0.5
     g = math.sin(t * 8.0 + 2.0) * 0.5 + 0.5

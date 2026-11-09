@@ -40,15 +40,15 @@ fn sketch() -> error::Result<()> {
     geometry_color(mesh, Vec4::new(1.0, 0.0, 0.0, 1.0))?;
     geometry_normal(mesh, Vec3::new(0.0, 0.0, 1.0))?;
     geometry_attribute_float(mesh, custom_attr, 0.0)?;
-    geometry_vertex(mesh, Vec3::new(-50.0, -50.0, 0.0))?;
+    geometry_vertex(mesh, Vec3::new(-50.0, 50.0, 0.0))?;
 
     geometry_color(mesh, Vec4::new(0.0, 1.0, 0.0, 1.0))?;
     geometry_attribute_float(mesh, custom_attr, 0.5)?;
-    geometry_vertex(mesh, Vec3::new(50.0, -50.0, 0.0))?;
+    geometry_vertex(mesh, Vec3::new(50.0, 50.0, 0.0))?;
 
     geometry_color(mesh, Vec4::new(0.0, 0.0, 1.0, 1.0))?;
     geometry_attribute_float(mesh, custom_attr, 1.0)?;
-    geometry_vertex(mesh, Vec3::new(0.0, 50.0, 0.0))?;
+    geometry_vertex(mesh, Vec3::new(0.0, -50.0, 0.0))?;
 
     geometry_index(mesh, 0)?;
     geometry_index(mesh, 1)?;

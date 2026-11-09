@@ -39,7 +39,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let theta = hash_unit(seed) * 6.2831853;
     let r     = sqrt(hash_unit(seed * 2u + 1u));
     let dirxz = vec2<f32>(cos(theta), sin(theta)) * r;
-    let dy    = 0.7 + 0.3 * hash_unit(seed * 3u + 7u);
+    let dy    = -(0.7 + 0.3 * hash_unit(seed * 3u + 7u));
     let v     = vec3<f32>(dirxz.x, dy, dirxz.y) * spawn.speed.x;
 
     position[slot * 3u + 0u] = spawn.pos.x;

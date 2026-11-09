@@ -48,7 +48,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let theta = hash_unit(seed) * 6.2831853;
     let r     = sqrt(hash_unit(seed * 2u + 1u));
     let dirxz = vec2<f32>(cos(theta), sin(theta)) * r;
-    let dy    = 0.7 + 0.3 * hash_unit(seed * 3u + 7u);
+    let dy    = -(0.7 + 0.3 * hash_unit(seed * 3u + 7u));
     let v     = vec3<f32>(dirxz.x, dy, dirxz.y) * spawn.speed.x;
 
     position[slot * 3u + 0u] = spawn.pos.x;
@@ -127,8 +127,8 @@ fn sketch() -> error::Result<()> {
     let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, 4.0, 16.0))?;
-    transform_look_at(graphics, Vec3::new(0.0, 2.0, 0.0))?;
+    transform_set_position(graphics, Vec3::new(0.0, -4.0, 16.0))?;
+    transform_look_at(graphics, Vec3::new(0.0, -2.0, 0.0))?;
 
     let _light =
         light_create_directional(graphics, bevy::color::Color::srgb(0.95, 0.9, 0.85), 800.0)?;
@@ -172,7 +172,7 @@ fn sketch() -> error::Result<()> {
     let burst: u32 = 120;
     let dt: f32 = 1.0 / 60.0;
     let ttl: f32 = 2.5;
-    let gravity: f32 = 9.8;
+    let gravity: f32 = -9.8;
     let speed: f32 = 5.0;
     let start = Instant::now();
 
@@ -199,7 +199,7 @@ fn sketch() -> error::Result<()> {
         compute_set(
             spawn,
             "pos",
-            shader_value::ShaderValue::Float4([sx, 7.0, sz, 0.0]),
+            shader_value::ShaderValue::Float4([sx, -7.0, sz, 0.0]),
         )?;
         compute_set(
             spawn,

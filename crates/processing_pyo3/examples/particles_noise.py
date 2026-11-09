@@ -35,7 +35,7 @@ def setup():
 
 
 def draw():
-    camera_position(0.0, 4.0, 18.0)
+    camera_position(0.0, -4.0, 18.0)
     camera_look_at(0.0, 0.0, 0.0)
     background(15, 15, 20)
 

@@ -972,7 +972,9 @@ mod projection_tests {
         assert!(ndc(0.0) > ndc(-1.0) && ndc(0.0) < ndc(1.0));
         // top-left of the canvas maps to NDC (-1, 1)
         let corner = clip * Vec4::new(0.0, 0.0, 0.0, 1.0);
-        assert!((corner.x / corner.w + 1.0).abs() < 1e-6 && (corner.y / corner.w - 1.0).abs() < 1e-6);
+        assert!(
+            (corner.x / corner.w + 1.0).abs() < 1e-6 && (corner.y / corner.w - 1.0).abs() < 1e-6
+        );
     }
 
     /// 3D is the same y-down world: a point above the origin (negative y) projects to the top
@@ -997,7 +999,10 @@ mod projection_tests {
         let up = ndc(Vec3::new(0.0, -10.0, -100.0));
         let right = ndc(Vec3::new(10.0, 0.0, -100.0));
         assert!(up.y > 0.0, "negative world y must be screen-up, got {up}");
-        assert!(right.x > 0.0, "positive world x must be screen-right, got {right}");
+        assert!(
+            right.x > 0.0,
+            "positive world x must be screen-right, got {right}"
+        );
         assert!(ndc(Vec3::new(0.0, 0.0, -10.0)).z > ndc(Vec3::new(0.0, 0.0, -100.0)).z);
     }
 }

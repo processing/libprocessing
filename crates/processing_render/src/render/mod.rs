@@ -7,12 +7,12 @@ pub mod style;
 pub mod transform;
 
 use bevy::{
+    camera::Camera3dDepthLoadOp,
     camera::{
         CameraOutputMode, ClearColorConfig,
         primitives::Aabb,
         visibility::{NoFrustumCulling, RenderLayers},
     },
-    camera::Camera3dDepthLoadOp,
     ecs::{query::Has, system::SystemParam},
     math::{Affine2, Affine3A, Vec3A},
     pbr::gpu_instance_batch::GpuBatchedMesh3d,
@@ -202,7 +202,7 @@ pub fn flush_draw_commands(
         let mut drained = true;
 
         while let Some(cmd) = pending.next() {
-            // check whether we are the first flush after a present 
+            // check whether we are the first flush after a present
             let opens_pass =
                 |batch: &BatchState| batch.draw_index == 0 && batch.current_mesh.is_none();
             match cmd {
@@ -1726,4 +1726,3 @@ fn layer_z(draw_index: u32) -> f32 {
 fn sort_bias(draw_index: u32) -> f32 {
     draw_index as f32 * 1e-6
 }
-

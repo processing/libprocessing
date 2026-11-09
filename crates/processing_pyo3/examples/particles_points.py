@@ -28,7 +28,7 @@ def draw():
 
     t = elapsed_time * 0.15
     r = BOUND * 2.6
-    camera_position(cos(t) * r, BOUND * 0.6, sin(t) * r)
+    camera_position(cos(t) * r, -BOUND * 0.6, sin(t) * r)
     camera_look_at(0.0, 0.0, 0.0)
 
     particles(p)

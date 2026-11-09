@@ -16,7 +16,7 @@ def band(seg, phase):
     twist = theta * 0.5 + phase
     w = (
         WIDTH * cos(twist) * radial[0],
-        WIDTH * sin(twist),
+        -WIDTH * sin(twist),
         WIDTH * cos(twist) * radial[2],
     )
     left = [center[0] - w[0], center[1] - w[1], center[2] - w[2]]
@@ -46,7 +46,7 @@ def draw():
 
     t = elapsed_time * 0.15
     r = R * 3.0
-    camera_position(cos(t) * r, R * 1.2, sin(t) * r)
+    camera_position(cos(t) * r, -R * 1.2, sin(t) * r)
     camera_look_at(0.0, 0.0, 0.0)
 
     particles(p, topology="triangle_strip")

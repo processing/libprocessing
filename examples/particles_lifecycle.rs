@@ -27,7 +27,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     age[i] = age[i] + dt;
-    position[i * 3u + 1u] = position[i * 3u + 1u] - dt * 1.5;
+    position[i * 3u + 1u] = position[i * 3u + 1u] + dt * 1.5;
 
     let remaining = clamp(1.0 - age[i] / ttl, 0.0, 1.0);
     let s = remaining * remaining;
@@ -54,7 +54,7 @@ fn sketch() -> error::Result<()> {
     let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, 2.0, 14.0))?;
+    transform_set_position(graphics, Vec3::new(0.0, -2.0, 14.0))?;
     transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
     let sphere = geometry_sphere(0.1, 8, 6)?;
@@ -112,7 +112,7 @@ fn sketch() -> error::Result<()> {
             let theta = u * std::f32::consts::TAU;
             let r = v * 0.6;
             positions.push(theta.cos() * r);
-            positions.push(2.5);
+            positions.push(-2.5);
             positions.push(theta.sin() * r);
             let h = (i as f32 * 0.013) % 1.0;
             let (cr, cg, cb) = hsv_to_rgb(h, 0.85, 1.0);

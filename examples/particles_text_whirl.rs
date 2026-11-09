@@ -287,7 +287,7 @@ fn sketch() -> error::Result<()> {
     let text = "processing5";
     let w = graphics_text_width(graphics, text)?;
     println!("text width = {w} (size = {TEXT_PT}, extrusion = {EXTRUSION})");
-    let mesh = graphics_text_to_model(graphics, text, -w / 2.0, -TEXT_PT * 0.4, EXTRUSION)?;
+    let mesh = graphics_text_to_model(graphics, text, -w / 2.0, TEXT_PT * 0.4, EXTRUSION)?;
     let source = geometry_create_from_mesh(mesh)?;
 
     let (cdf_bytes, indices_bytes, face_count) = processing_core::app_mut(|app| {
