@@ -1224,12 +1224,20 @@ pub fn image_copy_from(dst: Entity, src: Entity, src_is_graphics: bool) -> error
                 .clone();
             image::BlitSource::Image(handle)
         };
-        let dst_handle = app
-            .world()
-            .get::<image::Image>(dst)
-            .ok_or(error::ProcessingError::ImageNotFound)?
-            .handle
-            .clone();
+        // a render target's alpha is unknown until read back, so it is assumed translucent
+        let translucent = match &source {
+            image::BlitSource::Graphics(_) => true,
+            image::BlitSource::Image(_) => app
+                .world()
+                .get::<image::Image>(src)
+                .is_none_or(|img| img.translucent),
+        };
+        let mut dst_image = app
+            .world_mut()
+            .get_mut::<image::Image>(dst)
+            .ok_or(error::ProcessingError::ImageNotFound)?;
+        dst_image.translucent = translucent;
+        let dst_handle = dst_image.handle.clone();
         app.sub_app_mut(bevy::render::RenderApp)
             .world_mut()
             .run_system_cached_with(image::blit, (dst_handle, source))
@@ -1272,7 +1280,12 @@ pub fn image_update(entity: Entity, pixels: &[LinearRgba]) -> error::Result<()> 
                     px_size,
                 ),
             )
-            .unwrap()
+            .unwrap()?;
+        world
+            .get_mut::<image::Image>(entity)
+            .ok_or(error::ProcessingError::ImageNotFound)?
+            .translucent = pixels.iter().any(|p| p.alpha < 1.0);
+        Ok(())
     })
 }
 
@@ -1285,12 +1298,10 @@ pub fn image_update_raw(entity: Entity, data: &[u8]) -> error::Result<()> {
         }
         let texture = gpu_image(app, entity)?.texture.clone();
         let world = app.world_mut();
-        let (size, texture_format) = {
-            let p_image = world
-                .get::<image::Image>(entity)
-                .ok_or(error::ProcessingError::ImageNotFound)?;
-            (p_image.size, p_image.texture_format)
-        };
+        let mut p_image = world
+            .get_mut::<image::Image>(entity)
+            .ok_or(error::ProcessingError::ImageNotFound)?;
+        let (size, texture_format) = (p_image.size, p_image.texture_format);
         let px_size = image::pixel_size(texture_format)? as u32;
         let expected = (size.width * size.height * px_size) as usize;
         if data.len() != expected {
@@ -1302,6 +1313,8 @@ pub fn image_update_raw(entity: Entity, data: &[u8]) -> error::Result<()> {
                 data.len()
             )));
         }
+        p_image.translucent =
+            image::has_translucent_pixels(data, texture_format, size.width, size.height);
         world
             .run_system_cached_with(
                 image::update_region_write,
@@ -1338,7 +1351,14 @@ pub fn image_update_region(
                 image::update_region_write,
                 (entity, texture, x, y, width, height, data, px_size),
             )
-            .unwrap()
+            .unwrap()?;
+        if pixels.iter().any(|p| p.alpha < 1.0) {
+            world
+                .get_mut::<image::Image>(entity)
+                .ok_or(error::ProcessingError::ImageNotFound)?
+                .translucent = true;
+        }
+        Ok(())
     })
 }
 

@@ -547,6 +547,17 @@ impl<'a, 'py> FromPyObject<'a, 'py> for ImageRef {
         if let Ok(img) = ob.extract::<PyRef<Image>>() {
             return Ok(ImageRef { entity: img.entity });
         }
+        // an offscreen Graphics renders into an image; a window has no texture to sample
+        if let Ok(g) = ob.extract::<PyRef<Graphics>>() {
+            if image_size(g.surface.entity).is_err() {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "a window Graphics cannot be drawn as an image",
+                ));
+            }
+            return Ok(ImageRef {
+                entity: g.surface.entity,
+            });
+        }
         #[cfg(feature = "webcam")]
         if let Ok(cam) = ob.extract::<PyRef<crate::webcam::Webcam>>() {
             return Ok(ImageRef {
@@ -554,7 +565,7 @@ impl<'a, 'py> FromPyObject<'a, 'py> for ImageRef {
             });
         }
         Err(pyo3::exceptions::PyTypeError::new_err(
-            "expected an Image or Webcam",
+            "expected an Image, Graphics or Webcam",
         ))
     }
 }

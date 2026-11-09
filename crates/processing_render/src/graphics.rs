@@ -676,11 +676,21 @@ pub fn end_draw(app: &mut App, entity: Entity) -> Result<()> {
 ///
 // TODO: why is metal particularly affected by this? can we remove this?
 pub fn warmup(app: &mut App, entity: Entity) -> Result<()> {
+    // an offscreen buffer starts transparent, like Processing's createGraphics
+    let offscreen = matches!(
+        app.world().get::<RenderTarget>(entity),
+        Some(RenderTarget::Image(_))
+    );
+    let clear = if offscreen {
+        Color::NONE
+    } else {
+        DEFAULT_CLEAR_COLOR
+    };
     for _ in 0..3 {
         app.world_mut()
             .run_system_cached_with(
                 record_command,
-                (entity, DrawCommand::BackgroundColor(DEFAULT_CLEAR_COLOR)),
+                (entity, DrawCommand::BackgroundColor(clear)),
             )
             .unwrap()?;
         present(app, entity)?;

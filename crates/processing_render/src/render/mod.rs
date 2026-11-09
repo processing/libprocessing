@@ -252,6 +252,7 @@ pub fn flush_draw_commands(
                     if let Ok(img) = p_images.get(entity) {
                         let mut pbr = state.style.material_key.as_pbr();
                         pbr.base_color_texture = Some(img.handle.clone());
+                        pbr.transparent = img.translucent;
                         state.style.material_key = pbr.into();
                     }
                 }
@@ -259,6 +260,7 @@ pub fn flush_draw_commands(
                     if let MaterialKey::Pbr { .. } = &state.style.material_key {
                         let mut pbr = state.style.material_key.as_pbr();
                         pbr.base_color_texture = None;
+                        pbr.transparent = false;
                         state.style.material_key = pbr.into();
                     }
                 }
@@ -840,7 +842,7 @@ pub fn flush_draw_commands(
 
                     let tint = state.style.tint_color.unwrap_or(Color::WHITE);
                     let material_key = MaterialKey::Color {
-                        transparent: tint.alpha() < 1.0,
+                        transparent: tint.alpha() < 1.0 || p_image.translucent,
                         background_image: Some(p_image.handle.clone()),
                         uv_transform: uv_xform,
                         blend_state: state.style.blend_state,

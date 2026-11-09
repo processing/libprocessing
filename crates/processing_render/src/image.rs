@@ -207,6 +207,35 @@ pub struct Image {
     readback_buffer: Buffer,
     pub texture_format: TextureFormat,
     pub size: Extent3d,
+    /// Any pixel has alpha below one, so draws sampling it must blend
+    pub translucent: bool,
+}
+
+/// Whether tightly packed `data` in `format` holds any pixel with alpha below one
+pub fn has_translucent_pixels(data: &[u8], format: TextureFormat, width: u32, height: u32) -> bool {
+    let Ok(px_size) = pixel_size(format) else {
+        return true;
+    };
+    if px_size == 4 {
+        return data.chunks_exact(4).any(|p| p[3] < u8::MAX);
+    }
+    match bytes_to_pixels(data, format, width, height, width as usize * px_size) {
+        Ok(pixels) => pixels.iter().any(|p| p.alpha < 1.0),
+        Err(_) => true,
+    }
+}
+
+/// `translucent` for a CPU-side image; unknown contents count as translucent
+fn image_translucent(image: &bevy::image::Image) -> bool {
+    let size = image.texture_descriptor.size;
+    image.data.as_deref().is_none_or(|data| {
+        has_translucent_pixels(
+            data,
+            image.texture_descriptor.format,
+            size.width,
+            size.height,
+        )
+    })
 }
 
 pub fn create(
@@ -215,6 +244,7 @@ pub fn create(
     mut images: ResMut<Assets<bevy::image::Image>>,
     render_device: Res<RenderDevice>,
 ) -> Entity {
+    let translucent = has_translucent_pixels(&data, texture_format, size.width, size.height);
     let mut image = bevy::image::Image::new(
         size,
         TextureDimension::D2,
@@ -242,6 +272,7 @@ pub fn create(
             readback_buffer,
             texture_format,
             size,
+            translucent,
         },))
         .id()
 }
@@ -266,6 +297,7 @@ pub fn from_handle(
 
     let size = image.texture_descriptor.size;
     let texture_format = image.texture_descriptor.format;
+    let translucent = image_translucent(image);
 
     let render_device = world.resource::<RenderDevice>();
     let readback_buffer = create_readback_buffer(
@@ -282,6 +314,7 @@ pub fn from_handle(
             readback_buffer,
             texture_format,
             size,
+            translucent,
         })
         .id())
 }
@@ -305,6 +338,7 @@ pub fn load(In(path): In<PathBuf>, world: &mut World) -> Result<Entity> {
 
     let size = image.texture_descriptor.size;
     let texture_format = image.texture_descriptor.format;
+    let translucent = image_translucent(image);
 
     let render_device = world.resource::<RenderDevice>();
     let readback_buffer = create_readback_buffer(
@@ -321,6 +355,7 @@ pub fn load(In(path): In<PathBuf>, world: &mut World) -> Result<Entity> {
             readback_buffer,
             texture_format,
             size,
+            translucent,
         })
         .id())
 }
