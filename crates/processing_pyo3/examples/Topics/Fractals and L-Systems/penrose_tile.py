@@ -2,7 +2,7 @@
 # by Geraldine Sarmiento.
 #
 # This example was based on Patrick Dwyer's L-System class.
-from mewnala import *
+from processing_py import *
 
 ds = None
 

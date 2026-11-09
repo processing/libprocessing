@@ -2,7 +2,7 @@
 #
 # no_loop() stops the draw loop; every key press calls redraw()
 # to draw one more frame.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

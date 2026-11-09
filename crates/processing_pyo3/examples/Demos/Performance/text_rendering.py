@@ -1,7 +1,7 @@
 # Text Rendering
 #
 # Draws the word HELLO 10000 times per frame at random positions.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

@@ -3,7 +3,7 @@
 #
 # Collision detection against all
 # outer cube's surfaces.
-from mewnala import *
+from processing_py import *
 
 # 20 little internal cubes
 cubies = []

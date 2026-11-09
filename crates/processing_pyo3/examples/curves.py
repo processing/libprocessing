@@ -1,4 +1,4 @@
-from mewnala import *
+from processing_py import *
 from math import sin, cos
 
 t = 0.0

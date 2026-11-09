@@ -11,15 +11,15 @@ You can learn more about this project from this [talk at LibreGraphicsMeeting 20
 
 There is two different things at work here :
 - libprocessing (this repo) is the low-level cross-platform library for the core Processing API. It's written in Rust, and thus lets write Processing sketches in Rust.
-- mewnala is a Python package built directly from libprocessing, providing Python bindings for the library. It's available as any other Python package out there and lets you write Processing sketches in a Python environment, regardless of you having libprocessing or Rust installed.
+- processing-py is a Python package built directly from libprocessing, providing Python bindings for the library. It's available as any other Python package out there and lets you write Processing sketches in a Python environment, regardless of you having libprocessing or Rust installed.
 
-### mewnala (the python library)
+### processing-py (the python library)
 
 Inside of our `processing_pyo3` crate we have created a python package that you can easily install with pip.
 Again, we are still very nascent, but let us know what kinds of snags you may run into while getting this set up.
 Try running the examples in the [processing_pyo3 examples directory](crates/processing_pyo3/examples).
 
-We are big fans of [uv](https://github.com/astral-sh/uv) and this is the easiest way to get started using `mewnala`
+We are big fans of [uv](https://github.com/astral-sh/uv) and this is the easiest way to get started using `processing-py`
 
 #### Setting up uv on linux or macOS
 ```bash
@@ -31,24 +31,24 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-#### Install a mewnala
+#### Install processing-py
 
-We're going to create a folder named `mewnala-sketchbook` and install the `mewnala` package inside:
+We're going to create a folder named `processing-py-sketchbook` and install the `processing-py` package inside:
 
 ```bash
 # Initialize a project with uv
-uv init mewnala-sketchbook && cd mewnala-sketchbook
+uv init processing-py-sketchbook && cd processing-py-sketchbook
 
 # add the package
-uv add mewnala
+uv add processing-py
 ```
 
-Now create a file named `sketch.py` at the root of `mewnala-sketchbook`.
+Now create a file named `sketch.py` at the root of `processing-py-sketchbook`.
 
 You can use this code to test
 
 ```python
-from mewnala import *
+from processing_py import *
 
 def setup():
     size(400, 400)
@@ -176,7 +176,7 @@ sudo dpkg -i libglfw3_3.4-4_amd64.deb libglfw3-dev_3.4-4_amd64.deb
 
 We want your help building this library! 
 
-One place we could really use some help is with porting Processing examples to using mewnala, and then reporting where you get stuck or where things could be easier. Check out the effort here: https://github.com/processing/processing-examples-mewnala. 
+One place we could really use some help is with porting Processing examples to using processing-py, and then reporting where you get stuck or where things could be easier. Check out the ported examples in [crates/processing_pyo3/examples](crates/processing_pyo3/examples). 
 
 
 You can see a list of outstanding tasks in our [issues](https://github.com/processing/libprocessing). However, while we're still in the early phases, consider checking in with us first in the `#devs-chat` channel on [Discord](https://discord.gg/h99u95nU7q) to coordinate our efforts.

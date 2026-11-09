@@ -1,7 +1,7 @@
 # Loading Images.
 #
 # Processing applications can load images from the network.
-from mewnala import *
+from processing_py import *
 
 img = None
 

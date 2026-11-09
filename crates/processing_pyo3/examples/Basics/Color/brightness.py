@@ -3,7 +3,7 @@
 #
 # Brightness is the relative lightness or darkness of a color.
 # Move the cursor vertically over each bar to alter its brightness.
-from mewnala import *
+from processing_py import *
 
 bar_width = 20
 last_bar = -1

@@ -2,7 +2,7 @@
 #
 # Random numbers create the basis of this image.
 # Each time the program is loaded the result is different.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

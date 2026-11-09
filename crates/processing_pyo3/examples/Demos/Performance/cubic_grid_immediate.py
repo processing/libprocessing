@@ -3,7 +3,7 @@
 #
 # 3D translucent colored grid uses nested push_matrix()
 # and pop_matrix() functions.
-from mewnala import *
+from processing_py import *
 
 box_size = 20
 margin = box_size * 2

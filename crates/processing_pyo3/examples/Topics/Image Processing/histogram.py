@@ -4,7 +4,7 @@
 # A histogram is the frequency distribution
 # of the gray levels with the number of pure black values
 # displayed on the left and number of pure white values on the right.
-from mewnala import *
+from processing_py import *
 
 img = None
 

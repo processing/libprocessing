@@ -3,7 +3,7 @@
 # 10000 fading sprites emitted from the mouse. The particles live in a GPU
 # particle system (the retained equivalent of the PShape group): the CPU
 # updates their positions and tints and uploads them once per frame.
-from mewnala import *
+from processing_py import *
 
 particle_system = None
 quad = None

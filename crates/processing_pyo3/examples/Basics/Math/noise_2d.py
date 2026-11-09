@@ -2,7 +2,7 @@
 # by Daniel Shiffman.
 #
 # Using 2D noise to create simple texture.
-from mewnala import *
+from processing_py import *
 
 increment = 0.02
 

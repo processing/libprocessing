@@ -4,7 +4,7 @@
 # Values in a 2D array are accessed through two index values.
 # 2D arrays are useful for storing images. In this example, each dot
 # is colored in relation to its distance from the center of the image.
-from mewnala import *
+from processing_py import *
 
 distances = []
 max_distance = 0.0

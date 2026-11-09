@@ -3,7 +3,7 @@
 # This file uses a file object to write data continuously to a file
 # while the mouse is pressed. When a key is pressed, the file closes
 # itself and the program is stopped.
-from mewnala import *
+from processing_py import *
 import os
 
 output = None

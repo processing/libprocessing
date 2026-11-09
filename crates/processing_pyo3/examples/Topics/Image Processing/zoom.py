@@ -3,7 +3,7 @@
 # Move the cursor over the image to alter its position. Click and press
 # the mouse to zoom. This program displays a series of lines with their
 # heights corresponding to a color value read from an image.
-from mewnala import *
+from processing_py import *
 
 img = None
 img_pixels = []

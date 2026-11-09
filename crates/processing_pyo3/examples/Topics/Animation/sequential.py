@@ -3,7 +3,7 @@
 #
 # Displaying a sequence of images creates the illusion of motion.
 # Twelve images are loaded and each is displayed individually in a loop.
-from mewnala import *
+from processing_py import *
 
 num_frames = 12  # The number of frames in the animation
 current_frame = 0

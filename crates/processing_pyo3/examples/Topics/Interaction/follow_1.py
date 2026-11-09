@@ -2,7 +2,7 @@
 # based on code from Keith Peters.
 #
 # A line segment is pushed and pulled by the cursor.
-from mewnala import *
+from processing_py import *
 
 x = 100.0
 y = 100.0

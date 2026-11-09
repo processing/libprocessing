@@ -2,7 +2,7 @@
 # by Daniel Shiffman.
 #
 # Create a more complex wave by adding two waves together.
-from mewnala import *
+from processing_py import *
 
 xspacing = 8  # How far apart should each horizontal location be spaced
 w = 0  # Width of entire wave

@@ -4,7 +4,7 @@
 # Ported from the webGL version available in ShaderToy:
 # http://www.iquilezles.org/apps/shadertoy/
 # (Look for Deform under the Plane Deformations Presets)
-from mewnala import *
+from processing_py import *
 
 tex = None
 deform = None

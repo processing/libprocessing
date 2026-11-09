@@ -2,7 +2,7 @@
 #
 # The word "tickle" jitters when the cursor hovers over.
 # Sometimes, it can be tickled off the screen.
-from mewnala import *
+from processing_py import *
 
 message = "tickle"
 x = 0.0  # X and Y coordinates of text

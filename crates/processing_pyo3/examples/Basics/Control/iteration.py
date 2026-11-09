@@ -1,7 +1,7 @@
 # Iteration.
 #
 # Iteration with a "for" structure to construct repetitive forms.
-from mewnala import *
+from processing_py import *
 
 y = 0
 num = 14

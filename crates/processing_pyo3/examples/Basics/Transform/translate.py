@@ -4,7 +4,7 @@
 # to any location within the window. The first parameter
 # sets the x-axis offset and the second parameter sets the
 # y-axis offset.
-from mewnala import *
+from processing_py import *
 
 x = 0
 y = 0

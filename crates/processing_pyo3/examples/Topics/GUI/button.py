@@ -3,7 +3,7 @@
 # Click on one of the colored shapes in the
 # center of the image to change the color of
 # the background.
-from mewnala import *
+from processing_py import *
 
 rect_x = 0  # Position of square button
 rect_y = 0

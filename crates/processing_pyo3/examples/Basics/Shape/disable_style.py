@@ -6,7 +6,7 @@
 # method of Shape turns off this information so functions like
 # stroke() and fill() change the SVGs color. The enable_style()
 # method turns the file's original styles back on.
-from mewnala import *
+from processing_py import *
 
 bot = None
 

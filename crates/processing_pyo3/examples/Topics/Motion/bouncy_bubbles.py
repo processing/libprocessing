@@ -2,7 +2,7 @@
 # based on code from Keith Peters.
 #
 # Multiple-object collision.
-from mewnala import *
+from processing_py import *
 
 num_balls = 12
 spring = 0.05

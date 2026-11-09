@@ -16,7 +16,7 @@
 # For weaker detection effect, try this kernel:     [  0  -1   0 ]
 #                                                   [ -1   4  -1 ]
 #                                                   [  0  -1   0 ]
-from mewnala import *
+from processing_py import *
 
 kernel = [[-1, -1, -1],
           [-1, 8, -1],

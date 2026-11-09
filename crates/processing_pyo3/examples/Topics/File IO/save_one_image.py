@@ -4,7 +4,7 @@
 # display window. In this example, save() is run when a mouse
 # button is pressed. The image "line.png" is saved to the
 # same folder as the sketch's program file.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

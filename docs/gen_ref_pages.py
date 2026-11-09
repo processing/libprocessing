@@ -7,9 +7,9 @@ with mkdocs_gen_files.open("index.md", "w") as f:
     f.write(readme)
 
 modules = {
-    "reference/index.md": ("API Reference", "mewnala", {"show_submodules": False}),
-    "reference/math.md": ("mewnala.math", "mewnala.math", {}),
-    # "reference/color.md": ("mewnala.color", "mewnala.color", {}),
+    "reference/index.md": ("API Reference", "processing_py", {"show_submodules": False}),
+    "reference/math.md": ("processing_py.math", "processing_py.math", {}),
+    # "reference/color.md": ("processing_py.color", "processing_py.color", {}),
 }
 
 for path, (title, module, options) in modules.items():

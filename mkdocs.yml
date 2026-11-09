@@ -1,5 +1,5 @@
-site_name: mewnala
-site_description: Mewnala, I choose you!
+site_name: processing-py
+site_description: Python bindings for libprocessing
 site_url: https://processing.github.io/libprocessing/
 repo_url: https://github.com/processing/libprocessing
 repo_name: processing/libprocessing

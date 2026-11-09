@@ -1,15 +1,15 @@
-from .mewnala import *
+from .processing_py import *
 
-# `from .mewnala import *` above binds Processing globals that shadow Python
+# `from .processing_py import *` above binds Processing globals that shadow Python
 # builtins (e.g. `set`, `filter`, `get`), so this module reaches builtins it needs
 # through an explicit alias rather than the shadowed names.
 import builtins as _builtins
 
 # re-export native submodules that have no Python counterpart as submodules of
-# this module, so users can import from `mewnala.color` without knowing about
+# this module, so users can import from `processing_py.color` without knowing about
 # the internal structure of the native module.
 import sys as _sys
-from . import mewnala as _native
+from . import processing_py as _native
 
 _color = getattr(_native, "color", None)
 if _color is not None:

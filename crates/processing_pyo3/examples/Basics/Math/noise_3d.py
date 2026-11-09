@@ -2,7 +2,7 @@
 #
 # Using 3D noise to create simple animated texture.
 # Here, the third dimension ('z') is treated as time.
-from mewnala import *
+from processing_py import *
 
 increment = 0.01
 # The noise function's 3rd argument, a global variable that increments once per cycle

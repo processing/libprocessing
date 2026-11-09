@@ -3,7 +3,7 @@
 #
 # The arm follows the position of the mouse by
 # calculating the angles with atan2().
-from mewnala import *
+from processing_py import *
 
 seg_length = 80
 x = 0.0

@@ -3,7 +3,7 @@
 #
 # Based on Keith Peter's Solution in
 # Foundation Actionscript Animation: Making Things Move!
-from mewnala import *
+from processing_py import *
 
 balls = []
 

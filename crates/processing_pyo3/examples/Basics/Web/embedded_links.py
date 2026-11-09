@@ -1,7 +1,7 @@
 # Loading URLs.
 #
 # Click on the button to open a URL in a browser.
-from mewnala import *
+from processing_py import *
 
 over_button = False
 

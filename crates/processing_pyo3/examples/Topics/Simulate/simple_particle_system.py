@@ -5,7 +5,7 @@
 # fall with gravity, and fade out over time.
 # A ParticleSystem object manages a variable size
 # list of particles.
-from mewnala import *
+from processing_py import *
 
 ps = None
 

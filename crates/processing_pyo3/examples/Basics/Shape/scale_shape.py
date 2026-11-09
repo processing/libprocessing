@@ -4,7 +4,7 @@
 # Move the mouse left and right to zoom the SVG file.
 # This shows how, unlike an imported image, the lines
 # remain smooth at any size.
-from mewnala import *
+from processing_py import *
 
 bot = None
 

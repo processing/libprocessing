@@ -2,7 +2,7 @@
 #
 # Uses the arc() function to generate a pie chart from the data
 # stored in an array.
-from mewnala import *
+from processing_py import *
 
 angles = [30, 10, 45, 35, 60, 38, 75, 67]
 

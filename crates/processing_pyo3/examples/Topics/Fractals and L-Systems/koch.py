@@ -3,7 +3,7 @@
 #
 # Renders a simple fractal, the Koch snowflake.
 # Each recursive level is drawn in sequence.
-from mewnala import *
+from processing_py import *
 
 k = None
 

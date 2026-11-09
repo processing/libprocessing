@@ -3,7 +3,7 @@
 #
 # Drag mouse to rotate cube. Demonstrates use of u/v coords on a
 # geometry and the effect of texture().
-from mewnala import *
+from processing_py import *
 
 tex = None
 cube = None

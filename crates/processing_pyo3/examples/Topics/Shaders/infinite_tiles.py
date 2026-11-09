@@ -1,6 +1,6 @@
 # Display endless moving background using a tile texture.
 # Contributed by martiSteiger
-from mewnala import *
+from processing_py import *
 
 tile_texture = None
 tile_shader = None

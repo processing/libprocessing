@@ -4,7 +4,7 @@
 # data to another. Each of the conversion functions converts its parameter
 # to an equivalent representation within its datatype.
 # The conversion functions include int(), float(), str(), ord(), chr(), and others.
-from mewnala import *
+from processing_py import *
 
 size(640, 360)
 background(0.0)

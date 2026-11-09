@@ -5,7 +5,7 @@
 # A "Mover" object stores location, velocity, and
 # acceleration as vectors. The motion is controlled by
 # affecting the acceleration (in this case towards the mouse).
-from mewnala import *
+from processing_py import *
 
 # A Mover object
 mover = None

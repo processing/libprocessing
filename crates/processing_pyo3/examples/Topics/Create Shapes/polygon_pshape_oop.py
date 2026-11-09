@@ -1,7 +1,7 @@
 # PolygonPShapeOOP
 #
 # Wrapping a retained geometry inside a custom class
-from mewnala import *
+from processing_py import *
 
 # A Star object
 s1 = None

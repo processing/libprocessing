@@ -2,7 +2,7 @@
 #
 # This example creates variables for colors that may be referred to
 # in the program by a name, rather than a number.
-from mewnala import *
+from processing_py import *
 
 inside = None
 middle = None

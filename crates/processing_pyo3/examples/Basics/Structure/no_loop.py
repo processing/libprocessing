@@ -3,7 +3,7 @@
 # The no_loop() function causes draw() to only run once.
 # Without calling no_loop(), the code inside draw() is
 # run continually.
-from mewnala import *
+from processing_py import *
 
 y = 180
 

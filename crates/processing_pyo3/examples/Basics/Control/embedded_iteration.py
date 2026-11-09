@@ -1,7 +1,7 @@
 # Embedding Iteration.
 #
 # Embedding "for" structures allows repetition in two dimensions.
-from mewnala import *
+from processing_py import *
 
 size(640, 360)
 background(0.0)

@@ -2,7 +2,7 @@
 #
 # 50000 textured sprites at fixed random positions, each drawn with
 # its own image() call every frame.
-from mewnala import *
+from processing_py import *
 
 sprite = None
 

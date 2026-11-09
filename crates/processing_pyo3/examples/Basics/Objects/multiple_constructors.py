@@ -4,7 +4,7 @@
 # Sometimes it's beneficial to specify every aspect of an object's data by assigning
 # parameters to the fields, but other times it might be appropriate to define only
 # one or a few.
-from mewnala import *
+from processing_py import *
 
 sp1 = None
 sp2 = None

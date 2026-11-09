@@ -4,7 +4,7 @@
 # press and hold any key to see the current pixel being read.
 # This program sequentially reads the color of every pixel of an image
 # and displays this color to fill the window.
-from mewnala import *
+from processing_py import *
 
 img = None
 direction = 1

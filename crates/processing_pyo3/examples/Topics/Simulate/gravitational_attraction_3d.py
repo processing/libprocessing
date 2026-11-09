@@ -11,7 +11,7 @@
 # For the basics of working with PVector, see
 # http://processing.org/learning/pvector/
 # as well as examples in Topics/Vectors/
-from mewnala import *
+from processing_py import *
 
 # A bunch of planets
 planets = []

@@ -3,7 +3,7 @@
 # Change the default shader to apply a simple, custom edge detection filter.
 #
 # Press the mouse to switch between the custom and default shader.
-from mewnala import *
+from processing_py import *
 
 edges = None
 img = None

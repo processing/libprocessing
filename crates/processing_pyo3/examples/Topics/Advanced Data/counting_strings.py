@@ -6,7 +6,7 @@
 #
 # This example uses the dict to perform a simple concordance
 # http://en.wikipedia.org/wiki/Concordance_(publishing)
-from mewnala import *
+from processing_py import *
 import os
 
 # A dict pairs strings with integers

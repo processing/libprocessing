@@ -3,7 +3,7 @@
 # Move the mouse to change the direction of the eyes.
 # The atan2() function computes the angle from each eye
 # to the cursor.
-from mewnala import *
+from processing_py import *
 
 e1 = None
 e2 = None

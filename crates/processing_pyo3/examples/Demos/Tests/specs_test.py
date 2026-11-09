@@ -1,9 +1,9 @@
 # Specs Test
 #
 # The Java sketch prints the OpenGL vendor, renderer, version, GLSL version
-# and extensions. mewnala exposes no GPU adapter information, so this prints
+# and extensions. processing_py exposes no GPU adapter information, so this prints
 # what it does know about the display and the sketch surface.
-from mewnala import *
+from processing_py import *
 
 size(100, 100)
 mode_3d()

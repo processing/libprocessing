@@ -5,7 +5,7 @@
 # created for this example is capable of drawing any
 # regular polygon. Try placing different numbers into the
 # polygon() function calls within draw() to explore.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

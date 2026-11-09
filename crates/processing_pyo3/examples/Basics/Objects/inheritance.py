@@ -4,7 +4,7 @@
 # programming terminology, one class can inherit fields and methods from another.
 # An object that inherits from another is called a subclass, and the object it
 # inherits from is called a superclass. A subclass extends the superclass.
-from mewnala import *
+from processing_py import *
 
 spots = None
 arm = None

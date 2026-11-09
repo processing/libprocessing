@@ -1,7 +1,7 @@
 # Array Objects.
 #
 # Demonstrates the syntax for creating a list of custom objects.
-from mewnala import *
+from processing_py import *
 
 unit = 40
 count = 0

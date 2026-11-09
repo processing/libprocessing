@@ -3,7 +3,7 @@
 # A demonstration of recursion, which means functions call themselves.
 # Notice how the draw_circle() function calls itself at the end of its block.
 # It continues to do this until the variable "level" is equal to 1.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

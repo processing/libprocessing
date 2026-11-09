@@ -2,7 +2,7 @@
 #
 # The create_image() function provides a fresh buffer of pixels to play with.
 # This example creates an image gradient.
-from mewnala import *
+from processing_py import *
 
 img = None
 

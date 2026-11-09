@@ -1,7 +1,7 @@
 # BeginEndContour
 #
 # How to cut a shape out of another using begin_contour() and end_contour()
-from mewnala import *
+from processing_py import *
 
 angle = 0.0
 

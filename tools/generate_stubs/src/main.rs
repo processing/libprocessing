@@ -35,7 +35,7 @@ fn swizzle_props(dim: usize) -> Vec<Function> {
                 },
                 returns: Some(Expr::Attribute {
                     value: Box::new(Expr::Name {
-                        id: "mewnala.math".into(),
+                        id: "processing_py.math".into(),
                     }),
                     attr: format!("Vec{length}"),
                 }),
@@ -80,11 +80,11 @@ fn find_cdylib() -> PathBuf {
 
     // Platform-specific library name
     let lib_name = if cfg!(target_os = "macos") {
-        "libmewnala.dylib"
+        "libprocessing_py.dylib"
     } else if cfg!(target_os = "windows") {
-        "mewnala.dll"
+        "processing_py.dll"
     } else {
-        "libmewnala.so"
+        "libprocessing_py.so"
     };
 
     let path = target_dir.join(lib_name);
@@ -107,7 +107,7 @@ fn main() {
     eprintln!("Introspecting: {}", cdylib_path.display());
 
     let mut module =
-        introspect_cdylib(&cdylib_path, "mewnala").expect("Failed to introspect cdylib");
+        introspect_cdylib(&cdylib_path, "processing_py").expect("Failed to introspect cdylib");
 
     module.incomplete = false;
     inject_swizzles(&mut module);
@@ -142,7 +142,7 @@ fn main() {
     let output_dir = workspace_root()
         .join("crates")
         .join("processing_pyo3")
-        .join("mewnala");
+        .join("processing_py");
 
     for (filename, content) in &stubs {
         let out_path = output_dir.join(filename);

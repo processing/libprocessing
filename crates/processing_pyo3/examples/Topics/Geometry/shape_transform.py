@@ -9,7 +9,7 @@
 # Up Arrow - increases points
 # Down Arrow - decreases points
 # 'p' key toggles between cube/pyramid
-from mewnala import *
+from processing_py import *
 
 pts = 4
 angle = 0

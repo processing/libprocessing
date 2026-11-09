@@ -4,7 +4,7 @@
 # and the other vertical.
 #
 # Press the mouse to switch between the custom and default shader.
-from mewnala import *
+from processing_py import *
 
 blur = None
 src = None

@@ -1,7 +1,7 @@
 # Continuous Lines.
 #
 # Click and drag the mouse to draw a line.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

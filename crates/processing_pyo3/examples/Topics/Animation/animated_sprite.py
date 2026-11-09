@@ -6,7 +6,7 @@
 # It would be easy to write a program to display
 # animated GIFs, but would not allow as much control over
 # the display sequence and rate of display.
-from mewnala import *
+from processing_py import *
 
 animation1 = None
 animation2 = None

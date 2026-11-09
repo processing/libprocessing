@@ -2,7 +2,7 @@
 #
 # Changing one shape into another by interpolating
 # vertices from one to another
-from mewnala import *
+from processing_py import *
 
 # Two lists to store the vertices for two shapes
 # This example assumes that each shape will have the same

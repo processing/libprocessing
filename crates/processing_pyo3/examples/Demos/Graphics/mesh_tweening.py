@@ -6,7 +6,7 @@
 #
 # Every vertex carries a second position ("tweened") and the vertex shader
 # blends between the two with the mouse.
-from mewnala import *
+from processing_py import *
 
 sh = None
 mat = None

@@ -3,7 +3,7 @@
 #
 # The arm follows the position of the ball by
 # calculating the angles with atan2().
-from mewnala import *
+from processing_py import *
 
 num_segments = 8
 x = [0.0] * num_segments

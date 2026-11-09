@@ -4,7 +4,7 @@
 # Demonstration of multiple forces acting on bodies.
 # Bodies experience gravity continuously and fluid
 # resistance when in "water".
-from mewnala import *
+from processing_py import *
 
 # Ten moving bodies
 movers = []

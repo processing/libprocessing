@@ -3,7 +3,7 @@
 # Move the mouse left and right to shift the balance.
 # The "mouse_x" variable is used to control both the
 # size and color of the rectangles.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

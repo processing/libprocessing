@@ -4,7 +4,7 @@
 # with a tab and corresponds to a different aspect of each car. The file stores
 # the miles per gallon, cylinders, displacement, etc., for more than 400 different
 # makes and models. Press a mouse button to advance to the next group of entries.
-from mewnala import *
+from processing_py import *
 import os
 
 records = []

@@ -3,7 +3,7 @@
 # Loads a "mask" for an image to specify the transparency
 # in different parts of the image. The two images are blended
 # together using the mask() method of an offscreen graphics buffer.
-from mewnala import *
+from processing_py import *
 
 img = None
 img_mask = None

@@ -2,7 +2,7 @@
 #
 # 10000 fading sprites emitted from the mouse, each drawn with its own
 # tinted image() call every frame.
-from mewnala import *
+from processing_py import *
 
 sprite = None
 

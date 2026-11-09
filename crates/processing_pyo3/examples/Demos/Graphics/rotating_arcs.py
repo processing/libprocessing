@@ -3,7 +3,7 @@
 #
 # Using sin/cos, blends colors, and draws a series of
 # rotating arcs on the screen.
-from mewnala import *
+from processing_py import *
 
 COUNT = 150
 

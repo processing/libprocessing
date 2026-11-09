@@ -3,7 +3,7 @@
 # A fish-eye shader is used on the main surface and
 # a glossy specular reflection shader is used on the
 # offscreen canvas.
-from mewnala import *
+from processing_py import *
 
 fisheye = None
 glossy = None

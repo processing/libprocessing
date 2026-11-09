@@ -3,7 +3,7 @@ requires = ["maturin>=1.10,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "mewnala"
+name = "processing-py"
 requires-python = ">=3.10"
 description = "Python bindings for libprocessing — a creative coding library inspired by Processing"
 license = "MIT OR Apache-2.0"
@@ -44,10 +44,10 @@ docs = [
 [tool.maturin]
 manifest-path = "Cargo.toml"
 include = [
-    { path = "mewnala/*.pyi", format = "sdist" },
-    { path = "mewnala/*.pyi", format = "wheel" },
-    { path = "mewnala/py.typed", format = "sdist" },
-    { path = "mewnala/py.typed", format = "wheel" },
+    { path = "processing_py/*.pyi", format = "sdist" },
+    { path = "processing_py/*.pyi", format = "wheel" },
+    { path = "processing_py/py.typed", format = "sdist" },
+    { path = "processing_py/py.typed", format = "wheel" },
 ]
 
 [tool.uv]

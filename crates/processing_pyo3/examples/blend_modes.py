@@ -1,4 +1,4 @@
-from mewnala import *
+from processing_py import *
 
 MODES = [BLEND, ADD, SUBTRACT, DARKEST, LIGHTEST, DIFFERENCE, EXCLUSION, MULTIPLY, SCREEN, REPLACE]
 index = 0

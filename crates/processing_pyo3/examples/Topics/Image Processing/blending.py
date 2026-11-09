@@ -3,7 +3,7 @@
 #
 # Images can be blended using one of the 10 blending modes.
 # Click to go to cycle through the modes.
-from mewnala import *
+from processing_py import *
 
 img1 = None
 img2 = None

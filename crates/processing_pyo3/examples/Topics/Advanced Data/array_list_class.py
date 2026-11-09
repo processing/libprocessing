@@ -6,7 +6,7 @@
 # from the list.
 #
 # Click the mouse to add bouncing balls.
-from mewnala import *
+from processing_py import *
 
 balls = []
 ball_width = 48

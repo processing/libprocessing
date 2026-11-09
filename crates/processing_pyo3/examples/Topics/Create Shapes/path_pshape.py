@@ -1,7 +1,7 @@
 # PathPShape
 #
 # A simple path using PShape
-from mewnala import *
+from processing_py import *
 
 # A PShape object
 path = None

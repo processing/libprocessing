@@ -1,7 +1,7 @@
 # Text Rotation.
 #
 # Draws letters to the screen and rotates them at different angles.
-from mewnala import *
+from processing_py import *
 
 f = None
 angle_rotate = 0.0

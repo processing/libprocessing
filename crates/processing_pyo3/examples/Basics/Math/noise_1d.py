@@ -1,7 +1,7 @@
 # Noise1D.
 #
 # Using 1D Perlin Noise to assign location.
-from mewnala import *
+from processing_py import *
 
 xoff = 0.0
 xincrement = 0.01

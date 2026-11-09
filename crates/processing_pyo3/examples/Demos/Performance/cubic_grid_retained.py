@@ -2,7 +2,7 @@
 #
 # The same translucent grid as CubicGridImmediate, but all the boxes are
 # built once into a single geometry and drawn with one call per frame.
-from mewnala import *
+from processing_py import *
 
 box_size = 20
 margin = box_size * 2

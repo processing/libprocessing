@@ -4,7 +4,7 @@
 # mouse_y position. The transformations applied to the first segment
 # are also applied to the second segment because they are inside
 # the same push_matrix() and pop_matrix() group.
-from mewnala import *
+from processing_py import *
 
 x = 0
 y = 0

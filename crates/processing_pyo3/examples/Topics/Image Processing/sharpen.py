@@ -22,7 +22,7 @@
 #                                                   [  0  -1   0 ]
 #
 # For greater sharpening, try increasing the value of the center pixel.
-from mewnala import *
+from processing_py import *
 
 kernel = [[-1, -1, -1],
           [-1, 9, -1],

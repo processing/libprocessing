@@ -5,7 +5,7 @@
 # with rect() and circles are made with ellipse(). Each
 # of these functions requires a number of parameters to
 # determine the shape's position and size.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

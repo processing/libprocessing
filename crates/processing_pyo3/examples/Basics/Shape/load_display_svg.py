@@ -4,7 +4,7 @@
 # The load_shape() command is used to read simple SVG (Scalable Vector Graphics)
 # files into a sketch. This example loads an SVG file of a monster robot face
 # and displays it to the screen.
-from mewnala import *
+from processing_py import *
 
 bot = None
 

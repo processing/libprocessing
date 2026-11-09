@@ -3,7 +3,7 @@
 # Created by inigo quilez - iq/2013
 # License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
 # Processing port by Raphaël de Courville.
-from mewnala import *
+from processing_py import *
 
 landscape = None
 
@@ -14,7 +14,7 @@ def setup():
     no_stroke()
 
     # This WESL code shows how to use shaders from
-    # shadertoy in mewnala with minimal changes.
+    # shadertoy in processing_py with minimal changes.
     landscape = load_shader("data/landscape.wesl")
 
 

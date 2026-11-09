@@ -2,7 +2,7 @@
 #
 # The lerp_color() function is useful for interpolating
 # between two colors.
-from mewnala import *
+from processing_py import *
 
 # Constants
 Y_AXIS = 1

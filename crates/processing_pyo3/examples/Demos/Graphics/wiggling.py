@@ -2,7 +2,7 @@
 #
 # Press 'w' to start wiggling, space to restore
 # original positions. Press '1', '2' or '3' to change the stroke weight.
-from mewnala import *
+from processing_py import *
 
 cube = []  # six faces, each a list of [x, y, z] vertices
 cube_size = 320

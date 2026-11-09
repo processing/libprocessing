@@ -5,7 +5,7 @@
 # determine the flow of a program. In this example, when the
 # boolean value "x" is true, vertical black lines are drawn and when
 # the boolean value "x" is false, horizontal gray lines are drawn.
-from mewnala import *
+from processing_py import *
 
 b = False
 

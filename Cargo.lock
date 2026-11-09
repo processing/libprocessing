@@ -3558,7 +3558,7 @@ dependencies = [
 
 [[package]]
 name = "generate_stubs"
-version = "0.0.5"
+version = "0.4.0"
 dependencies = [
  "pyo3-introspection",
 ]
@@ -6112,7 +6112,7 @@ dependencies = [
 
 [[package]]
 name = "processing"
-version = "0.0.8"
+version = "0.4.0"
 dependencies = [
  "bevy",
  "js-sys",
@@ -6133,7 +6133,7 @@ dependencies = [
 
 [[package]]
 name = "processing_audio"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "bevy",
  "bevy_seedling",
@@ -6141,7 +6141,7 @@ dependencies = [
 
 [[package]]
 name = "processing_core"
-version = "0.0.5"
+version = "0.4.0"
 dependencies = [
  "bevy",
  "raw-window-handle",
@@ -6151,7 +6151,7 @@ dependencies = [
 
 [[package]]
 name = "processing_cuda"
-version = "0.0.5"
+version = "0.4.0"
 dependencies = [
  "bevy",
  "bevy_cuda",
@@ -6161,7 +6161,7 @@ dependencies = [
 
 [[package]]
 name = "processing_ffi"
-version = "0.0.5"
+version = "0.4.0"
 dependencies = [
  "bevy",
  "cbindgen",
@@ -6171,7 +6171,7 @@ dependencies = [
 
 [[package]]
 name = "processing_glfw"
-version = "0.0.5"
+version = "0.4.0"
 dependencies = [
  "bevy",
  "glfw",
@@ -6183,7 +6183,7 @@ dependencies = [
 
 [[package]]
 name = "processing_input"
-version = "0.0.5"
+version = "0.4.0"
 dependencies = [
  "bevy",
  "processing_core",
@@ -6191,7 +6191,7 @@ dependencies = [
 
 [[package]]
 name = "processing_midi"
-version = "0.0.5"
+version = "0.4.0"
 dependencies = [
  "bevy",
  "nannou_midi",
@@ -6200,7 +6200,7 @@ dependencies = [
 
 [[package]]
 name = "processing_pyo3"
-version = "0.0.8"
+version = "0.4.0"
 dependencies = [
  "bevy",
  "png",
@@ -6217,7 +6217,7 @@ dependencies = [
 
 [[package]]
 name = "processing_render"
-version = "0.0.5"
+version = "0.4.0"
 dependencies = [
  "bevy",
  "bevy_naga_reflect",
@@ -6245,7 +6245,7 @@ dependencies = [
 
 [[package]]
 name = "processing_wasm"
-version = "0.0.5"
+version = "0.4.0"
 dependencies = [
  "bevy",
  "console_error_panic_hook",
@@ -6261,7 +6261,7 @@ dependencies = [
 
 [[package]]
 name = "processing_webcam"
-version = "0.0.5"
+version = "0.4.0"
 dependencies = [
  "bevy",
  "nannou_webcam",

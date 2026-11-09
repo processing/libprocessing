@@ -1,7 +1,7 @@
 # Sine.
 #
 # Smoothly scaling size with the sin() function.
-from mewnala import *
+from processing_py import *
 
 diameter = 0.0
 angle = 0

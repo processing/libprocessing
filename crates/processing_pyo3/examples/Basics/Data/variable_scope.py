@@ -9,7 +9,7 @@
 # global variable, the program will use the local variable to make
 # its calculations within the current scope. In Python a variable
 # is local to the whole function it is assigned in, not to a block.
-from mewnala import *
+from processing_py import *
 
 a = 80  # Create a global variable "a"
 

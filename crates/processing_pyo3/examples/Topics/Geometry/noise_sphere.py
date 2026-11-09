@@ -2,7 +2,7 @@
 # by David Pena.
 #
 # Uniform random distribution on the surface of a sphere.
-from mewnala import *
+from processing_py import *
 
 cuantos = 4000
 lista = []

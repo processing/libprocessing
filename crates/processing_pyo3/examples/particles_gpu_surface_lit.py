@@ -1,4 +1,4 @@
-from mewnala import *
+from processing_py import *
 from math import cos, sin
 
 NX, NY = 200, 200

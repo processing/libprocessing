@@ -2,7 +2,7 @@
 #
 # Roll over the colored squares in the center of the image
 # to change the color of the outside rectangle.
-from mewnala import *
+from processing_py import *
 
 rect_x = 0  # Position of square button
 rect_y = 0

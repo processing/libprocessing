@@ -4,7 +4,7 @@
 # The top row is the signal from "mouse_x",
 # the middle row is the signal from "mouse_y",
 # and the bottom row is the signal from "mouse_is_pressed".
-from mewnala import *
+from processing_py import *
 
 xvals = []
 yvals = []

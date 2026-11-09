@@ -7,7 +7,7 @@
 # function that is called when a key is released.
 #
 # Original 'Color Typewriter' concept by John Maeda.
-from mewnala import *
+from processing_py import *
 
 max_height = 40
 min_height = 20

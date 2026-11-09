@@ -3,7 +3,7 @@
 #
 # Using two random() calls and the point() function
 # to create an irregular sawtooth line.
-from mewnala import *
+from processing_py import *
 
 total_pts = 300
 steps = total_pts + 1

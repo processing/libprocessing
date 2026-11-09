@@ -1,10 +1,10 @@
-import mewnala
+import processing_py
 
 def _processing_post_execute(result):
-    mewnala._present()
-    if not mewnala._poll_events():
-        mewnala._graphics = None
+    processing_py._present()
+    if not processing_py._poll_events():
+        processing_py._graphics = None
         return
-    mewnala._tick(get_ipython().user_ns)
+    processing_py._tick(get_ipython().user_ns)
 
 get_ipython().events.register('post_run_cell', _processing_post_execute)

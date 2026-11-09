@@ -2,7 +2,7 @@
 # by Ira Greenberg.
 #
 # Softbody dynamics simulation using curve_vertex() and curve_tightness().
-from mewnala import *
+from processing_py import *
 
 # center point
 center_x = 0.0

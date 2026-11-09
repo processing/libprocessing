@@ -5,7 +5,7 @@
 # The branching angle is calculated as a function of
 # the horizontal mouse location. Move the mouse left
 # and right to change the angle.
-from mewnala import *
+from processing_py import *
 
 theta = 0.0
 

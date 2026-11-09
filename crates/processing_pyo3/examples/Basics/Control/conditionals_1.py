@@ -7,7 +7,7 @@
 # The questions asked within a program are always logical
 # or relational statements. For example, if the variable 'i' is
 # equal to zero then draw a line.
-from mewnala import *
+from processing_py import *
 
 size(640, 360)
 background(0.0)

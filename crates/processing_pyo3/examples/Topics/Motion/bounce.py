@@ -1,7 +1,7 @@
 # Bounce.
 #
 # When the shape hits the edge of the window, it reverses its direction.
-from mewnala import *
+from processing_py import *
 
 rad = 60  # Width of the shape
 xpos = 0.0  # Starting position of shape

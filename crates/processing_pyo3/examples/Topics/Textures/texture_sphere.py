@@ -6,7 +6,7 @@
 # Original based on code by Toxi.
 #
 # A 3D textured sphere with simple rotation control.
-from mewnala import *
+from processing_py import *
 
 pts_w = 0
 pts_h = 0

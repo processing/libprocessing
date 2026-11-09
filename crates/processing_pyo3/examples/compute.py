@@ -1,6 +1,6 @@
 import struct
 
-from mewnala import Graphics, Shader, Compute, Buffer
+from processing_py import Graphics, Shader, Compute, Buffer
 
 g = Graphics.new_offscreen(1, 1, "", None)
 g.begin_draw()

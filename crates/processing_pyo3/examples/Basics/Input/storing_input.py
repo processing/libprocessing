@@ -5,7 +5,7 @@
 # into an array and played back every frame. Between each
 # frame, the newest value are added to the end of each array
 # and the oldest value is deleted.
-from mewnala import *
+from processing_py import *
 
 num = 60
 mx = [0.0] * num

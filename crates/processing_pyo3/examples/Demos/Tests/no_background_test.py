@@ -2,7 +2,7 @@
 #
 # The background is only drawn once in setup, so every frame
 # accumulates on top of the previous one.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

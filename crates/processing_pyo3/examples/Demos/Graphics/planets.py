@@ -2,7 +2,7 @@
 #
 # Sun and mercury textures from http://planetpixelemporium.com
 # Star field picture from http://www.galacticimages.com/
-from mewnala import *
+from processing_py import *
 
 starfield = None
 

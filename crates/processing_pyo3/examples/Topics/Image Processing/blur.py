@@ -25,7 +25,7 @@
 #                                           1/256 * [ 6  24  36  24  6 ]
 #                                                   [ 4  16  24  16  4 ]
 #                                                   [ 1   4   6   4  1 ]
-from mewnala import *
+from processing_py import *
 
 v = 1.0 / 9.0
 kernel = [[v, v, v],

@@ -4,7 +4,7 @@
 # Transformation functions such as rotate() are additive.
 # Successively calling rotate(1.0) and rotate(2.0)
 # is equivalent to calling rotate(3.0).
-from mewnala import *
+from processing_py import *
 
 a = 0.0
 r_size = 0  # rectangle size

@@ -2,7 +2,7 @@
 #
 # Variables are used for storing values. In this example, change
 # the values of variables to affect the composition.
-from mewnala import *
+from processing_py import *
 
 size(640, 360)
 background(0.0)

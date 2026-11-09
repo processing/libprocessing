@@ -6,7 +6,7 @@
 # the sketch does not freeze while they load. It's useful when you are
 # loading large images. These images are small for a quick download, but
 # try it with your own huge images to get the full effect.
-from mewnala import *
+from processing_py import *
 
 img_count = 12
 imgs = []

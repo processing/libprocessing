@@ -7,7 +7,7 @@
 # In this example, an array named "coswave" is created and
 # filled with the cosine values. This data is displayed three
 # separate ways on the screen.
-from mewnala import *
+from processing_py import *
 
 coswave = []
 

@@ -3,7 +3,7 @@
 #
 # This example plots icosahedra. The Icosahdron is a regular
 # polyhedron composed of twenty equalateral triangles.
-from mewnala import *
+from processing_py import *
 
 ico1 = None
 ico2 = None

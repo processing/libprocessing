@@ -2,7 +2,7 @@
 #
 # Move the mouse to position the shape.
 # Press the mouse button to invert the color.
-from mewnala import *
+from processing_py import *
 
 
 def setup():

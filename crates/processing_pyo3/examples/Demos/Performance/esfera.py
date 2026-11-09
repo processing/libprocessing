@@ -3,7 +3,7 @@
 #
 # Distribucion aleatoria uniforme sobre la superficie de una esfera.
 # The hairs are kept in one LINES geometry whose vertices are moved every frame.
-from mewnala import *
+from processing_py import *
 
 cuantos = 16000
 lista = []

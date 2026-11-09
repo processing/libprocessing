@@ -1,7 +1,7 @@
 # Texture Triangle.
 #
 # Using a rectangular image to map a texture onto a triangle.
-from mewnala import *
+from processing_py import *
 
 img = None
 tri = None

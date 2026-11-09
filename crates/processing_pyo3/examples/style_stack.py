@@ -2,7 +2,7 @@
 #
 # A grid of spinners. Each cell sets up its own transform and color inside
 # push()/pop(), so nothing leaks to its neighbours.
-from mewnala import *
+from processing_py import *
 from math import sin
 
 GRID = 6
