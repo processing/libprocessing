@@ -445,3 +445,27 @@ pub fn destroy(
     commands.entity(entity).despawn();
     Ok(())
 }
+
+/// Reflects a y-up mesh into the y-down world: positions, normals, tangents and winding
+pub(crate) fn mirror_y(mesh: &mut Mesh) {
+    for attr in [Mesh::ATTRIBUTE_POSITION, Mesh::ATTRIBUTE_NORMAL] {
+        if let Some(VertexAttributeValues::Float32x3(v)) = mesh.attribute_mut(attr) {
+            for p in v.iter_mut() {
+                p[1] = -p[1];
+            }
+        }
+    }
+    // the bitangent is `cross(normal, tangent) * w`, and a mirror flips that handedness
+    if let Some(VertexAttributeValues::Float32x4(v)) = mesh.attribute_mut(Mesh::ATTRIBUTE_TANGENT) {
+        for t in v.iter_mut() {
+            t[1] = -t[1];
+            t[3] = -t[3];
+        }
+    }
+    // a reflection reverses winding; `invert_winding` skips unindexed meshes, so index them first
+    if mesh.indices().is_none() && mesh.primitive_topology() == PrimitiveTopology::TriangleList {
+        let n = mesh.count_vertices() as u32;
+        mesh.insert_indices(Indices::U32((0..n).collect()));
+    }
+    let _ = mesh.invert_winding();
+}

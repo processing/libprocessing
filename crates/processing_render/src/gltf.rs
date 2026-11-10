@@ -9,7 +9,6 @@ use bevy::{
     camera::visibility::RenderLayers,
     ecs::system::RunSystemOnce,
     gltf::{Gltf, GltfMaterial, GltfMeshName},
-    mesh::VertexAttributeValues,
     pbr::ExtendedMaterial,
     platform::collections::HashSet,
     prelude::*,
@@ -40,25 +39,8 @@ fn mirror_y(t: Transform) -> Transform {
     }
 }
 
-fn mirror_mesh(mesh: &mut Mesh) {
-    for attr in [Mesh::ATTRIBUTE_POSITION, Mesh::ATTRIBUTE_NORMAL] {
-        if let Some(VertexAttributeValues::Float32x3(v)) = mesh.attribute_mut(attr) {
-            for p in v.iter_mut() {
-                p[1] = -p[1];
-            }
-        }
-    }
-    // the bitangent is `cross(normal, tangent) * w`, and a mirror flips that handedness
-    if let Some(VertexAttributeValues::Float32x4(v)) = mesh.attribute_mut(Mesh::ATTRIBUTE_TANGENT) {
-        for t in v.iter_mut() {
-            t[1] = -t[1];
-            t[3] = -t[3];
-        }
-    }
-}
-
 /// glTF is y-up and the Processing world is y-down, so a scene is mirrored on import to
-/// render as authored. The clockwise front face already matches the mirrored winding.
+/// render as authored.
 fn mirror_instance(world: &mut World, instance_id: InstanceId) {
     world.init_resource::<MirroredMeshes>();
     let entities: Vec<Entity> = world
@@ -80,7 +62,7 @@ fn mirror_instance(world: &mut World, instance_id: InstanceId) {
             if done.0.insert(handle.id())
                 && let Some(mut mesh) = meshes.get_mut(&handle)
             {
-                mirror_mesh(&mut mesh);
+                crate::geometry::mirror_y(&mut mesh);
             }
         }
     });
