@@ -117,12 +117,13 @@ pub fn check_belongs_to(
 pub fn destroy(
     In(entity): In<Entity>,
     mut commands: Commands,
-    lights: Query<(), With<ProcessingLight>>,
+    lights: Query<&LightOf, With<ProcessingLight>>,
 ) -> Result<(), ProcessingError> {
-    if !lights.contains(entity) {
-        return Err(ProcessingError::LightNotFound);
-    }
-    commands.entity(entity).despawn();
+    let owner = lights
+        .get(entity)
+        .map_err(|_| ProcessingError::LightNotFound)?;
+    // queued `Light(entity)` commands may still reference it, so despawn at the next begin_draw
+    commands.entity(entity).insert(DrawTransient(owner.0));
     Ok(())
 }
 
@@ -253,12 +254,17 @@ mod tests {
     }
 
     #[test]
-    fn destroy_despawns_a_light() {
+    fn destroy_despawns_a_light_at_the_next_begin_draw() {
         let mut world = World::new();
         let graphics = world.spawn(RenderState::new()).id();
         let light = create_light(&mut world, graphics, DIRECTIONAL);
         let result = world.run_system_once_with(destroy, light).unwrap();
         assert!(result.is_ok());
+        assert!(world.get_entity(light).is_ok());
+        world
+            .run_system_once_with(begin_draw, graphics)
+            .unwrap()
+            .unwrap();
         assert!(world.get_entity(light).is_err());
     }
 
