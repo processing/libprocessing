@@ -33,12 +33,12 @@ fn sketch() -> error::Result<()> {
 
     let dir_light =
         light_create_directional(graphics, bevy::color::Color::srgb(1.0, 0.98, 0.95), 1_500.0)?;
-    transform_set_position(dir_light, Vec3::new(300.0, 400.0, 300.0))?;
+    transform_set_position(dir_light, Vec3::new(300.0, -400.0, 300.0))?;
     transform_look_at(dir_light, Vec3::new(0.0, 0.0, 0.0))?;
 
     let point_light =
         light_create_point(graphics, bevy::color::Color::WHITE, 100_000.0, 800.0, 0.0)?;
-    transform_set_position(point_light, Vec3::new(200.0, 200.0, 400.0))?;
+    transform_set_position(point_light, Vec3::new(200.0, -200.0, 400.0))?;
 
     // Grid of materials varying roughness (x) and metallic (y)
     let cols = 11;
@@ -86,7 +86,7 @@ fn sketch() -> error::Result<()> {
                     DrawCommand::Translate(
                         Vec2::new(
                             col as f32 * spacing - offset_x,
-                            row as f32 * spacing - offset_y,
+                            offset_y - row as f32 * spacing,
                         )
                         .extend(0.0),
                     ),

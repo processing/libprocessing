@@ -30,7 +30,7 @@ def setup():
 
 def draw():
     global frame
-    camera_position(0.0, 4.0, 14.0)
+    camera_position(0.0, -4.0, 14.0)
     camera_look_at(0.0, 0.0, 0.0)
     background(15, 15, 20)
 
@@ -44,7 +44,7 @@ def draw():
         i = frame * burst + k
         t = i * 0.05
         radius = 1.5 + min(t * 0.02, 3.0)
-        height = math.sin(t * 0.1) * 2.0
+        height = -math.sin(t * 0.1) * 2.0
         positions.extend([math.cos(t) * radius, height, math.sin(t) * radius])
         c = hsva((i * 4.32) % 360.0, 0.85, 1.0)
         colors.extend([c.r, c.g, c.b, 1.0])

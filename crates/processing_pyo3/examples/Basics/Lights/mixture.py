@@ -15,11 +15,10 @@ def setup():
     mode_3d()
     no_stroke()
 
-    # Lights are created once; the world is y-up, so the y of every
-    # position and direction is flipped
+    # Lights are created once
     # Orange point light on the right
     point = point_light((0.59, 0.39, 0.0), 3000000000.0, 600.0, 1.0,  # Color
-                        position=(200, 150, 0))  # Position
+                        position=(200, -150, 0))  # Position
 
     # Blue directional light from the left
     directional = directional_light((0.0, 0.4, 1.0), 4000.0,  # Color
@@ -28,8 +27,8 @@ def setup():
     # Yellow spotlight from the front
     spot = spot_light((1.0, 1.0, 0.43), 2000000000.0, 600.0, 1.0,  # Color
                       PI / 4, PI / 2,  # Angle, concentration
-                      position=(0, -40, 200),  # Position
-                      look_at=(0, -40 + 0.5, 200 - 0.5))  # Direction
+                      position=(0, 40, 200),  # Position
+                      look_at=(0, 40 - 0.5, 200 - 0.5))  # Direction
     roughness(0.6)
 
 

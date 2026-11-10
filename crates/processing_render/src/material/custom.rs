@@ -64,17 +64,19 @@ struct CustomMaterialKey {
 }
 
 fn specialize(
-    key: &dyn Any,
+    _pipeline: &dyn Any,
     descriptor: &mut RenderPipelineDescriptor,
     _layout: &MeshVertexBufferLayoutRef,
-    _pipeline_key: ErasedMaterialPipelineKey,
+    pipeline_key: ErasedMaterialPipelineKey,
 ) -> std::result::Result<(), SpecializedMeshPipelineError> {
-    if let Some(key) = key.downcast_ref::<CustomMaterialKey>() {
-        crate::material::apply_pipeline_state(descriptor, key.blend_state, key.depth_write);
-        if let Some(double_sided) = key.double_sided {
-            descriptor.primitive.cull_mode = if double_sided { None } else { Some(Face::Back) };
-        }
-    }
+    // the first argument is bevy's `MaterialPipeline`; the material key rides in the pipeline key
+    let key: CustomMaterialKey = pipeline_key.material_key.to_key();
+    crate::material::apply_pipeline_state(descriptor, key.blend_state, key.depth_write);
+    // two-sided unless asked otherwise, like every other mewnala material
+    descriptor.primitive.cull_mode = match key.double_sided {
+        Some(false) => Some(Face::Back),
+        _ => None,
+    };
     Ok(())
 }
 

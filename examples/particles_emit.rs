@@ -17,7 +17,7 @@ fn sketch() -> error::Result<()> {
     let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, 4.0, 14.0))?;
+    transform_set_position(graphics, Vec3::new(0.0, -4.0, 14.0))?;
     transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
     let sphere = geometry_sphere(0.08, 8, 6)?;
@@ -71,7 +71,7 @@ fn sketch() -> error::Result<()> {
             let i = frame * burst + k;
             let t = i as f32 * 0.05;
             let radius = 1.5 + (t * 0.02).min(3.0);
-            let height = ((t * 0.1).sin()) * 2.0;
+            let height = -((t * 0.1).sin()) * 2.0;
             positions.push(t.cos() * radius);
             positions.push(height);
             positions.push(t.sin() * radius);

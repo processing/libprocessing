@@ -50,9 +50,9 @@ def draw():
             opacity = 1.0 - lifetimes[n] / part_lifetime
 
             if lifetimes[n] == 0:
-                # Re-spawn dead particle (the 3D origin is the canvas center, y up)
+                # Re-spawn dead particle (the 3D origin is the canvas center)
                 positions[n].x = mouse_x - width / 2
-                positions[n].y = height / 2 - mouse_y
+                positions[n].y = mouse_y - height / 2
 
                 angle = random(0, TWO_PI)
                 s = random(0.5 * speed, 0.5 * speed)
@@ -62,7 +62,7 @@ def draw():
                 positions[n].x += velocities[n].x
                 positions[n].y += velocities[n].y
 
-                velocities[n].y -= gravity
+                velocities[n].y += gravity
             draw_particle(positions[n], opacity)
 
     fcount += 1

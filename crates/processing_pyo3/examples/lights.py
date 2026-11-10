@@ -11,11 +11,11 @@ def setup():
 
     # Point Lights
     point_light_a = point_light((1.0, 0.5, 0.25), 1000000.0, 200.0, 0.5)
-    point_light_a.position(-25.0, 5.0, 51.0)
+    point_light_a.position(-25.0, -5.0, 51.0)
     point_light_a.look_at(0.0, 0.0, 0.0)
 
     point_light_b = point_light((0.0, 0.5, 0.75), 2000000.0, 200.0, 0.25)
-    point_light_b.position(0.0, 5.0, 50.5)
+    point_light_b.position(0.0, -5.0, 50.5)
     point_light_b.look_at(0.0, 0.0, 0.0)
 
     # Spot Light
@@ -25,13 +25,13 @@ def setup():
 
 def draw():
     global angle
-    camera_position(100.0, 100.0, 300.0)
+    camera_position(100.0, -100.0, 300.0)
     camera_look_at(0.0, 0.0, 0.0)
     background(220)
 
     roughness(0.0)
     push_matrix()
-    rotate(angle)
+    rotate(-angle)
     box(100.0, 100.0, 100.0)
     pop_matrix()
 

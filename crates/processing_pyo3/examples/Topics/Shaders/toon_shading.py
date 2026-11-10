@@ -29,12 +29,11 @@ def draw():
     background(0.0)
     dir_y = (mouse_y / height - 0.5) * 2
     dir_x = (mouse_x / width - 0.5) * 2
-    # directionalLight(204, 204, 204, -dirX, -dirY, -1), y flipped for the y-up world
-    light.look_at(-dir_x, dir_y, -1)
+    light.look_at(-dir_x, -dir_y, -1)
     if shader_enabled:
         # the custom material does not see the scene lights: pass the
         # direction toward the light as a uniform
-        toon.set(light_dir=(dir_x, -dir_y, 1.0))
+        toon.set(light_dir=(dir_x, dir_y, 1.0))
         material(toon)
     else:
         material(plain)  # GAP: no reset_shader()/no_material() to return to the default material

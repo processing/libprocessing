@@ -23,26 +23,26 @@ def setup():
     no_stroke()
 
     # The meshes are built once; uv coordinates are the image coordinates
-    # divided by the image size, and the world is y-up (the top edge is +100)
+    # divided by the image size
     tube = create_geometry(topology=TRIANGLE_STRIP)
     for i in range(tube_res):
         x = tube_x[i] * 100
         z = tube_y[i] * 100
         u = (img.width // tube_res * i) / img.width
         tube.uv(u, 0)
-        tube.vertex(x, 100, z)
-        tube.uv(u, 1)
         tube.vertex(x, -100, z)
+        tube.uv(u, 1)
+        tube.vertex(x, 100, z)
 
     quad = create_geometry(topology=TRIANGLES)
     quad.uv(0, 0)
-    quad.vertex(0, 100, 0)
-    quad.uv(100 / img.width, 0)
-    quad.vertex(100, 100, 0)
-    quad.uv(100 / img.width, 100 / img.height)
-    quad.vertex(100, -100, 0)
-    quad.uv(0, 100 / img.height)
     quad.vertex(0, -100, 0)
+    quad.uv(100 / img.width, 0)
+    quad.vertex(100, -100, 0)
+    quad.uv(100 / img.width, 100 / img.height)
+    quad.vertex(100, 100, 0)
+    quad.uv(0, 100 / img.height)
+    quad.vertex(0, 100, 0)
     for i in (0, 1, 2, 0, 2, 3):
         quad.index(i)
 

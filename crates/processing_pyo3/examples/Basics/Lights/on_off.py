@@ -30,8 +30,7 @@ def draw():
     spin += 0.01
 
     push_matrix()
-    # Rotations about x run the other way in the y-up world
-    rotate_x(-PI / 9)
+    rotate_x(PI / 9)
     rotate_y(PI / 5 + spin)
     box(150)
     pop_matrix()

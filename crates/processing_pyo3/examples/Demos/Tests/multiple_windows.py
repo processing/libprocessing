@@ -27,9 +27,9 @@ def draw():
     arcball.run()
     if mouse_is_pressed:
         fill(0.0)
-        text("Mouse pressed on parent.", 10 - width / 2, height / 2 - 10)
+        text("Mouse pressed on parent.", 10 - width / 2, 10 - height / 2)
         fill(0.0, 0.94, 0.0)
-        ellipse(mouse_x - width / 2, height / 2 - mouse_y, 60, 60)
+        ellipse(mouse_x - width / 2, mouse_y - height / 2, 60, 60)
         mouse_pressed_on_parent = True
     else:
         fill(0.08)
@@ -37,7 +37,7 @@ def draw():
         mouse_pressed_on_parent = False
     box(100)
     if child.g.mouse_is_pressed:
-        text("Mouse pressed on child.", 10 - width / 2, height / 2 - 30)
+        text("Mouse pressed on child.", 10 - width / 2, 30 - height / 2)
 
     child.draw()
 
@@ -69,9 +69,9 @@ class ChildApplet:
         arcball2.run()
         if g.mouse_is_pressed:
             g.fill(0.94, 0.0, 0.0)
-            g.ellipse(g.mouse_x - g.width / 2, g.height / 2 - g.mouse_y, 20, 20)
+            g.ellipse(g.mouse_x - g.width / 2, g.mouse_y - g.height / 2, 20, 20)
             g.fill(1.0)
-            g.text("Mouse pressed on child.", 10 - g.width / 2, g.height / 2 - 30)
+            g.text("Mouse pressed on child.", 10 - g.width / 2, 30 - g.height / 2)
         else:
             g.fill(1.0)
             g.ellipse(0, 0, 20, 20)
@@ -79,7 +79,7 @@ class ChildApplet:
         g.draw_box(100, 200, 100)
         if mouse_pressed_on_parent:
             g.fill(1.0)
-            g.text("Mouse pressed on parent", 20 - g.width / 2, g.height / 2 - 20)
+            g.text("Mouse pressed on parent", 20 - g.width / 2, 20 - g.height / 2)
 
 
 # Ariel and V3ga's arcball class with a couple tiny mods by Robert Hodgin

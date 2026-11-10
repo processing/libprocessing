@@ -26,8 +26,7 @@ def draw():
     background(0.0)
     dir_y = (mouse_y / height - 0.5) * 2
     dir_x = (mouse_x / width - 0.5) * 2
-    # The world is y-up, so the vertical direction is flipped
-    light.look_at(-dir_x, dir_y, -1)
+    light.look_at(-dir_x, -dir_y, -1)
     translate(-100, 0, 0)
     sphere(80)
     translate(200, 0, 0)

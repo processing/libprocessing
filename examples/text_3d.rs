@@ -24,7 +24,7 @@ fn sketch() -> error::Result<()> {
 
     let dir_light =
         light_create_directional(graphics, bevy::color::Color::srgb(0.3, 0.3, 0.4), 2000.0)?;
-    transform_set_position(dir_light, Vec3::new(200.0, 300.0, 500.0))?;
+    transform_set_position(dir_light, Vec3::new(200.0, -300.0, 500.0))?;
     transform_look_at(dir_light, Vec3::new(0.0, 0.0, 0.0))?;
 
     let glow = material_create_pbr()?;
@@ -68,7 +68,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(
             graphics,
             DrawCommand::Rotate {
-                angle: t * 0.3,
+                angle: -t * 0.3,
                 axis: Vec3::Z,
             },
         )?;

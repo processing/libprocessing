@@ -30,7 +30,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         sin(params.fz * t + params.time * 0.23),
     ) * params.scale;
     position[i * 3u + 0u] = world.x;
-    position[i * 3u + 1u] = world.y;
+    position[i * 3u + 1u] = -world.y;
     position[i * 3u + 2u] = world.z;
 
     let rainbow = hsv2rgb(vec3<f32>(fract(u + params.time * 0.03), 0.75, 1.0));
