@@ -28,7 +28,7 @@ use bevy::{
     render::render_resource::{Extent3d, TextureFormat},
     window::{
         CompositeAlphaMode, Monitor, RawHandleWrapper, WindowLevel, WindowMode, WindowPosition,
-        WindowRef, WindowResolution, WindowWrapper,
+        WindowRef, WindowResized, WindowResolution, WindowScaleFactorChanged, WindowWrapper,
     },
 };
 use raw_window_handle::{
@@ -445,6 +445,8 @@ pub fn resize(
 pub fn set_pixel_density(
     In((window_entity, density)): In<(Entity, f32)>,
     mut windows: Query<&mut Window>,
+    mut resized: bevy::ecs::message::MessageWriter<WindowResized>,
+    mut scale_changed: bevy::ecs::message::MessageWriter<WindowScaleFactorChanged>,
 ) -> Result<()> {
     if let Ok(mut window) = windows.get_mut(window_entity) {
         let logical_w = window.resolution.width();
@@ -453,6 +455,16 @@ pub fn set_pixel_density(
         window
             .resolution
             .set_physical_resolution((logical_w * density) as u32, (logical_h * density) as u32);
+        // cameras size their targets from these messages, not from the Window change
+        scale_changed.write(WindowScaleFactorChanged {
+            window: window_entity,
+            scale_factor: density as f64,
+        });
+        resized.write(WindowResized {
+            window: window_entity,
+            width: logical_w,
+            height: logical_h,
+        });
         Ok(())
     } else {
         Err(error::ProcessingError::SurfaceNotFound)

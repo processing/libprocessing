@@ -651,6 +651,18 @@ fn upload_rect(
     };
     let size = image.texture_descriptor.size;
     let format = image.texture_descriptor.format;
+    write_rect(queue, texture, data, size, format, rect)
+}
+
+/// Writes `rect` of tightly packed `data`, which covers a texture of `size`, into the texture
+pub(crate) fn write_rect(
+    queue: &RenderQueue,
+    texture: &Texture,
+    data: &[u8],
+    size: Extent3d,
+    format: TextureFormat,
+    rect: URect,
+) -> Result<()> {
     let px_size = pixel_size(format)?;
     let stride = size.width as usize * px_size;
     check_len(data.len(), stride, size, format)?;
@@ -915,7 +927,7 @@ pub fn bytes_to_pixels(
         .collect()
 }
 
-fn decode_pixel(c: &[u8], format: TextureFormat) -> Result<LinearRgba> {
+pub(crate) fn decode_pixel(c: &[u8], format: TextureFormat) -> Result<LinearRgba> {
     Ok(match format {
         TextureFormat::Rgba8Unorm => LinearRgba::from_u8_array([c[0], c[1], c[2], c[3]]),
         TextureFormat::Rgba8UnormSrgb => Srgba::from_u8_array([c[0], c[1], c[2], c[3]]).into(),

@@ -1062,7 +1062,7 @@ impl Graphics {
             &graphics_get_color_mode(self.entity)
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
         )?;
-        graphics_update_region(self.entity, x, y, 1, 1, &[LinearRgba::from(color)])
+        graphics_set_pixel(self.entity, x, y, LinearRgba::from(color))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 

@@ -7,7 +7,7 @@ use bevy::render::renderer::RenderDevice;
 use bevy_cuda::{CudaBuffer, CudaContext};
 use processing_core::app_mut;
 use processing_core::error::{ProcessingError, Result};
-use processing_render::graphics::view_target;
+use processing_render::graphics::{invalidate_pixels, main_texture, view_target};
 use processing_render::image::{Image, pixel_size, texture_for_read, texture_for_write};
 
 #[derive(Component)]
@@ -64,9 +64,11 @@ fn resolve_texture(
             p_image.size.height,
         ));
     }
-    if let Ok(vt) = view_target(app, entity) {
-        let texture = vt.main_texture().clone();
-        let fmt = vt.main_texture_format();
+    if let Ok(texture) = main_texture(app, entity) {
+        if write {
+            invalidate_pixels(app, entity);
+        }
+        let fmt = view_target(app, entity)?.main_texture_format();
         let size = texture.size();
         return Ok((texture, fmt, size.width, size.height));
     }

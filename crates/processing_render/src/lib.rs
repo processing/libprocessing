@@ -664,14 +664,7 @@ pub fn graphics_destroy(graphics_entity: Entity) -> error::Result<()> {
 
 /// Read back raw pixel data from the graphics surface.
 pub fn graphics_readback_raw(graphics_entity: Entity) -> error::Result<graphics::ReadbackData> {
-    app_mut(|app| {
-        graphics::flush(app, graphics_entity)?;
-        let vt = graphics::view_target(app, graphics_entity)?;
-        let texture = vt.main_texture().clone();
-        app.world_mut()
-            .run_system_cached_with(graphics::readback_raw, (graphics_entity, texture))
-            .unwrap()
-    })
+    app_mut(|app| graphics::read_pixels(app, graphics_entity))
 }
 
 /// Read back pixel data from the graphics surface as LinearRgba.
@@ -691,63 +684,37 @@ pub fn graphics_readback(graphics_entity: Entity) -> error::Result<Vec<LinearRgb
 /// Update the graphics surface with new pixel data.
 pub fn graphics_update(graphics_entity: Entity, pixels: &[LinearRgba]) -> error::Result<()> {
     app_mut(|app| {
-        let vt = graphics::view_target(app, graphics_entity)?;
-        let texture = vt.main_texture().clone();
-        let world = app.world_mut();
-        let size = world
+        let size = app
+            .world()
             .get::<graphics::Graphics>(graphics_entity)
             .ok_or(error::ProcessingError::GraphicsNotFound)?
             .size;
-        let (data, px_size) = graphics::prepare_update_region(
-            world,
-            graphics_entity,
-            size.width,
-            size.height,
-            pixels,
-        )?;
-        world
-            .run_system_cached_with(
-                graphics::update_region_write,
-                (
-                    graphics_entity,
-                    texture,
-                    0,
-                    0,
-                    size.width,
-                    size.height,
-                    data,
-                    px_size,
-                ),
-            )
-            .unwrap()
+        graphics::write_region(app, graphics_entity, 0, 0, size.width, size.height, pixels)
     })
 }
 
 /// Update a region of the graphics surface with new pixel data.
-/// One pixel of the graphics surface; `None` outside it, where Processing's `get` is
+/// The pixel at logical (`x`, `y`); `None` outside the surface, where Processing's `get` is
 /// transparent black
 pub fn graphics_get_pixel(
     graphics_entity: Entity,
     x: i64,
     y: i64,
 ) -> error::Result<Option<LinearRgba>> {
-    let size = app_mut(|app| {
-        Ok(app
-            .world()
-            .get::<graphics::Graphics>(graphics_entity)
-            .ok_or(error::ProcessingError::GraphicsNotFound)?
-            .size)
-    })?;
-    if x < 0 || y < 0 || x >= size.width as i64 || y >= size.height as i64 {
-        return Ok(None);
-    }
-    let pixels = graphics_readback(graphics_entity)?;
-    Ok(pixels
-        .get(y as usize * size.width as usize + x as usize)
-        .copied())
+    app_mut(|app| graphics::get_pixel(app, graphics_entity, x, y))
 }
 
-/// Write a block of pixels at (`x`, `y`); parts outside the surface are dropped.
+/// Set the pixel at logical (`x`, `y`); outside the surface it is dropped.
+pub fn graphics_set_pixel(
+    graphics_entity: Entity,
+    x: i64,
+    y: i64,
+    color: LinearRgba,
+) -> error::Result<()> {
+    app_mut(|app| graphics::set_pixel(app, graphics_entity, x, y, color))
+}
+
+/// Write a block of physical pixels at (`x`, `y`); parts outside the surface are dropped.
 pub fn graphics_update_region(
     graphics_entity: Entity,
     x: i64,
@@ -756,54 +723,7 @@ pub fn graphics_update_region(
     height: u32,
     pixels: &[LinearRgba],
 ) -> error::Result<()> {
-    if pixels.len() != (width * height) as usize {
-        return Err(error::ProcessingError::InvalidArgument(format!(
-            "Expected {} pixels for {width}x{height} region, got {}",
-            width * height,
-            pixels.len()
-        )));
-    }
-    app_mut(|app| {
-        let size = app
-            .world()
-            .get::<graphics::Graphics>(graphics_entity)
-            .ok_or(error::ProcessingError::GraphicsNotFound)?
-            .size;
-        let x0 = x.max(0);
-        let y0 = y.max(0);
-        let x1 = (x + width as i64).min(size.width as i64);
-        let y1 = (y + height as i64).min(size.height as i64);
-        if x1 <= x0 || y1 <= y0 {
-            return Ok(());
-        }
-        let (cw, ch) = ((x1 - x0) as u32, (y1 - y0) as u32);
-        let clipped: Vec<LinearRgba> = (y0..y1)
-            .flat_map(|dy| {
-                let row = (dy - y) as usize * width as usize + (x0 - x) as usize;
-                pixels[row..row + cw as usize].iter().copied()
-            })
-            .collect();
-        let vt = graphics::view_target(app, graphics_entity)?;
-        let texture = vt.main_texture().clone();
-        let world = app.world_mut();
-        let (data, px_size) =
-            graphics::prepare_update_region(world, graphics_entity, cw, ch, &clipped)?;
-        world
-            .run_system_cached_with(
-                graphics::update_region_write,
-                (
-                    graphics_entity,
-                    texture,
-                    x0 as u32,
-                    y0 as u32,
-                    cw,
-                    ch,
-                    data,
-                    px_size,
-                ),
-            )
-            .unwrap()
-    })
+    app_mut(|app| graphics::write_region(app, graphics_entity, x, y, width, height, pixels))
 }
 
 /// Set the color mode for a graphics entity.

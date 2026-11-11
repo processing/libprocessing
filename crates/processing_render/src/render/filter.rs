@@ -160,6 +160,7 @@ pub fn apply(app: &mut App, graphics: Entity, filter: Entity) -> Result<()> {
 
     // flush() also extracts the shader asset to the render world.
     crate::graphics::flush(app, graphics)?;
+    crate::graphics::invalidate_pixels(app, graphics);
 
     // The pipeline must target the view target's actual texture format, which
     // bevy may transform from the requested format (HDR, sRGB compositing).
