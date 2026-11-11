@@ -51,7 +51,9 @@ bevy = { git = "https://github.com/processing/bevy", branch = "main", default-fe
   "shader_format_wesl",
   "free_camera",
   "pan_camera",
-  
+
+  # image formats Processing loads
+  "jpeg",
 ] }
 bevy_naga_reflect = { git = "https://github.com/tychedelia/bevy_naga_reflect" }
 bevy_cuda = { git = "https://github.com/tychedelia/bevy_cuda" }

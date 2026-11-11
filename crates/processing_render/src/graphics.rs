@@ -54,6 +54,10 @@ pub struct Graphics {
     readback_buffer: bevy::render::render_resource::Buffer,
     pub texture_format: TextureFormat,
     pub size: Extent3d,
+    /// CPU copy of the canvas, tightly packed; dropped whenever something draws
+    pixels: Option<Vec<u8>>,
+    /// Part of `pixels` written by `set` and not uploaded yet
+    dirty: Option<URect>,
 }
 
 pub fn view_target(app: &mut App, entity: Entity) -> Result<&ViewTarget> {
@@ -279,6 +283,8 @@ pub fn create(
             readback_buffer,
             texture_format,
             size,
+            pixels: None,
+            dirty: None,
         },
     ));
 
@@ -332,6 +338,8 @@ pub fn sync_to_surface(
             height: physical_h,
             depth_or_array_layers: 1,
         };
+        graphics.pixels = None;
+        graphics.dirty = None;
         graphics.readback_buffer = create_readback_buffer(
             &render_device,
             physical_w,
@@ -633,6 +641,13 @@ pub fn screen_point(
 }
 
 pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
+    // `set` pixels go up first so the draws queued after them land on top
+    upload_dirty(app, entity)?;
+    if has_commands(app, entity)
+        && let Some(mut graphics) = app.world_mut().get_mut::<Graphics>(entity)
+    {
+        graphics.pixels = None;
+    }
     graphics_mut!(app, entity).insert(Flush);
     // a mid-frame `background()` leaves the rest of the commands for another pass
     loop {
@@ -646,6 +661,220 @@ pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
     }
     graphics_mut!(app, entity).remove::<Flush>();
     Ok(())
+}
+
+fn has_commands(app: &App, entity: Entity) -> bool {
+    app.world()
+        .get::<CommandBuffer>(entity)
+        .is_some_and(|buffer| !buffer.commands.is_empty())
+}
+
+/// Uploads the canvas pixels `set` wrote since the last upload
+fn upload_dirty(app: &mut App, entity: Entity) -> Result<()> {
+    let Some(graphics) = app.world().get::<Graphics>(entity) else {
+        return Ok(());
+    };
+    let Some(rect) = graphics.dirty else {
+        return Ok(());
+    };
+    let (size, format) = (graphics.size, graphics.texture_format);
+    let texture = view_target(app, entity)?.main_texture().clone();
+    let world = app.world();
+    if let Some(data) = world
+        .get::<Graphics>(entity)
+        .and_then(|g| g.pixels.as_deref())
+    {
+        crate::image::write_rect(
+            world.resource::<RenderQueue>(),
+            &texture,
+            data,
+            size,
+            format,
+            rect,
+        )?;
+    }
+    if let Some(mut graphics) = app.world_mut().get_mut::<Graphics>(entity) {
+        graphics.dirty = None;
+    }
+    Ok(())
+}
+
+/// The canvas texture for a GPU reader, with pending `set` pixels uploaded
+pub fn main_texture(app: &mut App, entity: Entity) -> Result<Texture> {
+    upload_dirty(app, entity)?;
+    Ok(view_target(app, entity)?.main_texture().clone())
+}
+
+/// Drops the CPU copy after something other than a flush wrote the canvas texture
+pub fn invalidate_pixels(app: &mut App, entity: Entity) {
+    if let Some(mut graphics) = app.world_mut().get_mut::<Graphics>(entity) {
+        graphics.pixels = None;
+        graphics.dirty = None;
+    }
+}
+
+/// Makes the CPU copy current: one readback serves every read until the next draw
+fn ensure_pixels(app: &mut App, entity: Entity) -> Result<()> {
+    let cached = app
+        .world()
+        .get::<Graphics>(entity)
+        .ok_or(ProcessingError::GraphicsNotFound)?
+        .pixels
+        .is_some();
+    if cached && !has_commands(app, entity) {
+        return Ok(());
+    }
+    flush(app, entity)?;
+    let texture = view_target(app, entity)?.main_texture().clone();
+    app.world_mut()
+        .run_system_cached_with(readback_raw, (entity, texture))
+        .unwrap()
+}
+
+/// The canvas pixels in its texture format
+pub fn read_pixels(app: &mut App, entity: Entity) -> Result<ReadbackData> {
+    ensure_pixels(app, entity)?;
+    let graphics = app
+        .world()
+        .get::<Graphics>(entity)
+        .ok_or(ProcessingError::GraphicsNotFound)?;
+    Ok(ReadbackData {
+        bytes: graphics.pixels.clone().unwrap_or_default(),
+        format: graphics.texture_format,
+        width: graphics.size.width,
+        height: graphics.size.height,
+    })
+}
+
+/// Physical pixels per logical pixel on each axis
+fn pixel_scale(app: &App, entity: Entity) -> Result<(u32, u32, f64, f64)> {
+    let world = app.world();
+    let size = world
+        .get::<Graphics>(entity)
+        .ok_or(ProcessingError::GraphicsNotFound)?
+        .size;
+    let (lw, lh) = world
+        .get::<SurfaceSize>(entity)
+        .map_or((size.width, size.height), |s| (s.0.max(1), s.1.max(1)));
+    Ok((
+        lw,
+        lh,
+        size.width as f64 / lw as f64,
+        size.height as f64 / lh as f64,
+    ))
+}
+
+/// The pixel at logical (`x`, `y`); `None` outside the canvas
+pub fn get_pixel(app: &mut App, entity: Entity, x: i64, y: i64) -> Result<Option<LinearRgba>> {
+    let (lw, lh, sx, sy) = pixel_scale(app, entity)?;
+    if x < 0 || y < 0 || x >= lw as i64 || y >= lh as i64 {
+        return Ok(None);
+    }
+    ensure_pixels(app, entity)?;
+    let graphics = app
+        .world()
+        .get::<Graphics>(entity)
+        .ok_or(ProcessingError::GraphicsNotFound)?;
+    let Some(data) = graphics.pixels.as_deref() else {
+        return Ok(None);
+    };
+    let px_size = pixel_size(graphics.texture_format)?;
+    let px = ((x as f64 * sx) as usize).min(graphics.size.width as usize - 1);
+    let py = ((y as f64 * sy) as usize).min(graphics.size.height as usize - 1);
+    let at = (py * graphics.size.width as usize + px) * px_size;
+    crate::image::decode_pixel(&data[at..at + px_size], graphics.texture_format).map(Some)
+}
+
+/// Sets the pixel at logical (`x`, `y`), which covers a block of physical pixels
+pub fn set_pixel(app: &mut App, entity: Entity, x: i64, y: i64, color: LinearRgba) -> Result<()> {
+    let (lw, lh, sx, sy) = pixel_scale(app, entity)?;
+    if x < 0 || y < 0 || x >= lw as i64 || y >= lh as i64 {
+        return Ok(());
+    }
+    let x0 = (x as f64 * sx) as i64;
+    let y0 = (y as f64 * sy) as i64;
+    let w = (((x + 1) as f64 * sx) as i64 - x0).max(1) as u32;
+    let h = (((y + 1) as f64 * sy) as i64 - y0).max(1) as u32;
+    write_region(app, entity, x0, y0, w, h, &vec![color; (w * h) as usize])
+}
+
+/// Writes a block of physical pixels at (`x`, `y`); parts outside the canvas are dropped
+pub fn write_region(
+    app: &mut App,
+    entity: Entity,
+    x: i64,
+    y: i64,
+    width: u32,
+    height: u32,
+    pixels: &[LinearRgba],
+) -> Result<()> {
+    if pixels.len() != (width * height) as usize {
+        return Err(ProcessingError::InvalidArgument(format!(
+            "Expected {} pixels for {width}x{height} region, got {}",
+            width * height,
+            pixels.len()
+        )));
+    }
+    let size = app
+        .world()
+        .get::<Graphics>(entity)
+        .ok_or(ProcessingError::GraphicsNotFound)?
+        .size;
+    let x0 = x.max(0);
+    let y0 = y.max(0);
+    let x1 = (x + width as i64).min(size.width as i64);
+    let y1 = (y + height as i64).min(size.height as i64);
+    if x1 <= x0 || y1 <= y0 {
+        return Ok(());
+    }
+    // draws queued before this write must land under it
+    if has_commands(app, entity) {
+        flush(app, entity)?;
+    }
+    let (cw, ch) = ((x1 - x0) as u32, (y1 - y0) as u32);
+    let clipped: Vec<LinearRgba> = (y0..y1)
+        .flat_map(|dy| {
+            let row = (dy - y) as usize * width as usize + (x0 - x) as usize;
+            pixels[row..row + cw as usize].iter().copied()
+        })
+        .collect();
+    let rect = URect::new(x0 as u32, y0 as u32, x1 as u32, y1 as u32);
+
+    let mut graphics = app
+        .world_mut()
+        .get_mut::<Graphics>(entity)
+        .ok_or(ProcessingError::GraphicsNotFound)?;
+    let format = graphics.texture_format;
+    let px_size = pixel_size(format)?;
+    let bytes = pixels_to_bytes(&clipped, format)?;
+    let graphics = &mut *graphics;
+    if let Some(data) = graphics.pixels.as_mut() {
+        // the CPU copy is current, so patch it and upload the touched rect once at the next flush
+        let stride = size.width as usize * px_size;
+        let run = cw as usize * px_size;
+        for row in 0..ch as usize {
+            let dst = (y0 as usize + row) * stride + x0 as usize * px_size;
+            data[dst..dst + run].copy_from_slice(&bytes[row * run..(row + 1) * run]);
+        }
+        graphics.dirty = Some(graphics.dirty.map_or(rect, |d| d.union(rect)));
+        return Ok(());
+    }
+    let texture = view_target(app, entity)?.main_texture().clone();
+    app.world_mut()
+        .run_system_cached_with(
+            update_region_write,
+            (
+                entity,
+                texture,
+                x0 as u32,
+                y0 as u32,
+                cw,
+                ch,
+                bytes,
+                px_size as u32,
+            ),
+        )
+        .unwrap()
 }
 
 pub fn apply_filter(app: &mut App, graphics: Entity, filter: Entity) -> Result<()> {
@@ -681,11 +910,21 @@ pub fn end_draw(app: &mut App, entity: Entity) -> Result<()> {
 ///
 // TODO: why is metal particularly affected by this? can we remove this?
 pub fn warmup(app: &mut App, entity: Entity) -> Result<()> {
+    // an offscreen buffer starts transparent, like Processing's createGraphics
+    let offscreen = matches!(
+        app.world().get::<RenderTarget>(entity),
+        Some(RenderTarget::Image(_))
+    );
+    let clear = if offscreen {
+        Color::NONE
+    } else {
+        DEFAULT_CLEAR_COLOR
+    };
     for _ in 0..3 {
         app.world_mut()
             .run_system_cached_with(
                 record_command,
-                (entity, DrawCommand::BackgroundColor(DEFAULT_CLEAR_COLOR)),
+                (entity, DrawCommand::BackgroundColor(clear)),
             )
             .unwrap()?;
         present(app, entity)?;
@@ -714,12 +953,12 @@ pub struct ReadbackData {
 
 pub fn readback_raw(
     In((entity, texture)): In<(Entity, Texture)>,
-    graphics_query: Query<&Graphics>,
+    mut graphics_query: Query<&mut Graphics>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
-) -> Result<ReadbackData> {
-    let graphics = graphics_query
-        .get(entity)
+) -> Result<()> {
+    let mut graphics = graphics_query
+        .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
     let mut encoder = render_device.create_command_encoder(&CommandEncoderDescriptor::default());
@@ -778,12 +1017,9 @@ pub fn readback_raw(
         data
     };
 
-    Ok(ReadbackData {
-        bytes: unpadded,
-        format: graphics.texture_format,
-        width: graphics.size.width,
-        height: graphics.size.height,
-    })
+    graphics.pixels = Some(unpadded);
+    graphics.dirty = None;
+    Ok(())
 }
 
 pub fn update_region_write(

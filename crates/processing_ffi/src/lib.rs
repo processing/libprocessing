@@ -1763,7 +1763,7 @@ pub unsafe extern "C" fn processing_graphics_update_region(
             .iter()
             .map(|color| color.to_linear())
             .collect();
-        graphics_update_region(graphics_entity, x, y, width, height, &pixels)
+        graphics_update_region(graphics_entity, x.into(), y.into(), width, height, &pixels)
     });
 }
 
@@ -1776,7 +1776,16 @@ pub unsafe extern "C" fn processing_graphics_update_region(
 pub extern "C" fn processing_graphics_set(graphics_id: u64, x: u32, y: u32, color: Color) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
-    error::check(|| graphics_update_region(graphics_entity, x, y, 1, 1, &[color.to_linear()]));
+    error::check(|| {
+        graphics_update_region(
+            graphics_entity,
+            x.into(),
+            y.into(),
+            1,
+            1,
+            &[color.to_linear()],
+        )
+    });
 }
 
 /// Set the tint color applied to images.
