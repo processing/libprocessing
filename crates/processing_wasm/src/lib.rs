@@ -1666,6 +1666,19 @@ pub fn js_light_create_spot(
     .map(|e| e.to_bits())
 }
 
+#[wasm_bindgen(js_name = "light")]
+pub fn js_light(graphics_id: u64, light_id: u64) -> Result<(), JsValue> {
+    check(graphics_light(
+        Entity::from_bits(graphics_id),
+        Entity::from_bits(light_id),
+    ))
+}
+
+#[wasm_bindgen(js_name = "lightDestroy")]
+pub fn js_light_destroy(light_id: u64) -> Result<(), JsValue> {
+    check(light_destroy(Entity::from_bits(light_id)))
+}
+
 #[wasm_bindgen(js_name = "materialCreatePbr")]
 pub fn js_material_create_pbr() -> Result<u64, JsValue> {
     check(material_create_pbr()).map(|e| e.to_bits())

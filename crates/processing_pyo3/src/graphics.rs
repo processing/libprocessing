@@ -1,11 +1,11 @@
 use crate::color::{ColorMode, extract_color_with_mode};
 use crate::glfw::GlfwContext;
 use crate::input;
-use crate::math::{extract_vec2, extract_vec3, extract_vec4};
+use crate::math::{Vec3Like, extract_vec2, extract_vec3, extract_vec4};
 use bevy::{
     color::{ColorToPacked, LinearRgba, Srgba},
     math::{Affine3A, Mat4, Vec3, Vec4},
-    prelude::Entity,
+    prelude::{Entity, Transform},
     render::render_resource::{Extent3d, TextureFormat},
 };
 use processing::prelude::*;
@@ -437,12 +437,30 @@ impl Light {
     }
 }
 
-// TODO: implement `light_destroy`
-// impl Drop for Light {
-//     fn drop(&mut self) {
-//         let _ = light_destroy(self.entity);
-//     }
-// }
+impl Light {
+    fn placed(
+        entity: Entity,
+        position: Option<Vec3Like>,
+        look_at: Option<Vec3Like>,
+    ) -> PyResult<Self> {
+        let light = Self { entity };
+        if let Some(position) = position {
+            transform_set_position(light.entity, position.into_vec3())
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        }
+        if let Some(target) = look_at {
+            transform_look_at(light.entity, target.into_vec3())
+                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        }
+        Ok(light)
+    }
+}
+
+impl Drop for Light {
+    fn drop(&mut self) {
+        let _ = light_destroy(self.entity);
+    }
+}
 
 #[pyclass]
 #[derive(Debug)]
@@ -2254,6 +2272,12 @@ impl Graphics {
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
+    /// Adds a light to this frame.
+    pub fn light(&self, light: &Light) -> PyResult<()> {
+        graphics_light(self.entity, light.entity)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    }
+
     pub fn material(&self, material: &crate::material::Material) -> PyResult<()> {
         graphics_record_command(self.entity, DrawCommand::Material(material.entity))
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
@@ -2544,30 +2568,125 @@ impl Graphics {
         camera_reset(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    pub fn light_directional(
+    /// Adds a directional light to this frame.
+    #[pyo3(signature = (color, illuminance, *, position=None, look_at=None))]
+    pub fn directional_light(
         &self,
         color: crate::color::ColorLike,
         illuminance: f32,
-    ) -> PyResult<Light> {
-        let color = color.into_color()?;
-        match light_create_directional(self.entity, color, illuminance) {
-            Ok(light) => Ok(Light { entity: light }),
-            Err(e) => Err(PyRuntimeError::new_err(format!("{e}"))),
-        }
+        position: Option<Vec3Like>,
+        look_at: Option<Vec3Like>,
+    ) -> PyResult<()> {
+        let kind = LightKind::Directional {
+            color: color.into_color()?,
+            illuminance,
+        };
+        self.add_light(kind, position, look_at)
     }
 
-    pub fn light_point(
+    /// Adds a point light to this frame.
+    #[pyo3(signature = (color, intensity, range, radius, *, position=None, look_at=None))]
+    pub fn point_light(
         &self,
         color: crate::color::ColorLike,
         intensity: f32,
         range: f32,
         radius: f32,
+        position: Option<Vec3Like>,
+        look_at: Option<Vec3Like>,
+    ) -> PyResult<()> {
+        let kind = LightKind::Point {
+            color: color.into_color()?,
+            intensity,
+            range,
+            radius,
+        };
+        self.add_light(kind, position, look_at)
+    }
+
+    /// Adds a spot light to this frame.
+    #[pyo3(signature = (color, intensity, range, radius, inner_angle, outer_angle, *, position=None, look_at=None))]
+    #[allow(clippy::too_many_arguments)]
+    pub fn spot_light(
+        &self,
+        color: crate::color::ColorLike,
+        intensity: f32,
+        range: f32,
+        radius: f32,
+        inner_angle: f32,
+        outer_angle: f32,
+        position: Option<Vec3Like>,
+        look_at: Option<Vec3Like>,
+    ) -> PyResult<()> {
+        let kind = LightKind::Spot {
+            color: color.into_color()?,
+            intensity,
+            range,
+            radius,
+            inner_angle,
+            outer_angle,
+        };
+        self.add_light(kind, position, look_at)
+    }
+
+    /// Creates a directional light.
+    #[pyo3(signature = (color, illuminance, *, position=None, look_at=None))]
+    pub fn create_directional_light(
+        &self,
+        color: crate::color::ColorLike,
+        illuminance: f32,
+        position: Option<Vec3Like>,
+        look_at: Option<Vec3Like>,
     ) -> PyResult<Light> {
         let color = color.into_color()?;
-        match light_create_point(self.entity, color, intensity, range, radius) {
-            Ok(light) => Ok(Light { entity: light }),
-            Err(e) => Err(PyRuntimeError::new_err(format!("{e}"))),
-        }
+        let entity = light_create_directional(self.entity, color, illuminance)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Light::placed(entity, position, look_at)
+    }
+
+    /// Creates a point light.
+    #[pyo3(signature = (color, intensity, range, radius, *, position=None, look_at=None))]
+    pub fn create_point_light(
+        &self,
+        color: crate::color::ColorLike,
+        intensity: f32,
+        range: f32,
+        radius: f32,
+        position: Option<Vec3Like>,
+        look_at: Option<Vec3Like>,
+    ) -> PyResult<Light> {
+        let color = color.into_color()?;
+        let entity = light_create_point(self.entity, color, intensity, range, radius)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Light::placed(entity, position, look_at)
+    }
+
+    /// Creates a spot light.
+    #[pyo3(signature = (color, intensity, range, radius, inner_angle, outer_angle, *, position=None, look_at=None))]
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_spot_light(
+        &self,
+        color: crate::color::ColorLike,
+        intensity: f32,
+        range: f32,
+        radius: f32,
+        inner_angle: f32,
+        outer_angle: f32,
+        position: Option<Vec3Like>,
+        look_at: Option<Vec3Like>,
+    ) -> PyResult<Light> {
+        let color = color.into_color()?;
+        let entity = light_create_spot(
+            self.entity,
+            color,
+            intensity,
+            range,
+            radius,
+            inner_angle,
+            outer_angle,
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Light::placed(entity, position, look_at)
     }
 
     #[getter]
@@ -2629,29 +2748,24 @@ impl Graphics {
     fn key_is_pressed(&self) -> PyResult<bool> {
         input::key_is_pressed()
     }
+}
 
-    pub fn light_spot(
+impl Graphics {
+    fn add_light(
         &self,
-        color: crate::color::ColorLike,
-        intensity: f32,
-        range: f32,
-        radius: f32,
-        inner_angle: f32,
-        outer_angle: f32,
-    ) -> PyResult<Light> {
-        let color = color.into_color()?;
-        match light_create_spot(
-            self.entity,
-            color,
-            intensity,
-            range,
-            radius,
-            inner_angle,
-            outer_angle,
-        ) {
-            Ok(light) => Ok(Light { entity: light }),
-            Err(e) => Err(PyRuntimeError::new_err(format!("{e}"))),
+        kind: LightKind,
+        position: Option<Vec3Like>,
+        look_at: Option<Vec3Like>,
+    ) -> PyResult<()> {
+        let mut transform = Transform::default();
+        if let Some(position) = position {
+            transform.translation = position.into_vec3();
         }
+        if let Some(target) = look_at {
+            transform.look_at(target.into_vec3(), Vec3::Y);
+        }
+        graphics_immediate_light(self.entity, kind, transform)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 }
 

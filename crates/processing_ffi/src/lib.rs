@@ -2857,6 +2857,18 @@ pub extern "C" fn processing_light_create_spot(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn processing_light(graphics_id: u64, light_id: u64) {
+    error::clear_error();
+    error::check(|| graphics_light(Entity::from_bits(graphics_id), Entity::from_bits(light_id)));
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn processing_light_destroy(light_id: u64) {
+    error::clear_error();
+    error::check(|| light_destroy(Entity::from_bits(light_id)));
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn processing_material_create_pbr() -> u64 {
     error::clear_error();
     error::check(material_create_pbr)

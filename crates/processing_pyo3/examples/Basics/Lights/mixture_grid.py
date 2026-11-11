@@ -4,20 +4,17 @@
 # Display a 2D grid of boxes with three different kinds of lights.
 from processing_py import *
 
-point = None
-directional = None
-spot = None
-
 
 def setup():
     size(640, 360)
     mode_3d()
     no_stroke()
-    define_lights()
+    roughness(0.6)
 
 
 def draw():
     background(0.0)
+    define_lights()
 
     for x in range(0, width + 1, 60):
         for y in range(0, height + 1, 60):
@@ -30,22 +27,20 @@ def draw():
 
 
 def define_lights():
-    global point, directional, spot
-    # The lights are created once, in the original's top-left coordinates
+    # The lights are placed in the original's top-left coordinates
     # Orange point light on the right
-    point = point_light((0.59, 0.39, 0.0), 3000000000.0, 600.0, 1.0,  # Color
-                        position=(200 - width / 2, -150 - height / 2, 0))  # Position
+    point_light((0.59, 0.39, 0.0), 3000000000.0, 600.0, 1.0,  # Color
+                position=(200 - width / 2, -150 - height / 2, 0))  # Position
 
     # Blue directional light from the left
-    directional = directional_light((0.0, 0.4, 1.0), 4000.0,  # Color
-                                    look_at=(1, 0, 0))  # The x-, y-, z-axis direction
+    directional_light((0.0, 0.4, 1.0), 4000.0,  # Color
+                      look_at=(1, 0, 0))  # The x-, y-, z-axis direction
 
     # Yellow spotlight from the front
-    spot = spot_light((1.0, 1.0, 0.43), 2000000000.0, 600.0, 1.0,  # Color
-                      PI / 4, PI / 2,  # Angle, concentration
-                      position=(-width / 2, 40 - height / 2, 200),  # Position
-                      look_at=(-width / 2, 40 - height / 2 - 0.5, 200 - 0.5))  # Direction
-    roughness(0.6)
+    spot_light((1.0, 1.0, 0.43), 2000000000.0, 600.0, 1.0,  # Color
+               PI / 4, PI / 2,  # Angle, concentration
+               position=(-width / 2, 40 - height / 2, 200),  # Position
+               look_at=(-width / 2, 40 - height / 2 - 0.5, 200 - 0.5))  # Direction
 
 
 run()

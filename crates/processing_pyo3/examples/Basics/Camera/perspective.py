@@ -13,19 +13,16 @@
 # to set the area precisely.
 from processing_py import *
 
-light = None
-
 
 def setup():
-    global light
     size(640, 360)
     mode_3d()
     no_stroke()
-    light = directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     roughness(0.6)
 
 
 def draw():
+    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     background(0.0)
     camera_y = height / 2.0
     # A fov of 0 would divide by zero below

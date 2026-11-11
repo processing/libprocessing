@@ -11,8 +11,8 @@ pub use processing_midi::{
 };
 pub use processing_render::{
     render::command::{
-        ArcMode, BlendMode, DrawCommand, ShapeKind, ShapeMode, StrokeCapMode, StrokeJoinMode,
-        TextAlignH, TextAlignV, TextStyle, TextWrapMode, custom_blend_state,
+        ArcMode, BlendMode, DrawCommand, LightKind, ShapeKind, ShapeMode, StrokeCapMode,
+        StrokeJoinMode, TextAlignH, TextAlignV, TextStyle, TextWrapMode, custom_blend_state,
     },
     render::filter::Filter,
     *,

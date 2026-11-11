@@ -20,7 +20,7 @@ fn sketch() -> error::Result<()> {
     transform_set_position(graphics, Vec3::new(0.0, -6.0, 18.0))?;
     transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
-    let _light =
+    let light =
         light_create_directional(graphics, bevy::color::Color::srgb(0.95, 0.9, 0.85), 200.0)?;
 
     let sphere = geometry_sphere(0.3, 16, 12)?;
@@ -66,6 +66,7 @@ fn sketch() -> error::Result<()> {
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;
+        graphics_light(graphics, light)?;
         graphics_record_command(
             graphics,
             DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.06, 0.06, 0.08)),

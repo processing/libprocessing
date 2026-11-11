@@ -6,11 +6,14 @@ SPIN_PER_FRAME = 0.003
 
 p = None
 cube = None
+red_light = None
+green_light = None
+blue_light = None
 spin = None
 
 
 def setup():
-    global p, cube, spin
+    global p, cube, spin, red_light, green_light, blue_light
 
     size(900, 700)
     mode_3d()
@@ -20,9 +23,9 @@ def setup():
     camera_look_at(0.0, 0.0, 0.0)
     orbit_camera()
 
-    directional_light((1.0, 0.0, 0.0), 1000.0, position=Vec3.X, look_at=Vec3.ZERO)
-    directional_light((0.0, 1.0, 0.0), 1000.0, position=Vec3(0.0, -1.0, 0.0), look_at=Vec3.ZERO)
-    directional_light((0.0, 0.0, 1.0), 1000.0, position=Vec3.Z, look_at=Vec3.ZERO)
+    red_light = create_directional_light((1.0, 0.0, 0.0), 1000.0, position=Vec3.X, look_at=Vec3.ZERO)
+    green_light = create_directional_light((0.0, 1.0, 0.0), 1000.0, position=Vec3(0.0, -1.0, 0.0), look_at=Vec3.ZERO)
+    blue_light = create_directional_light((0.0, 0.0, 1.0), 1000.0, position=Vec3.Z, look_at=Vec3.ZERO)
 
     p = create_particles(
         Geometry.grid(GRID, GRID, GRID, SPACING),
@@ -45,6 +48,9 @@ def setup():
 
 def draw():
     background(10, 10, 18)
+    light(red_light)
+    light(green_light)
+    light(blue_light)
     particles(p, cube)
     p.apply(spin, rotation_axis=Vec3.Y, rotation_angle=SPIN_PER_FRAME)
 

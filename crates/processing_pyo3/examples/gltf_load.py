@@ -4,11 +4,11 @@ import math
 gltf = None
 duck_geo = None
 duck_mat = None
-light = None
+lamp = None
 frame = 0
 
 def setup():
-    global gltf, duck_geo, duck_mat, light
+    global gltf, duck_geo, duck_mat, lamp
     size(800, 600)
 
     gltf = load_gltf("gltf/Duck.glb")
@@ -17,7 +17,7 @@ def setup():
 
     mode_3d()
     gltf.camera(0)
-    light = gltf.light(0)
+    lamp = gltf.light(0)
 
 def draw():
     global frame
@@ -27,8 +27,8 @@ def draw():
     lx = math.cos(t) * radius
     ly = -1.5
     lz = math.sin(t) * radius
-    light.position(lx, ly, lz)
-    light.look_at(0.0, -0.8, 0.0)
+    lamp.position(lx, ly, lz)
+    lamp.look_at(0.0, -0.8, 0.0)
 
     r = math.sin(t * 8.0) * 0.5 + 0.5
     g = math.sin(t * 8.0 + 2.0) * 0.5 + 0.5
@@ -36,6 +36,7 @@ def draw():
     duck_mat.set(base_color=[r, g, b, 1.0])
 
     background(25)
+    light(lamp)
     material(duck_mat)
     draw_geometry(duck_geo)
 

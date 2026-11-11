@@ -11,12 +11,12 @@ from processing_py import *
 def setup():
     size(640, 360)
     mode_3d()
-    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     roughness(0.6)
     no_loop()
 
 
 def draw():
+    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     background(0.0)
 
     no_stroke()

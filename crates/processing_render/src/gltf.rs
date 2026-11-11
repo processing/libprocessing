@@ -6,7 +6,6 @@ use bevy::{
         AssetPath, LoadState, handle_internal_asset_events,
         io::{AssetSourceId, embedded::GetAssetServer},
     },
-    camera::visibility::RenderLayers,
     ecs::system::RunSystemOnce,
     gltf::{Gltf, GltfMaterial, GltfMeshName},
     pbr::ExtendedMaterial,
@@ -17,7 +16,9 @@ use bevy::{
 
 use crate::geometry::{BuiltinAttributes, Geometry, layout::VertexLayout};
 use crate::graphics;
+use crate::light::{LightOf, ProcessingLight};
 use crate::material::ProcessingMaterial;
+use crate::render::command::LightKind;
 use crate::render::material::{ProcessingExtendedMaterial, UntypedMaterial};
 use processing_core::config::{Config, ConfigKey};
 use processing_core::error::{ProcessingError, Result};
@@ -390,6 +391,7 @@ pub fn camera(In((gltf_entity, index)): In<(Entity, usize)>, world: &mut World) 
     Ok(())
 }
 
+/// Creates a light from a light in the scene.
 pub fn light(In((gltf_entity, index)): In<(Entity, usize)>, world: &mut World) -> Result<Entity> {
     let gltf_handle = world
         .get::<GltfHandle>(gltf_entity)
@@ -401,11 +403,7 @@ pub fn light(In((gltf_entity, index)): In<(Entity, usize)>, world: &mut World) -
         let spawner = world.resource::<WorldInstanceSpawner>();
         spawner
             .iter_instance_entities(instance_id)
-            .filter(|&e| {
-                world.get::<DirectionalLight>(e).is_some()
-                    || world.get::<PointLight>(e).is_some()
-                    || world.get::<SpotLight>(e).is_some()
-            })
+            .filter(|&e| scene_light_kind(world, e).is_some())
             .collect()
     };
 
@@ -413,16 +411,35 @@ pub fn light(In((gltf_entity, index)): In<(Entity, usize)>, world: &mut World) -
         ProcessingError::GltfLoadError(format!("Light index {} not found", index))
     })?;
 
-    let render_layers = world
-        .get::<RenderLayers>(graphics_entity)
-        .ok_or(ProcessingError::GraphicsNotFound)?
-        .clone();
-    world.entity_mut(scene_light_entity).insert(render_layers);
-
+    let kind = scene_light_kind(world, scene_light_entity).ok_or(ProcessingError::LightNotFound)?;
     let global = compute_global_transform(world, scene_light_entity);
-    *world
-        .get_mut::<Transform>(scene_light_entity)
-        .ok_or(ProcessingError::GraphicsNotFound)? = global;
+    Ok(world
+        .spawn((ProcessingLight(kind), global, LightOf(graphics_entity)))
+        .id())
+}
 
-    Ok(scene_light_entity)
+fn scene_light_kind(world: &World, entity: Entity) -> Option<LightKind> {
+    if let Some(light) = world.get::<DirectionalLight>(entity) {
+        return Some(LightKind::Directional {
+            color: light.color,
+            illuminance: light.illuminance,
+        });
+    }
+    if let Some(light) = world.get::<PointLight>(entity) {
+        return Some(LightKind::Point {
+            color: light.color,
+            intensity: light.intensity,
+            range: light.range,
+            radius: light.radius,
+        });
+    }
+    let light = world.get::<SpotLight>(entity)?;
+    Some(LightKind::Spot {
+        color: light.color,
+        intensity: light.intensity,
+        range: light.range,
+        radius: light.radius,
+        inner_angle: light.inner_angle,
+        outer_angle: light.outer_angle,
+    })
 }

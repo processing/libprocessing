@@ -20,13 +20,14 @@ fn sketch() -> error::Result<()> {
     transform_set_position(graphics, Vec3::new(200.0, -150.0, 350.0))?;
     transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
-    let _light =
+    let light =
         light_create_directional(graphics, bevy::color::Color::srgb(0.9, 0.85, 0.8), 800.0)?;
 
     let mut angle: f32 = 0.0;
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;
+        graphics_light(graphics, light)?;
 
         graphics_record_command(
             graphics,

@@ -3,16 +3,17 @@ from processing_py import *
 p = None
 sphere = None
 mat = None
+sun = None
 spin = None
 
 
 def setup():
-    global p, sphere, mat, spin
+    global p, sphere, mat, sun, spin
 
     size(900, 700)
     mode_3d()
 
-    directional_light((0.9, 0.85, 0.8), 300.0)
+    sun = create_directional_light((0.9, 0.85, 0.8), 300.0)
 
     sphere = Geometry.sphere(0.25, 12, 8)
 
@@ -35,6 +36,7 @@ def draw():
     camera_position(0.0, -8.0, 25.0)
     camera_look_at(0.0, 0.0, 0.0)
     background(15, 15, 20)
+    light(sun)
     fill(230, 128, 75)
 
     material(mat)

@@ -7,15 +7,13 @@
 # number of sides drawn is variable.
 from processing_py import *
 
-light = None
 cylinder = None
 
 
 def setup():
-    global light, cylinder
+    global cylinder
     size(640, 360)
     mode_3d()
-    light = directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     roughness(0.6)
     cylinder = build_cylinder(10, 180, 200, 16)  # Build a mix between a cylinder and a cone
     # cylinder = build_cylinder(70, 70, 120, 64)  # Build a cylinder
@@ -23,6 +21,7 @@ def setup():
 
 
 def draw():
+    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     background(0.0)
     rotate_y(remap(mouse_x, 0, width, 0, PI))
     rotate_z(remap(mouse_y, 0, height, 0, -PI))

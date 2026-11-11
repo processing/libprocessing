@@ -37,21 +37,19 @@ is_wire_frame = False
 is_helix = False
 helix_offset = 5.0
 
-light = None
 toroid = None
 
 
 def setup():
-    global light
     size(640, 360)
     mode_3d()
-    # basic lighting setup
-    light = directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     roughness(0.6)
     build_toroid()
 
 
 def draw():
+    # basic lighting setup
+    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     background(0.2, 0.25, 0.16)
     # 2 rendering styles
     # wireframe or solid

@@ -3,15 +3,16 @@ from processing_py import *
 p = None
 particle = None
 mat = None
+sun = None
 
 
 def setup():
-    global p, particle, mat
+    global p, particle, mat, sun
 
     size(900, 700)
     mode_3d()
 
-    directional_light((0.95, 0.9, 0.85), 600.0)
+    sun = create_directional_light((0.95, 0.9, 0.85), 600.0)
 
     source = Geometry.sphere(5.0, 32, 24)
     p = create_particles(
@@ -36,6 +37,7 @@ def draw():
     camera_position(0.0, -4.0, 18.0)
     camera_look_at(0.0, 0.0, 0.0)
     background(15, 15, 20)
+    light(sun)
 
     material(mat)
     particles(p, particle)

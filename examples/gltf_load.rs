@@ -53,6 +53,7 @@ fn sketch() -> error::Result<()> {
         material_set(duck_mat, "base_color", ShaderValue::Float4([r, g, b, 1.0]))?;
 
         graphics_begin_draw(graphics)?;
+        graphics_light(graphics, light)?;
 
         graphics_record_command(
             graphics,

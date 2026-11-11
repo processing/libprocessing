@@ -76,7 +76,7 @@ pub struct ProcessingRenderPlugin;
 impl Plugin for ProcessingRenderPlugin {
     fn build(&self, app: &mut App) {
         use render::material::{add_custom_materials, add_processing_materials};
-        use render::{activate_cameras, clear_transient_meshes, flush_draw_commands};
+        use render::{activate_cameras, clear_flush_transients, flush_draw_commands};
 
         let config = app.world().resource::<Config>().clone();
 
@@ -114,7 +114,7 @@ impl Plugin for ProcessingRenderPlugin {
             ..Default::default()
         });
 
-        app.add_systems(First, (clear_transient_meshes, activate_cameras))
+        app.add_systems(First, (clear_flush_transients, activate_cameras))
             .add_systems(
                 Update,
                 (
@@ -1365,14 +1365,10 @@ pub fn light_create_directional(
     color: Color,
     illuminance: f32,
 ) -> error::Result<Entity> {
-    app_mut(|app| {
-        app.world_mut()
-            .run_system_cached_with(
-                light::create_directional,
-                (graphics_entity, color, illuminance),
-            )
-            .unwrap()
-    })
+    light_create(
+        graphics_entity,
+        render::command::LightKind::Directional { color, illuminance },
+    )
 }
 
 pub fn light_create_point(
@@ -1382,14 +1378,15 @@ pub fn light_create_point(
     range: f32,
     radius: f32,
 ) -> error::Result<Entity> {
-    app_mut(|app| {
-        app.world_mut()
-            .run_system_cached_with(
-                light::create_point,
-                (graphics_entity, color, intensity, range, radius),
-            )
-            .unwrap()
-    })
+    light_create(
+        graphics_entity,
+        render::command::LightKind::Point {
+            color,
+            intensity,
+            range,
+            radius,
+        },
+    )
 }
 
 pub fn light_create_spot(
@@ -1401,20 +1398,72 @@ pub fn light_create_spot(
     inner_angle: f32,
     outer_angle: f32,
 ) -> error::Result<Entity> {
+    light_create(
+        graphics_entity,
+        render::command::LightKind::Spot {
+            color,
+            intensity,
+            range,
+            radius,
+            inner_angle,
+            outer_angle,
+        },
+    )
+}
+
+fn light_create(
+    graphics_entity: Entity,
+    kind: render::command::LightKind,
+) -> error::Result<Entity> {
     app_mut(|app| {
         app.world_mut()
+            .run_system_cached_with(light::create, (graphics_entity, kind, Transform::default()))
+            .unwrap()
+    })
+}
+
+/// Adds a light to the frame.
+pub fn graphics_light(graphics_entity: Entity, light_entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(light::check_belongs_to, (light_entity, graphics_entity))
+            .unwrap()?;
+        app.world_mut()
             .run_system_cached_with(
-                light::create_spot,
-                (
-                    graphics_entity,
-                    color,
-                    intensity,
-                    range,
-                    radius,
-                    inner_angle,
-                    outer_angle,
-                ),
+                graphics::record_command,
+                (graphics_entity, DrawCommand::Light(light_entity)),
             )
+            .unwrap()
+    })
+}
+
+/// Adds a light to the frame.
+pub fn graphics_immediate_light(
+    graphics_entity: Entity,
+    kind: render::command::LightKind,
+    transform: Transform,
+) -> error::Result<()> {
+    app_mut(|app| {
+        let light_entity = app
+            .world_mut()
+            .run_system_cached_with(light::create, (graphics_entity, kind, transform))
+            .unwrap()?;
+        app.world_mut()
+            .entity_mut(light_entity)
+            .insert(render::DrawTransient(graphics_entity));
+        app.world_mut()
+            .run_system_cached_with(
+                graphics::record_command,
+                (graphics_entity, DrawCommand::Light(light_entity)),
+            )
+            .unwrap()
+    })
+}
+
+pub fn light_destroy(entity: Entity) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(light::destroy, entity)
             .unwrap()
     })
 }
