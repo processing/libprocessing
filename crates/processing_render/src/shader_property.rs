@@ -54,7 +54,7 @@ pub(crate) fn apply_shader_value(
     name: &str,
     value: ShaderValue,
     p_buffers: &mut Query<&mut Buffer>,
-    p_images: &Query<&PImage>,
+    p_images: &mut Query<&mut PImage>,
 ) -> Result<()> {
     match value {
         ShaderValue::Buffer(buf_entity) => {
@@ -93,10 +93,14 @@ pub(crate) fn apply_shader_value(
                     "property `{name}` expects {category:?}, got Texture",
                 )));
             }
-            let image = p_images
-                .get(img_entity)
+            let mut image = p_images
+                .get_mut(img_entity)
                 .map_err(|_| ProcessingError::ImageNotFound)?;
             shader.insert(name, image.handle.clone());
+            // reflection does not carry the access mode, so any storage binding may write
+            if category == ParameterCategory::StorageTexture {
+                image.bound_rw = true;
+            }
             Ok(())
         }
         v => {
@@ -114,7 +118,7 @@ fn bind_struct(
     buffers: &[(&str, Entity)],
     values: &[(&str, ShaderValue)],
     p_buffers: &mut Query<&mut Buffer>,
-    p_images: &Query<&PImage>,
+    p_images: &mut Query<&mut PImage>,
 ) -> Result<()> {
     for (suffix, buffer) in buffers {
         let binding = format!("{name}_{suffix}");
@@ -149,7 +153,7 @@ pub fn set_property(
     mut computes: Query<&mut Compute>,
     mut filters: Query<&mut Filter>,
     mut p_buffers: Query<&mut Buffer>,
-    p_images: Query<&PImage>,
+    mut p_images: Query<&mut PImage>,
     grids: Query<&Grid>,
 ) -> Result<bool> {
     let shader = if let Ok(compute) = computes.get_mut(entity) {
@@ -177,10 +181,10 @@ pub fn set_property(
                     ("dims", ShaderValue::UInt3(grid.params.dims)),
                 ],
                 &mut p_buffers,
-                &p_images,
+                &mut p_images,
             )?;
         }
-        other => apply_shader_value(shader, &name, other, &mut p_buffers, &p_images)?,
+        other => apply_shader_value(shader, &name, other, &mut p_buffers, &mut p_images)?,
     }
     Ok(true)
 }

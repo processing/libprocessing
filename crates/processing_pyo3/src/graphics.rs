@@ -1,4 +1,4 @@
-use crate::color::{ColorMode, extract_color_with_mode};
+use crate::color::{ColorMode, ColorSpace, extract_color_with_mode, parse_numeric};
 use crate::glfw::GlfwContext;
 use crate::input;
 use crate::math::{extract_vec2, extract_vec3, extract_vec4};
@@ -41,6 +41,10 @@ fn pixels_to_pylist(py: Python<'_>, pixels: &[LinearRgba]) -> PyResult<Py<PyList
     Ok(PyList::new(py, colors)?.unbind())
 }
 
+fn pixel_item_error() -> PyErr {
+    PyValueError::new_err("pixels must contain Color values or [r, g, b, (a)] sequences")
+}
+
 /// Convert a Python sequence of colors (as returned by `load_pixels()`, or
 /// individual `Color`/`[r,g,b,a]` values) into linear-RGBA pixels.
 fn pyseq_to_pixels(seq: &Bound<'_, PyAny>) -> PyResult<Vec<LinearRgba>> {
@@ -49,14 +53,21 @@ fn pyseq_to_pixels(seq: &Bound<'_, PyAny>) -> PyResult<Vec<LinearRgba>> {
         let item = item?;
         let color = if let Ok(c) = item.extract::<crate::color::PyColor>() {
             c.0
-        } else if let Ok(rgba) = item.extract::<[f32; 4]>() {
-            bevy::prelude::Color::Srgba(Srgba::new(rgba[0], rgba[1], rgba[2], rgba[3]))
-        } else if let Ok(rgb) = item.extract::<[f32; 3]>() {
-            bevy::prelude::Color::Srgba(Srgba::new(rgb[0], rgb[1], rgb[2], 1.0))
         } else {
-            return Err(PyValueError::new_err(
-                "pixels must contain Color values or [r, g, b, (a)] sequences",
-            ));
+            // bare components follow the default color mode: ints 0-255, floats 0-1
+            let space = ColorSpace::Srgb;
+            let parts: Vec<Bound<'_, PyAny>> = item
+                .try_iter()
+                .and_then(|it| it.collect())
+                .map_err(|_| pixel_item_error())?;
+            if parts.len() != 3 && parts.len() != 4 {
+                return Err(pixel_item_error());
+            }
+            let mut c = [1.0f32; 4];
+            for (ch, part) in parts.iter().enumerate() {
+                c[ch] = parse_numeric(&space, part, ch).map_err(|_| pixel_item_error())?;
+            }
+            space.color(c[0], c[1], c[2], c[3])
         };
         out.push(LinearRgba::from(color));
     }
@@ -618,18 +629,10 @@ impl Image {
 
     /// Read a single pixel as a `Color` (Processing `get`); outside the image it is transparent black.
     fn get(&self, x: i64, y: i64) -> PyResult<crate::color::PyColor> {
-        let (w, h) =
-            image_size(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        if x < 0 || y < 0 || x >= w as i64 || y >= h as i64 {
-            return Ok(crate::color::PyColor(bevy::prelude::Color::Srgba(
-                Srgba::NONE,
-            )));
-        }
-        let pixels =
-            image_readback(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        let p = pixels[(y as u32 * w + x as u32) as usize];
+        let p = image_get_pixel(self.entity, x, y)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(crate::color::PyColor(bevy::prelude::Color::Srgba(
-            Srgba::from(p),
+            p.map_or(Srgba::NONE, Srgba::from),
         )))
     }
 
@@ -1044,18 +1047,10 @@ impl Graphics {
 
     /// Read a single pixel as a `Color` (Processing `get`).
     pub fn get(&self, x: i64, y: i64) -> PyResult<crate::color::PyColor> {
-        if x < 0 || y < 0 || x >= self.width as i64 || y >= self.height as i64 {
-            return Ok(crate::color::PyColor(bevy::prelude::Color::Srgba(
-                Srgba::NONE,
-            )));
-        }
-        let pixels =
-            graphics_readback(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        let p = pixels
-            .get((y as u32 * self.width + x as u32) as usize)
-            .ok_or_else(|| PyValueError::new_err("pixel out of bounds"))?;
+        let p = graphics_get_pixel(self.entity, x, y)
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(crate::color::PyColor(bevy::prelude::Color::Srgba(
-            Srgba::from(*p),
+            p.map_or(Srgba::NONE, Srgba::from),
         )))
     }
 
@@ -1067,18 +1062,8 @@ impl Graphics {
             &graphics_get_color_mode(self.entity)
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
         )?;
-        if x < 0 || y < 0 || x >= self.width as i64 || y >= self.height as i64 {
-            return Ok(());
-        }
-        graphics_update_region(
-            self.entity,
-            x as u32,
-            y as u32,
-            1,
-            1,
-            &[LinearRgba::from(color)],
-        )
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        graphics_update_region(self.entity, x, y, 1, 1, &[LinearRgba::from(color)])
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     /// Read all pixels into the `pixels` list (Processing `loadPixels`).

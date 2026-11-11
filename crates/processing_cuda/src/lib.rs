@@ -8,7 +8,7 @@ use bevy_cuda::{CudaBuffer, CudaContext};
 use processing_core::app_mut;
 use processing_core::error::{ProcessingError, Result};
 use processing_render::graphics::view_target;
-use processing_render::image::{Image, gpu_image, pixel_size};
+use processing_render::image::{Image, pixel_size, texture_for_read, texture_for_write};
 
 #[derive(Component)]
 pub struct CudaImageBuffer {
@@ -44,9 +44,18 @@ fn cuda_ctx(world: &World) -> Result<&CudaContext> {
         .ok_or(ProcessingError::CudaError("CUDA not available".into()))
 }
 
-fn resolve_texture(app: &mut App, entity: Entity) -> Result<(Texture, TextureFormat, u32, u32)> {
+/// The texture to copy from, or with `write` to copy into, which leaves an image's CPU copy stale
+fn resolve_texture(
+    app: &mut App,
+    entity: Entity,
+    write: bool,
+) -> Result<(Texture, TextureFormat, u32, u32)> {
     if app.world().get::<Image>(entity).is_some() {
-        let texture = gpu_image(app, entity)?.texture.clone();
+        let texture = if write {
+            texture_for_write(app, entity)?
+        } else {
+            texture_for_read(app, entity)?
+        };
         let p_image = app.world().get::<Image>(entity).unwrap();
         return Ok((
             texture,
@@ -66,7 +75,7 @@ fn resolve_texture(app: &mut App, entity: Entity) -> Result<(Texture, TextureFor
 
 pub fn cuda_export(entity: Entity) -> Result<()> {
     app_mut(|app| {
-        let (texture, texture_format, width, height) = resolve_texture(app, entity)?;
+        let (texture, texture_format, width, height) = resolve_texture(app, entity, false)?;
 
         let px_size = pixel_size(texture_format)?;
         let buffer_size = (width as u64) * (height as u64) * (px_size as u64);
@@ -103,7 +112,7 @@ pub fn cuda_export(entity: Entity) -> Result<()> {
 
 pub fn cuda_import(entity: Entity, src_device_ptr: u64, byte_size: u64) -> Result<()> {
     app_mut(|app| {
-        let (texture, texture_format, width, height) = resolve_texture(app, entity)?;
+        let (texture, texture_format, width, height) = resolve_texture(app, entity, true)?;
 
         let existing = app.world().get::<CudaImageBuffer>(entity);
         let needs_alloc = existing.is_none_or(|buf| buf.buffer.size() != byte_size);
@@ -147,7 +156,7 @@ pub fn cuda_import(entity: Entity, src_device_ptr: u64, byte_size: u64) -> Resul
 
 pub fn cuda_write_back(entity: Entity) -> Result<()> {
     app_mut(|app| {
-        let (texture, _, _, _) = resolve_texture(app, entity)?;
+        let (texture, _, _, _) = resolve_texture(app, entity, true)?;
 
         let cuda_buf = app
             .world()

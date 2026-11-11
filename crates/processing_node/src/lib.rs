@@ -1202,8 +1202,8 @@ pub fn js_graphics_update_region(
 ) -> Result<()> {
     check(graphics_update_region(
         ent(graphics_id),
-        x,
-        y,
+        x.into(),
+        y.into(),
         width,
         height,
         &floats_to_linear(&pixels, space),
@@ -1224,8 +1224,8 @@ pub fn js_graphics_set(
     let color = Color::new(c1, c2, c3, a, space).to_linear();
     check(graphics_update_region(
         ent(graphics_id),
-        x,
-        y,
+        x.into(),
+        y.into(),
         1,
         1,
         &[color],

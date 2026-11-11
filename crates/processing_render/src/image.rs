@@ -13,13 +13,13 @@ use bevy::{
     image::{ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor},
     prelude::*,
     render::{
-        Render, RenderApp, RenderSystems,
+        ExtractSchedule, MainWorld, Render, RenderApp, RenderSystems,
         extract_component::{ExtractComponent, ExtractComponentPlugin},
         render_asset::RenderAssets,
         render_resource::{
             Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, Extent3d, MapMode,
-            PollType, TexelCopyBufferInfo, TexelCopyBufferLayout, Texture, TextureDimension,
-            TextureFormat, TextureUsages,
+            Origin3d, PollType, TexelCopyBufferInfo, TexelCopyBufferLayout, TexelCopyTextureInfo,
+            Texture, TextureDimension, TextureFormat, TextureUsages,
         },
         renderer::{RenderDevice, RenderQueue},
         texture::GpuImage,
@@ -39,6 +39,7 @@ impl Plugin for ImagePlugin {
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app.init_resource::<BlitterCache>();
             render_app.add_systems(Render, blit_backgrounds.in_set(RenderSystems::Prepare));
+            render_app.add_systems(ExtractSchedule, upload_pending);
         }
     }
 }
@@ -210,8 +211,38 @@ pub struct Image {
     pub size: Extent3d,
     /// Any pixel has alpha below one, so draws sampling it must blend
     pub translucent: bool,
-    /// The GPU wrote the texture (blit), so the asset's CPU pixels are stale until read back
-    pub gpu_dirty: bool,
+    pub coherence: Coherence,
+    /// Bound as a storage texture, so any compute dispatch may write it
+    pub bound_rw: bool,
+}
+
+/// Which copy of the pixels is newer; the other is brought up to date on demand
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Coherence {
+    /// CPU writes inside the rect are not in the texture yet
+    CpuAhead(URect),
+    InSync,
+    /// The GPU wrote the texture, so the CPU copy is stale or absent
+    GpuAhead,
+}
+
+impl Coherence {
+    fn of_asset(image: &bevy::image::Image) -> Self {
+        if image.data.is_some() {
+            Self::InSync
+        } else {
+            Self::GpuAhead
+        }
+    }
+}
+
+impl Image {
+    fn cpu_wrote(&mut self, rect: URect) {
+        self.coherence = match self.coherence {
+            Coherence::CpuAhead(pending) => Coherence::CpuAhead(pending.union(rect)),
+            _ => Coherence::CpuAhead(rect),
+        };
+    }
 }
 
 /// Whether tightly packed `data` in `format` holds any pixel with alpha below one
@@ -276,7 +307,8 @@ pub fn create(
             texture_format,
             size,
             translucent,
-            gpu_dirty: false,
+            coherence: Coherence::InSync,
+            bound_rw: false,
         },))
         .id()
 }
@@ -302,6 +334,7 @@ pub fn from_handle(
     let size = image.texture_descriptor.size;
     let texture_format = image.texture_descriptor.format;
     let translucent = image_translucent(image);
+    let coherence = Coherence::of_asset(image);
 
     let render_device = world.resource::<RenderDevice>();
     let readback_buffer = create_readback_buffer(
@@ -319,7 +352,8 @@ pub fn from_handle(
             texture_format,
             size,
             translucent,
-            gpu_dirty: false,
+            coherence,
+            bound_rw: false,
         })
         .id())
 }
@@ -344,6 +378,7 @@ pub fn load(In(path): In<PathBuf>, world: &mut World) -> Result<Entity> {
     let size = image.texture_descriptor.size;
     let texture_format = image.texture_descriptor.format;
     let translucent = image_translucent(image);
+    let coherence = Coherence::of_asset(image);
 
     let render_device = world.resource::<RenderDevice>();
     let readback_buffer = create_readback_buffer(
@@ -361,7 +396,8 @@ pub fn load(In(path): In<PathBuf>, world: &mut World) -> Result<Entity> {
             texture_format,
             size,
             translucent,
-            gpu_dirty: false,
+            coherence,
+            bound_rw: false,
         })
         .id())
 }
@@ -380,7 +416,7 @@ pub fn resize(
         .get_mut(&p_image.handle)
         .ok_or(ProcessingError::ImageNotFound)?
         .resize_in_place(new_size);
-    p_image.gpu_dirty = false;
+    p_image.coherence = Coherence::InSync;
 
     p_image.readback_buffer = create_readback_buffer(
         &render_device,
@@ -400,7 +436,7 @@ pub fn readback(
     mut images: ResMut<Assets<bevy::image::Image>>,
     render_device: Res<RenderDevice>,
     render_queue: ResMut<RenderQueue>,
-) -> Result<Vec<LinearRgba>> {
+) -> Result<()> {
     let mut p_image = p_images
         .get_mut(entity)
         .map_err(|_| ProcessingError::ImageNotFound)?;
@@ -459,19 +495,12 @@ pub fn readback(
     images
         .get_mut_untracked(&p_image.handle)
         .ok_or(ProcessingError::ImageNotFound)?
-        .data = Some(data.clone());
-    p_image.gpu_dirty = false;
-
-    bytes_to_pixels(
-        &data,
-        p_image.texture_format,
-        p_image.size.width,
-        p_image.size.height,
-        bytes_per_row,
-    )
+        .data = Some(data);
+    p_image.coherence = Coherence::InSync;
+    Ok(())
 }
 
-/// Pixels from the asset's CPU copy, which is current while `gpu_dirty` is false
+/// Pixels from the asset's CPU copy; `sync_cpu` first if the GPU may be ahead
 pub fn cpu_pixels(world: &World, entity: Entity) -> Result<Vec<LinearRgba>> {
     let p_image = world
         .get::<Image>(entity)
@@ -508,8 +537,28 @@ fn check_len(len: usize, stride: usize, size: Extent3d, format: TextureFormat) -
     Ok(())
 }
 
-/// Replaces the asset's CPU pixels with `data` in the texture format; Bevy uploads the modified
-/// asset into the existing texture on the next frame
+/// One pixel from the asset's CPU copy; `None` outside the image
+pub fn cpu_pixel(world: &World, entity: Entity, x: i64, y: i64) -> Result<Option<LinearRgba>> {
+    let p_image = world
+        .get::<Image>(entity)
+        .ok_or(ProcessingError::ImageNotFound)?;
+    let size = p_image.size;
+    if x < 0 || y < 0 || x >= size.width as i64 || y >= size.height as i64 {
+        return Ok(None);
+    }
+    let data = world
+        .resource::<Assets<bevy::image::Image>>()
+        .get(&p_image.handle)
+        .and_then(|image| image.data.as_deref())
+        .ok_or(ProcessingError::ImageNotFound)?;
+    let px_size = pixel_size(p_image.texture_format)?;
+    let stride = size.width as usize * px_size;
+    check_len(data.len(), stride, size, p_image.texture_format)?;
+    let at = y as usize * stride + x as usize * px_size;
+    decode_pixel(&data[at..at + px_size], p_image.texture_format).map(Some)
+}
+
+/// Replaces the asset's CPU pixels with `data` in the texture format
 pub fn cpu_write(world: &mut World, entity: Entity, data: Vec<u8>) -> Result<()> {
     let (handle, texture_format, size) = {
         let p_image = world
@@ -517,27 +566,24 @@ pub fn cpu_write(world: &mut World, entity: Entity, data: Vec<u8>) -> Result<()>
             .ok_or(ProcessingError::ImageNotFound)?;
         (p_image.handle.clone(), p_image.texture_format, p_image.size)
     };
-    let px_size = pixel_size(texture_format)?;
-    let expected = size.width as usize * size.height as usize * px_size;
-    if data.len() != expected {
-        return Err(ProcessingError::InvalidArgument(format!(
-            "expected {expected} bytes for a {}x{} {:?} image, got {}",
-            size.width,
-            size.height,
-            texture_format,
-            data.len()
-        )));
-    }
+    let stride = size.width as usize * pixel_size(texture_format)?;
+    check_len(data.len(), stride, size, texture_format)?;
+    // untracked: only the dirty rect is uploaded, not the whole asset
     world
         .resource_mut::<Assets<bevy::image::Image>>()
-        .get_mut(&handle)
+        .get_mut_untracked(&handle)
         .ok_or(ProcessingError::ImageNotFound)?
         .data = Some(data);
+    let full = URect::new(0, 0, size.width, size.height);
+    world
+        .get_mut::<Image>(entity)
+        .ok_or(ProcessingError::ImageNotFound)?
+        .coherence = Coherence::CpuAhead(full);
     Ok(())
 }
 
 /// Writes a `width`×`height` block of `pixels` at (`x`, `y`) into the asset's CPU pixels,
-/// clipping to the image like Processing's `set`
+/// clipping to the image like Processing's `set`; `sync_cpu` first if the GPU may be ahead
 pub fn cpu_write_region(
     world: &mut World,
     entity: Entity,
@@ -563,31 +609,221 @@ pub fn cpu_write_region(
             .ok_or(ProcessingError::ImageNotFound)?;
         (p_image.handle.clone(), p_image.texture_format, p_image.size)
     };
-    let px_size = pixel_size(texture_format)?;
-    let bytes = pixels_to_bytes(pixels, texture_format)?;
     let x0 = x.max(0);
+    let y0 = y.max(0);
     let x1 = (x + width as i64).min(size.width as i64);
-    if x1 <= x0 {
+    let y1 = (y + height as i64).min(size.height as i64);
+    if x1 <= x0 || y1 <= y0 {
         return Ok(());
     }
-    let mut images = world.resource_mut::<Assets<bevy::image::Image>>();
-    let mut image = images
-        .get_mut(&handle)
-        .ok_or(ProcessingError::ImageNotFound)?;
-    let data = image.data.as_mut().ok_or(ProcessingError::ImageNotFound)?;
+    let px_size = pixel_size(texture_format)?;
+    let bytes = pixels_to_bytes(pixels, texture_format)?;
     let stride = size.width as usize * px_size;
+    let mut images = world.resource_mut::<Assets<bevy::image::Image>>();
+    // untracked: only the dirty rect is uploaded, not the whole asset
+    let data = images
+        .get_mut_untracked(&handle)
+        .and_then(|image| image.data.as_mut())
+        .ok_or(ProcessingError::ImageNotFound)?;
     check_len(data.len(), stride, size, texture_format)?;
     let run = (x1 - x0) as usize * px_size;
-    for row in 0..height as i64 {
-        let dy = y + row;
-        if dy < 0 || dy >= size.height as i64 {
-            continue;
-        }
-        let src = (row as usize * width as usize + (x0 - x) as usize) * px_size;
+    for dy in y0..y1 {
+        let src = ((dy - y) as usize * width as usize + (x0 - x) as usize) * px_size;
         let dst = dy as usize * stride + x0 as usize * px_size;
         data[dst..dst + run].copy_from_slice(&bytes[src..src + run]);
     }
+    world
+        .get_mut::<Image>(entity)
+        .ok_or(ProcessingError::ImageNotFound)?
+        .cpu_wrote(URect::new(x0 as u32, y0 as u32, x1 as u32, y1 as u32));
     Ok(())
+}
+
+/// Writes `rect` of the asset's CPU pixels into the texture
+fn upload_rect(
+    queue: &RenderQueue,
+    texture: &Texture,
+    image: &bevy::image::Image,
+    rect: URect,
+) -> Result<()> {
+    let Some(data) = image.data.as_deref() else {
+        return Ok(());
+    };
+    let size = image.texture_descriptor.size;
+    let format = image.texture_descriptor.format;
+    let px_size = pixel_size(format)?;
+    let stride = size.width as usize * px_size;
+    check_len(data.len(), stride, size, format)?;
+    let start = rect.min.y as usize * stride + rect.min.x as usize * px_size;
+    let len = (rect.height() as usize - 1) * stride + rect.width() as usize * px_size;
+    queue.write_texture(
+        TexelCopyTextureInfo {
+            texture,
+            mip_level: 0,
+            origin: Origin3d {
+                x: rect.min.x,
+                y: rect.min.y,
+                z: 0,
+            },
+            aspect: Default::default(),
+        },
+        &data[start..start + len],
+        TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(stride as u32),
+            rows_per_image: None,
+        },
+        Extent3d {
+            width: rect.width(),
+            height: rect.height(),
+            depth_or_array_layers: 1,
+        },
+    );
+    Ok(())
+}
+
+/// Uploads every pending CPU write once per frame, before anything renders
+fn upload_pending(
+    mut main_world: ResMut<MainWorld>,
+    mut state: Local<Option<QueryState<(Entity, &'static Image)>>>,
+    queue: Res<RenderQueue>,
+    gpu_images: Res<RenderAssets<GpuImage>>,
+) {
+    let state = state.get_or_insert_with(|| main_world.query());
+    let pending: Vec<_> = state
+        .iter(&main_world)
+        .filter_map(|(entity, p_image)| match p_image.coherence {
+            Coherence::CpuAhead(rect) => Some((entity, p_image.handle.clone(), rect)),
+            _ => None,
+        })
+        .collect();
+    for (entity, handle, rect) in pending {
+        // an unprepared image uploads its whole CPU copy when Bevy first prepares it
+        let Some(gpu_image) = gpu_images.get(&handle) else {
+            continue;
+        };
+        let Some(image) = main_world
+            .resource::<Assets<bevy::image::Image>>()
+            .get(&handle)
+        else {
+            continue;
+        };
+        if let Err(err) = upload_rect(&queue, &gpu_image.texture, image, rect) {
+            error!("image upload failed: {err}");
+        }
+        if let Some(mut p_image) = main_world.get_mut::<Image>(entity) {
+            p_image.coherence = Coherence::InSync;
+        }
+    }
+}
+
+/// Uploads an image's pending CPU writes now, for GPU work that runs outside a frame
+pub fn sync_gpu(app: &mut App, entity: Entity) -> Result<()> {
+    let p_image = app
+        .world()
+        .get::<Image>(entity)
+        .ok_or(ProcessingError::ImageNotFound)?;
+    let Coherence::CpuAhead(rect) = p_image.coherence else {
+        return Ok(());
+    };
+    let handle = p_image.handle.clone();
+    let gpu_images = app
+        .sub_app(RenderApp)
+        .world()
+        .resource::<RenderAssets<GpuImage>>();
+    // an unprepared image uploads its whole CPU copy when Bevy first prepares it
+    let Some(gpu_image) = gpu_images.get(&handle) else {
+        return Ok(());
+    };
+    let world = app.world();
+    let image = world
+        .resource::<Assets<bevy::image::Image>>()
+        .get(&handle)
+        .ok_or(ProcessingError::ImageNotFound)?;
+    upload_rect(
+        world.resource::<RenderQueue>(),
+        &gpu_image.texture,
+        image,
+        rect,
+    )?;
+    app.world_mut()
+        .get_mut::<Image>(entity)
+        .ok_or(ProcessingError::ImageNotFound)?
+        .coherence = Coherence::InSync;
+    Ok(())
+}
+
+/// `sync_gpu` for every image
+pub fn flush_uploads(app: &mut App) -> Result<()> {
+    let world = app.world_mut();
+    let pending: Vec<Entity> = world
+        .query::<(Entity, &Image)>()
+        .iter(world)
+        .filter(|(_, p_image)| matches!(p_image.coherence, Coherence::CpuAhead(_)))
+        .map(|(entity, _)| entity)
+        .collect();
+    for entity in pending {
+        sync_gpu(app, entity)?;
+    }
+    Ok(())
+}
+
+/// Reads GPU-written pixels back into the CPU copy, so CPU reads and writes see them
+pub fn sync_cpu(app: &mut App, entity: Entity) -> Result<()> {
+    let world = app.world();
+    let p_image = world
+        .get::<Image>(entity)
+        .ok_or(ProcessingError::ImageNotFound)?;
+    let has_cpu = world
+        .resource::<Assets<bevy::image::Image>>()
+        .get(&p_image.handle)
+        .is_some_and(|image| image.data.is_some());
+    if has_cpu && p_image.coherence != Coherence::GpuAhead {
+        return Ok(());
+    }
+    let texture = gpu_texture(app, entity)?;
+    app.world_mut()
+        .run_system_cached_with(readback, (entity, texture))
+        .unwrap()
+}
+
+/// After a compute dispatch, every storage-bound image may hold new pixels
+pub fn invalidate_rw(mut p_images: Query<&mut Image>) {
+    for mut p_image in &mut p_images {
+        if p_image.bound_rw && p_image.coherence != Coherence::GpuAhead {
+            p_image.coherence = Coherence::GpuAhead;
+        }
+    }
+}
+
+/// Marks an image whose texture the GPU just wrote
+pub fn gpu_wrote(app: &mut App, entity: Entity) -> Result<()> {
+    app.world_mut()
+        .get_mut::<Image>(entity)
+        .ok_or(ProcessingError::ImageNotFound)?
+        .coherence = Coherence::GpuAhead;
+    Ok(())
+}
+
+/// The texture for a GPU reader, with every CPU write uploaded
+pub fn texture_for_read(app: &mut App, entity: Entity) -> Result<Texture> {
+    sync_gpu(app, entity)?;
+    gpu_texture(app, entity)
+}
+
+/// The texture for a GPU writer; the CPU copy is stale from here on
+pub fn texture_for_write(app: &mut App, entity: Entity) -> Result<Texture> {
+    let texture = texture_for_read(app, entity)?;
+    gpu_wrote(app, entity)?;
+    Ok(texture)
+}
+
+fn gpu_texture(app: &mut App, entity: Entity) -> Result<Texture> {
+    // a new image has no texture until a frame prepares it
+    if gpu_image(app, entity).is_err() {
+        app.update();
+    }
+    Ok(gpu_image(app, entity)?.texture.clone())
 }
 
 /// Get the pixel dimensions `(width, height)` of an image.
@@ -672,57 +908,27 @@ pub fn bytes_to_pixels(
 ) -> Result<Vec<LinearRgba>> {
     let px_size = pixel_size(format)?;
     let bytes_per_row = width as usize * px_size;
+    data.chunks_exact(padded_bytes_per_row)
+        .take(height as usize)
+        .flat_map(|row| row[..bytes_per_row].chunks_exact(px_size))
+        .map(|chunk| decode_pixel(chunk, format))
+        .collect()
+}
 
-    let pixels = match format {
-        TextureFormat::Rgba8Unorm => data
-            .chunks_exact(padded_bytes_per_row)
-            .take(height as usize)
-            .flat_map(|row| {
-                row[..bytes_per_row].chunks_exact(px_size).map(|chunk| {
-                    LinearRgba::from_u8_array([chunk[0], chunk[1], chunk[2], chunk[3]])
-                })
-            })
-            .collect(),
-        TextureFormat::Rgba8UnormSrgb => data
-            .chunks_exact(padded_bytes_per_row)
-            .take(height as usize)
-            .flat_map(|row| {
-                row[..bytes_per_row].chunks_exact(px_size).map(|chunk| {
-                    Srgba::from_u8_array([chunk[0], chunk[1], chunk[2], chunk[3]]).into()
-                })
-            })
-            .collect(),
-        TextureFormat::Rgba16Float => data
-            .chunks_exact(padded_bytes_per_row)
-            .take(height as usize)
-            .flat_map(|row| {
-                row[..bytes_per_row].chunks_exact(px_size).map(|chunk| {
-                    let r = f16::from_bits(u16::from_le_bytes([chunk[0], chunk[1]])).to_f32();
-                    let g = f16::from_bits(u16::from_le_bytes([chunk[2], chunk[3]])).to_f32();
-                    let b = f16::from_bits(u16::from_le_bytes([chunk[4], chunk[5]])).to_f32();
-                    let a = f16::from_bits(u16::from_le_bytes([chunk[6], chunk[7]])).to_f32();
-                    LinearRgba::from_f32_array([r, g, b, a])
-                })
-            })
-            .collect(),
-        TextureFormat::Rgba32Float => data
-            .chunks_exact(padded_bytes_per_row)
-            .take(height as usize)
-            .flat_map(|row| {
-                row[..bytes_per_row].chunks_exact(px_size).map(|chunk| {
-                    let r = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
-                    let g = f32::from_le_bytes([chunk[4], chunk[5], chunk[6], chunk[7]]);
-                    let b = f32::from_le_bytes([chunk[8], chunk[9], chunk[10], chunk[11]]);
-                    let a = f32::from_le_bytes([chunk[12], chunk[13], chunk[14], chunk[15]]);
-                    LinearRgba::from_f32_array([r, g, b, a])
-                })
-            })
-            .collect(),
-        // TODO: Handle more formats as needed
+fn decode_pixel(c: &[u8], format: TextureFormat) -> Result<LinearRgba> {
+    Ok(match format {
+        TextureFormat::Rgba8Unorm => LinearRgba::from_u8_array([c[0], c[1], c[2], c[3]]),
+        TextureFormat::Rgba8UnormSrgb => Srgba::from_u8_array([c[0], c[1], c[2], c[3]]).into(),
+        TextureFormat::Rgba16Float => {
+            let ch = |i: usize| f16::from_bits(u16::from_le_bytes([c[i], c[i + 1]])).to_f32();
+            LinearRgba::from_f32_array([ch(0), ch(2), ch(4), ch(6)])
+        }
+        TextureFormat::Rgba32Float => {
+            let ch = |i: usize| f32::from_le_bytes([c[i], c[i + 1], c[i + 2], c[i + 3]]);
+            LinearRgba::from_f32_array([ch(0), ch(4), ch(8), ch(12)])
+        }
         _ => return Err(ProcessingError::UnsupportedTextureFormat),
-    };
-
-    Ok(pixels)
+    })
 }
 
 /// Create a readback buffer for the given texture dimensions and format.
@@ -789,7 +995,7 @@ pub fn set_sampler(
     Ok(())
 }
 
-pub fn gpu_image(app: &mut App, entity: Entity) -> Result<&GpuImage> {
+fn gpu_image(app: &mut App, entity: Entity) -> Result<&GpuImage> {
     let handle = app
         .world()
         .get::<Image>(entity)
