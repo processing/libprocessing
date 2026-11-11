@@ -251,7 +251,7 @@ pub fn has_translucent_pixels(data: &[u8], format: TextureFormat, width: u32, he
         return true;
     };
     if px_size == 4 {
-        return data.chunks_exact(4).any(|p| p[3] < u8::MAX);
+        return data.as_chunks::<4>().0.iter().any(|p| p[3] < u8::MAX);
     }
     match bytes_to_pixels(data, format, width, height, width as usize * px_size) {
         Ok(pixels) => pixels.iter().any(|p| p.alpha < 1.0),
