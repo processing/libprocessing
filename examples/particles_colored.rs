@@ -17,7 +17,7 @@ fn sketch() -> error::Result<()> {
     let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, 6.0, 18.0))?;
+    transform_set_position(graphics, Vec3::new(0.0, -6.0, 18.0))?;
     transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
     let sphere = geometry_sphere(0.25, 12, 8)?;
@@ -29,7 +29,7 @@ fn sketch() -> error::Result<()> {
         for y in 0..10 {
             for z in 0..10 {
                 positions.push((x as f32 - 4.5) * 1.0);
-                positions.push((y as f32 - 4.5) * 1.0);
+                positions.push((4.5 - y as f32) * 1.0);
                 positions.push((z as f32 - 4.5) * 1.0);
                 colors.push(x as f32 / 9.0);
                 colors.push(y as f32 / 9.0);

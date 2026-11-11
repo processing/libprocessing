@@ -11,7 +11,7 @@ def setup():
 
     dir_light = create_directional_light((1.0, 0.98, 0.95), 1500.0)
     p_light = create_point_light((1.0, 1.0, 1.0), 100000.0, 800.0, 0.0)
-    p_light.position(200.0, 200.0, 400.0)
+    p_light.position(200.0, -200.0, 400.0)
 
     mat = create_material(
         roughness=0.3,

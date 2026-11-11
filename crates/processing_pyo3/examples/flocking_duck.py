@@ -122,7 +122,7 @@ def draw():
 
     t = elapsed_time * 0.2
     r = extent * 1.1
-    camera_position(center[0] + cos(t) * r, center[1] + extent * 0.35, center[2] + sin(t) * r)
+    camera_position(center[0] + cos(t) * r, center[1] - extent * 0.35, center[2] + sin(t) * r)
     camera_look_at(center[0], center[1], center[2])
     background(10, 12, 18)
     light(sun)

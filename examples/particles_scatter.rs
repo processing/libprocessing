@@ -47,7 +47,7 @@ fn sketch() -> error::Result<()> {
     let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, 0.4, 4.5))?;
+    transform_set_position(graphics, Vec3::new(0.0, -0.4, 4.5))?;
     transform_look_at(graphics, Vec3::ZERO)?;
 
     let key =
@@ -105,7 +105,7 @@ fn sketch() -> error::Result<()> {
         let t = start.elapsed().as_secs_f32();
         let cam_x = (t * 0.25).cos() * 4.5;
         let cam_z = (t * 0.25).sin() * 4.5;
-        transform_set_position(graphics, Vec3::new(cam_x, 0.4, cam_z))?;
+        transform_set_position(graphics, Vec3::new(cam_x, -0.4, cam_z))?;
         transform_look_at(graphics, Vec3::ZERO)?;
 
         compute_set(

@@ -37,7 +37,7 @@ def draw():
     # pointLight(255, 255, 255, 0, 0, 0) at the sun's position, and
     # pointLight(255, 255, 255, 0, 0, -150) at the screen corner for planet1
     point_light((1.0, 1.0, 1.0), 1000000.0, 1200.0, 1.0, position=(0, 0, -300))
-    point_light((1.0, 1.0, 1.0), 1000000.0, 1200.0, 1.0, position=(-width / 2, height / 2, -150))
+    point_light((1.0, 1.0, 1.0), 1000000.0, 1200.0, 1.0, position=(-width / 2, -height / 2, -150))
 
     push_matrix()
     translate(0, 0, -300)
@@ -61,7 +61,7 @@ def draw():
 
     pop_matrix()
 
-    translate(0.25 * width, -0.1 * height, 50)
+    translate(0.25 * width, 0.1 * height, 50)
     texture(surftex1)
     sphere(150, 40, 40)
     no_texture()

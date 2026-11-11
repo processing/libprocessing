@@ -66,6 +66,7 @@ impl MaterialExtension for ParticlesExtension {
         _layout: &MeshVertexBufferLayoutRef,
         key: MaterialExtensionKey<Self>,
     ) -> Result<(), SpecializedMeshPipelineError> {
+        crate::material::apply_processing_winding(descriptor);
         if let Some(ref mut fragment) = descriptor.fragment {
             if key.bind_group_data.has_albedo {
                 fragment.shader_defs.push("HAS_COLORS".into());

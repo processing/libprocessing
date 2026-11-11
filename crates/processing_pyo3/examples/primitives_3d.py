@@ -8,7 +8,7 @@ def setup():
 
 def draw():
     global t
-    camera_position(0, 80, 800)
+    camera_position(0, -80, 800)
     camera_look_at(0, 0, 0)
     background(15, 15, 20)
 
@@ -20,7 +20,7 @@ def draw():
     for i, x in enumerate(offsets):
         push_matrix()
         translate(x, 0)
-        rotate(t)
+        rotate(-t)
 
         if i == 0:
             box(50, 50, 50)

@@ -36,14 +36,14 @@ def boid_geometry(half_width, length, droop):
     n = (half_width * half_width + droop * droop) ** 0.5
     nose = (0.0, 0.0, length * 0.5)
     tail = (0.0, 0.0, -length * 0.5)
-    g.normal(-droop / n, half_width / n, 0.0)
+    g.normal(-droop / n, -half_width / n, 0.0)
     g.vertex(*nose)
-    g.vertex(-half_width, -droop, -length * 0.5)
+    g.vertex(-half_width, droop, -length * 0.5)
     g.vertex(*tail)
-    g.normal(droop / n, half_width / n, 0.0)
+    g.normal(droop / n, -half_width / n, 0.0)
     g.vertex(*nose)
     g.vertex(*tail)
-    g.vertex(half_width, -droop, -length * 0.5)
+    g.vertex(half_width, droop, -length * 0.5)
     for i in range(6):
         g.index(i)
     return g
@@ -132,7 +132,7 @@ def draw():
 
     t = elapsed_time * 0.1
     r = BOUND * 2.6
-    camera_position(cos(t) * r, BOUND * 0.8, sin(t) * r)
+    camera_position(cos(t) * r, -BOUND * 0.8, sin(t) * r)
     camera_look_at(0.0, 0.0, 0.0)
     background(10, 12, 18)
     light(sun)
@@ -144,7 +144,7 @@ def draw():
 
     p.apply(INTEGRATE, dt=DT)
     p.apply(BOUNDS_BOX, aabb_min=[-BOUND] * 3, aabb_max=[BOUND] * 3, mode=2)
-    p.apply(ORIENT, forward=[0.0, 0.0, 1.0], up=[0.0, 1.0, 0.0])
+    p.apply(ORIENT, forward=[0.0, 0.0, 1.0], up=[0.0, -1.0, 0.0])
 
 
 run()

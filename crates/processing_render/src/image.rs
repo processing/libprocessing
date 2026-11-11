@@ -12,7 +12,8 @@ use bevy::{
     image::{ImageAddressMode, ImageFilterMode, ImageSampler, ImageSamplerDescriptor},
     prelude::*,
     render::{
-        RenderApp,
+        Render, RenderApp, RenderSystems,
+        extract_component::{ExtractComponent, ExtractComponentPlugin},
         render_asset::RenderAssets,
         render_resource::{
             Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, Extent3d, MapMode,
@@ -21,6 +22,7 @@ use bevy::{
         },
         renderer::{RenderDevice, RenderQueue},
         texture::GpuImage,
+        view::ViewTarget,
     },
 };
 use half::f16;
@@ -32,10 +34,80 @@ pub struct ImagePlugin;
 
 impl Plugin for ImagePlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(ExtractComponentPlugin::<BackgroundBlit>::default());
         if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app.init_resource::<BlitterCache>();
+            render_app.add_systems(Render, blit_backgrounds.in_set(RenderSystems::Prepare));
         }
     }
+}
+
+/// The image a `background(img)` paints over this camera's target before its next pass
+#[derive(Component, Clone, Default, ExtractComponent)]
+pub struct BackgroundBlit(pub Option<Handle<bevy::image::Image>>);
+
+/// `background(img)` applies to one pass only
+pub fn clear_background_blits(mut blits: Query<&mut BackgroundBlit>) {
+    for mut blit in &mut blits {
+        if blit.0.is_some() {
+            blit.0 = None;
+        }
+    }
+}
+
+/// Clears each view target with a pending background image, then alpha-blends the image over
+/// it like Processing's `set(0, 0, img)`; the pass loads the result
+fn blit_backgrounds(
+    views: Query<(&ViewTarget, &BackgroundBlit)>,
+    render_device: Res<RenderDevice>,
+    render_queue: Res<RenderQueue>,
+    gpu_images: Res<RenderAssets<GpuImage>>,
+    mut cache: ResMut<BlitterCache>,
+) {
+    let device = render_device.wgpu_device();
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("processing_background_blit"),
+    });
+    let mut pending = false;
+    for (target, blit) in &views {
+        let Some(handle) = &blit.0 else { continue };
+        pending = true;
+        let dst: &wgpu::TextureView = target.main_texture_view();
+        clear_view(&mut encoder, dst);
+        // an image still loading leaves the clear alone
+        if let Some(src) = gpu_images.get(handle) {
+            cache.copy(
+                device,
+                &mut encoder,
+                &src.texture_view,
+                dst,
+                target.main_texture_format(),
+                true,
+            );
+        }
+    }
+    if pending {
+        render_queue.submit(std::iter::once(encoder.finish()));
+    }
+}
+
+fn clear_view(encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
+    encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+        label: Some("processing_background_clear"),
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
+        depth_stencil_attachment: None,
+        timestamp_writes: None,
+        occlusion_query_set: None,
+        multiview_mask: None,
+    });
 }
 
 /// Where a blit reads its source pixels: another image, or a graphics render
@@ -45,11 +117,37 @@ pub enum BlitSource {
     Graphics(Entity),
 }
 
-/// Caches one `wgpu::util::TextureBlitter` per destination texture format. Lives
+/// Caches one `wgpu::util::TextureBlitter` per destination format and blend. Lives
 /// in the render world; blitters are cheap to reuse and expensive to rebuild.
 #[derive(Resource, Default)]
 pub struct BlitterCache {
-    blitters: std::collections::HashMap<TextureFormat, wgpu::util::TextureBlitter>,
+    blitters: std::collections::HashMap<(TextureFormat, bool), wgpu::util::TextureBlitter>,
+}
+
+impl BlitterCache {
+    /// Draws `src` over all of `dst`, which has `format`; `blend` alpha-blends instead of replacing
+    pub fn copy(
+        &mut self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+        src: &wgpu::TextureView,
+        dst: &wgpu::TextureView,
+        format: TextureFormat,
+        blend: bool,
+    ) {
+        let blitter = self.blitters.entry((format, blend)).or_insert_with(|| {
+            let builder = wgpu::util::TextureBlitterBuilder::new(device, format);
+            if blend {
+                builder
+                    .sample_type(wgpu::FilterMode::Linear)
+                    .blend_state(wgpu::BlendState::ALPHA_BLENDING)
+                    .build()
+            } else {
+                builder.build()
+            }
+        });
+        blitter.copy(device, encoder, src, dst);
+    }
 }
 
 /// Blit `source` into the destination image (a sampling copy: handles differing
@@ -87,15 +185,10 @@ pub fn blit(
     };
 
     let device = render_device.wgpu_device();
-    let blitter = cache
-        .blitters
-        .entry(format)
-        .or_insert_with(|| wgpu::util::TextureBlitter::new(device, format));
-
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("processing_blit"),
     });
-    blitter.copy(device, &mut encoder, src_view, dst_view);
+    cache.copy(device, &mut encoder, src_view, dst_view, format, false);
     render_queue.submit(std::iter::once(encoder.finish()));
     Ok(())
 }

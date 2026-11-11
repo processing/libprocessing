@@ -429,11 +429,19 @@ impl MaterialExtension for ProcessingMaterial {
     }
 }
 
+/// The projection's y flip (`graphics::Y_FLIP`) mirrors triangle winding, so clockwise is the
+/// front face; keeps `cull_mode` and `double_sided` lighting correct. A shadow pass rendered
+/// from a light's view would need the default winding instead.
+pub(crate) fn apply_processing_winding(descriptor: &mut RenderPipelineDescriptor) {
+    descriptor.primitive.front_face = bevy::render::render_resource::FrontFace::Cw;
+}
+
 pub(crate) fn apply_pipeline_state(
     descriptor: &mut RenderPipelineDescriptor,
     blend_state: Option<BlendState>,
     depth_write: Option<bool>,
 ) {
+    apply_processing_winding(descriptor);
     if let Some(blend_state) = blend_state
         && let Some(fragment_state) = &mut descriptor.fragment
     {

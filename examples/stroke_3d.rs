@@ -17,7 +17,7 @@ fn sketch() -> error::Result<()> {
     let graphics = graphics_create(surface, 600, 400, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(200.0, 150.0, 350.0))?;
+    transform_set_position(graphics, Vec3::new(200.0, -150.0, 350.0))?;
     transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
     let light =
@@ -43,7 +43,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(
             graphics,
             DrawCommand::Rotate {
-                angle,
+                angle: -angle,
                 axis: Vec3::Z,
             },
         )?;
@@ -74,7 +74,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(
             graphics,
             DrawCommand::Rotate {
-                angle: angle * 0.7,
+                angle: -angle * 0.7,
                 axis: Vec3::Z,
             },
         )?;
@@ -108,7 +108,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(
             graphics,
             DrawCommand::Rotate {
-                angle: angle * 0.5,
+                angle: -angle * 0.5,
                 axis: Vec3::Z,
             },
         )?;
@@ -142,7 +142,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(
             graphics,
             DrawCommand::Rotate {
-                angle: -angle * 0.3,
+                angle: angle * 0.3,
                 axis: Vec3::Z,
             },
         )?;

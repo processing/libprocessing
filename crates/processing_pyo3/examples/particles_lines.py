@@ -11,7 +11,7 @@ p = None
 def knot(t, phase):
     r = cos(Q * t) + 2.0
     x = r * cos(P * t + phase)
-    y = r * sin(P * t + phase)
+    y = -r * sin(P * t + phase)
     z = -sin(Q * t)
     return (x * SCALE, y * SCALE, z * SCALE)
 
@@ -38,7 +38,7 @@ def draw():
 
     t = elapsed_time * 0.12
     r = SCALE * 4.5
-    camera_position(cos(t) * r, SCALE * 1.5, sin(t) * r)
+    camera_position(cos(t) * r, -SCALE * 1.5, sin(t) * r)
     camera_look_at(0.0, 0.0, 0.0)
 
     particles(p, topology="line_strip")

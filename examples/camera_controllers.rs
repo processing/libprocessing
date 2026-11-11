@@ -32,7 +32,7 @@ fn sketch() -> error::Result<()> {
 
     let dir_light =
         light_create_directional(graphics, bevy::color::Color::srgb(1.0, 0.98, 0.95), 1_500.0)?;
-    transform_set_position(dir_light, Vec3::new(300.0, 400.0, 300.0))?;
+    transform_set_position(dir_light, Vec3::new(300.0, -400.0, 300.0))?;
     transform_look_at(dir_light, Vec3::ZERO)?;
 
     let mut angle: f32 = 0.0;
@@ -74,7 +74,7 @@ fn sketch() -> error::Result<()> {
             graphics_record_command(
                 graphics,
                 DrawCommand::Rotate {
-                    angle,
+                    angle: -angle,
                     axis: Vec3::Z,
                 },
             )?;

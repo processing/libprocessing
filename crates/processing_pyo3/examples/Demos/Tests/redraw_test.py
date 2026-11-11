@@ -13,7 +13,7 @@ def setup():
 
 def draw():
     background(1.0, 0.0, 0.0)
-    ellipse(mouse_x - width / 2, height / 2 - mouse_y, 100, 50)
+    ellipse(mouse_x - width / 2, mouse_y - height / 2, 100, 50)
     print("draw")
 
 

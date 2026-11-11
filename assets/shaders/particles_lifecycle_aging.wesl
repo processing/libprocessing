@@ -19,7 +19,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     age[i] = age[i] + dt;
-    position[i * 3u + 1u] = position[i * 3u + 1u] - dt * 1.5;
+    position[i * 3u + 1u] = position[i * 3u + 1u] + dt * 1.5;
 
     let remaining = clamp(1.0 - age[i] / ttl, 0.0, 1.0);
     let s = remaining * remaining;

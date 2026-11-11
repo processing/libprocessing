@@ -55,7 +55,7 @@ def draw():
 
     t = elapsed_time
     r = 26.0
-    camera_position(cos(t * 0.08) * r, sin(t * 0.05) * r * 0.55, sin(t * 0.08) * r)
+    camera_position(cos(t * 0.08) * r, -sin(t * 0.05) * r * 0.55, sin(t * 0.08) * r)
     camera_look_at(0.0, 0.0, 0.0)
 
     curve.set(count=N, time=t, fx=FX, fy=FY, fz=FZ, loops=1.0, scale=SCALE, hue_mix=HUE_MIX)

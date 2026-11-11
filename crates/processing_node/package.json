@@ -1,0 +1,23 @@
+{
+  "name": "processing-node",
+  "version": "0.0.5",
+  "description": "Node.js bindings for libprocessing",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "private": true,
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "*.node"
+  ],
+  "napi": {
+    "binaryName": "processing"
+  },
+  "scripts": {
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.6.2"
+  }
+}

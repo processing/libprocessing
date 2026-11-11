@@ -37,7 +37,7 @@ def draw():
             z = (mouse_x / width) * brightness(px[loc]) * 255 - 20.0
             # Translate to the location, set fill and stroke, and draw the rect
             push_matrix()
-            translate(x + 200 - width / 2, height / 2 - (y + 100), z)
+            translate(x + 200 - width / 2, y + 100 - height / 2, z)
             fill(c.with_alpha(0.8))
             no_stroke()
             rect_mode(CENTER)

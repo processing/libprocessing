@@ -108,6 +108,12 @@ impl Plugin for ProcessingRenderPlugin {
         ))
         .add_plugins(ci::CiPlugin);
 
+        // Processing strokes every edge of a shape, so the wireframe pass never culls
+        app.insert_resource(bevy::pbr::wireframe::WireframeConfig {
+            cull_mode: None,
+            ..Default::default()
+        });
+
         app.add_systems(First, (clear_flush_transients, activate_cameras))
             .add_systems(
                 Update,

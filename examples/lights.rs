@@ -41,7 +41,7 @@ fn sketch() -> error::Result<()> {
         200.0,
         0.5,
     )?;
-    transform_set_position(point_light_a, Vec3::new(-25.0, 5.0, 51.0))?;
+    transform_set_position(point_light_a, Vec3::new(-25.0, -5.0, 51.0))?;
     transform_look_at(point_light_a, Vec3::new(0.0, 0.0, 0.0))?;
 
     // create another point light
@@ -52,7 +52,7 @@ fn sketch() -> error::Result<()> {
         200.0,
         0.25,
     )?;
-    transform_set_position(point_light_b, Vec3::new(0.0, 5.0, 50.5))?;
+    transform_set_position(point_light_b, Vec3::new(0.0, -5.0, 50.5))?;
     transform_look_at(point_light_b, Vec3::new(0.0, 0.0, 0.0))?;
 
     // and a spot light, too!
@@ -69,7 +69,7 @@ fn sketch() -> error::Result<()> {
     transform_look_at(spot_light, Vec3::new(0.0, 0.0, 0.0))?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(100.0, 100.0, 300.0))?;
+    transform_set_position(graphics, Vec3::new(100.0, -100.0, 300.0))?;
     transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
     let mut angle = 0.0;
@@ -93,7 +93,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(
             graphics,
             DrawCommand::Rotate {
-                angle,
+                angle: -angle,
                 axis: Vec3::Z,
             },
         )?;

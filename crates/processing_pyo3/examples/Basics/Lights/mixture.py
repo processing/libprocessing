@@ -15,10 +15,9 @@ def setup():
 def draw():
     background(0.0)
 
-    # The world is y-up, so the y of every position and direction is flipped
     # Orange point light on the right
     point_light((0.59, 0.39, 0.0), 3000000000.0, 600.0, 1.0,  # Color
-                position=(200, 150, 0))  # Position
+                position=(200, -150, 0))  # Position
 
     # Blue directional light from the left
     directional_light((0.0, 0.4, 1.0), 4000.0,  # Color
@@ -27,8 +26,8 @@ def draw():
     # Yellow spotlight from the front
     spot_light((1.0, 1.0, 0.43), 2000000000.0, 600.0, 1.0,  # Color
                PI / 4, PI / 2,  # Angle, concentration
-               position=(0, -40, 200),  # Position
-               look_at=(0, -40 + 0.5, 200 - 0.5))  # Direction
+               position=(0, 40, 200),  # Position
+               look_at=(0, 40 - 0.5, 200 - 0.5))  # Direction
 
     rotate_y(remap(mouse_x, 0, width, 0, PI))
     rotate_x(remap(mouse_y, 0, height, 0, PI))

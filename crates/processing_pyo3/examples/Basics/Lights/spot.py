@@ -16,20 +16,19 @@ def setup():
 def draw():
     background(0.0)
 
-    # Lights are positioned relative to the top-left corner as in the
-    # original (the world is centered and y-up)
+    # Lights are positioned in the original's top-left coordinates
     # Light the bottom of the sphere
-    directional_light((0.2, 0.4, 0.49), 4000.0, look_at=(0, 1, 0))
+    directional_light((0.2, 0.4, 0.49), 4000.0, look_at=(0, -1, 0))
 
     # Orange light on the upper-right of the sphere
     spot_light((0.8, 0.6, 0.0), 10000000000.0, 1200.0, 1.0, 0.0, PI / 12,
-               position=(360 - width / 2, height / 2 - 160, 600),
-               look_at=(360 - width / 2, height / 2 - 160, 0))
+               position=(360 - width / 2, 160 - height / 2, 600),
+               look_at=(360 - width / 2, 160 - height / 2, 0))
 
     # Moving spotlight that follows the mouse
     spot_light((0.4, 0.6, 0.8), 10000000000.0, 1200.0, 1.0, 0.0, PI / 12,
-               position=(360 - width / 2, height / 2 - mouse_y, 600),
-               look_at=(360 - width / 2, height / 2 - mouse_y, 0))
+               position=(360 - width / 2, mouse_y - height / 2, 600),
+               look_at=(360 - width / 2, mouse_y - height / 2, 0))
 
     sphere(120, 60, 60)
 

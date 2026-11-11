@@ -34,8 +34,7 @@ def draw():
     perspective(fov, aspect, camera_z / 10.0, camera_z * 10.0)
 
     translate(30, 0, 0)
-    # Rotations about x run the other way in the y-up world
-    rotate_x(PI / 6)
+    rotate_x(-PI / 6)
     rotate_y(PI / 3 + mouse_y / height * PI)
     box(45)
     translate(0, 0, -50)
