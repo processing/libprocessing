@@ -3,6 +3,7 @@
 //! It can be created from raw pixel data, loaded from disk, resized, and read back to CPU memory.
 use std::path::PathBuf;
 
+use bevy::color::Srgba;
 use bevy::{
     asset::{
         AssetPath, LoadState, RenderAssetUsages, handle_internal_asset_events,
@@ -17,8 +18,8 @@ use bevy::{
         render_asset::RenderAssets,
         render_resource::{
             Buffer, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, Extent3d, MapMode,
-            Origin3d, PollType, TexelCopyBufferInfo, TexelCopyBufferLayout, TexelCopyTextureInfo,
-            Texture, TextureDimension, TextureFormat, TextureUsages,
+            PollType, TexelCopyBufferInfo, TexelCopyBufferLayout, Texture, TextureDimension,
+            TextureFormat, TextureUsages,
         },
         renderer::{RenderDevice, RenderQueue},
         texture::GpuImage,
@@ -209,6 +210,8 @@ pub struct Image {
     pub size: Extent3d,
     /// Any pixel has alpha below one, so draws sampling it must blend
     pub translucent: bool,
+    /// The GPU wrote the texture (blit), so the asset's CPU pixels are stale until read back
+    pub gpu_dirty: bool,
 }
 
 /// Whether tightly packed `data` in `format` holds any pixel with alpha below one
@@ -273,6 +276,7 @@ pub fn create(
             texture_format,
             size,
             translucent,
+            gpu_dirty: false,
         },))
         .id()
 }
@@ -315,6 +319,7 @@ pub fn from_handle(
             texture_format,
             size,
             translucent,
+            gpu_dirty: false,
         })
         .id())
 }
@@ -356,6 +361,7 @@ pub fn load(In(path): In<PathBuf>, world: &mut World) -> Result<Entity> {
             texture_format,
             size,
             translucent,
+            gpu_dirty: false,
         })
         .id())
 }
@@ -374,6 +380,7 @@ pub fn resize(
         .get_mut(&p_image.handle)
         .ok_or(ProcessingError::ImageNotFound)?
         .resize_in_place(new_size);
+    p_image.gpu_dirty = false;
 
     p_image.readback_buffer = create_readback_buffer(
         &render_device,
@@ -389,13 +396,13 @@ pub fn resize(
 
 pub fn readback(
     In((entity, texture)): In<(Entity, Texture)>,
-    p_images: Query<&Image>,
+    mut p_images: Query<&mut Image>,
     mut images: ResMut<Assets<bevy::image::Image>>,
     render_device: Res<RenderDevice>,
     render_queue: ResMut<RenderQueue>,
 ) -> Result<Vec<LinearRgba>> {
-    let p_image = p_images
-        .get(entity)
+    let mut p_image = p_images
+        .get_mut(entity)
         .map_err(|_| ProcessingError::ImageNotFound)?;
 
     let mut encoder = render_device.create_command_encoder(&CommandEncoderDescriptor::default());
@@ -438,81 +445,108 @@ pub fn readback(
 
     r.recv().expect("Failed to receive the map_async message");
 
-    let data = buffer_slice.get_mapped_range().to_vec();
-
-    let mut image = images
-        .get_mut(&p_image.handle)
-        .ok_or(ProcessingError::ImageNotFound)?;
-    image.data = Some(data.clone());
-
+    // drop the row padding so the stored copy matches the asset's tight layout
+    let bytes_per_row = p_image.size.width as usize * px_size;
+    let data: Vec<u8> = buffer_slice
+        .get_mapped_range()
+        .chunks_exact(padded_bytes_per_row)
+        .take(p_image.size.height as usize)
+        .flat_map(|row| row[..bytes_per_row].iter().copied())
+        .collect();
     p_image.readback_buffer.unmap();
+
+    // untracked: the GPU already holds these pixels, so no re-upload is wanted
+    images
+        .get_mut_untracked(&p_image.handle)
+        .ok_or(ProcessingError::ImageNotFound)?
+        .data = Some(data.clone());
+    p_image.gpu_dirty = false;
 
     bytes_to_pixels(
         &data,
         p_image.texture_format,
         p_image.size.width,
         p_image.size.height,
-        padded_bytes_per_row,
+        bytes_per_row,
     )
 }
 
-pub fn update_region_write(
-    In((entity, texture, x, y, width, height, data, px_size)): In<(
-        Entity,
-        Texture,
-        u32,
-        u32,
-        u32,
-        u32,
-        Vec<u8>,
-        u32,
-    )>,
-    p_images: Query<&Image>,
-    render_queue: Res<RenderQueue>,
-) -> Result<()> {
-    let p_image = p_images
-        .get(entity)
-        .map_err(|_| ProcessingError::ImageNotFound)?;
+/// Pixels from the asset's CPU copy, which is current while `gpu_dirty` is false
+pub fn cpu_pixels(world: &World, entity: Entity) -> Result<Vec<LinearRgba>> {
+    let p_image = world
+        .get::<Image>(entity)
+        .ok_or(ProcessingError::ImageNotFound)?;
+    let image = world
+        .resource::<Assets<bevy::image::Image>>()
+        .get(&p_image.handle)
+        .ok_or(ProcessingError::ImageNotFound)?;
+    let data = image
+        .data
+        .as_deref()
+        .ok_or(ProcessingError::ImageNotFound)?;
+    let px_size = pixel_size(p_image.texture_format)?;
+    let stride = p_image.size.width as usize * px_size;
+    check_len(data.len(), stride, p_image.size, p_image.texture_format)?;
+    bytes_to_pixels(
+        data,
+        p_image.texture_format,
+        p_image.size.width,
+        p_image.size.height,
+        stride,
+    )
+}
 
-    if x + width > p_image.size.width || y + height > p_image.size.height {
+/// A CPU buffer that disagrees with the image size would make row math index out of bounds
+fn check_len(len: usize, stride: usize, size: Extent3d, format: TextureFormat) -> Result<()> {
+    let expected = stride * size.height as usize;
+    if len != expected {
         return Err(ProcessingError::InvalidArgument(format!(
-            "Region ({}, {}, {}, {}) exceeds image bounds ({}, {})",
-            x, y, width, height, p_image.size.width, p_image.size.height
+            "image data is {len} bytes, expected {expected} for {}x{} {format:?}",
+            size.width, size.height
         )));
     }
-
-    let bytes_per_row = width * px_size;
-
-    render_queue.write_texture(
-        TexelCopyTextureInfo {
-            texture: &texture,
-            mip_level: 0,
-            origin: Origin3d { x, y, z: 0 },
-            aspect: Default::default(),
-        },
-        &data,
-        TexelCopyBufferLayout {
-            offset: 0,
-            bytes_per_row: Some(bytes_per_row),
-            rows_per_image: None,
-        },
-        Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        },
-    );
-
     Ok(())
 }
 
-pub fn prepare_update_region(
-    world: &World,
+/// Replaces the asset's CPU pixels with `data` in the texture format; Bevy uploads the modified
+/// asset into the existing texture on the next frame
+pub fn cpu_write(world: &mut World, entity: Entity, data: Vec<u8>) -> Result<()> {
+    let (handle, texture_format, size) = {
+        let p_image = world
+            .get::<Image>(entity)
+            .ok_or(ProcessingError::ImageNotFound)?;
+        (p_image.handle.clone(), p_image.texture_format, p_image.size)
+    };
+    let px_size = pixel_size(texture_format)?;
+    let expected = size.width as usize * size.height as usize * px_size;
+    if data.len() != expected {
+        return Err(ProcessingError::InvalidArgument(format!(
+            "expected {expected} bytes for a {}x{} {:?} image, got {}",
+            size.width,
+            size.height,
+            texture_format,
+            data.len()
+        )));
+    }
+    world
+        .resource_mut::<Assets<bevy::image::Image>>()
+        .get_mut(&handle)
+        .ok_or(ProcessingError::ImageNotFound)?
+        .data = Some(data);
+    Ok(())
+}
+
+/// Writes a `width`×`height` block of `pixels` at (`x`, `y`) into the asset's CPU pixels,
+/// clipping to the image like Processing's `set`
+pub fn cpu_write_region(
+    world: &mut World,
     entity: Entity,
+    x: i64,
+    y: i64,
     width: u32,
     height: u32,
     pixels: &[LinearRgba],
-) -> Result<(Vec<u8>, u32)> {
+) -> Result<()> {
     let expected_count = (width * height) as usize;
     if pixels.len() != expected_count {
         return Err(ProcessingError::InvalidArgument(format!(
@@ -523,14 +557,37 @@ pub fn prepare_update_region(
             pixels.len()
         )));
     }
-
-    let p_image = world
-        .get::<Image>(entity)
+    let (handle, texture_format, size) = {
+        let p_image = world
+            .get::<Image>(entity)
+            .ok_or(ProcessingError::ImageNotFound)?;
+        (p_image.handle.clone(), p_image.texture_format, p_image.size)
+    };
+    let px_size = pixel_size(texture_format)?;
+    let bytes = pixels_to_bytes(pixels, texture_format)?;
+    let x0 = x.max(0);
+    let x1 = (x + width as i64).min(size.width as i64);
+    if x1 <= x0 {
+        return Ok(());
+    }
+    let mut images = world.resource_mut::<Assets<bevy::image::Image>>();
+    let mut image = images
+        .get_mut(&handle)
         .ok_or(ProcessingError::ImageNotFound)?;
-    let px_size = pixel_size(p_image.texture_format)? as u32;
-    let data = pixels_to_bytes(pixels, p_image.texture_format)?;
-
-    Ok((data, px_size))
+    let data = image.data.as_mut().ok_or(ProcessingError::ImageNotFound)?;
+    let stride = size.width as usize * px_size;
+    check_len(data.len(), stride, size, texture_format)?;
+    let run = (x1 - x0) as usize * px_size;
+    for row in 0..height as i64 {
+        let dy = y + row;
+        if dy < 0 || dy >= size.height as i64 {
+            continue;
+        }
+        let src = (row as usize * width as usize + (x0 - x) as usize) * px_size;
+        let dst = dy as usize * stride + x0 as usize * px_size;
+        data[dst..dst + run].copy_from_slice(&bytes[src..src + run]);
+    }
+    Ok(())
 }
 
 /// Get the pixel dimensions `(width, height)` of an image.
@@ -567,9 +624,11 @@ pub fn pixel_size(format: TextureFormat) -> Result<usize> {
 /// Convert LinearRgba pixels to raw bytes in the specified texture format.
 pub fn pixels_to_bytes(pixels: &[LinearRgba], format: TextureFormat) -> Result<Vec<u8>> {
     match format {
-        TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => {
-            Ok(pixels.iter().flat_map(|p| p.to_u8_array()).collect())
-        }
+        TextureFormat::Rgba8Unorm => Ok(pixels.iter().flat_map(|p| p.to_u8_array()).collect()),
+        TextureFormat::Rgba8UnormSrgb => Ok(pixels
+            .iter()
+            .flat_map(|p| Srgba::from(*p).to_u8_array())
+            .collect()),
         TextureFormat::Rgba16Float => Ok(pixels
             .iter()
             .flat_map(|p| {
@@ -615,12 +674,21 @@ pub fn bytes_to_pixels(
     let bytes_per_row = width as usize * px_size;
 
     let pixels = match format {
-        TextureFormat::Rgba8Unorm | TextureFormat::Rgba8UnormSrgb => data
+        TextureFormat::Rgba8Unorm => data
             .chunks_exact(padded_bytes_per_row)
             .take(height as usize)
             .flat_map(|row| {
                 row[..bytes_per_row].chunks_exact(px_size).map(|chunk| {
                     LinearRgba::from_u8_array([chunk[0], chunk[1], chunk[2], chunk[3]])
+                })
+            })
+            .collect(),
+        TextureFormat::Rgba8UnormSrgb => data
+            .chunks_exact(padded_bytes_per_row)
+            .take(height as usize)
+            .flat_map(|row| {
+                row[..bytes_per_row].chunks_exact(px_size).map(|chunk| {
+                    Srgba::from_u8_array([chunk[0], chunk[1], chunk[2], chunk[3]]).into()
                 })
             })
             .collect(),

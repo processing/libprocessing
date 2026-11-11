@@ -37,7 +37,7 @@ fn flatten_floats(args: &Bound<'_, PyTuple>) -> PyResult<Vec<f32>> {
 fn pixels_to_pylist(py: Python<'_>, pixels: &[LinearRgba]) -> PyResult<Py<PyList>> {
     let colors = pixels
         .iter()
-        .map(|p| crate::color::PyColor(bevy::prelude::Color::LinearRgba(*p)));
+        .map(|p| crate::color::PyColor(bevy::prelude::Color::Srgba(Srgba::from(*p))));
     Ok(PyList::new(py, colors)?.unbind())
 }
 
@@ -50,9 +50,9 @@ fn pyseq_to_pixels(seq: &Bound<'_, PyAny>) -> PyResult<Vec<LinearRgba>> {
         let color = if let Ok(c) = item.extract::<crate::color::PyColor>() {
             c.0
         } else if let Ok(rgba) = item.extract::<[f32; 4]>() {
-            bevy::prelude::Color::LinearRgba(LinearRgba::new(rgba[0], rgba[1], rgba[2], rgba[3]))
+            bevy::prelude::Color::Srgba(Srgba::new(rgba[0], rgba[1], rgba[2], rgba[3]))
         } else if let Ok(rgb) = item.extract::<[f32; 3]>() {
-            bevy::prelude::Color::LinearRgba(LinearRgba::new(rgb[0], rgb[1], rgb[2], 1.0))
+            bevy::prelude::Color::Srgba(Srgba::new(rgb[0], rgb[1], rgb[2], 1.0))
         } else {
             return Err(PyValueError::new_err(
                 "pixels must contain Color values or [r, g, b, (a)] sequences",
@@ -616,25 +616,27 @@ impl Image {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    /// Read a single pixel as a `Color` (Processing `get`).
-    fn get(&self, x: u32, y: u32) -> PyResult<crate::color::PyColor> {
+    /// Read a single pixel as a `Color` (Processing `get`); outside the image it is transparent black.
+    fn get(&self, x: i64, y: i64) -> PyResult<crate::color::PyColor> {
         let (w, h) =
             image_size(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        if x >= w || y >= h {
-            return Err(PyValueError::new_err(format!(
-                "pixel ({x}, {y}) out of bounds for {w}x{h} image"
+        if x < 0 || y < 0 || x >= w as i64 || y >= h as i64 {
+            return Ok(crate::color::PyColor(bevy::prelude::Color::Srgba(
+                Srgba::NONE,
             )));
         }
         let pixels =
             image_readback(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        let p = pixels[(y * w + x) as usize];
-        Ok(crate::color::PyColor(bevy::prelude::Color::LinearRgba(p)))
+        let p = pixels[(y as u32 * w + x as u32) as usize];
+        Ok(crate::color::PyColor(bevy::prelude::Color::Srgba(
+            Srgba::from(p),
+        )))
     }
 
-    /// Write a single pixel (Processing `set`). Accepts a `Color`, hex string,
-    /// or color components in the default (sRGB) color mode.
+    /// Write a single pixel (Processing `set`); outside the image it is dropped. Accepts a
+    /// `Color`, hex string, or color components in the default (sRGB) color mode.
     #[pyo3(signature = (x, y, *args))]
-    fn set(&self, x: u32, y: u32, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+    fn set(&self, x: i64, y: i64, args: &Bound<'_, PyTuple>) -> PyResult<()> {
         let color = extract_color_with_mode(args, &ColorMode::default())?;
         image_update_region(self.entity, x, y, 1, 1, &[LinearRgba::from(color)])
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
@@ -1041,31 +1043,42 @@ impl Graphics {
     }
 
     /// Read a single pixel as a `Color` (Processing `get`).
-    pub fn get(&self, x: u32, y: u32) -> PyResult<crate::color::PyColor> {
-        if x >= self.width || y >= self.height {
-            return Err(PyValueError::new_err(format!(
-                "pixel ({x}, {y}) out of bounds for {}x{} canvas",
-                self.width, self.height
+    pub fn get(&self, x: i64, y: i64) -> PyResult<crate::color::PyColor> {
+        if x < 0 || y < 0 || x >= self.width as i64 || y >= self.height as i64 {
+            return Ok(crate::color::PyColor(bevy::prelude::Color::Srgba(
+                Srgba::NONE,
             )));
         }
         let pixels =
             graphics_readback(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         let p = pixels
-            .get((y * self.width + x) as usize)
+            .get((y as u32 * self.width + x as u32) as usize)
             .ok_or_else(|| PyValueError::new_err("pixel out of bounds"))?;
-        Ok(crate::color::PyColor(bevy::prelude::Color::LinearRgba(*p)))
+        Ok(crate::color::PyColor(bevy::prelude::Color::Srgba(
+            Srgba::from(*p),
+        )))
     }
 
-    /// Write a single pixel (Processing `set`).
+    /// Write a single pixel (Processing `set`); outside the canvas it is dropped.
     #[pyo3(signature = (x, y, *args))]
-    pub fn set(&self, x: u32, y: u32, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+    pub fn set(&self, x: i64, y: i64, args: &Bound<'_, PyTuple>) -> PyResult<()> {
         let color = extract_color_with_mode(
             args,
             &graphics_get_color_mode(self.entity)
                 .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?,
         )?;
-        graphics_update_region(self.entity, x, y, 1, 1, &[LinearRgba::from(color)])
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        if x < 0 || y < 0 || x >= self.width as i64 || y >= self.height as i64 {
+            return Ok(());
+        }
+        graphics_update_region(
+            self.entity,
+            x as u32,
+            y as u32,
+            1,
+            1,
+            &[LinearRgba::from(color)],
+        )
+        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     /// Read all pixels into the `pixels` list (Processing `loadPixels`).

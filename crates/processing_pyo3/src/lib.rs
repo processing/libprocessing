@@ -2320,7 +2320,7 @@ pub mod processing_py {
 
     #[pyfunction]
     #[pyo3(pass_module)]
-    fn get(module: &Bound<'_, PyModule>, x: u32, y: u32) -> PyResult<PyColor> {
+    fn get(module: &Bound<'_, PyModule>, x: i64, y: i64) -> PyResult<PyColor> {
         graphics!(module).get(x, y)
     }
 
@@ -2328,8 +2328,8 @@ pub mod processing_py {
     #[pyo3(pass_module, signature = (x, y, *args))]
     fn set(
         module: &Bound<'_, PyModule>,
-        x: u32,
-        y: u32,
+        x: i64,
+        y: i64,
         args: &Bound<'_, PyTuple>,
     ) -> PyResult<()> {
         graphics!(module).set(x, y, args)

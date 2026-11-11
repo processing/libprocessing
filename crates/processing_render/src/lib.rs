@@ -1189,6 +1189,7 @@ pub async fn image_load(path: &str) -> error::Result<Entity> {
 /// Resize an existing image to new size.
 pub fn image_resize(entity: Entity, new_size: Extent3d) -> error::Result<()> {
     app_mut(|app| {
+        image_sync_cpu(app, entity)?;
         app.world_mut()
             .run_system_cached_with(image::resize, (entity, new_size))
             .unwrap()
@@ -1237,6 +1238,7 @@ pub fn image_copy_from(dst: Entity, src: Entity, src_is_graphics: bool) -> error
             .get_mut::<image::Image>(dst)
             .ok_or(error::ProcessingError::ImageNotFound)?;
         dst_image.translucent = translucent;
+        dst_image.gpu_dirty = true;
         let dst_handle = dst_image.handle.clone();
         app.sub_app_mut(bevy::render::RenderApp)
             .world_mut()
@@ -1245,42 +1247,40 @@ pub fn image_copy_from(dst: Entity, src: Entity, src_is_graphics: bool) -> error
     })
 }
 
-/// Read back image data from GPU to CPU.
-pub fn image_readback(entity: Entity) -> error::Result<Vec<LinearRgba>> {
-    app_mut(|app| {
+/// Pulls GPU-written pixels into the asset's CPU copy, so CPU reads and writes see them
+fn image_sync_cpu(app: &mut App, entity: Entity) -> error::Result<()> {
+    let dirty = app
+        .world()
+        .get::<image::Image>(entity)
+        .ok_or(error::ProcessingError::ImageNotFound)?
+        .gpu_dirty;
+    if dirty {
         let texture = gpu_image(app, entity)?.texture.clone();
         app.world_mut()
             .run_system_cached_with(image::readback, (entity, texture))
-            .unwrap()
+            .unwrap()?;
+    }
+    Ok(())
+}
+
+/// The image's pixels; served from the CPU copy unless the GPU wrote the texture
+pub fn image_readback(entity: Entity) -> error::Result<Vec<LinearRgba>> {
+    app_mut(|app| {
+        image_sync_cpu(app, entity)?;
+        image::cpu_pixels(app.world(), entity)
     })
 }
 
-/// Update an existing image with new pixel data.
+/// Replace every pixel of an image.
 pub fn image_update(entity: Entity, pixels: &[LinearRgba]) -> error::Result<()> {
     app_mut(|app| {
-        let texture = gpu_image(app, entity)?.texture.clone();
+        image_sync_cpu(app, entity)?;
         let world = app.world_mut();
         let size = world
             .get::<image::Image>(entity)
             .ok_or(error::ProcessingError::ImageNotFound)?
             .size;
-        let (data, px_size) =
-            image::prepare_update_region(world, entity, size.width, size.height, pixels)?;
-        world
-            .run_system_cached_with(
-                image::update_region_write,
-                (
-                    entity,
-                    texture,
-                    0,
-                    0,
-                    size.width,
-                    size.height,
-                    data,
-                    px_size,
-                ),
-            )
-            .unwrap()?;
+        image::cpu_write_region(world, entity, 0, 0, size.width, size.height, pixels)?;
         world
             .get_mut::<image::Image>(entity)
             .ok_or(error::ProcessingError::ImageNotFound)?
@@ -1293,65 +1293,33 @@ pub fn image_update(entity: Entity, pixels: &[LinearRgba]) -> error::Result<()> 
 /// format.
 pub fn image_update_raw(entity: Entity, data: &[u8]) -> error::Result<()> {
     app_mut(|app| {
-        if gpu_image(app, entity).is_err() && app.world().get::<image::Image>(entity).is_some() {
-            app.update();
-        }
-        let texture = gpu_image(app, entity)?.texture.clone();
         let world = app.world_mut();
+        image::cpu_write(world, entity, data.to_vec())?;
         let mut p_image = world
             .get_mut::<image::Image>(entity)
             .ok_or(error::ProcessingError::ImageNotFound)?;
         let (size, texture_format) = (p_image.size, p_image.texture_format);
-        let px_size = image::pixel_size(texture_format)? as u32;
-        let expected = (size.width * size.height * px_size) as usize;
-        if data.len() != expected {
-            return Err(error::ProcessingError::InvalidArgument(format!(
-                "expected {expected} bytes for a {}x{} {:?} image, got {}",
-                size.width,
-                size.height,
-                texture_format,
-                data.len()
-            )));
-        }
         p_image.translucent =
             image::has_translucent_pixels(data, texture_format, size.width, size.height);
-        world
-            .run_system_cached_with(
-                image::update_region_write,
-                (
-                    entity,
-                    texture,
-                    0,
-                    0,
-                    size.width,
-                    size.height,
-                    data.to_vec(),
-                    px_size,
-                ),
-            )
-            .unwrap()
+        // the whole image was replaced, so nothing on the GPU is worth keeping
+        p_image.gpu_dirty = false;
+        Ok(())
     })
 }
 
-/// Update a region of an existing image with new pixel data.
+/// Write a block of pixels at (`x`, `y`); parts outside the image are dropped.
 pub fn image_update_region(
     entity: Entity,
-    x: u32,
-    y: u32,
+    x: i64,
+    y: i64,
     width: u32,
     height: u32,
     pixels: &[LinearRgba],
 ) -> error::Result<()> {
     app_mut(|app| {
-        let texture = gpu_image(app, entity)?.texture.clone();
+        image_sync_cpu(app, entity)?;
         let world = app.world_mut();
-        let (data, px_size) = image::prepare_update_region(world, entity, width, height, pixels)?;
-        world
-            .run_system_cached_with(
-                image::update_region_write,
-                (entity, texture, x, y, width, height, data, px_size),
-            )
-            .unwrap()?;
+        image::cpu_write_region(world, entity, x, y, width, height, pixels)?;
         if pixels.iter().any(|p| p.alpha < 1.0) {
             world
                 .get_mut::<image::Image>(entity)
