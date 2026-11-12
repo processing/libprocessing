@@ -552,6 +552,11 @@ pub fn graphics_flush(graphics_entity: Entity) -> error::Result<()> {
     app_mut(|app| graphics::flush(app, graphics_entity))
 }
 
+/// Flush only if draws or `set` pixels are pending, for sampling the graphics as an image.
+pub fn graphics_flush_pending(graphics_entity: Entity) -> error::Result<()> {
+    app_mut(|app| graphics::flush_pending(app, graphics_entity))
+}
+
 /// Present the current frame to the surface.
 pub fn graphics_present(graphics_entity: Entity) -> error::Result<()> {
     app_mut(|app| graphics::present(app, graphics_entity))
@@ -1177,12 +1182,7 @@ pub async fn image_load(path: &str) -> error::Result<Entity> {
 
 /// Resize an existing image to new size.
 pub fn image_resize(entity: Entity, new_size: Extent3d) -> error::Result<()> {
-    app_mut(|app| {
-        image::sync_cpu(app, entity)?;
-        app.world_mut()
-            .run_system_cached_with(image::resize, (entity, new_size))
-            .unwrap()
-    })
+    app_mut(|app| image::resize(app, entity, new_size))
 }
 
 /// Get the pixel dimensions `(width, height)` of an image.

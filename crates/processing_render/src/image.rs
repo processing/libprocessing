@@ -84,6 +84,7 @@ fn blit_backgrounds(
                 &src.texture_view,
                 dst,
                 target.main_texture_format(),
+                wgpu::FilterMode::Linear,
                 true,
             );
         }
@@ -119,15 +120,19 @@ pub enum BlitSource {
     Graphics(Entity),
 }
 
-/// Caches one `wgpu::util::TextureBlitter` per destination format and blend. Lives
+/// Caches one `wgpu::util::TextureBlitter` per destination format, filter and blend. Lives
 /// in the render world; blitters are cheap to reuse and expensive to rebuild.
 #[derive(Resource, Default)]
 pub struct BlitterCache {
-    blitters: std::collections::HashMap<(TextureFormat, bool), wgpu::util::TextureBlitter>,
+    blitters: std::collections::HashMap<
+        (TextureFormat, wgpu::FilterMode, bool),
+        wgpu::util::TextureBlitter,
+    >,
 }
 
 impl BlitterCache {
     /// Draws `src` over all of `dst`, which has `format`; `blend` alpha-blends instead of replacing
+    #[allow(clippy::too_many_arguments)]
     pub fn copy(
         &mut self,
         device: &wgpu::Device,
@@ -135,20 +140,37 @@ impl BlitterCache {
         src: &wgpu::TextureView,
         dst: &wgpu::TextureView,
         format: TextureFormat,
+        filter: wgpu::FilterMode,
         blend: bool,
     ) {
-        let blitter = self.blitters.entry((format, blend)).or_insert_with(|| {
-            let builder = wgpu::util::TextureBlitterBuilder::new(device, format);
-            if blend {
-                builder
-                    .sample_type(wgpu::FilterMode::Linear)
-                    .blend_state(wgpu::BlendState::ALPHA_BLENDING)
-                    .build()
-            } else {
-                builder.build()
-            }
-        });
+        let blitter = self
+            .blitters
+            .entry((format, filter, blend))
+            .or_insert_with(|| {
+                let builder =
+                    wgpu::util::TextureBlitterBuilder::new(device, format).sample_type(filter);
+                if blend {
+                    builder
+                        .blend_state(wgpu::BlendState::ALPHA_BLENDING)
+                        .build()
+                } else {
+                    builder.build()
+                }
+            });
         blitter.copy(device, encoder, src, dst);
+    }
+}
+
+/// Linear when the device can filter `format`, else nearest (32-bit floats need a feature)
+pub fn sample_filter(device: &RenderDevice, format: TextureFormat) -> wgpu::FilterMode {
+    let filterable = format
+        .guaranteed_format_features(device.features())
+        .flags
+        .contains(wgpu::TextureFormatFeatureFlags::FILTERABLE);
+    if filterable {
+        wgpu::FilterMode::Linear
+    } else {
+        wgpu::FilterMode::Nearest
     }
 }
 
@@ -190,7 +212,16 @@ pub fn blit(
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("processing_blit"),
     });
-    cache.copy(device, &mut encoder, src_view, dst_view, format, false);
+    let filter = sample_filter(&render_device, format);
+    cache.copy(
+        device,
+        &mut encoder,
+        src_view,
+        dst_view,
+        format,
+        filter,
+        false,
+    );
     render_queue.submit(std::iter::once(encoder.finish()));
     Ok(())
 }
@@ -402,32 +433,134 @@ pub fn load(In(path): In<PathBuf>, world: &mut World) -> Result<Entity> {
         .id())
 }
 
-pub fn resize(
-    In((entity, new_size)): In<(Entity, Extent3d)>,
-    mut p_images: Query<&mut Image>,
-    mut images: ResMut<Assets<bevy::image::Image>>,
-    render_device: Res<RenderDevice>,
-) -> Result<()> {
-    let mut p_image = p_images
-        .get_mut(entity)
-        .map_err(|_| ProcessingError::ImageNotFound)?;
+/// Scales on the GPU with bilinear filtering, halving first so a large shrink averages
+/// every source texel; the asset handle is kept, so materials holding it see the new size
+pub fn resize(app: &mut App, entity: Entity, new_size: Extent3d) -> Result<()> {
+    let src = texture_for_read(app, entity)?;
+    let (handle, format, old_size) = {
+        let p_image = app
+            .world()
+            .get::<Image>(entity)
+            .ok_or(ProcessingError::ImageNotFound)?;
+        (p_image.handle.clone(), p_image.texture_format, p_image.size)
+    };
+    let render_device = app.world().resource::<RenderDevice>().clone();
+    let render_queue = app.world().resource::<RenderQueue>().clone();
+    let device = render_device.wgpu_device();
+    let filter = sample_filter(&render_device, format);
 
-    images
-        .get_mut(&p_image.handle)
-        .ok_or(ProcessingError::ImageNotFound)?
-        .resize_in_place(new_size);
-    p_image.coherence = Coherence::InSync;
+    let steps: Vec<Texture> = resize_steps(old_size, new_size)
+        .into_iter()
+        .map(|size| {
+            render_device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("processing_resize_step"),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format,
+                usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            })
+        })
+        .collect();
+    let scaled = steps.last().expect("resize_steps ends at the new size");
 
-    p_image.readback_buffer = create_readback_buffer(
-        &render_device,
-        new_size.width,
-        new_size.height,
-        p_image.texture_format,
-        "Image Readback Buffer",
-    )?;
-    p_image.size = new_size;
+    let render_world = app.sub_app_mut(RenderApp).world_mut();
+    render_world.resource_scope(|_, mut cache: Mut<BlitterCache>| {
+        let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("processing_resize"),
+        });
+        // a loaded image may carry mips; scale from the full-size level
+        let mut from = src.create_view(&wgpu::TextureViewDescriptor {
+            mip_level_count: Some(1),
+            ..default()
+        });
+        for step in &steps {
+            let to = step.create_view(&default());
+            cache.copy(device, &mut encoder, &from, &to, format, filter, false);
+            from = to;
+        }
+        render_queue.submit(std::iter::once(encoder.finish()));
+    });
 
+    {
+        let mut images = app.world_mut().resource_mut::<Assets<bevy::image::Image>>();
+        let mut image = images
+            .get_mut(&handle)
+            .ok_or(ProcessingError::ImageNotFound)?;
+        image.data = None;
+        let descriptor = &mut image.texture_descriptor;
+        descriptor.size = new_size;
+        descriptor.mip_level_count = 1;
+        // loaded images aren't render targets until now
+        descriptor.usage |= TextureUsages::RENDER_ATTACHMENT;
+    }
+    {
+        let mut p_image = app
+            .world_mut()
+            .get_mut::<Image>(entity)
+            .ok_or(ProcessingError::ImageNotFound)?;
+        p_image.readback_buffer = create_readback_buffer(
+            &render_device,
+            new_size.width,
+            new_size.height,
+            format,
+            "Image Readback Buffer",
+        )?;
+        p_image.size = new_size;
+        p_image.coherence = Coherence::GpuAhead;
+    }
+
+    // re-prepares the asset's texture at the new size, then the result lands in it
+    app.update();
+    let dst = gpu_image(app, entity)?;
+    if dst.texture_descriptor.size != new_size {
+        return Err(ProcessingError::ImageNotFound);
+    }
+    let dst_view = dst.texture_view.clone();
+    let render_world = app.sub_app_mut(RenderApp).world_mut();
+    render_world.resource_scope(|_, mut cache: Mut<BlitterCache>| {
+        let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("processing_resize_copy"),
+        });
+        let from = scaled.create_view(&default());
+        cache.copy(
+            device,
+            &mut encoder,
+            &from,
+            &dst_view,
+            format,
+            wgpu::FilterMode::Nearest,
+            false,
+        );
+        render_queue.submit(std::iter::once(encoder.finish()));
+    });
     Ok(())
+}
+
+/// Sizes to blit through: halvings while a step would shrink more than 2x, which bilinear
+/// sampling would skip texels on, then `to`
+fn resize_steps(from: Extent3d, to: Extent3d) -> Vec<Extent3d> {
+    let (mut width, mut height) = (from.width, from.height);
+    let mut steps = Vec::new();
+    while width > to.width * 2 || height > to.height * 2 {
+        if width > to.width * 2 {
+            width /= 2;
+        }
+        if height > to.height * 2 {
+            height /= 2;
+        }
+        steps.push(Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        });
+    }
+    if steps.last() != Some(&to) {
+        steps.push(to);
+    }
+    steps
 }
 
 pub fn readback(
