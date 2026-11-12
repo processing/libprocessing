@@ -128,9 +128,18 @@ impl Default for LoopState {
     }
 }
 
+/// Input history the derived callbacks need across frames.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct EventState {
+    /// Pressed and not dragged since, so the release is a click.
+    click_pending: bool,
+    canvas_size: Option<(u32, u32)>,
+}
+
 thread_local! {
     pub(crate) static LAST_GLOBALS: RefCell<HashMap<&'static str, Py<PyAny>>> = RefCell::new(HashMap::new());
     pub(crate) static LOOP_STATE: Cell<LoopState> = Cell::new(LoopState::default());
+    pub(crate) static EVENT_STATE: Cell<EventState> = Cell::new(EventState::default());
 }
 
 fn update_loop_state(f: impl FnOnce(&mut LoopState)) {
@@ -177,61 +186,132 @@ where
     Ok(())
 }
 
-pub(crate) fn reset_tracked_globals() {
-    LAST_GLOBALS.with(|cache| cache.borrow_mut().clear());
+fn canvas_size(graphics: &Graphics) -> PyResult<(u32, u32)> {
+    let err =
+        |e: processing::prelude::error::ProcessingError| PyRuntimeError::new_err(format!("{e}"));
+    let width = ::processing::prelude::surface_width(graphics.surface.entity).map_err(err)?;
+    let height = ::processing::prelude::surface_height(graphics.surface.entity).map_err(err)?;
+    Ok((
+        if width == 0 { graphics.width } else { width },
+        if height == 0 { graphics.height } else { height },
+    ))
 }
 
 fn sync_globals(module: &Bound<'_, PyModule>, globals: &Bound<'_, PyAny>) -> PyResult<()> {
     let graphics =
         get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-    let width = ::processing::prelude::surface_width(graphics.surface.entity)
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-    let width = if width == 0 { graphics.width } else { width };
-    let height = ::processing::prelude::surface_height(graphics.surface.entity)
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-    let height = if height == 0 { graphics.height } else { height };
+    let (width, height) = canvas_size(&graphics)?;
     input::sync_globals(globals, graphics.surface.entity, width, height)?;
     surface::sync_globals(globals, &graphics.surface, width, height)?;
     time::sync_globals(globals)?;
     Ok(())
 }
 
-fn try_call(locals: &Bound<'_, PyAny>, name: &str) -> PyResult<()> {
-    if let Ok(cb) = locals.get_item(name)
-        && cb.is_callable()
-    {
-        cb.call0()
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+fn mouse_event(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
+    // the graphics borrow has to end before the callback runs, which may draw
+    let event = {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        let (width, height) = canvas_size(&graphics)?;
+        input::MouseEvent::current(graphics.surface.entity, width, height)?
+    };
+    Ok(Py::new(module.py(), event)?.into_any())
+}
+
+fn key_event(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
+    Ok(Py::new(module.py(), input::KeyEvent::current()?)?.into_any())
+}
+
+fn no_event(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
+    Ok(module.py().None())
+}
+
+/// Calls the sketch's `name` callback, with an event if it takes a parameter
+/// (`def mouse_pressed(e)`), as py5 and Processing's `mousePressed(MouseEvent)` do.
+fn call_event_callback(
+    module: &Bound<'_, PyModule>,
+    locals: &Bound<'_, PyAny>,
+    name: &str,
+    event: fn(&Bound<'_, PyModule>) -> PyResult<Py<PyAny>>,
+) -> PyResult<()> {
+    let Ok(cb) = locals.get_item(name) else {
+        return Ok(());
+    };
+    if !cb.is_callable() {
+        return Ok(());
+    }
+    let inspect = PyModule::import(module.py(), "inspect")?;
+    // builtins without a signature can't take our event either
+    let takes_event = inspect
+        .call_method1("signature", (&cb,))
+        .and_then(|sig| sig.getattr("parameters")?.len())
+        .is_ok_and(|n| n > 0);
+    if takes_event {
+        cb.call1((event(module)?,))?;
+    } else {
+        cb.call0()?;
     }
     Ok(())
 }
 
-fn dispatch_event_callbacks(locals: &Bound<'_, PyAny>) -> PyResult<()> {
+fn dispatch_event_callbacks(
+    module: &Bound<'_, PyModule>,
+    locals: &Bound<'_, PyAny>,
+) -> PyResult<()> {
     use processing::prelude::*;
     let err =
         |e: processing::prelude::error::ProcessingError| PyRuntimeError::new_err(format!("{e}"));
 
-    if input_mouse_any_just_pressed().map_err(err)? {
-        try_call(locals, "mouse_pressed")?;
+    let update_events = |f: &dyn Fn(&mut EventState)| {
+        EVENT_STATE.with(|s| {
+            let mut state = s.get();
+            f(&mut state);
+            s.set(state);
+        })
+    };
+
+    let size = {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        canvas_size(&graphics)?
+    };
+    let previous = EVENT_STATE.with(|s| s.get().canvas_size);
+    update_events(&|s| s.canvas_size = Some(size));
+    if previous.is_some_and(|p| p != size) {
+        call_event_callback(module, locals, "window_resized", no_event)?;
     }
-    if input_mouse_any_just_released().map_err(err)? {
-        try_call(locals, "mouse_released")?;
+
+    if input_mouse_any_just_pressed().map_err(err)? {
+        update_events(&|s| s.click_pending = true);
+        call_event_callback(module, locals, "mouse_pressed", mouse_event)?;
     }
     if input_mouse_moved().map_err(err)? {
         if input_mouse_is_pressed().map_err(err)? {
-            try_call(locals, "mouse_dragged")?;
+            update_events(&|s| s.click_pending = false);
+            call_event_callback(module, locals, "mouse_dragged", mouse_event)?;
         } else {
-            try_call(locals, "mouse_moved")?;
+            call_event_callback(module, locals, "mouse_moved", mouse_event)?;
+        }
+    }
+    if input_mouse_any_just_released().map_err(err)? {
+        call_event_callback(module, locals, "mouse_released", mouse_event)?;
+        if EVENT_STATE.with(|s| s.get().click_pending) {
+            update_events(&|s| s.click_pending = false);
+            call_event_callback(module, locals, "mouse_clicked", mouse_event)?;
         }
     }
     if input_mouse_scrolled().map_err(err)? {
-        try_call(locals, "mouse_wheel")?;
+        call_event_callback(module, locals, "mouse_wheel", mouse_event)?;
     }
     if input_key_any_just_pressed().map_err(err)? {
-        try_call(locals, "key_pressed")?;
+        call_event_callback(module, locals, "key_pressed", key_event)?;
+        // Processing's keyTyped: only keys that produce a character
+        if input_key().map_err(err)?.is_some_and(|c| !c.is_control()) {
+            call_event_callback(module, locals, "key_typed", key_event)?;
+        }
     }
     if input_key_any_just_released().map_err(err)? {
-        try_call(locals, "key_released")?;
+        call_event_callback(module, locals, "key_released", key_event)?;
     }
     Ok(())
 }
@@ -360,19 +440,16 @@ fn get_asset_root() -> PyResult<String> {
         // in ipython/jupyter argv[0] is weird so we use cwd
         // todo: what is the correct way to get notebook path
         if filename.is_empty() || !path.getattr("isfile")?.call1((filename,))?.is_truthy()? {
-            let cwd = os.getattr("getcwd")?.call0()?.to_string();
-            let asset_root = path.getattr("join")?.call1((cwd, "assets"))?.to_string();
-            return Ok(asset_root);
+            return Ok(os.getattr("getcwd")?.call0()?.to_string());
         }
 
         let dirname = path.getattr("dirname")?.call1((filename,))?;
-        let abspath = path.getattr("abspath")?.call1((dirname,))?;
-        let asset_root = path
-            .getattr("join")?
-            .call1((abspath, "assets"))?
-            .to_string();
-        Ok(asset_root)
+        Ok(path.getattr("abspath")?.call1((dirname,))?.to_string())
     })
+}
+
+pub(crate) fn reset_tracked_globals() {
+    LAST_GLOBALS.with(|cache| cache.borrow_mut().clear());
 }
 
 fn get_sketch_info() -> PyResult<(String, String)> {
@@ -470,6 +547,10 @@ pub mod processing_py {
     #[cfg(feature = "cuda")]
     #[pymodule_export]
     use super::cuda::CudaImage;
+    #[pymodule_export]
+    use super::input::KeyEvent;
+    #[pymodule_export]
+    use super::input::MouseEvent;
     #[pymodule_export]
     use super::math::PyQuat;
     #[pymodule_export]
@@ -693,7 +774,7 @@ pub mod processing_py {
             return Ok(());
         }
         sync_globals(module, ns)?;
-        dispatch_event_callbacks(ns)?;
+        dispatch_event_callbacks(module, ns)?;
         Ok(())
     }
 
@@ -1106,7 +1187,7 @@ pub mod processing_py {
                             break;
                         }
                     }
-                    dispatch_event_callbacks(&locals)?;
+                    dispatch_event_callbacks(module, &locals)?;
                     std::thread::sleep(std::time::Duration::from_millis(16));
                 }
 
@@ -1148,7 +1229,7 @@ pub mod processing_py {
                     }
                 }
 
-                dispatch_event_callbacks(&locals)?;
+                dispatch_event_callbacks(module, &locals)?;
 
                 let should_draw = first_frame
                     || LOOP_STATE.with(|s| {

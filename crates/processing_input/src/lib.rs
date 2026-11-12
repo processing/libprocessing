@@ -1,3 +1,4 @@
+pub mod keys;
 pub mod state;
 
 use bevy::input::ButtonState;
@@ -14,6 +15,7 @@ use bevy::window::{CursorMoved, WindowResized};
 use processing_core::app_mut;
 use processing_core::error;
 
+pub use keys::{key_code_from_u32, key_code_to_u32};
 pub use state::{CursorPosition, LastKey, LastMouseButton};
 
 pub struct InputPlugin;
