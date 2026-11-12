@@ -290,7 +290,7 @@ fn sketch() -> error::Result<()> {
     let mesh = graphics_text_to_model(graphics, text, -w / 2.0, TEXT_PT * 0.4, EXTRUSION)?;
     let source = geometry_create_from_mesh(mesh)?;
 
-    let (cdf_bytes, indices_bytes, face_count) = processing_core::app_mut(|app| {
+    let (cdf_bytes, indices_bytes, _uv_bytes, face_count) = processing_core::app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(processing_render::particles::prepare_scatter_source, source)
             .unwrap()

@@ -15,6 +15,8 @@ pub enum ShaderValue {
     UInt3([u32; 3]),
     UInt4([u32; 4]),
     Mat4([f32; 16]),
+    /// Linear RGBA in a shader; PBR color properties take it as-is.
+    Color(Color),
     Texture(Entity),
     Buffer(Entity),
     MeshAttribute(Entity, Entity),
@@ -39,6 +41,13 @@ impl ShaderValue {
             ShaderValue::UInt3(v) => Some(v.iter().flat_map(|u| u.to_le_bytes()).collect()),
             ShaderValue::UInt4(v) => Some(v.iter().flat_map(|u| u.to_le_bytes()).collect()),
             ShaderValue::Mat4(v) => Some(v.iter().flat_map(|f| f.to_le_bytes()).collect()),
+            ShaderValue::Color(c) => Some(
+                c.to_linear()
+                    .to_f32_array()
+                    .iter()
+                    .flat_map(|f| f.to_le_bytes())
+                    .collect(),
+            ),
             ShaderValue::Texture(_)
             | ShaderValue::Buffer(_)
             | ShaderValue::MeshAttribute(..)
@@ -52,7 +61,10 @@ impl ShaderValue {
             ShaderValue::Float(_) | ShaderValue::Int(_) | ShaderValue::UInt(_) => Some(4),
             ShaderValue::Float2(_) | ShaderValue::Int2(_) | ShaderValue::UInt2(_) => Some(8),
             ShaderValue::Float3(_) | ShaderValue::Int3(_) | ShaderValue::UInt3(_) => Some(12),
-            ShaderValue::Float4(_) | ShaderValue::Int4(_) | ShaderValue::UInt4(_) => Some(16),
+            ShaderValue::Float4(_)
+            | ShaderValue::Int4(_)
+            | ShaderValue::UInt4(_)
+            | ShaderValue::Color(_) => Some(16),
             ShaderValue::Mat4(_) => Some(64),
             ShaderValue::Texture(_)
             | ShaderValue::Buffer(_)
@@ -104,6 +116,10 @@ impl ShaderValue {
             ShaderValue::UInt3(_) => Some(ShaderValue::UInt3(u32s::<3>(bytes)?)),
             ShaderValue::UInt4(_) => Some(ShaderValue::UInt4(u32s::<4>(bytes)?)),
             ShaderValue::Mat4(_) => Some(ShaderValue::Mat4(f32s::<16>(bytes)?)),
+            ShaderValue::Color(_) => {
+                let [r, g, b, a] = f32s::<4>(bytes)?;
+                Some(ShaderValue::Color(Color::linear_rgba(r, g, b, a)))
+            }
             ShaderValue::Texture(_)
             | ShaderValue::Buffer(_)
             | ShaderValue::MeshAttribute(..)
