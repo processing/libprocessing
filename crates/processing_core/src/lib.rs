@@ -1,6 +1,7 @@
 pub mod config;
 pub mod constants;
 pub mod error;
+pub mod noise;
 
 use std::cell::RefCell;
 use std::sync::OnceLock;
