@@ -100,6 +100,9 @@ pub struct Particles {
     /// Ring-buffer write cursor; wraps at `capacity`.
     pub emit_head: u32,
     pub neighbor_lists: Option<NeighborLists>,
+    /// The mesh a system made from a `Geometry` came from. Attributes created
+    /// later start from its data when it has them, so only what's used is copied.
+    pub source_mesh: Option<Handle<Mesh>>,
 }
 
 /// The `neighbors` (up to `max` indices per particle) and `neighbor_count` attributes.
@@ -163,6 +166,7 @@ pub fn create(
             connectivity: None,
             emit_head: 0,
             neighbor_lists: None,
+            source_mesh: None,
         })
         .id();
     Ok(entity)
@@ -245,6 +249,7 @@ pub fn create_from_geometry(
             connectivity,
             emit_head: 0,
             neighbor_lists: None,
+            source_mesh: Some(geom.handle.clone()),
         })
         .id();
     Ok(entity)
@@ -434,6 +439,7 @@ pub fn materialize_attribute(
     mut commands: Commands,
     mut particles_q: Query<&mut Particles>,
     attributes: Query<&Attribute>,
+    meshes: Res<Assets<Mesh>>,
     mut shader_buffers: ResMut<Assets<ShaderBuffer>>,
     render_device: Res<RenderDevice>,
 ) -> Result<Entity> {
@@ -442,7 +448,7 @@ pub fn materialize_attribute(
         .map_err(|_| ProcessingError::InvalidEntity)?
         .clone();
 
-    let capacity = {
+    let (capacity, from_mesh) = {
         let particles = particles_q
             .get(particles_entity)
             .map_err(|_| ProcessingError::ParticlesNotFound)?;
@@ -477,7 +483,15 @@ pub fn materialize_attribute(
                 ))),
             };
         }
-        particles.capacity as usize
+        let capacity = particles.capacity as usize;
+        let from_mesh = particles
+            .source_mesh
+            .as_ref()
+            .and_then(|handle| meshes.get(handle))
+            .and_then(|mesh| mesh.attribute(attr.inner))
+            .and_then(|values| attribute_values_to_bytes(values, attr.format))
+            .filter(|bytes| bytes.len() == capacity * attr.format.byte_size());
+        (capacity, from_mesh)
     };
 
     let elem_size = attr.format.byte_size();
@@ -506,7 +520,11 @@ pub fn materialize_attribute(
         }
     };
 
-    let initial = tile_seed(&per_element, capacity);
+    // an explicit default wins over the mesh's data
+    let initial = match (&seed, from_mesh) {
+        (AttributeSeed::Declare(Some(_)), _) | (_, None) => tile_seed(&per_element, capacity),
+        (_, Some(bytes)) => bytes,
+    };
     let buffer_entity = make_buffer(&mut commands, &mut shader_buffers, &render_device, &initial);
     particles_q
         .get_mut(particles_entity)

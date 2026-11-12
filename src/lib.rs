@@ -149,7 +149,9 @@ fn setup_tracing(log_level: Option<&str>) -> error::Result<()> {
         use tracing_subscriber::EnvFilter;
         use tracing_subscriber::util::SubscriberInitExt;
 
-        let filter = EnvFilter::try_new(log_level.unwrap_or("info"))
+        // RUST_LOG wins so a quiet frontend can still be debugged
+        let filter = EnvFilter::try_from_default_env()
+            .or_else(|_| EnvFilter::try_new(log_level.unwrap_or("info")))
             .unwrap_or_else(|_| EnvFilter::new("info"));
         let subscriber = tracing_subscriber::FmtSubscriber::builder()
             .with_env_filter(filter)
