@@ -351,6 +351,47 @@ pub fn sync_to_surface(
     }
 }
 
+/// The view `mode_3d()` sets up for a canvas, which `camera()`, `perspective()` and `ortho()`
+/// fall back to for arguments left out.
+#[derive(Debug, Clone, Copy)]
+pub struct ViewDefaults {
+    pub width: f32,
+    pub height: f32,
+    pub fov: f32,
+    pub aspect: f32,
+    pub near: f32,
+    pub far: f32,
+    /// Distance at which the canvas fills the view.
+    pub camera_z: f32,
+}
+
+impl ViewDefaults {
+    pub fn new(width: f32, height: f32) -> Self {
+        let fov = std::f32::consts::PI / 3.0; // 60 degrees
+        let camera_z = (height / 2.0) / (fov / 2.0).tan();
+        Self {
+            width,
+            height,
+            fov,
+            aspect: width / height,
+            // Processing4 uses near = camera_z / 10, but that clips anything closer
+            // than ~camera_z/10 to the camera. Since `transform_set_position` lets the
+            // user move the camera without recomputing the projection, a small fixed
+            // near is safer and matches most engines' defaults.
+            near: 1.0,
+            far: camera_z * 10.0,
+            camera_z,
+        }
+    }
+}
+
+pub fn view_defaults(In(entity): In<Entity>, sizes: Query<&SurfaceSize>) -> Result<ViewDefaults> {
+    let SurfaceSize(width, height) = sizes
+        .get(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+    Ok(ViewDefaults::new(*width as f32, *height as f32))
+}
+
 pub fn mode_3d(
     In(entity): In<Entity>,
     mut projections: Query<&mut Projection>,
@@ -361,18 +402,14 @@ pub fn mode_3d(
         .get(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
-    let width = *width as f32;
-    let height = *height as f32;
-
-    let fov = std::f32::consts::PI / 3.0; // 60 degrees
-    let aspect = width / height;
-    let camera_z = (height / 2.0) / (fov / 2.0).tan();
-    // Processing4 uses near = camera_z / 10, but that clips anything closer
-    // than ~camera_z/10 to the camera. Since `transform_set_position` lets the
-    // user move the camera without recomputing the projection, a small fixed
-    // near is safer and matches most engines' defaults.
-    let near = 1.0;
-    let far = camera_z * 10.0;
+    let ViewDefaults {
+        fov,
+        aspect,
+        near,
+        far,
+        camera_z,
+        ..
+    } = ViewDefaults::new(*width as f32, *height as f32);
     let near_clip_plane = vec4(0.0, 0.0, -1.0, -near);
 
     let mut projection = projections
@@ -427,17 +464,14 @@ pub fn mode_2d(
 }
 
 pub fn perspective(
-    In((entity, inner)): In<(Entity, PerspectiveProjection)>,
+    In((entity, inner, fit_canvas)): In<(Entity, PerspectiveProjection, bool)>,
     mut projections: Query<&mut Projection>,
 ) -> Result<()> {
     let mut projection = projections
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
-    *projection = Projection::custom(ProcessingPerspective {
-        inner,
-        fit_canvas: false,
-    });
+    *projection = Projection::custom(ProcessingPerspective { inner, fit_canvas });
 
     Ok(())
 }
