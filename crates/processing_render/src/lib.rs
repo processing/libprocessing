@@ -563,6 +563,11 @@ pub fn graphics_flush(graphics_entity: Entity) -> error::Result<()> {
     app_mut(|app| graphics::flush(app, graphics_entity))
 }
 
+/// Flush only if draws or `set` pixels are pending, for sampling the graphics as an image.
+pub fn graphics_flush_pending(graphics_entity: Entity) -> error::Result<()> {
+    app_mut(|app| graphics::flush_pending(app, graphics_entity))
+}
+
 /// Present the current frame to the surface.
 pub fn graphics_present(graphics_entity: Entity) -> error::Result<()> {
     app_mut(|app| graphics::present(app, graphics_entity))
