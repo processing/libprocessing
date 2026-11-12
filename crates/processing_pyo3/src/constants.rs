@@ -25,7 +25,7 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
         QUAD_STRIP,
         LINE_STRIP
     );
-    add!(m, CORNER, CORNERS, CENTER, RADIUS);
+    add!(m, CORNER, CORNERS, CENTER, RADIUS, DIAMETER);
     add!(m, OPEN, CHORD, PIE, CLOSE);
 
     m.add("INVERT", crate::filter::INVERT_U8)?;
@@ -43,7 +43,9 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     add!(m, NORMAL, ITALIC, BOLD, BOLD_ITALIC);
     add!(m, WORD, CHAR);
     add!(m, NEAREST, CLAMP, REPEAT, MIRROR);
-    add!(m, SRGB, LINEAR, HSL, HSV, HWB, OKLAB, OKLCH, LAB, LCH, XYZ);
+    add!(
+        m, SRGB, RGB, LINEAR, HSL, HSV, HSB, HWB, OKLAB, OKLCH, LAB, LCH, XYZ
+    );
     add!(
         m,
         PBR_NEUTRAL,
@@ -56,8 +58,9 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
         SOMEWHAT_BORING_DISPLAY_TRANSFORM
     );
     add!(
-        m, PI, TWO_PI, HALF_PI, QUARTER_PI, TAU, DEG_TO_RAD, RAD_TO_DEG
+        m, PI, TWO_PI, HALF_PI, QUARTER_PI, THIRD_PI, TAU, DEG_TO_RAD, RAD_TO_DEG
     );
+    add!(m, EPSILON, MAX_FLOAT, MIN_FLOAT, MAX_INT, MIN_INT);
 
     add!(
         m, MAP, COMBINE, MIX, LOOKUP, REDUCE, EXTRACT, PACK, GENERATE
@@ -121,7 +124,9 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     add!(
         m,
         ESCAPE,
+        ESC,
         ENTER,
+        RETURN,
         TAB,
         BACKSPACE,
         INSERT,
