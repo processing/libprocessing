@@ -881,6 +881,20 @@ pub mod processing_py {
         Ok(())
     }
 
+    /// The built-in WESL packages as `{package: {relative path: source}}`.
+    #[pyfunction]
+    fn _shader_packages(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
+        let packages = PyDict::new(py);
+        for package in processing_render::material::custom::shader_packages() {
+            let files = PyDict::new(py);
+            for (path, contents) in package.files {
+                files.set_item(path, contents)?;
+            }
+            packages.set_item(package.name, files)?;
+        }
+        Ok(packages)
+    }
+
     #[pyfunction]
     #[pyo3(pass_module)]
     fn window_title(module: &Bound<'_, PyModule>, title: &str) -> PyResult<()> {
