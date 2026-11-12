@@ -24,7 +24,7 @@ pub fn app_mut<T>(cb: impl FnOnce(&mut App) -> error::Result<T>) -> error::Resul
             .map_err(|_| error::ProcessingError::AppAccess)?;
         let app = app_borrow
             .as_mut()
-            .ok_or(error::ProcessingError::AppAccess)?;
+            .ok_or(error::ProcessingError::AppNotInitialized)?;
         cb(app)
     });
     match res {

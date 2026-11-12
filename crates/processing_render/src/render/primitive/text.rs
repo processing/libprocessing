@@ -28,6 +28,7 @@ use crate::render::{
     RenderState,
     command::{TextAlignH, TextAlignV, TextStyle, TextWrapMode},
     mesh_builder::MeshBuilder,
+    style::Style,
 };
 use crate::text::font::{DEFAULT_FONT_FAMILY, TextContext};
 
@@ -91,19 +92,23 @@ impl OwnedTextParams {
     /// Snapshot a `RenderState`'s text state. `glyph_colors` is left unset; the
     /// draw path fills it in, measurement queries don't need it.
     pub fn from_render_state(state: &RenderState, max_w: Option<f32>, max_h: Option<f32>) -> Self {
+        Self::from_style(&state.style, max_w, max_h)
+    }
+
+    pub fn from_style(style: &Style, max_w: Option<f32>, max_h: Option<f32>) -> Self {
         Self {
-            text_size: state.style.text_size,
-            align_h: state.style.text_align_h,
-            align_v: state.style.text_align_v,
-            leading: state.style.text_leading,
+            text_size: style.text_size,
+            align_h: style.text_align_h,
+            align_v: style.text_align_v,
+            leading: style.text_leading,
             max_w,
             max_h,
-            wrap: state.style.text_wrap,
-            font_family: state.style.text_font_family.clone(),
-            text_style: state.style.text_style,
-            text_weight: state.style.text_weight,
-            text_variations: state.style.text_variations.clone(),
-            text_features: state.style.text_features.clone(),
+            wrap: style.text_wrap,
+            font_family: style.text_font_family.clone(),
+            text_style: style.text_style,
+            text_weight: style.text_weight,
+            text_variations: style.text_variations.clone(),
+            text_features: style.text_features.clone(),
             glyph_colors: None,
         }
     }
@@ -394,6 +399,27 @@ pub fn text_to_paths(
 /// Default `sample_factor` for [`text_to_points`].
 pub const DEFAULT_SAMPLE_FACTOR: f32 = 0.1;
 
+/// Samples a segment at `step` points per unit of length, like p5's `textToPoints`.
+fn sample_outline(
+    points: &mut Vec<[f32; 2]>,
+    step: f32,
+    point: &dyn Fn(f32) -> [f32; 2],
+    include_end: bool,
+) {
+    let mut len = 0.0;
+    let mut prev = point(0.0);
+    for i in 1..=16 {
+        let p = point(i as f32 / 16.0);
+        len += ((p[0] - prev[0]).powi(2) + (p[1] - prev[1]).powi(2)).sqrt();
+        prev = p;
+    }
+    let steps = (len * step).ceil().max(1.0) as usize;
+    let last = if include_end { steps } else { steps - 1 };
+    for i in 1..=last {
+        points.push(point(i as f32 / steps as f32));
+    }
+}
+
 /// Sample points along text outlines. Higher `sample_factor` = more points;
 /// see [`DEFAULT_SAMPLE_FACTOR`].
 pub fn text_to_points(
@@ -416,6 +442,10 @@ pub fn text_to_points(
         let step = sample_factor.max(0.001);
         let mut points = Vec::new();
 
+        let lerp = |a: lyon::math::Point, b: lyon::math::Point| {
+            move |t: f32| [a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t]
+        };
+
         for path in &glyph_paths {
             for event in path.iter() {
                 use lyon::path::Event;
@@ -424,47 +454,49 @@ pub fn text_to_points(
                         points.push([at.x, at.y]);
                     }
                     Event::Line { from, to } => {
-                        let dx = to.x - from.x;
-                        let dy = to.y - from.y;
-                        let len = (dx * dx + dy * dy).sqrt();
-                        let steps = (len * step).max(1.0) as usize;
-                        for i in 1..=steps {
-                            let t = i as f32 / steps as f32;
-                            points.push([from.x + dx * t, from.y + dy * t]);
-                        }
+                        sample_outline(&mut points, step, &lerp(from, to), true)
                     }
-                    Event::Quadratic { from, ctrl, to } => {
-                        let steps = (20.0 * step).max(2.0) as usize;
-                        for i in 1..=steps {
-                            let t = i as f32 / steps as f32;
+                    Event::Quadratic { from, ctrl, to } => sample_outline(
+                        &mut points,
+                        step,
+                        &|t| {
                             let inv = 1.0 - t;
-                            let px = inv * inv * from.x + 2.0 * inv * t * ctrl.x + t * t * to.x;
-                            let py = inv * inv * from.y + 2.0 * inv * t * ctrl.y + t * t * to.y;
-                            points.push([px, py]);
-                        }
-                    }
+                            [
+                                inv * inv * from.x + 2.0 * inv * t * ctrl.x + t * t * to.x,
+                                inv * inv * from.y + 2.0 * inv * t * ctrl.y + t * t * to.y,
+                            ]
+                        },
+                        true,
+                    ),
                     Event::Cubic {
                         from,
                         ctrl1,
                         ctrl2,
                         to,
-                    } => {
-                        let steps = (30.0 * step).max(2.0) as usize;
-                        for i in 1..=steps {
-                            let t = i as f32 / steps as f32;
+                    } => sample_outline(
+                        &mut points,
+                        step,
+                        &|t| {
                             let inv = 1.0 - t;
-                            let px = inv * inv * inv * from.x
-                                + 3.0 * inv * inv * t * ctrl1.x
-                                + 3.0 * inv * t * t * ctrl2.x
-                                + t * t * t * to.x;
-                            let py = inv * inv * inv * from.y
-                                + 3.0 * inv * inv * t * ctrl1.y
-                                + 3.0 * inv * t * t * ctrl2.y
-                                + t * t * t * to.y;
-                            points.push([px, py]);
+                            [
+                                inv * inv * inv * from.x
+                                    + 3.0 * inv * inv * t * ctrl1.x
+                                    + 3.0 * inv * t * t * ctrl2.x
+                                    + t * t * t * to.x,
+                                inv * inv * inv * from.y
+                                    + 3.0 * inv * inv * t * ctrl1.y
+                                    + 3.0 * inv * t * t * ctrl2.y
+                                    + t * t * t * to.y,
+                            ]
+                        },
+                        true,
+                    ),
+                    // the closing edge back to the start; its endpoint is the Begin point
+                    Event::End { last, first, close } => {
+                        if close && last != first {
+                            sample_outline(&mut points, step, &lerp(last, first), false);
                         }
                     }
-                    Event::End { .. } => {}
                 }
             }
         }

@@ -43,7 +43,7 @@ use pyo3::{
     types::{PyDict, PyList, PyTuple},
 };
 use shader::Shader;
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 
 /// Register a window `Graphics` in the module's `_windows` list so the run loop
 /// draws + presents it each frame.
@@ -349,7 +349,11 @@ fn create_graphics_context(
     let env = detect_environment(module)?;
 
     let interactive = env != "script";
-    let log_level = if interactive { Some("error") } else { None };
+    let log_level = if interactive {
+        Some("error")
+    } else {
+        Some("warn")
+    };
 
     let has_existing = module
         .getattr("_graphics")
@@ -475,6 +479,40 @@ pub(crate) fn reset_tracked_globals() {
     LAST_GLOBALS.with(|cache| cache.borrow_mut().clear());
 }
 
+/// Live reload: re-define the saved file's imports, functions and classes in the running
+/// sketch's globals, so state survives and `size()`/`run()` don't run again.
+fn reload_definitions(py: Python<'_>, source: &str, globals: &Bound<'_, PyAny>) -> PyResult<()> {
+    let ast = PyModule::import(py, "ast")?;
+    let tree = ast.getattr("parse")?.call1((source,))?;
+    let keep = PyTuple::new(
+        py,
+        [
+            "FunctionDef",
+            "AsyncFunctionDef",
+            "ClassDef",
+            "Import",
+            "ImportFrom",
+        ]
+        .iter()
+        .map(|n| ast.getattr(*n))
+        .collect::<PyResult<Vec<_>>>()?,
+    )?;
+    let body = PyList::empty(py);
+    for node in tree.getattr("body")?.try_iter()? {
+        let node = node?;
+        if node.is_instance(&keep)? {
+            body.append(node)?;
+        }
+    }
+    tree.setattr("body", body)?;
+    let builtins = PyModule::import(py, "builtins")?;
+    let code = builtins
+        .getattr("compile")?
+        .call1((tree, "<sketch reload>", "exec"))?;
+    builtins.getattr("exec")?.call1((code, globals))?;
+    Ok(())
+}
+
 fn get_sketch_info() -> PyResult<(String, String)> {
     Python::attach(|py| {
         let sys = PyModule::import(py, "sys")?;
@@ -483,7 +521,12 @@ fn get_sketch_info() -> PyResult<(String, String)> {
         let os = PyModule::import(py, "os")?;
         let path = os.getattr("path")?;
 
-        if filename.is_empty() || !path.getattr("isfile")?.call1((filename,))?.is_truthy()? {
+        // live reload watches the sketch file; it's opt-in while it's experimental
+        let live_reload = env::var_os("PROCESSING_LIVE_RELOAD").is_some_and(|v| !v.is_empty());
+        if !live_reload
+            || filename.is_empty()
+            || !path.getattr("isfile")?.call1((filename,))?.is_truthy()?
+        {
             let cwd = os.getattr("getcwd")?.call0()?.to_string();
             return Ok((cwd, String::new()));
         }
@@ -1254,7 +1297,7 @@ pub mod processing_py {
 
             ensure_graphics(module)?;
 
-            let mut globals = if let Some(ref draw) = draw_fn {
+            let globals = if let Some(ref draw) = draw_fn {
                 draw.getattr("__globals__")?
             } else if let Some(ref setup) = setup_fn {
                 setup.getattr("__globals__")?
@@ -1278,6 +1321,7 @@ pub mod processing_py {
                     .end_draw()?;
 
                 loop {
+                    py.check_signals()?;
                     {
                         let mut graphics = get_graphics_mut(module)?
                             .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
@@ -1298,35 +1342,32 @@ pub mod processing_py {
             let mut first_frame = true;
 
             loop {
+                // also catches Ctrl-C while paused, when no Python code runs
+                py.check_signals()?;
                 {
                     let mut graphics = get_graphics_mut(module)?
                         .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
 
-                    // TODO: this shouldn't be on the graphics object
-                    let sketch = graphics.poll_for_sketch_update()?;
-                    if !sketch.source.is_empty() {
-                        let locals = PyDict::new(py);
-
-                        let ok = CString::new(sketch.source.as_str()).unwrap();
-                        let cstr: &CStr = ok.as_c_str();
-
-                        match py.run(cstr, None, Some(&locals)) {
-                            Ok(_) => {}
-                            Err(e) => {
-                                eprintln!("sketch reload error: {e}");
-                            }
-                        }
-
-                        *draw_fn_ref = locals.get_item("draw").unwrap().unwrap();
-                        globals = draw_fn_ref.getattr("__globals__")?;
-                        reset_tracked_globals();
-                        first_frame = true;
-
-                        dbg!(locals);
-                    }
-
                     if !graphics.surface.poll_events() {
                         break;
+                    }
+                }
+
+                // TODO: this shouldn't be on the graphics object
+                let sketch = get_graphics(module)?
+                    .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?
+                    .poll_for_sketch_update()?;
+                if !sketch.source.is_empty() {
+                    match reload_definitions(py, &sketch.source, &globals) {
+                        Ok(()) => {
+                            if let Ok(draw) = globals.get_item("draw") {
+                                *draw_fn_ref = draw;
+                            }
+                            // the re-run `import *` rebound the tracked globals
+                            reset_tracked_globals();
+                            first_frame = true;
+                        }
+                        Err(e) => eprintln!("sketch reload error: {e}"),
                     }
                 }
 
@@ -1360,9 +1401,7 @@ pub mod processing_py {
                     wg.bind(py).borrow().begin_draw()?;
                 }
                 sync_globals(module, &globals)?;
-                draw_fn_ref
-                    .call0()
-                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+                draw_fn_ref.call0()?;
                 for wg in &windows {
                     wg.bind(py).borrow().end_draw()?;
                 }
@@ -1377,6 +1416,17 @@ pub mod processing_py {
             }
 
             Ok(())
+        })
+        .or_else(|e: PyErr| {
+            // Ctrl-C quits the sketch like closing its window, rather than a
+            // traceback from wherever draw() happened to be
+            Python::attach(|py| {
+                if e.is_instance_of::<pyo3::exceptions::PyKeyboardInterrupt>(py) {
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            })
         });
 
         // tear down the app while the thread-local is still alive; the eager

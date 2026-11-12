@@ -157,11 +157,13 @@ pub fn set_property(
     grids: Query<&Grid>,
 ) -> Result<bool> {
     let shader = if let Ok(compute) = computes.get_mut(entity) {
+        let compute = compute.into_inner();
+        compute.column_bindings.remove(&name);
         if let ShaderValue::MeshAttribute(..) | ShaderValue::MeshIndex(..) = value {
-            bind_compute_mesh(compute.into_inner(), name, value)?;
+            bind_compute_mesh(compute, name, value)?;
             return Ok(true);
         }
-        &mut compute.into_inner().shader
+        &mut compute.shader
     } else if let Ok(filter) = filters.get_mut(entity) {
         &mut filter.into_inner().shader
     } else {

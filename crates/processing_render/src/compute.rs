@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use bevy::asset::{AssetId, RenderAssetUsages};
 use bevy::mesh::MeshVertexAttribute;
@@ -21,6 +21,7 @@ use bevy::{
 };
 
 use bevy_naga_reflect::dynamic_shader::DynamicShader;
+use bevy_naga_reflect::reflect::ParameterCategory;
 
 use crate::geometry::{Attribute, Geometry};
 use crate::material::custom::Shader;
@@ -220,6 +221,8 @@ pub struct Compute {
     pub pipeline_id: CachedComputePipelineId,
     pub bind_group_layout_descriptors: Vec<(u32, BindGroupLayoutDescriptor)>,
     pub mesh_bindings: HashMap<String, MeshBindingRef>,
+    /// Storage arrays bound to a particle system's columns by the last apply or emit.
+    pub column_bindings: HashSet<String>,
 }
 
 fn queue_pipeline(
@@ -328,6 +331,7 @@ pub fn create_compute(app: &mut App, shader_entity: Entity) -> Result<Entity> {
                     pipeline_id,
                     bind_group_layout_descriptors,
                     mesh_bindings: HashMap::new(),
+                    column_bindings: HashSet::new(),
                 })
                 .id());
         }
@@ -369,6 +373,15 @@ pub fn dispatch(
         };
         if !ready {
             return Err(ProcessingError::ResourceNotReady(name.to_string()));
+        }
+        // wgpu treats an incomplete bind group as fatal, so fail here instead
+        if matches!(param.category(), ParameterCategory::Storage { .. })
+            && shader.buffer_handle(name).is_none()
+            && !mesh_bindings.iter().any(|(n, _)| n == name)
+        {
+            return Err(ProcessingError::InvalidArgument(format!(
+                "nothing is bound to the shader's storage array `{name}`"
+            )));
         }
     }
 

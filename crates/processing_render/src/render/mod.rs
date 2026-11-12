@@ -9,7 +9,7 @@ pub mod transform;
 use bevy::{
     camera::Camera3dDepthLoadOp,
     camera::{
-        CameraOutputMode, ClearColorConfig,
+        CameraOutputMode, ClearColorConfig, RenderTarget,
         primitives::Aabb,
         visibility::{NoFrustumCulling, RenderLayers},
     },
@@ -18,6 +18,7 @@ use bevy::{
     pbr::gpu_instance_batch::GpuBatchedMesh3d,
     prelude::*,
     render::render_resource::BlendState,
+    window::WindowRef,
 };
 use command::{CommandBuffer, DrawCommand, ShapeMode};
 use material::{MaterialKey, ProcessingExtendedMaterial};
@@ -95,6 +96,57 @@ impl BatchState {
     }
 }
 
+/// Applies a text-style command to `style`; shared by the flush and by text queries, which
+/// replay the frame's pending commands. `font_family` resolves a font entity.
+pub(crate) fn apply_text_style_command(
+    style: &mut StyleStack,
+    cmd: DrawCommand,
+    font_family: impl Fn(Entity) -> Option<String>,
+) {
+    match cmd {
+        DrawCommand::TextFont(font_entity) => {
+            if let Some(entity) = font_entity {
+                if let Some(family) = font_family(entity) {
+                    style.text_font_family = Some(family);
+                }
+            } else {
+                style.text_font_family = None;
+            }
+        }
+        DrawCommand::TextStyle(text_style) => style.text_style = text_style,
+        DrawCommand::TextWeight(weight) => style.text_weight = Some(weight),
+        DrawCommand::TextVariation { tag, value } => {
+            if let Some(existing) = style.text_variations.iter_mut().find(|(t, _)| *t == tag) {
+                existing.1 = value;
+            } else {
+                style.text_variations.push((tag, value));
+            }
+        }
+        DrawCommand::ClearTextVariations => style.text_variations.clear(),
+        DrawCommand::TextFeature { tag, value } => {
+            if let Some(existing) = style.text_features.iter_mut().find(|(t, _)| *t == tag) {
+                existing.1 = value;
+            } else {
+                style.text_features.push((tag, value));
+            }
+        }
+        DrawCommand::NoTextFeature { tag } => style.text_features.retain(|(t, _)| *t != tag),
+        DrawCommand::ClearTextFeatures => style.text_features.clear(),
+        DrawCommand::TextSize(size) => {
+            style.text_size = size;
+            style.text_leading = None;
+        }
+        DrawCommand::TextAlign { h, v } => {
+            style.text_align_h = h;
+            style.text_align_v = v;
+        }
+        DrawCommand::TextLeading(leading) => style.text_leading = Some(leading),
+        DrawCommand::TextWrap(mode) => style.text_wrap = mode,
+        DrawCommand::TextGlyphColors(colors) => style.text_glyph_colors = Some(colors),
+        _ => {}
+    }
+}
+
 #[derive(Debug, Component)]
 pub struct RenderState {
     pub style: StyleStack,
@@ -161,9 +213,11 @@ pub fn flush_draw_commands(
             &mut Camera3d,
             &mut crate::image::BackgroundBlit,
             Has<crate::graphics::Present>,
+            Option<&RenderTarget>,
         ),
         With<Flush>,
     >,
+    p_windows: Query<&Window>,
     p_images: Query<&Image>,
     p_geometries: Query<(&Geometry, Option<&GltfNodeTransform>)>,
     p_material_handles: Query<&UntypedMaterial>,
@@ -190,8 +244,16 @@ pub fn flush_draw_commands(
         mut camera_3d,
         mut background_blit,
         presents,
+        target,
     ) in graphics.iter_mut()
     {
+        // an opaque window ignores background alpha, as in Processing
+        let opaque_window = matches!(
+            target,
+            Some(RenderTarget::Window(WindowRef::Entity(window)))
+                if p_windows.get(*window).is_ok_and(|w| !w.transparent)
+        );
+
         // color is kept unless `background()` opens the pass; depth is kept only within a frame
         camera.clear_color = ClearColorConfig::None;
         camera_3d.depth_load_op = if std::mem::take(&mut state.clear_depth) {
@@ -904,6 +966,11 @@ pub fn flush_draw_commands(
                         drained = false;
                         break;
                     }
+                    let color = if opaque_window {
+                        color.with_alpha(1.0)
+                    } else {
+                        color
+                    };
                     camera.clear_color = ClearColorConfig::Custom(color);
                     camera_3d.depth_load_op = Camera3dDepthLoadOp::Clear(0.0);
                 }
@@ -1282,70 +1349,22 @@ pub fn flush_draw_commands(
                         &p_material_handles,
                     );
                 }
-                DrawCommand::TextFont(font_entity) => {
-                    if let Some(entity) = font_entity {
-                        if let Ok(font) = p_fonts.get(entity) {
-                            state.style.text_font_family = Some(font.family_name.clone());
-                        }
-                    } else {
-                        state.style.text_font_family = None;
-                    }
-                }
-                DrawCommand::TextStyle(style) => {
-                    state.style.text_style = style;
-                }
-                DrawCommand::TextWeight(weight) => {
-                    state.style.text_weight = Some(weight);
-                }
-                DrawCommand::TextVariation { tag, value } => {
-                    if let Some(existing) = state
-                        .style
-                        .text_variations
-                        .iter_mut()
-                        .find(|(t, _)| *t == tag)
-                    {
-                        existing.1 = value;
-                    } else {
-                        state.style.text_variations.push((tag, value));
-                    }
-                }
-                DrawCommand::ClearTextVariations => {
-                    state.style.text_variations.clear();
-                }
-                DrawCommand::TextFeature { tag, value } => {
-                    if let Some(existing) = state
-                        .style
-                        .text_features
-                        .iter_mut()
-                        .find(|(t, _)| *t == tag)
-                    {
-                        existing.1 = value;
-                    } else {
-                        state.style.text_features.push((tag, value));
-                    }
-                }
-                DrawCommand::NoTextFeature { tag } => {
-                    state.style.text_features.retain(|(t, _)| *t != tag);
-                }
-                DrawCommand::ClearTextFeatures => {
-                    state.style.text_features.clear();
-                }
-                DrawCommand::TextSize(size) => {
-                    state.style.text_size = size;
-                    state.style.text_leading = None;
-                }
-                DrawCommand::TextAlign { h, v } => {
-                    state.style.text_align_h = h;
-                    state.style.text_align_v = v;
-                }
-                DrawCommand::TextLeading(leading) => {
-                    state.style.text_leading = Some(leading);
-                }
-                DrawCommand::TextWrap(mode) => {
-                    state.style.text_wrap = mode;
-                }
-                DrawCommand::TextGlyphColors(colors) => {
-                    state.style.text_glyph_colors = Some(colors);
+                cmd @ (DrawCommand::TextFont(_)
+                | DrawCommand::TextStyle(_)
+                | DrawCommand::TextWeight(_)
+                | DrawCommand::TextVariation { .. }
+                | DrawCommand::ClearTextVariations
+                | DrawCommand::TextFeature { .. }
+                | DrawCommand::NoTextFeature { .. }
+                | DrawCommand::ClearTextFeatures
+                | DrawCommand::TextSize(_)
+                | DrawCommand::TextAlign { .. }
+                | DrawCommand::TextLeading(_)
+                | DrawCommand::TextWrap(_)
+                | DrawCommand::TextGlyphColors(_)) => {
+                    apply_text_style_command(&mut state.style, cmd, |entity| {
+                        p_fonts.get(entity).ok().map(|f| f.family_name.clone())
+                    });
                 }
                 DrawCommand::Text {
                     content,
