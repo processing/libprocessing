@@ -187,7 +187,6 @@ pub fn sync_globals(
     set_tracked(globals, "width", canvas_width)?;
     set_tracked(globals, "height", canvas_height)?;
     set_tracked(globals, "focused", surface.focused()?)?;
-    set_tracked(globals, "pixel_density", surface.pixel_density()?)?;
     set_tracked(globals, "pixel_width", surface.pixel_width()?)?;
     set_tracked(globals, "pixel_height", surface.pixel_height()?)?;
 
