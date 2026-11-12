@@ -2,6 +2,7 @@
 name = "processing_wasm"
 version = "0.4.0"
 edition = "2024"
+rust-version.workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]

@@ -2,6 +2,7 @@
 name = "processing"
 version = "0.4.0"
 edition = "2024"
+rust-version.workspace = true
 autoexamples = false
 
 [lints]
@@ -17,6 +18,9 @@ cuda = ["dep:processing_cuda", "processing_cuda/cuda"]
 [workspace]
 resolver = "3"
 members = ["crates/*", "tools/*"]
+
+[workspace.package]
+rust-version = "1.95"
 
 [workspace.lints.clippy]
 type_complexity = "allow"

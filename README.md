@@ -77,6 +77,12 @@ _Note: you can use any file name you want for your sketch_
 
 You'll need to install the Rust toolchain to work on this project. Most users will want to install Rust via [`rustup`](https://rustup.rs/), which helps manage Rust toolchain versions.
 
+libprocessing requires **Rust 1.95 or newer** (the minimum is set by `rust-version` in [`Cargo.toml`](Cargo.toml) and follows what our Bevy dependency requires). If you installed Rust a while ago, update to the latest stable toolchain before building:
+
+```bash
+rustup update stable
+```
+
 ### Clone the project and its submodules
 
 When cloning this repo (or your fork), don't forget to install its submodules (eg. Lygia)
