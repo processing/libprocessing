@@ -697,6 +697,15 @@ pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
     Ok(())
 }
 
+/// Brings the target up to date with what was drawn so far; no update when nothing is queued
+pub fn flush_pending(app: &mut App, entity: Entity) -> Result<()> {
+    if has_commands(app, entity) {
+        flush(app, entity)
+    } else {
+        upload_dirty(app, entity)
+    }
+}
+
 fn has_commands(app: &App, entity: Entity) -> bool {
     app.world()
         .get::<CommandBuffer>(entity)

@@ -412,10 +412,19 @@ pub fn resize(
         .get_mut(entity)
         .map_err(|_| ProcessingError::ImageNotFound)?;
 
-    images
+    let format = p_image.texture_format;
+    let old_size = p_image.size;
+    let mut image = images
         .get_mut(&p_image.handle)
-        .ok_or(ProcessingError::ImageNotFound)?
-        .resize_in_place(new_size);
+        .ok_or(ProcessingError::ImageNotFound)?;
+    let resampled = match image.data.as_deref() {
+        Some(data) => Some(resample(data, format, old_size, new_size)?),
+        None => None,
+    };
+    image.resize_in_place(new_size);
+    if resampled.is_some() {
+        image.data = resampled;
+    }
     p_image.coherence = Coherence::InSync;
 
     p_image.readback_buffer = create_readback_buffer(
@@ -428,6 +437,96 @@ pub fn resize(
     p_image.size = new_size;
 
     Ok(())
+}
+
+/// Scales tightly packed pixels to `to`: bilinear when enlarging, area average when shrinking,
+/// as Processing's `resize`; channels are filtered as stored, with alpha premultiplied
+fn resample(data: &[u8], format: TextureFormat, from: Extent3d, to: Extent3d) -> Result<Vec<u8>> {
+    let srgb = format == TextureFormat::Rgba8UnormSrgb;
+    let stride = from.width as usize * pixel_size(format)?;
+    let src: Vec<[f32; 4]> = bytes_to_pixels(data, format, from.width, from.height, stride)?
+        .into_iter()
+        .map(|p| {
+            let [r, g, b, a] = if srgb {
+                Srgba::from(p).to_f32_array()
+            } else {
+                p.to_f32_array()
+            };
+            [r * a, g * a, b * a, a]
+        })
+        .collect();
+
+    // one axis at a time: `len` source texels starting at `at(line, i)` become `out_len`
+    let pass = |src: &[[f32; 4]], lines: usize, len: usize, out_len: usize, horizontal: bool| {
+        let scale = len as f32 / out_len as f32;
+        let mut out = vec![[0.0f32; 4]; lines * out_len];
+        for o in 0..out_len {
+            let (start, end) = (o as f32 * scale, (o as f32 + 1.0) * scale);
+            let center = (start + end) / 2.0;
+            let (first, last, weights): (usize, usize, Vec<f32>) = if scale > 1.0 {
+                // how much of each source texel the destination texel covers
+                let (first, last) = (start.floor() as usize, (end.ceil() as usize).min(len));
+                let weights = (first..last)
+                    .map(|i| (end.min(i as f32 + 1.0) - start.max(i as f32)).max(0.0))
+                    .collect();
+                (first, last, weights)
+            } else {
+                // the two nearest texel centers, clamped at the edges
+                let lo = (center - 0.5).floor();
+                let t = center - 0.5 - lo;
+                let first = lo.max(0.0) as usize;
+                let last = ((lo as isize + 2).max(1) as usize).min(len);
+                let weights = if last - first == 2 {
+                    vec![1.0 - t, t]
+                } else {
+                    vec![1.0]
+                };
+                (first, last, weights)
+            };
+            let total: f32 = weights.iter().sum();
+            for line in 0..lines {
+                let mut acc = [0.0f32; 4];
+                for (i, w) in (first..last).zip(&weights) {
+                    let texel = if horizontal {
+                        src[line * len + i]
+                    } else {
+                        src[i * lines + line]
+                    };
+                    for c in 0..4 {
+                        acc[c] += texel[c] * w;
+                    }
+                }
+                let dst = if horizontal {
+                    line * out_len + o
+                } else {
+                    o * lines + line
+                };
+                out[dst] = acc.map(|v| v / total);
+            }
+        }
+        out
+    };
+    let (fw, fh) = (from.width as usize, from.height as usize);
+    let (tw, th) = (to.width as usize, to.height as usize);
+    let wide = pass(&src, fh, fw, tw, true);
+    let scaled = pass(&wide, tw, fh, th, false);
+
+    let pixels: Vec<LinearRgba> = scaled
+        .into_iter()
+        .map(|[r, g, b, a]| {
+            let (r, g, b) = if a > 0.0 {
+                (r / a, g / a, b / a)
+            } else {
+                (0.0, 0.0, 0.0)
+            };
+            if srgb {
+                Srgba::new(r, g, b, a).into()
+            } else {
+                LinearRgba::new(r, g, b, a)
+            }
+        })
+        .collect();
+    pixels_to_bytes(&pixels, format)
 }
 
 pub fn readback(
