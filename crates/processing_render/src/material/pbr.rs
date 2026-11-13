@@ -11,12 +11,16 @@ pub fn set_property(
 ) -> Result<()> {
     match name {
         "base_color" | "color" => {
-            let ShaderValue::Float4(c) = value else {
-                return Err(ProcessingError::InvalidArgument(format!(
-                    "'{name}' expects Float4, got {value:?}"
-                )));
+            material.base_color = match value {
+                // plain numbers are colors as written, i.e. sRGB
+                ShaderValue::Float4(c) => Color::srgba(c[0], c[1], c[2], c[3]),
+                ShaderValue::Color(c) => *c,
+                _ => {
+                    return Err(ProcessingError::InvalidArgument(format!(
+                        "'{name}' expects a color, got {value:?}"
+                    )));
+                }
             };
-            material.base_color = Color::srgba(c[0], c[1], c[2], c[3]);
         }
         "metallic" => {
             let ShaderValue::Float(v) = value else {
@@ -43,12 +47,15 @@ pub fn set_property(
             material.reflectance = *v;
         }
         "emissive" => {
-            let ShaderValue::Float4(c) = value else {
-                return Err(ProcessingError::InvalidArgument(format!(
-                    "'{name}' expects Float4, got {value:?}"
-                )));
+            material.emissive = match value {
+                ShaderValue::Float4(c) => LinearRgba::new(c[0], c[1], c[2], c[3]),
+                ShaderValue::Color(c) => c.to_linear(),
+                _ => {
+                    return Err(ProcessingError::InvalidArgument(format!(
+                        "'{name}' expects a color, got {value:?}"
+                    )));
+                }
             };
-            material.emissive = LinearRgba::new(c[0], c[1], c[2], c[3]);
         }
         "base_color_texture" | "texture" => {
             let Some(handle) = texture_handle else {

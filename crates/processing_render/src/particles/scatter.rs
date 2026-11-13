@@ -5,13 +5,14 @@ use processing_core::app_mut;
 use processing_core::error::{self, ProcessingError, Result};
 
 use crate::geometry::Geometry;
+use crate::particles::kernels::set_requires;
 use crate::shader_value::ShaderValue;
 use crate::{
     buffer_create_with_data, compute_create, compute_set, geometry_attribute_position, shader_load,
 };
 
 pub fn particles_scatter_create(source_geometry: Entity) -> error::Result<Entity> {
-    let (cdf_bytes, indices_bytes, face_count) = app_mut(|app| {
+    let (cdf_bytes, indices_bytes, uv_bytes, face_count) = app_mut(|app| {
         app.world_mut()
             .run_system_cached_with(prepare_scatter_source, source_geometry)
             .unwrap()
@@ -19,10 +20,12 @@ pub fn particles_scatter_create(source_geometry: Entity) -> error::Result<Entity
 
     let cdf_buf = buffer_create_with_data(cdf_bytes)?;
     let idx_buf = buffer_create_with_data(indices_bytes)?;
+    let uv_buf = buffer_create_with_data(uv_bytes)?;
 
     let shader =
         shader_load("embedded://processing_render/particles/kernels/scatter_surface.wgsl")?;
     let scatter = compute_create(shader)?;
+    set_requires(scatter, &["position", "scale", "age", "life", "uv"])?;
 
     let position_attr = geometry_attribute_position();
     compute_set(
@@ -32,6 +35,7 @@ pub fn particles_scatter_create(source_geometry: Entity) -> error::Result<Entity
     )?;
     compute_set(scatter, "source_indices", ShaderValue::Buffer(idx_buf))?;
     compute_set(scatter, "cdf", ShaderValue::Buffer(cdf_buf))?;
+    compute_set(scatter, "source_uv", ShaderValue::Buffer(uv_buf))?;
     compute_set(scatter, "face_count", ShaderValue::UInt(face_count))?;
     compute_set(scatter, "seed", ShaderValue::UInt(0xc0ffeeu32))?;
 
@@ -119,7 +123,7 @@ pub fn prepare_scatter_source(
     In(geom_entity): In<Entity>,
     geometries: Query<&Geometry>,
     mut meshes: ResMut<Assets<Mesh>>,
-) -> Result<(Vec<u8>, Vec<u8>, u32)> {
+) -> Result<(Vec<u8>, Vec<u8>, Vec<u8>, u32)> {
     let geom = geometries
         .get(geom_entity)
         .map_err(|_| ProcessingError::GeometryNotFound)?;
@@ -130,6 +134,11 @@ pub fn prepare_scatter_source(
 
     let (positions, dense_indices) = extract_scatter_geometry(mesh)?;
     let face_count = (dense_indices.len() / 3) as u32;
+    // a mesh without UVs scatters with uv (0, 0)
+    let uvs = match mesh.attribute(Mesh::ATTRIBUTE_UV_0) {
+        Some(VertexAttributeValues::Float32x2(uv)) => uv.clone(),
+        _ => vec![[0.0, 0.0]; positions.len()],
+    };
 
     let mut cum = Vec::with_capacity(face_count as usize);
     let mut total = 0.0_f32;
@@ -156,7 +165,8 @@ pub fn prepare_scatter_source(
 
     let cdf_bytes: Vec<u8> = cum.iter().flat_map(|f| f.to_le_bytes()).collect();
     let indices_bytes: Vec<u8> = dense_indices.iter().flat_map(|i| i.to_le_bytes()).collect();
-    Ok((cdf_bytes, indices_bytes, face_count))
+    let uv_bytes: Vec<u8> = uvs.iter().flatten().flat_map(|f| f.to_le_bytes()).collect();
+    Ok((cdf_bytes, indices_bytes, uv_bytes, face_count))
 }
 
 pub fn prepare_scatter_volume_source(

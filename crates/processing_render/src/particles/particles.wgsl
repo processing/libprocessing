@@ -1,6 +1,7 @@
 #import bevy_pbr::{
     pbr_fragment::pbr_input_from_standard_material,
     pbr_functions::alpha_discard,
+    pbr_types::STANDARD_MATERIAL_FLAGS_UNLIT_BIT,
     mesh_functions,
 }
 
@@ -52,7 +53,11 @@ fn fragment(
     let out = deferred_output(in, pbr_input);
 #else
     var out: FragmentOutput;
-    out.color = apply_pbr_lighting(pbr_input);
+    if (pbr_input.material.flags & STANDARD_MATERIAL_FLAGS_UNLIT_BIT) == 0u {
+        out.color = apply_pbr_lighting(pbr_input);
+    } else {
+        out.color = pbr_input.material.base_color;
+    }
     out.color = main_pass_post_lighting_processing(pbr_input, out.color);
 #endif
 

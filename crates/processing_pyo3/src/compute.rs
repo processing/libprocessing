@@ -1,3 +1,4 @@
+use bevy::color::ColorToComponents;
 use bevy::prelude::Entity;
 use processing::prelude::*;
 use pyo3::{
@@ -112,7 +113,7 @@ impl Buffer {
         value: &Bound<'_, PyAny>,
     ) -> PyResult<()> {
         if let Ok(i) = index.extract::<isize>() {
-            let sv = py_to_shader_value(value)?;
+            let sv = buffer_element(value)?;
             self.check_element_type(&sv)?;
             let bytes = sv
                 .to_bytes()
@@ -246,11 +247,19 @@ fn slice_positions(indices: &PySliceIndices) -> impl Iterator<Item = isize> + us
     (0..slicelength as isize).map(move |i| start + i * step)
 }
 
+/// A buffer has no color type: a `Color` is stored as its linear RGBA floats.
+fn buffer_element(value: &Bound<'_, PyAny>) -> PyResult<ShaderValue> {
+    Ok(match py_to_shader_value(value)? {
+        ShaderValue::Color(c) => ShaderValue::Float4(c.to_linear().to_f32_array()),
+        sv => sv,
+    })
+}
+
 fn shader_values_to_bytes(values: &Bound<'_, PyAny>) -> PyResult<(Vec<u8>, Option<ShaderValue>)> {
     let mut bytes = Vec::new();
     let mut element_type: Option<ShaderValue> = None;
     for item in values.try_iter()? {
-        let sv = py_to_shader_value(&item?)?;
+        let sv = buffer_element(&item?)?;
         if let Some(ref existing) = element_type
             && std::mem::discriminant(existing) != std::mem::discriminant(&sv)
         {
@@ -288,6 +297,7 @@ fn shader_value_to_py<'py>(py: Python<'py>, sv: &ShaderValue) -> PyResult<Bound<
         ShaderValue::UInt3(v) => list(py, v),
         ShaderValue::UInt4(v) => list(py, v),
         ShaderValue::Mat4(v) => list(py, v),
+        ShaderValue::Color(c) => Ok(crate::color::PyColor(*c).into_pyobject(py)?.into_any()),
         ShaderValue::Texture(_)
         | ShaderValue::Buffer(_)
         | ShaderValue::MeshAttribute(..)

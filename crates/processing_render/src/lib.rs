@@ -2344,6 +2344,15 @@ pub fn gltf_material(gltf_entity: Entity, name: &str) -> error::Result<Entity> {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+pub fn gltf_texture(gltf_entity: Entity, name: &str) -> error::Result<Entity> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(gltf::texture, (gltf_entity, name.to_string()))
+            .unwrap()
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 pub fn gltf_mesh_names(gltf_entity: Entity) -> error::Result<Vec<String>> {
     app_mut(|app| {
         app.world_mut()
@@ -2870,12 +2879,27 @@ fn text_query_state(
     render::primitive::text::OwnedTextParams,
     text::font::TextContext,
 )> {
-    let state = app
-        .world()
+    let world = app.world();
+    let state = world
         .get::<render::RenderState>(graphics_entity)
         .ok_or(error::ProcessingError::GraphicsNotFound)?;
-    let params = render::primitive::text::OwnedTextParams::from_render_state(state, max_w, max_h);
-    let text_cx = app.world().resource::<text::font::TextContext>().clone();
+    // text_size() and friends are queued until the next flush, so replay them
+    let mut style = state.style.clone();
+    if let Some(buffer) = world.get::<render::command::CommandBuffer>(graphics_entity) {
+        for cmd in &buffer.commands {
+            match cmd {
+                DrawCommand::PushStyle => style.push(),
+                DrawCommand::PopStyle => style.pop(),
+                cmd => render::apply_text_style_command(&mut style, cmd.clone(), |entity| {
+                    world
+                        .get::<text::font::Font>(entity)
+                        .map(|f| f.family_name.clone())
+                }),
+            }
+        }
+    }
+    let params = render::primitive::text::OwnedTextParams::from_style(&style, max_w, max_h);
+    let text_cx = world.resource::<text::font::TextContext>().clone();
     Ok((params, text_cx))
 }
 
