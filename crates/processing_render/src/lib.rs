@@ -864,16 +864,31 @@ pub fn camera_reset(entity: Entity) -> error::Result<()> {
     })
 }
 
+/// The `mode_3d()` view of this graphics at its current size.
+pub fn graphics_view_defaults(graphics_entity: Entity) -> error::Result<graphics::ViewDefaults> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(graphics::view_defaults, graphics_entity)
+            .unwrap()
+    })
+}
+
+/// `aspect_ratio: None` follows the canvas, including later resizes.
 pub fn graphics_perspective(
     graphics_entity: Entity,
     fov: f32,
-    aspect_ratio: f32,
+    aspect_ratio: Option<f32>,
     near: f32,
     far: f32,
     near_clip_plane: Vec4,
 ) -> error::Result<()> {
     app_mut(|app| {
         flush(app, graphics_entity)?;
+        let canvas_aspect = app
+            .world_mut()
+            .run_system_cached_with(graphics::view_defaults, graphics_entity)
+            .unwrap()?
+            .aspect;
         app.world_mut()
             .run_system_cached_with(
                 graphics::perspective,
@@ -881,11 +896,12 @@ pub fn graphics_perspective(
                     graphics_entity,
                     PerspectiveProjection {
                         fov,
-                        aspect_ratio,
+                        aspect_ratio: aspect_ratio.unwrap_or(canvas_aspect),
                         near,
                         far,
                         near_clip_plane,
                     },
+                    aspect_ratio.is_none(),
                 ),
             )
             .unwrap()
@@ -1060,6 +1076,8 @@ pub fn transform_look_at(entity: Entity, target: Vec3) -> error::Result<()> {
 /// Position the camera at `eye`, looking at `center` with the given `up`.
 pub fn graphics_camera(entity: Entity, eye: Vec3, center: Vec3, up: Vec3) -> error::Result<()> {
     app_mut(|app| {
+        // draws queued so far keep the view they were issued under
+        flush(app, entity)?;
         app.world_mut()
             .run_system_cached_with(transform::camera, (entity, eye, center, up))
             .unwrap()

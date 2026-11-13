@@ -355,7 +355,7 @@ pub fn camera(In((gltf_entity, index)): In<(Entity, usize)>, world: &mut World) 
     match projection {
         Projection::Perspective(p) => {
             world
-                .run_system_cached_with(graphics::perspective, (graphics_entity, p))
+                .run_system_cached_with(graphics::perspective, (graphics_entity, p, false))
                 .unwrap()?;
         }
         Projection::Orthographic(o) => {
