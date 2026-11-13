@@ -27,7 +27,6 @@ _DYNAMIC_GRAPHICS_ATTRS = (
     "width",
     "height",
     "focused",
-    "pixel_density",
     "pixel_width",
     "pixel_height",
     "mouse_x",
@@ -36,12 +35,13 @@ _DYNAMIC_GRAPHICS_ATTRS = (
     "pmouse_y",
     "mouse_is_pressed",
     "mouse_button",
-    "mouse_wheel",
     "moved_x",
     "moved_y",
     "key",
     "key_code",
     "key_is_pressed",
+    "window_x",
+    "window_y",
 )
 
 _DYNAMIC_TIME_ATTRS = (
@@ -54,7 +54,6 @@ _DEFAULT_GRAPHICS_VALUES = {
     "width": 100,
     "height": 100,
     "focused": False,
-    "pixel_density": 1.0,
     "pixel_width": 100,
     "pixel_height": 100,
     "mouse_x": 0.0,
@@ -63,18 +62,19 @@ _DEFAULT_GRAPHICS_VALUES = {
     "pmouse_y": 0.0,
     "mouse_is_pressed": False,
     "mouse_button": None,
-    "mouse_wheel": 0.0,
     "moved_x": 0.0,
     "moved_y": 0.0,
     "key": None,
     "key_code": None,
     "key_is_pressed": False,
+    "window_x": 0,
+    "window_y": 0,
 }
 
 _DYNAMIC = (
     _DYNAMIC_GRAPHICS_ATTRS
     + _DYNAMIC_TIME_ATTRS
-    + ("display_width", "display_height", "window_x", "window_y")
+    + ("display_width", "display_height")
 )
 
 
@@ -104,16 +104,6 @@ def __getattr__(name):
         if mon is None:
             return 0
         return mon.width if name == "display_width" else mon.height
-    if name in ("window_x", "window_y"):
-        g = _get_graphics()
-        if g is None:
-            return 0
-        # offscreen canvases (notebooks, embedding hosts) have no window position
-        try:
-            x, y = g.surface.position
-        except (AttributeError, RuntimeError):
-            return 0
-        return x if name == "window_x" else y
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

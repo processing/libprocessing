@@ -135,8 +135,41 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
         HOME,
         END
     );
+    add!(
+        m,
+        CAPS_LOCK,
+        SCROLL_LOCK,
+        NUM_LOCK,
+        PRINT_SCREEN,
+        PAUSE,
+        CONTEXT_MENU
+    );
     add!(m, SHIFT, CONTROL, ALT, SUPER);
-    add!(m, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12);
+    add!(m, SHIFT_RIGHT, CONTROL_RIGHT, ALT_RIGHT, SUPER_RIGHT);
+    add!(
+        m, F1, F2, F3, F4, F5, F6, F7, F8, F9, F10, F11, F12, F13, F14, F15, F16, F17, F18, F19,
+        F20, F21, F22, F23, F24, F25
+    );
+    add!(
+        m,
+        NUMPAD_0,
+        NUMPAD_1,
+        NUMPAD_2,
+        NUMPAD_3,
+        NUMPAD_4,
+        NUMPAD_5,
+        NUMPAD_6,
+        NUMPAD_7,
+        NUMPAD_8,
+        NUMPAD_9,
+        NUMPAD_DECIMAL,
+        NUMPAD_DIVIDE,
+        NUMPAD_MULTIPLY,
+        NUMPAD_SUBTRACT,
+        NUMPAD_ADD,
+        NUMPAD_ENTER,
+        NUMPAD_EQUAL
+    );
 
     // Objects rather than strings, passed straight to blend_mode().
     m.add("BLEND", PyBlendMode::from_preset(BlendMode::Blend))?;
