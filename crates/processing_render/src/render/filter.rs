@@ -43,6 +43,7 @@ pub mod builtin {
     pub const BLUR: &str = include_str!("filters/blur.wgsl");
     pub const COMPOSITE: &str = include_str!("filters/composite.wgsl");
     pub const FEEDBACK: &str = include_str!("filters/feedback.wgsl");
+    pub const COPY_REGION: &str = include_str!("filters/copy_region.wgsl");
 }
 
 #[derive(Component)]

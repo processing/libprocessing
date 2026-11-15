@@ -69,8 +69,16 @@ pub(crate) fn extract_color_with_mode(
             Ok(space.gray(v, native[3]))
         }
         2 => {
-            let v = convert_channel(mode, &args.get_item(0)?, 0)?;
+            let first = args.get_item(0)?;
             let a = convert_channel(mode, &args.get_item(1)?, 3)?;
+            // a color with its alpha replaced, e.g. `fill(c, 128)`
+            if let Ok(c) = first.extract::<PyRef<PyColor>>() {
+                return Ok(c.0.with_alpha(a));
+            }
+            if let Ok(s) = first.extract::<String>() {
+                return Ok(parse_hex(&s)?.with_alpha(a));
+            }
+            let v = convert_channel(mode, &first, 0)?;
             Ok(space.gray(v, a))
         }
         3 => {
