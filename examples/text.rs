@@ -42,6 +42,7 @@ fn sketch() -> error::Result<()> {
                 z: 0.0,
                 max_w: None,
                 max_h: None,
+                stroke_weight: None,
             },
         )?;
 
@@ -56,6 +57,7 @@ fn sketch() -> error::Result<()> {
                 z: 0.0,
                 max_w: None,
                 max_h: None,
+                stroke_weight: None,
             },
         )?;
 
@@ -70,6 +72,7 @@ fn sketch() -> error::Result<()> {
                 z: 0.0,
                 max_w: Some(300.0),
                 max_h: Some(200.0),
+                stroke_weight: None,
             },
         )?;
 
@@ -91,6 +94,7 @@ fn sketch() -> error::Result<()> {
                 z: 0.0,
                 max_w: Some(200.0),
                 max_h: None,
+                stroke_weight: None,
             },
         )?;
 

@@ -1225,6 +1225,7 @@ pub unsafe extern "C" fn processing_text(
                 z: 0.0,
                 max_w: None,
                 max_h: None,
+                stroke_weight: None,
             },
         )
     });
@@ -1257,6 +1258,7 @@ pub unsafe extern "C" fn processing_text_3d(
                 z,
                 max_w: None,
                 max_h: None,
+                stroke_weight: None,
             },
         )
     });
@@ -1278,6 +1280,7 @@ pub extern "C" fn processing_text_int(graphics_id: u64, value: i32, x: f32, y: f
                 z: 0.0,
                 max_w: None,
                 max_h: None,
+                stroke_weight: None,
             },
         )
     });
@@ -1299,6 +1302,7 @@ pub extern "C" fn processing_text_float(graphics_id: u64, value: f32, x: f32, y:
                 z: 0.0,
                 max_w: None,
                 max_h: None,
+                stroke_weight: None,
             },
         )
     });
@@ -1332,6 +1336,7 @@ pub unsafe extern "C" fn processing_text_box(
                 z: 0.0,
                 max_w: Some(w),
                 max_h: Some(h),
+                stroke_weight: None,
             },
         )
     });

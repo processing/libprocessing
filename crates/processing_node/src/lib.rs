@@ -976,6 +976,7 @@ fn text_command(content: String, x: f64, y: f64, z: f64, max: Option<(f64, f64)>
         z: z as f32,
         max_w: max.map(|(w, _)| w as f32),
         max_h: max.map(|(_, h)| h as f32),
+        stroke_weight: None,
     }
 }
 

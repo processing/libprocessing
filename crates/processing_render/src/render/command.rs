@@ -760,6 +760,8 @@ pub enum DrawCommand {
         z: f32,
         max_w: Option<f32>,
         max_h: Option<f32>,
+        /// outlines the glyphs in the stroke color; text is not stroked otherwise
+        stroke_weight: Option<f32>,
     },
 }
 
