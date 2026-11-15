@@ -1255,6 +1255,15 @@ pub mod processing_py {
             update_loop_state(|s| s.exit_requested = false);
             let exit_requested = || LOOP_STATE.with(|s| s.get().exit_requested);
 
+            // the engine starts before setup() so it can size the sketch to the display
+            if get_graphics(module)?.is_none() {
+                let asset_path = get_asset_root()?;
+                graphics::start_early(&asset_path, Some("warn"))?;
+                let sys = PyModule::import(py, "sys")?;
+                let frame = sys.getattr("_getframe")?.call1((0,))?;
+                surface::sync_display_globals(&frame.getattr("f_globals")?)?;
+            }
+
             if let Some(ref setup) = setup_fn {
                 setup.call0()?;
             }

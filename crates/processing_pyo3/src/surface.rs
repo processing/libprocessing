@@ -194,6 +194,11 @@ pub fn sync_globals(
     set_tracked(globals, "window_x", wx)?;
     set_tracked(globals, "window_y", wy)?;
 
+    sync_display_globals(globals)
+}
+
+/// `display_width`/`display_height`, valid as soon as the engine has started.
+pub fn sync_display_globals(globals: &Bound<'_, PyAny>) -> PyResult<()> {
     let (dw, dh) = match monitor::primary()? {
         Some(m) => (m.width()?, m.height()?),
         None => (0, 0),

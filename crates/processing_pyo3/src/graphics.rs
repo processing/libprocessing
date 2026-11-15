@@ -972,6 +972,35 @@ impl Graphics {
     }
 }
 
+thread_local! {
+    /// GLFW and the engine started before the first window, so displays can be read in `setup()`.
+    static EARLY_CONTEXT: std::cell::RefCell<Option<GlfwContext>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Start GLFW and the engine with no window, and mirror the monitors.
+fn start_context(asset_path: &str, log_level: Option<&str>) -> PyResult<GlfwContext> {
+    let mut glfw_ctx = GlfwContext::init().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+
+    let mut config = Config::new();
+    config.set(ConfigKey::AssetRootPath, asset_path.to_string());
+    if let Some(level) = log_level {
+        config.set(ConfigKey::LogLevel, level.to_string());
+    }
+    init(config).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+    glfw_ctx.sync_monitors();
+    Ok(glfw_ctx)
+}
+
+/// Start the context ahead of `size()`; the first windowed `Graphics` adopts it.
+pub(crate) fn start_early(asset_path: &str, log_level: Option<&str>) -> PyResult<()> {
+    if EARLY_CONTEXT.with(|early| early.borrow().is_some()) {
+        return Ok(());
+    }
+    let ctx = start_context(asset_path, log_level)?;
+    EARLY_CONTEXT.with(|early| *early.borrow_mut() = Some(ctx));
+    Ok(())
+}
+
 #[pymethods]
 impl Graphics {
     /// Opaque id for this object.
@@ -987,15 +1016,12 @@ impl Graphics {
         log_level: Option<&str>,
         transparent: bool,
     ) -> PyResult<Self> {
-        let mut glfw_ctx = GlfwContext::new(width, height, transparent)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-
-        let mut config = Config::new();
-        config.set(ConfigKey::AssetRootPath, asset_path.to_string());
-        if let Some(level) = log_level {
-            config.set(ConfigKey::LogLevel, level.to_string());
-        }
-        init(config).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        let started = EARLY_CONTEXT.with(|early| early.borrow_mut().take());
+        let mut glfw_ctx = match started {
+            Some(ctx) => ctx,
+            None => start_context(asset_path, log_level)?,
+        };
+        glfw_ctx.open_window(width, height, transparent);
 
         let surface = glfw_ctx
             .create_surface(width, height, transparent)
