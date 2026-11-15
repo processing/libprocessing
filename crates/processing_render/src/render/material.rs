@@ -100,7 +100,44 @@ impl MaterialKey {
                 uv_transform: *uv_transform,
                 blend_state: *blend_state,
             },
-            _ => PbrFields::default(),
+            // going lit keeps the texture
+            MaterialKey::Color {
+                transparent,
+                background_image,
+                uv_transform,
+                blend_state,
+            } => PbrFields {
+                base_color_texture: background_image.clone(),
+                uv_transform: *uv_transform,
+                blend_state: *blend_state,
+                transparent: background_image.is_some() && *transparent,
+                ..default()
+            },
+            MaterialKey::Custom { .. } => PbrFields::default(),
+        }
+    }
+
+    /// The unlit key, keeping the texture.
+    pub fn as_unlit(&self) -> MaterialKey {
+        match self {
+            MaterialKey::Color { .. } => self.clone(),
+            MaterialKey::Pbr {
+                base_color_texture,
+                uv_transform,
+                transparent,
+                ..
+            } => MaterialKey::Color {
+                transparent: base_color_texture.is_some() && *transparent,
+                background_image: base_color_texture.clone(),
+                uv_transform: *uv_transform,
+                blend_state: None,
+            },
+            MaterialKey::Custom { .. } => MaterialKey::Color {
+                transparent: false,
+                background_image: None,
+                uv_transform: Affine2::IDENTITY,
+                blend_state: None,
+            },
         }
     }
 
@@ -136,7 +173,7 @@ impl MaterialKey {
         }
     }
 
-    fn to_standard_material(&self) -> StandardMaterial {
+    pub(super) fn to_standard_material(&self) -> StandardMaterial {
         match self {
             MaterialKey::Color {
                 transparent,

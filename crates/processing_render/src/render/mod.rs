@@ -337,32 +337,54 @@ pub fn flush_draw_commands(
                 }
                 DrawCommand::Texture(entity) => {
                     if let Ok(img) = p_images.get(entity) {
-                        let mut pbr = state.style.material_key.as_pbr();
-                        pbr.base_color_texture = Some(img.handle.clone());
-                        pbr.transparent = img.translucent;
-                        state.style.material_key = pbr.into();
+                        // a texture leaves the material lit or unlit as it was
+                        match &mut state.style.material_key {
+                            MaterialKey::Color {
+                                transparent,
+                                background_image,
+                                ..
+                            } => {
+                                *background_image = Some(img.handle.clone());
+                                *transparent = img.translucent;
+                            }
+                            key => {
+                                let mut pbr = key.as_pbr();
+                                pbr.base_color_texture = Some(img.handle.clone());
+                                pbr.transparent = img.translucent;
+                                *key = pbr.into();
+                            }
+                        }
                     }
                 }
-                DrawCommand::NoTexture => {
-                    if let MaterialKey::Pbr { .. } = &state.style.material_key {
-                        let mut pbr = state.style.material_key.as_pbr();
-                        pbr.base_color_texture = None;
-                        pbr.transparent = false;
-                        state.style.material_key = pbr.into();
+                DrawCommand::NoTexture => match &mut state.style.material_key {
+                    MaterialKey::Color {
+                        transparent,
+                        background_image,
+                        ..
+                    } => {
+                        *background_image = None;
+                        *transparent = false;
                     }
-                }
-                DrawCommand::TextureTransform(transform) => {
-                    let mut pbr = state.style.material_key.as_pbr();
-                    pbr.uv_transform = transform;
-                    state.style.material_key = pbr.into();
-                }
+                    MaterialKey::Pbr {
+                        base_color_texture,
+                        transparent,
+                        ..
+                    } => {
+                        *base_color_texture = None;
+                        *transparent = false;
+                    }
+                    MaterialKey::Custom { .. } => {}
+                },
+                DrawCommand::TextureTransform(transform) => match &mut state.style.material_key {
+                    MaterialKey::Color { uv_transform, .. } => *uv_transform = transform,
+                    key => {
+                        let mut pbr = key.as_pbr();
+                        pbr.uv_transform = transform;
+                        *key = pbr.into();
+                    }
+                },
                 DrawCommand::Unlit => {
-                    state.style.material_key = MaterialKey::Color {
-                        transparent: state.fill_is_transparent(),
-                        background_image: None,
-                        uv_transform: Affine2::IDENTITY,
-                        blend_state: None,
-                    };
+                    state.style.material_key = state.style.material_key.as_unlit();
                 }
                 DrawCommand::RectMode(mode) => {
                     state.style.rect_mode = mode;
@@ -1147,7 +1169,11 @@ pub fn flush_draw_commands(
                     };
 
                     let material_handle = if let Fill::Buffer(buf_entity) = state.style.fill {
-                        match particles_fill_material(&mut res, buf_entity) {
+                        match particles_fill_material(
+                            &mut res,
+                            buf_entity,
+                            &state.style.material_key,
+                        ) {
                             Some(h) => h,
                             None => {
                                 warn!("fill(buffer) entity {:?} not found", buf_entity);
@@ -1586,18 +1612,24 @@ fn material_key_with_color(
 fn particles_fill_material(
     res: &mut RenderResources,
     buf_entity: Entity,
+    key: &MaterialKey,
 ) -> Option<bevy::asset::UntypedHandle> {
     use crate::particles::material::{ParticlesExtension, ParticlesMaterial};
 
     let buf = res.particle_buffers.get(buf_entity).ok()?;
-    let handle = res.particles_materials.add(ParticlesMaterial {
-        base: StandardMaterial {
+    // lit or unlit like any other draw; the buffer supplies the per-particle color
+    let base = match key {
+        MaterialKey::Custom { .. } => StandardMaterial {
             base_color: Color::WHITE,
             perceptual_roughness: 0.4,
             metallic: 0.0,
             cull_mode: None,
             ..Default::default()
         },
+        key => key.to_standard_material(),
+    };
+    let handle = res.particles_materials.add(ParticlesMaterial {
+        base,
         extension: ParticlesExtension {
             colors: Some(buf.handle.clone()),
             emissive_colors: None,
@@ -1755,11 +1787,20 @@ fn draw_mesh3d(
             // TODO: in 2d, we use vertex colors. `to_material` becomes complicated if we also encode
             // a base color in the material, so for simplicity we just create a new material here
             // that is unlit and uses the fill color as the base color
-            MaterialKey::Color { .. } => {
-                let blended =
-                    state.style.blend_state.is_some() || color.alpha() < 1.0 || draw.translucent;
+            MaterialKey::Color {
+                transparent,
+                background_image,
+                uv_transform,
+                ..
+            } => {
+                let blended = state.style.blend_state.is_some()
+                    || color.alpha() < 1.0
+                    || draw.translucent
+                    || *transparent;
                 let base = StandardMaterial {
                     base_color: color,
+                    base_color_texture: background_image.clone(),
+                    uv_transform: *uv_transform,
                     unlit: true,
                     cull_mode: None,
                     alpha_mode: if blended {
