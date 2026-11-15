@@ -40,6 +40,7 @@ fn sketch() -> error::Result<()> {
             graphics,
             DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.1, 0.1, 0.15)),
         )?;
+        graphics_record_command(graphics, DrawCommand::NoStroke)?;
 
         graphics_record_command(graphics, DrawCommand::PushMatrix)?;
         graphics_record_command(

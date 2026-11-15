@@ -54,6 +54,7 @@ fn sketch() -> error::Result<()> {
             graphics,
             DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.02, 0.02, 0.03)),
         )?;
+        graphics_record_command(graphics, DrawCommand::NoStroke)?;
 
         graphics_record_command(
             graphics,

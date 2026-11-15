@@ -30,6 +30,7 @@ def setup():
 
 def draw():
     background(220)
+    no_stroke()
     camera_position(0.0, 0.0, 200.0)
     camera_look_at(0.0, 0.0, 0.0)
     draw_geometry(geometry)

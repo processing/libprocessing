@@ -51,6 +51,8 @@ def draw():
     for i in range(len(lista)):
         lista[i].dibujar()
 
+    # Lines take the stroke color, multiplied by the vertex colors
+    stroke(1.0)
     stroke_weight(1)
     draw_geometry(pelos)
 

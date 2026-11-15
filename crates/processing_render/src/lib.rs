@@ -1593,7 +1593,7 @@ pub fn geometry_normal(entity: Entity, normal: Vec3) -> error::Result<()> {
     app_mut(|app| geometry::normal(app.world_mut(), entity, normal))
 }
 
-pub fn geometry_color(entity: Entity, color: Vec4) -> error::Result<()> {
+pub fn geometry_color(entity: Entity, color: Color) -> error::Result<()> {
     app_mut(|app| geometry::color(app.world_mut(), entity, color))
 }
 

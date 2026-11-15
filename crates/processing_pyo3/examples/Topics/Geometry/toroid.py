@@ -55,7 +55,7 @@ def draw():
     # wireframe or solid
     if is_wire_frame:
         stroke(1.0, 1.0, 0.59)
-        no_fill()  # GAP: stroke()/no_fill() wireframe outline on draw_geometry
+        no_fill()
     else:
         no_stroke()
         fill(0.59, 0.76, 0.49)

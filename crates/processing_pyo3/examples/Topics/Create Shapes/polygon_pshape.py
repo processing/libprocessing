@@ -15,8 +15,7 @@ def setup():
     star = create_geometry(topology=TRIANGLES)
     # You can set fill and stroke
     star.color(0.4, 0.4, 0.4, 1.0)
-    stroke(1.0)  # GAP: Geometry has no stroke; the outline is not drawn
-    stroke_weight(2)  # GAP: Geometry has no stroke_weight
+    no_stroke()  # GAP: stroke() on a Geometry draws every triangle edge; the polygon outline needs a Shape
     # Here, we are hardcoding a series of vertices;
     # the first one is the center, so the star can be built as a triangle fan
     star.vertex(0, 0, 0)
