@@ -13,13 +13,16 @@ use bevy::{
     math::{Mat4, Vec3A, Vec4},
     prelude::*,
     render::{
-        RenderApp,
+        Render, RenderApp, RenderSystems,
+        camera::ExtractedCamera,
         render_resource::{
             CommandEncoderDescriptor, Extent3d, MapMode, Origin3d, PollType, TexelCopyBufferInfo,
-            TexelCopyBufferLayout, TexelCopyTextureInfo, Texture, TextureFormat, TextureUsages,
+            TexelCopyBufferLayout, TexelCopyTextureInfo, Texture, TextureDescriptor,
+            TextureDimension, TextureFormat, TextureUsages,
         },
         renderer::{RenderDevice, RenderQueue},
         sync_world::MainEntity,
+        texture::{TextureCache, update_texture_cache_system},
         view::ViewTarget,
     },
     window::WindowRef,
@@ -46,6 +49,63 @@ impl Plugin for GraphicsPlugin {
         app.init_resource::<RenderLayersManager>()
             .add_systems(First, crate::image::clear_background_blits)
             .add_systems(PostUpdate, sync_to_surface);
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
+            render_app.add_systems(
+                Render,
+                retain_idle_view_targets
+                    .in_set(RenderSystems::Cleanup)
+                    .before(update_texture_cache_system),
+            );
+        }
+    }
+}
+
+/// Keeps the canvas of a camera that did not render this update in the texture cache, which
+/// otherwise drops it after three updates; a sketch may run many updates between flushes.
+fn retain_idle_view_targets(
+    mut texture_cache: ResMut<TextureCache>,
+    render_device: Res<RenderDevice>,
+    idle: Query<&ViewTarget, Without<ExtractedCamera>>,
+) {
+    for target in &idle {
+        // these mirror the descriptors of bevy's `prepare_view_targets`
+        let main = target.main_texture();
+        let format = main.format();
+        let view_formats: &'static [TextureFormat] = match format {
+            TextureFormat::Bgra8Unorm => &[TextureFormat::Bgra8UnormSrgb],
+            TextureFormat::Rgba8Unorm => &[TextureFormat::Rgba8UnormSrgb],
+            _ => &[],
+        };
+        for label in ["main_texture_a", "main_texture_b"] {
+            texture_cache.get(
+                &render_device,
+                TextureDescriptor {
+                    label: Some(label),
+                    size: main.size(),
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: TextureDimension::D2,
+                    format,
+                    usage: main.usage(),
+                    view_formats,
+                },
+            );
+        }
+        if let Some(sampled) = target.sampled_main_texture() {
+            texture_cache.get(
+                &render_device,
+                TextureDescriptor {
+                    label: Some("main_texture_sampled"),
+                    size: sampled.size(),
+                    mip_level_count: 1,
+                    sample_count: sampled.sample_count(),
+                    dimension: TextureDimension::D2,
+                    format,
+                    usage: TextureUsages::RENDER_ATTACHMENT,
+                    view_formats,
+                },
+            );
+        }
     }
 }
 
