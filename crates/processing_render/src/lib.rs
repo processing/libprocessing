@@ -4,6 +4,7 @@ pub mod camera;
 pub mod ci;
 pub mod color;
 pub mod compute;
+pub mod destroy;
 pub mod geometry;
 pub mod gltf;
 pub mod graphics;
@@ -692,6 +693,17 @@ pub fn graphics_update(graphics_entity: Entity, pixels: &[LinearRgba]) -> error:
     })
 }
 
+/// A new image of the logical block at (`x`, `y`) of the surface.
+pub fn graphics_get_region(
+    graphics_entity: Entity,
+    x: i64,
+    y: i64,
+    width: u32,
+    height: u32,
+) -> error::Result<Entity> {
+    app_mut(|app| graphics::get_region(app, graphics_entity, x, y, width, height))
+}
+
 /// Update a region of the graphics surface with new pixel data.
 /// The pixel at logical (`x`, `y`); `None` outside the surface, where Processing's `get` is
 /// transparent black
@@ -1349,9 +1361,11 @@ pub fn image_set_sampler(entity: Entity, filter: u8, wrap_x: u8, wrap_y: u8) -> 
 /// Destroy an existing image and free its resources.
 pub fn image_destroy(entity: Entity) -> error::Result<()> {
     app_mut(|app| {
-        app.world_mut()
-            .run_system_cached_with(image::destroy, entity)
-            .unwrap()
+        destroy::request(app.world_mut(), move |world| {
+            world
+                .run_system_cached_with(image::destroy, entity)
+                .unwrap()
+        })
     })
 }
 
@@ -1457,9 +1471,11 @@ pub fn graphics_immediate_light(
 
 pub fn light_destroy(entity: Entity) -> error::Result<()> {
     app_mut(|app| {
-        app.world_mut()
-            .run_system_cached_with(light::destroy, entity)
-            .unwrap()
+        destroy::request(app.world_mut(), move |world| {
+            world
+                .run_system_cached_with(light::destroy, entity)
+                .unwrap()
+        })
     })
 }
 
@@ -1766,9 +1782,11 @@ pub fn geometry_get_indices(entity: Entity, start: usize, end: usize) -> error::
 
 pub fn geometry_destroy(entity: Entity) -> error::Result<()> {
     app_mut(|app| {
-        app.world_mut()
-            .run_system_cached_with(geometry::destroy, entity)
-            .unwrap()
+        destroy::request(app.world_mut(), move |world| {
+            world
+                .run_system_cached_with(geometry::destroy, entity)
+                .unwrap()
+        })
     })
 }
 
@@ -2126,9 +2144,11 @@ pub fn material_set_custom_blend(
 
 pub fn material_destroy(entity: Entity) -> error::Result<()> {
     app_mut(|app| {
-        app.world_mut()
-            .run_system_cached_with(material::destroy, entity)
-            .unwrap()
+        destroy::request(app.world_mut(), move |world| {
+            world
+                .run_system_cached_with(material::destroy, entity)
+                .unwrap()
+        })
     })
 }
 
@@ -2590,9 +2610,11 @@ fn buffer_read_range(entity: Entity, offset: u64, len: u64) -> error::Result<Vec
 
 pub fn buffer_destroy(entity: Entity) -> error::Result<()> {
     app_mut(|app| {
-        app.world_mut()
-            .run_system_cached_with(compute::destroy_buffer, entity)
-            .unwrap()
+        destroy::request(app.world_mut(), move |world| {
+            world
+                .run_system_cached_with(compute::destroy_buffer, entity)
+                .unwrap()
+        })
     })
 }
 

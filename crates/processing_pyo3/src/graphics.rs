@@ -1196,13 +1196,34 @@ impl Graphics {
         write_png_file(filename, raw.width, raw.height, &rgba)
     }
 
-    /// Read a single pixel as a `Color` (Processing `get`).
-    pub fn get(&self, x: i64, y: i64) -> PyResult<crate::color::PyColor> {
-        let p = graphics_get_pixel(self.entity, x, y)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        Ok(crate::color::PyColor(bevy::prelude::Color::Srgba(
-            p.map_or(Srgba::NONE, pixel_to_srgba),
-        )))
+    /// `get(x, y)` reads one pixel as a `Color`; `get(x, y, w, h)` copies a block into a new `Image`.
+    #[pyo3(signature = (x, y, w=None, h=None))]
+    pub fn get(
+        &self,
+        py: Python<'_>,
+        x: i64,
+        y: i64,
+        w: Option<u32>,
+        h: Option<u32>,
+    ) -> PyResult<Py<PyAny>> {
+        match (w, h) {
+            (Some(w), Some(h)) => {
+                let entity = graphics_get_region(self.entity, x, y, w, h)
+                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+                Ok(Py::new(py, Image::wrap(entity))?.into_any())
+            }
+            (None, None) => {
+                let p = graphics_get_pixel(self.entity, x, y)
+                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+                let color = crate::color::PyColor(bevy::prelude::Color::Srgba(
+                    p.map_or(Srgba::NONE, pixel_to_srgba),
+                ));
+                Ok(Py::new(py, color)?.into_any())
+            }
+            _ => Err(pyo3::exceptions::PyTypeError::new_err(
+                "get() takes x, y or x, y, w, h",
+            )),
+        }
     }
 
     /// Write a single pixel (Processing `set`); outside the canvas it is dropped.

@@ -119,11 +119,10 @@ pub fn destroy(
     mut commands: Commands,
     lights: Query<&LightOf, With<ProcessingLight>>,
 ) -> Result<(), ProcessingError> {
-    let owner = lights
+    lights
         .get(entity)
         .map_err(|_| ProcessingError::LightNotFound)?;
-    // queued `Light(entity)` commands may still reference it, so despawn at the next begin_draw
-    commands.entity(entity).insert(DrawTransient(owner.0));
+    commands.entity(entity).despawn();
     Ok(())
 }
 
@@ -254,17 +253,13 @@ mod tests {
     }
 
     #[test]
-    fn destroy_despawns_a_light_at_the_next_begin_draw() {
+    fn destroy_despawns_a_light() {
         let mut world = World::new();
         let graphics = world.spawn(RenderState::new()).id();
         let light = create_light(&mut world, graphics, DIRECTIONAL);
         let result = world.run_system_once_with(destroy, light).unwrap();
         assert!(result.is_ok());
-        assert!(world.get_entity(light).is_ok());
-        world
-            .run_system_once_with(begin_draw, graphics)
-            .unwrap()
-            .unwrap();
+        world.flush();
         assert!(world.get_entity(light).is_err());
     }
 

@@ -554,9 +554,9 @@ pub fn particles_create_from_geometry(
 
 pub fn particles_destroy(entity: Entity) -> error::Result<()> {
     app_mut(|app| {
-        app.world_mut()
-            .run_system_cached_with(destroy, entity)
-            .unwrap()
+        crate::destroy::request(app.world_mut(), move |world| {
+            world.run_system_cached_with(destroy, entity).unwrap()
+        })
     })
 }
 
