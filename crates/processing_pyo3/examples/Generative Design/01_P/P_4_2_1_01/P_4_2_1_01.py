@@ -1,0 +1,158 @@
+# P_4_2_1_01
+#
+# Generative Gestaltung, ISBN: 978-3-87439-759-9
+# First Edition, Hermann Schmidt, Mainz, 2009
+# Hartmut Bohnacker, Benedikt Gross, Julia Laub, Claudius Lazzeroni
+# Copyright 2009 Hartmut Bohnacker, Benedikt Gross, Julia Laub, Claudius Lazzeroni
+#
+# http://www.generative-gestaltung.de
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Ported from the Processing original to processing_py.
+
+# collage generator. example footage can be found in "data".
+# if you use your own footage, make sure to rename the files or adjust the prefixes:
+# see the parameters of generate_collage_items()
+#
+# KEYS
+# 1-3                  : create a new collage (layer specific)
+# s                    : save png
+import os
+from datetime import datetime
+
+from processing_py import *
+
+
+# ------ collage class/record ------
+class CollageItem:
+    def __init__(self):
+        self.x = 0
+        self.y = 0
+        self.rotation = 0
+        self.scaling = 1
+        self.index_to_image = -1
+
+
+images = []
+image_names = []
+image_count = 0
+
+layer1_items = []
+layer2_items = []
+layer3_items = []
+
+
+def setup():
+    global images, image_names, image_count
+    global layer1_items, layer2_items, layer3_items
+    size(1024, 768)
+    image_mode(CENTER)
+    background(1.0)
+
+    # ------ load images ------
+    # replace this location with a folder on your machine
+    dir = "data"
+
+    if os.path.isdir(dir):
+        contents = sorted(os.listdir(dir))
+        images = [None] * len(contents)
+        image_names = [None] * len(contents)
+        for i in range(len(contents)):
+            # skip hidden files and folders starting with a dot, load .png files only
+            if contents[i][0] == ".":
+                continue
+            elif contents[i].lower().endswith(".png"):
+                child_file = os.path.join(dir, contents[i])
+                images[image_count] = load_image(child_file)
+                image_names[image_count] = contents[i]
+                print(str(image_count) + " " + contents[i] + "  " + child_file)
+                image_count += 1
+
+    # ------ init ------
+    # generate_collage_items(filename prefix, count, x,y, range x,range y, scale start,scale end, rotation start,rotation end)
+    # filname prefix               : Alle Bilder, deren Name so beginnt, werden für diesen Layer verwendet
+    # count                        : Anzahl der Bilder
+    # x,y                          : Position, um die sich die Bilder scharen
+    # range x, range y             : So weit werden die Positionen in x- und y-Richtung gestreut
+    # scale start, scale end       : Minimaler und maximaler Wert für den zufälligen Skalierungsfaktor
+    # rotation start, rotation end : Minimaler und maximaler Wert für den zufälligen Rotationswinkel
+
+    layer1_items = generate_collage_items("layer1", 100, width / 2, height / 2, width, height, 0.1, 0.5, 0, 0)
+    layer2_items = generate_collage_items("layer2", 150, width / 2, height / 2, width, height, 0.1, 0.3, -PI / 2, PI / 2)
+    layer3_items = generate_collage_items("layer3", 110, width / 2, height / 2, width, height, 0.1, 0.85, 0, 0)
+
+    # draw collage
+    draw_collage_items(layer1_items)
+    draw_collage_items(layer2_items)
+    draw_collage_items(layer3_items)
+
+
+def draw():
+    # keep the programm running
+    pass
+
+
+# ------ interactions and generation of the collage ------
+def key_released():
+    global layer1_items, layer2_items, layer3_items
+    if key == "s" or key == "S":
+        save_frame(timestamp() + "_##.png")
+
+    if key == "1":
+        layer1_items = generate_collage_items("layer1", int(random(50, 200)), width / 2, height / 2, width, height, 0.1, 0.5, 0, 0)
+    if key == "2":
+        layer2_items = generate_collage_items("layer2", int(random(25, 300)), 200, height * 0.75, width, 150, 0.1, random(0.3, 0.8), -PI / 2, PI / 2)
+    if key == "3":
+        layer3_items = generate_collage_items("layer3", int(random(50, 300)), width / 2, height * 0.66, width, height * 0.66, 0.1, random(0.4, 0.8), -0.05, 0.05)
+
+    # draw collage
+    background(1.0)
+    draw_collage_items(layer1_items)
+    draw_collage_items(layer2_items)
+    draw_collage_items(layer3_items)
+
+
+# ------ collage items helper functions ------
+def generate_collage_items(the_prefix, the_count, the_pos_x, the_pos_y, the_range_x, the_range_y, the_scale_start, the_scale_end, the_rotation_start, the_rotation_end):
+    # collect all images with the specified prefix
+    indexes = []
+    for i in range(len(image_names)):
+        if image_names[i] != None:
+            if image_names[i].startswith(the_prefix):
+                indexes.append(i)
+
+    items = [None] * the_count
+    for i in range(len(items)):
+        items[i] = CollageItem()
+        items[i].index_to_image = indexes[i % len(indexes)]
+        items[i].x = the_pos_x + random(-the_range_x / 2, the_range_x / 2)
+        items[i].y = the_pos_y + random(-the_range_y / 2, the_range_y / 2)
+        items[i].scaling = random(the_scale_start, the_scale_end)
+        items[i].rotation = random(the_rotation_start, the_rotation_end)
+    return items
+
+
+def draw_collage_items(the_items):
+    for i in range(len(the_items)):
+        push_matrix()
+        translate(the_items[i].x, the_items[i].y)
+        rotate(the_items[i].rotation)
+        scale(the_items[i].scaling)
+        image(images[the_items[i].index_to_image], 0, 0)
+        pop_matrix()
+
+
+# timestamp
+def timestamp():
+    return datetime.now().strftime("%y%m%d_%H%M%S")
+
+
+run()
