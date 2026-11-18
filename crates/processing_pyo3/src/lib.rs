@@ -1687,13 +1687,7 @@ pub mod processing_py {
     #[pyfunction]
     #[pyo3(pass_module, signature = (*args))]
     fn background(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let graphics = graphics!(module);
-        let first = args.get_item(0)?;
-        if first.is_instance_of::<Image>() {
-            graphics.background_image(&*first.extract::<PyRef<Image>>()?)
-        } else {
-            graphics.background(args)
-        }
+        graphics!(module).background(args)
     }
 
     #[pyfunction]
