@@ -18,13 +18,18 @@
     <canvas></canvas>
     <script type="module">
         const select = document.getElementById('example');
-        select.value = new URLSearchParams(location.search).get('example') ?? select.options[0].value;
+        // An unknown ?example= leaves select.value empty, so fall back to the
+        // first option. Always read the name back from the <select>, never the
+        // raw query param: that keeps arbitrary URLs out of the script src.
+        select.value = new URLSearchParams(location.search).get('example') ?? '';
+        if (!select.value) select.selectedIndex = 0;
         select.onchange = () => (location.search = `?example=${select.value}`);
 
         // the sketch is a plain script that defines setup() and draw()
         const sketch = document.createElement('script');
         sketch.src = `${select.value}.js`;
         sketch.onload = () => import('./processing.js');
+        sketch.onerror = () => document.body.append(`Could not load ${sketch.src}`);
         document.head.append(sketch);
     </script>
 </body>
