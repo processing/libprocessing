@@ -1,6 +1,7 @@
 pub const CORNER: &str = "corner";
 pub const CORNERS: &str = "corners";
 pub const RADIUS: &str = "radius";
+pub const DIAMETER: &str = CENTER; // ellipse_mode alias for CENTER
 pub const CENTER: &str = "center"; // also the middle mouse button
 
 pub const ROUND: &str = "round"; // caps and joins
@@ -46,8 +47,10 @@ pub const MIRROR: &str = "mirror";
 
 pub const SRGB: &str = "srgb";
 pub const LINEAR: &str = "linear"; // also the Sampler filter
+pub const RGB: &str = SRGB; // color_mode alias
 pub const HSL: &str = "hsl";
 pub const HSV: &str = "hsv";
+pub const HSB: &str = HSV; // color_mode alias
 pub const HWB: &str = "hwb";
 pub const OKLAB: &str = "oklab";
 pub const OKLCH: &str = "oklch";
@@ -134,9 +137,16 @@ pub const PI: f32 = std::f32::consts::PI;
 pub const TWO_PI: f32 = std::f32::consts::TAU;
 pub const HALF_PI: f32 = std::f32::consts::FRAC_PI_2;
 pub const QUARTER_PI: f32 = std::f32::consts::FRAC_PI_4;
+pub const THIRD_PI: f32 = std::f32::consts::FRAC_PI_3;
 pub const TAU: f32 = std::f32::consts::TAU;
 pub const DEG_TO_RAD: f32 = std::f32::consts::PI / 180.0;
 pub const RAD_TO_DEG: f32 = 180.0 / std::f32::consts::PI;
+
+pub const EPSILON: f32 = 0.0001;
+pub const MAX_FLOAT: f32 = f32::MAX;
+pub const MIN_FLOAT: f32 = -f32::MAX;
+pub const MAX_INT: i32 = i32::MAX;
+pub const MIN_INT: i32 = i32::MIN;
 
 // Key codes stay numeric (compared against `key_code`); values must match `key_code_to_u32`.
 
@@ -192,7 +202,9 @@ pub const BRACKET_RIGHT: u32 = 93;
 pub const BACKQUOTE: u32 = 96;
 
 pub const ESCAPE: u32 = 256;
+pub const ESC: u32 = ESCAPE;
 pub const ENTER: u32 = 257;
+pub const RETURN: u32 = ENTER;
 pub const TAB: u32 = 258;
 pub const BACKSPACE: u32 = 259;
 pub const INSERT: u32 = 260;
