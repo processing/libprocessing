@@ -166,10 +166,6 @@ name = "midi"
 path = "examples/midi.rs"
 
 [[example]]
-name = "midi_input"
-path = "examples/midi_input.rs"
-
-[[example]]
 name = "gltf_load"
 path = "examples/gltf_load.rs"
 
