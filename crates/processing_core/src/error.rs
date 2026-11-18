@@ -6,6 +6,8 @@ pub type Result<T> = std::result::Result<T, ProcessingError>;
 pub enum ProcessingError {
     #[error("App was accessed from multiple threads")]
     AppAccess,
+    #[error("Not initialized yet; call size() first")]
+    AppNotInitialized,
     #[error("Error initializing tracing: {0}")]
     Tracing(#[from] tracing::subscriber::SetGlobalDefaultError),
     #[error("Surface not found")]
