@@ -129,6 +129,7 @@ function tick(now) {
         step();
     } catch (e) {
         cancelAnimationFrame(handle);
+        throw e;
     }
 }
 
