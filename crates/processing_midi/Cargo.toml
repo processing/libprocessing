@@ -9,5 +9,8 @@ bevy = { workspace = true }
 processing_core = { workspace = true }
 nannou_midi = { git = "https://github.com/nannou-org/nannou", branch = "bevy-refactor" }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+midir = { version = "0.11", features = ["coremidi_send_timestamped"] }
+
 [lints]
 workspace = true
