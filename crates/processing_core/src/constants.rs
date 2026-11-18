@@ -138,7 +138,7 @@ pub const TAU: f32 = std::f32::consts::TAU;
 pub const DEG_TO_RAD: f32 = std::f32::consts::PI / 180.0;
 pub const RAD_TO_DEG: f32 = 180.0 / std::f32::consts::PI;
 
-// Key codes stay numeric (compared against `key_code`); values must match `key_code_to_u32`.
+// Key codes are GLFW values, mapped to Bevy `KeyCode`s by `processing_input::keys`.
 
 pub const KEY_A: u32 = 65;
 pub const KEY_B: u32 = 66;
@@ -223,3 +223,46 @@ pub const F9: u32 = 298;
 pub const F10: u32 = 299;
 pub const F11: u32 = 300;
 pub const F12: u32 = 301;
+pub const F13: u32 = 302;
+pub const F14: u32 = 303;
+pub const F15: u32 = 304;
+pub const F16: u32 = 305;
+pub const F17: u32 = 306;
+pub const F18: u32 = 307;
+pub const F19: u32 = 308;
+pub const F20: u32 = 309;
+pub const F21: u32 = 310;
+pub const F22: u32 = 311;
+pub const F23: u32 = 312;
+pub const F24: u32 = 313;
+pub const F25: u32 = 314;
+
+pub const CAPS_LOCK: u32 = 280;
+pub const SCROLL_LOCK: u32 = 281;
+pub const NUM_LOCK: u32 = 282;
+pub const PRINT_SCREEN: u32 = 283;
+pub const PAUSE: u32 = 284;
+
+pub const NUMPAD_0: u32 = 320;
+pub const NUMPAD_1: u32 = 321;
+pub const NUMPAD_2: u32 = 322;
+pub const NUMPAD_3: u32 = 323;
+pub const NUMPAD_4: u32 = 324;
+pub const NUMPAD_5: u32 = 325;
+pub const NUMPAD_6: u32 = 326;
+pub const NUMPAD_7: u32 = 327;
+pub const NUMPAD_8: u32 = 328;
+pub const NUMPAD_9: u32 = 329;
+pub const NUMPAD_DECIMAL: u32 = 330;
+pub const NUMPAD_DIVIDE: u32 = 331;
+pub const NUMPAD_MULTIPLY: u32 = 332;
+pub const NUMPAD_SUBTRACT: u32 = 333;
+pub const NUMPAD_ADD: u32 = 334;
+pub const NUMPAD_ENTER: u32 = 335;
+pub const NUMPAD_EQUAL: u32 = 336;
+
+pub const SHIFT_RIGHT: u32 = 344;
+pub const CONTROL_RIGHT: u32 = 345;
+pub const ALT_RIGHT: u32 = 346;
+pub const SUPER_RIGHT: u32 = 347;
+pub const CONTEXT_MENU: u32 = 348;
