@@ -79,7 +79,17 @@ Object.defineProperties(globalThis, {
     mouseY: { get: () => p.mouseY(surface), configurable: true },
 });
 
-function frame() {
+// The wasm side has no loop of its own, so we drive frames from JS. Loop state
+// mirrors the pyo3 host: noLoop()/loop()/redraw(), plus frameRate() since
+// requestAnimationFrame follows the display (60, 120, 144 Hz...).
+let looping = true;
+let redrawRequested = true; // draw once even if setup() calls noLoop()
+let frameInterval = 1000 / 60;
+let lastFrame = -Infinity;
+let handle;
+
+// one frame: flush input, then begin -> draw -> end
+function step() {
     p.inputFlush();
     p.beginDraw(graphics);
     try {
@@ -88,10 +98,30 @@ function frame() {
         p.endDraw(graphics);
     }
     frameCount++;
-    requestAnimationFrame(frame);
 }
+
+function tick(now) {
+    // schedule first so nothing below can silently end the loop
+    handle = requestAnimationFrame(tick);
+    if (!(looping || redrawRequested) || now - lastFrame < frameInterval - 1) return;
+    lastFrame = now;
+    redrawRequested = false;
+    try {
+        step();
+    } catch (e) {
+        cancelAnimationFrame(handle); // stop on error, like Processing
+        throw e;
+    }
+}
+
+Object.assign(globalThis, {
+    noLoop: () => { looping = false; },
+    loop: () => { looping = true; },
+    redraw: () => { redrawRequested = true; },
+    frameRate: (fps) => { frameInterval = 1000 / fps; },
+});
 
 await initWasm();
 await p.init();
 await globalThis.setup?.();
-frame();
+handle = requestAnimationFrame(tick);
