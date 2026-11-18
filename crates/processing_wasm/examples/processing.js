@@ -1,14 +1,12 @@
-// A thin Processing-style layer over the raw wasm bindings: global drawing
-// functions that act on a default canvas, and a setup()/draw() loop. The
-// surface and graphics ids stay internal.
+// Processing-style globals over the wasm bindings. Sketches call rect(),
+// fill() etc. directly and never see the surface or graphics ids.
 import initWasm, * as p from '../../../target/wasm/processing_wasm.js';
 
 let surface, graphics;
 let frameCount = 0;
-let maxes = [1, 1, 1, 1]; // channel maximums, mirrors colorMode()
+let maxes = [1, 1, 1, 1];
 const SRGB = 0;
 
-// color args -> [c1, c2, c3, a], following Processing's 1/2/3/4 arg forms
 function color(args) {
     const [a, b, c, d] = args;
     switch (args.length) {
@@ -20,16 +18,14 @@ function color(args) {
     }
 }
 
-// color args -> the trailing (c1, c2, c3, a, space) params of the color bindings
 const rgba = (args) => [...color(args), SRGB];
 
-// the DOM also reports back/forward (3, 4), which Processing has no names for
+// browsers also report back/forward buttons, which libprocessing doesn't know
 const isProcessingButton = (button) => button <= 2;
 
 const api = {
     size(width, height) {
-        // Processing only allows one size() call; a second would leak the old
-        // surface and double up the mouse listeners
+        // a second call would leak the surface and double up the mouse listeners
         if (surface) throw new Error('size() can only be called once');
         const canvas = document.querySelector('canvas');
         canvas.id ||= 'processing-canvas';
@@ -51,10 +47,6 @@ const api = {
     },
     loadImage: (path) => p.imageLoad(path),
 
-    // colorMode(space)            keeps the current maximums
-    // colorMode(space, max)       sets all four
-    // colorMode(space, m1, m2, m3) sets the color channels, alpha max unchanged
-    // colorMode(space, m1, m2, m3, mA)
     colorMode(space, ...max) {
         switch (max.length) {
             case 0: break;
@@ -65,7 +57,8 @@ const api = {
         }
         p.colorMode(graphics, space, ...maxes);
     },
-    // background(image) or background(...color)
+
+    // the user should ideally be exposed to an image object that wraps the bigint
     background: (...args) =>
         typeof args[0] === 'bigint'
             ? p.backgroundImage(graphics, args[0])
@@ -77,8 +70,6 @@ const api = {
     strokeWeight: (w) => p.setStrokeWeight(graphics, w),
     rectMode: (mode) => p.rectMode(graphics, mode),
 
-    // like Processing, push()/pop() save and restore style (fill, stroke, ...)
-    // as well as the transform
     push() {
         p.pushStyle(graphics);
         p.pushMatrix(graphics);
@@ -91,7 +82,6 @@ const api = {
     rotate: (angle) => p.rotate(graphics, angle),
     scale: (x, y = x) => p.scale(graphics, x, y),
 
-    // rect(x, y, w, h), rect(x, y, w, h, r) or rect(x, y, w, h, tl, tr, br, bl)
     rect(x, y, w, h, ...r) {
         const radii = r.length === 1 ? [r[0], r[0], r[0], r[0]] : r.length === 4 ? r : [0, 0, 0, 0];
         p.rect(graphics, x, y, w, h, ...radii);
@@ -106,21 +96,18 @@ const api = {
 Object.assign(globalThis, api, { CORNER: 0, CORNERS: 1, CENTER: 2, RADIUS: 3 });
 Object.defineProperties(globalThis, {
     frameCount: { get: () => frameCount, configurable: true },
-    // 0 until size() has created the surface
     mouseX: { get: () => (surface ? p.mouseX(surface) : 0), configurable: true },
     mouseY: { get: () => (surface ? p.mouseY(surface) : 0), configurable: true },
 });
 
-// The wasm side has no loop of its own, so we drive frames from JS. Loop state
-// mirrors the pyo3 host: noLoop()/loop()/redraw(), plus frameRate() since
-// requestAnimationFrame follows the display (60, 120, 144 Hz...).
+// The wasm side has no loop of its own, so we drive frames from JS.
+// requestAnimationFrame follows the display's refresh rate, so frameRate() skips ticks.
 let looping = true;
-let redrawRequested = true; // draw once even if setup() calls noLoop()
+let redrawRequested = true; // so we still draw once if setup() calls noLoop()
 let frameInterval = 1000 / 60;
 let lastFrame = -Infinity;
 let handle;
 
-// one frame: flush input, then begin -> draw -> end
 function step() {
     p.inputFlush();
     p.beginDraw(graphics);
@@ -133,22 +120,15 @@ function step() {
 }
 
 function tick(now) {
-    // schedule first so nothing below can silently end the loop
     handle = requestAnimationFrame(tick);
     if (!(looping || redrawRequested) || now - lastFrame < frameInterval - 1) return;
-    // Advance by exactly one interval rather than snapping to `now`: frames land
-    // a little late on displays that aren't a multiple of the target rate
-    // (60 fps on 144 Hz), and snapping would throw that lateness away, settling
-    // at 48 fps. Resync only if we've fallen a whole interval behind (hidden
-    // tab, slow frame) so we don't burst to catch up.
     lastFrame += frameInterval;
-    if (now - lastFrame > frameInterval) lastFrame = now;
+    if (now - lastFrame > frameInterval) lastFrame = now; // if we're too far behind
     redrawRequested = false;
     try {
         step();
     } catch (e) {
-        cancelAnimationFrame(handle); // stop on error, like Processing
-        throw e;
+        cancelAnimationFrame(handle);
     }
 }
 
@@ -162,5 +142,5 @@ Object.assign(globalThis, {
 await initWasm();
 await p.init();
 await globalThis.setup?.();
-if (!graphics) api.size(100, 100); // Processing's default when setup() skips size()
+if (!graphics) api.size(100, 100);
 handle = requestAnimationFrame(tick);
