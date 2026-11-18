@@ -6255,6 +6255,7 @@ name = "processing_core"
 version = "0.4.0"
 dependencies = [
  "bevy",
+ "rand 0.10.2",
  "raw-window-handle",
  "thiserror 2.0.20",
  "tracing",
