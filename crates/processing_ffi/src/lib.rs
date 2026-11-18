@@ -1963,7 +1963,7 @@ pub extern "C" fn processing_perspective(
         graphics_perspective(
             graphics_entity,
             fov,
-            aspect,
+            Some(aspect),
             near,
             far,
             bevy::math::Vec4::new(0.0, 0.0, -1.0, -near),

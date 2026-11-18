@@ -1345,7 +1345,7 @@ pub fn js_perspective(
     check(graphics_perspective(
         ent(graphics_id),
         fov as f32,
-        aspect as f32,
+        Some(aspect as f32),
         near as f32,
         far as f32,
         Vec4::new(0.0, 0.0, -1.0, -near as f32),
