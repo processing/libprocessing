@@ -475,6 +475,10 @@ pub fn focused(In(entity): In<Entity>, query: Query<&Window>) -> bool {
     query.get(entity).map(|w| w.focused).unwrap_or(false)
 }
 
+pub fn transparent(In(entity): In<Entity>, query: Query<&Window>) -> bool {
+    query.get(entity).map(|w| w.transparent).unwrap_or(false)
+}
+
 pub fn scale_factor(In(entity): In<Entity>, query: Query<&Window>) -> f32 {
     query
         .get(entity)
