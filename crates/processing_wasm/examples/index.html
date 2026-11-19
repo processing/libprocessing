@@ -4,30 +4,57 @@
     <meta charset="utf-8">
     <title>Processing</title>
     <style>
-        body { margin: 0; min-height: 100vh; background: #1a1a1a; color: #ccc;
-               display: flex; flex-direction: column; align-items: center; gap: 12px; padding-top: 12px; }
-        canvas { border: 1px solid #333; }
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: #1a1a1a;
+        }
+        canvas {
+            border: 1px solid #333;
+        }
     </style>
 </head>
 <body>
-    <select id="example">
-        <option>background_image</option>
-        <option>translate</option>
-        <option>mouse_2d</option>
-    </select>
-    <canvas></canvas>
+    <canvas id="canvas" width="600" height="600"></canvas>
     <script type="module">
-        const select = document.getElementById('example');
-        // read back from the <select> (empty if unknown) so only listed examples can load
-        select.value = new URLSearchParams(location.search).get('example') ?? '';
-        if (!select.value) select.selectedIndex = 0;
-        select.onchange = () => (location.search = `?example=${select.value}`);
+        import init, * as p from '../../../target/wasm/processing_wasm.js';
 
-        const sketch = document.createElement('script');
-        sketch.src = `${select.value}.js`;
-        sketch.onload = () => import('./processing.js');
-        sketch.onerror = () => document.body.append(`Could not load ${sketch.src}`);
-        document.head.append(sketch);
+        async function main() {
+            await init();
+            await p.init();
+            const surface = p.surfaceCreateFromCanvas('canvas', 600, 600);
+            const graphics = p.graphicsCreate(surface, 600, 600);
+
+            const bgImage = await p.imageLoad('images/logo.png');
+
+            let frame = 0;
+
+            function draw() {
+                try {
+                    p.beginDraw(graphics);
+                    p.backgroundImage(graphics, bgImage);
+
+                    const x = 250 + Math.sin(frame * 0.02) * 200;
+                    p.setFill(graphics, 0.9, 0.1, 0.3, 1.0, 0 /* sRGB */);
+                    p.rect(graphics, x, 50, 100, 100, 20, 20, 20, 20);
+
+                    p.endDraw(graphics);
+
+                    frame++;
+                } catch (e) {
+                    console.error('Draw error:', e);
+                }
+
+                requestAnimationFrame(draw);
+            }
+
+            draw();
+        }
+
+        main().catch(console.error);
     </script>
 </body>
 </html>
