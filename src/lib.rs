@@ -1,4 +1,69 @@
+pub mod engine;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod prelude;
+
+#[cfg(not(target_arch = "wasm32"))]
+mod args;
+#[cfg(not(target_arch = "wasm32"))]
+mod color;
+#[cfg(not(target_arch = "wasm32"))]
+mod draw;
+#[cfg(not(target_arch = "wasm32"))]
+mod filter;
+#[cfg(not(target_arch = "wasm32"))]
+mod geometry;
+#[cfg(not(target_arch = "wasm32"))]
+mod gltf;
+#[cfg(not(target_arch = "wasm32"))]
+mod graphics;
+#[cfg(not(target_arch = "wasm32"))]
+mod image;
+#[cfg(not(target_arch = "wasm32"))]
+mod input;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod midi;
+#[cfg(not(target_arch = "wasm32"))]
+mod particles;
+#[cfg(not(target_arch = "wasm32"))]
+mod shader;
+#[cfg(not(target_arch = "wasm32"))]
+mod shape;
+#[cfg(not(target_arch = "wasm32"))]
+mod sketch;
+#[cfg(all(feature = "webcam", not(target_arch = "wasm32")))]
+mod webcam;
+
+#[cfg(all(feature = "webcam", not(target_arch = "wasm32")))]
+pub use crate::webcam::Webcam;
+#[cfg(not(target_arch = "wasm32"))]
+pub use crate::{
+    args::{IntoExtent, IntoPoint, Scalar},
+    color::{Channel, Color, ColorArg, ColorSpace, IntoChannel, IntoColorMax},
+    draw::{Arc, BeginDraw, Detail, ImageDraw, LightDraw, ParticlesDraw, Push, Rect, Text},
+    filter::Filter,
+    geometry::{Attribute, AttributeValue, Geometry, GeometryData, Layout},
+    gltf::Gltf,
+    graphics::{ColorModeBuilder, Graphics, Light, TextAlign},
+    image::{AsImage, Font, Image},
+    input::{Key, MouseButton},
+    particles::{BufferData, Particles},
+    shader::{Buffer, BufferElement, Compute, IntoShaderValue, Material, Shader},
+    shape::{Contour, Shape},
+    sketch::{Settings, Sketch, run},
+};
+pub use bevy::math::{Affine3A, Mat4, Vec2, Vec3, Vec4};
+pub use std::f32::consts::{PI, TAU};
+pub const HALF_PI: f32 = std::f32::consts::FRAC_PI_2;
+pub const QUARTER_PI: f32 = std::f32::consts::FRAC_PI_4;
+pub const TWO_PI: f32 = TAU;
+pub use processing_core::error::ProcessingError as Error;
+
+pub type Result<T, E = Error> = std::result::Result<T, E>;
+pub use processing_render::geometry::{AttributeFormat, Topology};
+pub use processing_render::render::command::{
+    ArcMode, BlendMode, ShapeKind, ShapeMode, StrokeCapMode as StrokeCap,
+    StrokeJoinMode as StrokeJoin, TextAlignH, TextAlignV, TextStyle, TextWrapMode,
+};
 
 use std::num::NonZero;
 

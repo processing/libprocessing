@@ -5,9 +5,9 @@ use bevy::color::LinearRgba;
 use bevy::math::{Vec2, Vec3, Vec4};
 use bevy::prelude::Entity;
 use bevy::render::render_resource::{Extent3d, TextureFormat};
-use processing::prelude::color::{ColorMode, ColorSpace};
-use processing::prelude::error::ProcessingError;
-use processing::prelude::*;
+use processing::engine::color::{ColorMode, ColorSpace};
+use processing::engine::error::ProcessingError;
+use processing::engine::*;
 use wasm_bindgen::prelude::*;
 
 fn check<T, E: std::fmt::Display>(result: Result<T, E>) -> Result<T, JsValue> {
@@ -160,12 +160,12 @@ pub fn js_color_mode(
 ) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
     check((|| {
-        let space = processing::prelude::color::ColorSpace::from_u8(space).ok_or_else(|| {
-            processing::prelude::error::ProcessingError::InvalidArgument(format!(
+        let space = processing::engine::color::ColorSpace::from_u8(space).ok_or_else(|| {
+            processing::engine::error::ProcessingError::InvalidArgument(format!(
                 "unknown color space: {space}"
             ))
         })?;
-        let mode = processing::prelude::color::ColorMode::new(space, max1, max2, max3, max_alpha);
+        let mode = processing::engine::color::ColorMode::new(space, max1, max2, max3, max_alpha);
         graphics_set_color_mode(graphics_entity, mode)
     })())
 }
@@ -233,7 +233,7 @@ pub fn js_set_stroke_cap(graphics_id: u64, cap: u8) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
     check(graphics_record_command(
         graphics_entity,
-        DrawCommand::StrokeCap(processing::prelude::StrokeCapMode::from(cap)),
+        DrawCommand::StrokeCap(processing::engine::StrokeCapMode::from(cap)),
     ))
 }
 
@@ -242,7 +242,7 @@ pub fn js_set_stroke_join(graphics_id: u64, join: u8) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
     check(graphics_record_command(
         graphics_entity,
-        DrawCommand::StrokeJoin(processing::prelude::StrokeJoinMode::from(join)),
+        DrawCommand::StrokeJoin(processing::engine::StrokeJoinMode::from(join)),
     ))
 }
 
@@ -251,7 +251,7 @@ pub fn js_rect_mode(graphics_id: u64, mode: u8) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
     check(graphics_record_command(
         graphics_entity,
-        DrawCommand::RectMode(processing::prelude::ShapeMode::from(mode)),
+        DrawCommand::RectMode(processing::engine::ShapeMode::from(mode)),
     ))
 }
 
@@ -260,7 +260,7 @@ pub fn js_ellipse_mode(graphics_id: u64, mode: u8) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
     check(graphics_record_command(
         graphics_entity,
-        DrawCommand::EllipseMode(processing::prelude::ShapeMode::from(mode)),
+        DrawCommand::EllipseMode(processing::engine::ShapeMode::from(mode)),
     ))
 }
 
@@ -361,7 +361,7 @@ pub fn js_shear_y(graphics_id: u64, angle: f32) -> Result<(), JsValue> {
 pub fn js_set_blend_mode(graphics_id: u64, mode: u8) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
     check((|| {
-        let blend_state = processing::prelude::BlendMode::try_from(mode)?.to_blend_state();
+        let blend_state = processing::engine::BlendMode::try_from(mode)?.to_blend_state();
         graphics_record_command(graphics_entity, DrawCommand::BlendMode(blend_state))
     })())
 }
@@ -534,7 +534,7 @@ pub fn js_arc(
             h,
             start,
             stop,
-            mode: processing::prelude::ArcMode::from(mode),
+            mode: processing::engine::ArcMode::from(mode),
         },
     ))
 }
@@ -698,7 +698,7 @@ pub fn js_begin_shape(graphics_id: u64, kind: u8) -> Result<(), JsValue> {
     check(graphics_record_command(
         graphics_entity,
         DrawCommand::BeginShape {
-            kind: processing::prelude::ShapeKind::from(kind),
+            kind: processing::engine::ShapeKind::from(kind),
         },
     ))
 }
@@ -2059,7 +2059,7 @@ pub fn js_mouse_wheel() -> Result<f32, JsValue> {
     check(input_mouse_wheel())
 }
 
-fn key_code_from_u32(val: u32) -> processing::prelude::error::Result<KeyCode> {
+fn key_code_from_u32(val: u32) -> processing::engine::error::Result<KeyCode> {
     match val {
         PROCESSING_KEY_SPACE => Ok(KeyCode::Space),
         PROCESSING_KEY_QUOTE => Ok(KeyCode::Quote),

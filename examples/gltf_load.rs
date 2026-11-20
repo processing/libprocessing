@@ -1,72 +1,48 @@
-use processing_glfw::GlfwContext;
-
-use bevy::math::Vec3;
 use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
-use processing_render::shader_value::ShaderValue;
 
-fn main() {
-    match sketch() {
-        Ok(_) => {
-            eprintln!("Sketch completed successfully");
-            exit(0).unwrap();
-        }
-        Err(e) => {
-            eprintln!("Sketch error: {:?}", e);
-            exit(1).unwrap();
-        }
-    };
+struct GltfLoad {
+    duck: Geometry,
+    skin: Material,
+    light: Light,
 }
 
-fn sketch() -> error::Result<()> {
-    let width = 800;
-    let height = 600;
-    let mut glfw_ctx = GlfwContext::new(width, height, false)?;
-    init(Config::default())?;
-
-    let surface = glfw_ctx.create_surface(width, height, false)?;
-    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
-
-    let gltf = gltf_load(graphics, "gltf/Duck.glb")?;
-    let duck = gltf_geometry(gltf, "LOD3spShape")?;
-    let duck_mat = gltf_material(gltf, "blinn3-fx")?;
-
-    graphics_mode_3d(graphics)?;
-    gltf_camera(gltf, 0)?;
-    let light = gltf_light(gltf, 0)?;
-
-    let mut frame: u64 = 0;
-
-    while glfw_ctx.poll_events() {
-        let t = frame as f32 * 0.02;
-
-        let radius = 1.5;
-        let lx = t.cos() * radius;
-        let ly = -1.5;
-        let lz = t.sin() * radius;
-        transform_set_position(light, Vec3::new(lx, ly, lz))?;
-        transform_look_at(light, Vec3::new(0.0, -0.8, 0.0))?;
-
-        let r = (t * 8.0).sin() * 0.5 + 0.5;
-        let g = (t * 8.0 + 2.0).sin() * 0.5 + 0.5;
-        let b = (t * 8.0 + 4.0).sin() * 0.5 + 0.5;
-        material_set(duck_mat, "base_color", ShaderValue::Float4([r, g, b, 1.0]))?;
-
-        graphics_begin_draw(graphics)?;
-        graphics_light(graphics, light)?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.1, 0.1, 0.12)),
-        )?;
-
-        graphics_record_command(graphics, DrawCommand::Material(duck_mat))?;
-        graphics_record_command(graphics, DrawCommand::Geometry(duck))?;
-
-        graphics_end_draw(graphics)?;
-
-        frame += 1;
+impl Sketch for GltfLoad {
+    fn settings() -> Settings {
+        Settings::size(800, 600)
     }
 
-    Ok(())
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+
+        let gltf = Gltf::load(g, "gltf/Duck.glb")?;
+        let duck = gltf.geometry("LOD3spShape")?;
+        let skin = gltf.material("blinn3-fx")?;
+        gltf.camera(0)?;
+        let light = gltf.light(0)?;
+
+        Ok(GltfLoad { duck, skin, light })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        let t = (g.frame_count() - 1) as f32 * 0.02;
+
+        let radius = 1.5;
+        self.light
+            .position((t.cos() * radius, -1.5, t.sin() * radius))
+            .look_at((0.0, -0.8, 0.0));
+
+        let r = (t * 8.0).sin() * 0.5 + 0.5;
+        let green = (t * 8.0 + 2.0).sin() * 0.5 + 0.5;
+        let b = (t * 8.0 + 4.0).sin() * 0.5 + 0.5;
+        self.skin.set("base_color", (r, green, b, 1.0));
+
+        g.light(&self.light);
+        g.background((0.1, 0.1, 0.12));
+        g.material(&self.skin);
+        g.model(&self.duck);
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<GltfLoad>()
 }

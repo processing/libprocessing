@@ -1,86 +1,60 @@
-use processing_glfw::GlfwContext;
-
-use bevy::math::{Vec2, Vec3};
 use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
 
-fn main() {
-    sketch().unwrap();
-    exit(0).unwrap();
+struct Text3d {
+    word: Geometry,
+    glow: Material,
+    sun: Light,
+    t: f32,
 }
 
-fn sketch() -> error::Result<()> {
-    let width = 1200;
-    let height = 700;
-    let mut glfw_ctx = GlfwContext::new(width, height, false)?;
-    init(Config::default())?;
-
-    let surface = glfw_ctx.create_surface(width, height, false)?;
-    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
-
-    graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, 0.0, 800.0))?;
-    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
-
-    let dir_light =
-        light_create_directional(graphics, bevy::color::Color::srgb(0.3, 0.3, 0.4), 2000.0)?;
-    transform_set_position(dir_light, Vec3::new(200.0, -300.0, 500.0))?;
-    transform_look_at(dir_light, Vec3::new(0.0, 0.0, 0.0))?;
-
-    let glow = material_create_pbr()?;
-    material_set(glow, "roughness", shader_value::ShaderValue::Float(0.3))?;
-    material_set(glow, "metallic", shader_value::ShaderValue::Float(0.5))?;
-    material_set(
-        glow,
-        "emissive",
-        shader_value::ShaderValue::Float4([2.0, 0.5, 3.0, 1.0]),
-    )?;
-
-    graphics_record_command(graphics, DrawCommand::TextSize(120.0))?;
-    graphics_record_command(graphics, DrawCommand::TextStyle(TextStyle::Bold))?;
-
-    // measure width to center the mesh on the origin
-    let w = graphics_text_width(graphics, "Processing")?;
-    let mesh = graphics_text_to_model(graphics, "Processing", -w / 2.0, 0.0, 40.0)?;
-    let geom = geometry_create_from_mesh(mesh)?;
-
-    let mut t: f32 = 0.0;
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-        graphics_light(graphics, dir_light)?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.02, 0.02, 0.03)),
-        )?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Fill(bevy::color::Color::srgb(0.8, 0.3, 1.0)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::Material(glow))?;
-
-        graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Scale(Vec2::new(15.0, 15.0).extend(1.0)),
-        )?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Rotate {
-                angle: -t * 0.3,
-                axis: Vec3::Z,
-            },
-        )?;
-        graphics_record_command(graphics, DrawCommand::Geometry(geom))?;
-        graphics_record_command(graphics, DrawCommand::PopMatrix)?;
-
-        graphics_end_draw(graphics)?;
-        t += 0.016;
+impl Sketch for Text3d {
+    fn settings() -> Settings {
+        Settings::size(1200, 700)
     }
 
-    material_destroy(glow)?;
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.camera_position((0, 0, 800));
+        g.camera_look_at((0, 0, 0));
 
-    Ok(())
+        let sun = g.create_directional_light((0.3, 0.3, 0.4), 2000);
+        sun.position((200, -300, 500)).look_at((0, 0, 0));
+
+        let mut glow = Material::pbr()?;
+        glow.set("roughness", 0.3);
+        glow.set("metallic", 0.5);
+        glow.set("emissive", (2.0, 0.5, 3.0, 1.0));
+
+        g.text_size(120);
+        g.text_style(TextStyle::Bold);
+        let w = g.text_width("Processing");
+        let word = g.text_to_model("Processing", -w / 2.0, 0, 40)?;
+
+        Ok(Text3d {
+            word,
+            glow,
+            sun,
+            t: 0.0,
+        })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        g.light(&self.sun);
+        g.background((0.02, 0.02, 0.03));
+        g.fill((0.8, 0.3, 1.0));
+        g.material(&self.glow);
+
+        {
+            let g = g.push();
+            g.scale((1.5, 1.5));
+            g.rotate(-self.t * 0.3);
+            g.model(&self.word);
+        }
+
+        self.t += 0.016;
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<Text3d>()
 }

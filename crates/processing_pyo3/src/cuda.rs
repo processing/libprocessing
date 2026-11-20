@@ -1,4 +1,4 @@
-use processing::prelude::image::pixel_size;
+use processing::engine::image::pixel_size;
 use processing_cuda::{cuda_buffer, cuda_write_back, typestr_for_format};
 use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyDict};
 

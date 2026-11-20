@@ -765,21 +765,68 @@ pub enum DrawCommand {
 
 #[derive(Debug, Default, Component)]
 pub struct CommandBuffer {
-    pub commands: Vec<DrawCommand>,
+    commands: Vec<DrawCommand>,
+    generation: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CommandSlot {
+    graphics: Entity,
+    index: usize,
+    generation: u64,
+}
+
+impl CommandSlot {
+    pub fn graphics(&self) -> Entity {
+        self.graphics
+    }
 }
 
 impl CommandBuffer {
     pub fn new() -> Self {
-        Self {
-            commands: Vec::new(),
-        }
+        Self::default()
     }
 
     pub fn push(&mut self, cmd: DrawCommand) {
         self.commands.push(cmd);
     }
 
+    pub fn push_slot(&mut self, graphics: Entity, cmd: DrawCommand) -> CommandSlot {
+        self.commands.push(cmd);
+        CommandSlot {
+            graphics,
+            index: self.commands.len() - 1,
+            generation: self.generation,
+        }
+    }
+
+    pub fn get_mut(&mut self, slot: CommandSlot) -> Option<&mut DrawCommand> {
+        if slot.generation != self.generation {
+            return None;
+        }
+        self.commands.get_mut(slot.index)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.commands.is_empty()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &DrawCommand> {
+        self.commands.iter()
+    }
+
+    pub fn take(&mut self) -> Vec<DrawCommand> {
+        self.generation += 1;
+        std::mem::take(&mut self.commands)
+    }
+
+    pub fn requeue(&mut self, commands: impl IntoIterator<Item = DrawCommand>) {
+        self.generation += 1;
+        self.commands = commands.into_iter().collect();
+    }
+
     pub fn clear(&mut self) {
+        self.generation += 1;
         self.commands.clear();
     }
 }

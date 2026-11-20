@@ -1,108 +1,71 @@
-use processing_glfw::GlfwContext;
-
-use bevy::math::Vec3;
 use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
 
-fn main() {
-    match sketch() {
-        Ok(_) => {
-            eprintln!("Sketch completed successfully");
-            exit(0).unwrap();
-        }
-        Err(e) => {
-            eprintln!("Sketch error: {:?}", e);
-            exit(1).unwrap();
-        }
-    };
+struct Lights {
+    cube: Geometry,
+    shiny: Material,
+    sun: Light,
+    warm: Light,
+    cool: Light,
+    spot: Light,
+    angle: f32,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(400, 400, false)?;
-    init(Config::default())?;
-
-    let width = 400;
-    let height = 400;
-    let surface = glfw_ctx.create_surface(width, height, false)?;
-    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
-    let box_geo = geometry_box(100.0, 100.0, 100.0)?;
-    let pbr_mat = material_create_pbr()?;
-    material_set(pbr_mat, "roughness", shader_value::ShaderValue::Float(0.0))?;
-
-    // create a directional light
-    let dir_light =
-        light_create_directional(graphics, bevy::color::Color::srgb(0.35, 0.25, 0.5), 500.0)?;
-
-    // create a point light
-    let point_light_a = light_create_point(
-        graphics,
-        bevy::color::Color::srgb(1.0, 0.5, 0.25),
-        1_000_000.0,
-        200.0,
-        0.5,
-    )?;
-    transform_set_position(point_light_a, Vec3::new(-25.0, -5.0, 51.0))?;
-    transform_look_at(point_light_a, Vec3::new(0.0, 0.0, 0.0))?;
-
-    // create another point light
-    let point_light_b = light_create_point(
-        graphics,
-        bevy::color::Color::srgb(0.0, 0.5, 0.75),
-        2_000_000.0,
-        200.0,
-        0.25,
-    )?;
-    transform_set_position(point_light_b, Vec3::new(0.0, -5.0, 50.5))?;
-    transform_look_at(point_light_b, Vec3::new(0.0, 0.0, 0.0))?;
-
-    // and a spot light, too!
-    let spot_light = light_create_spot(
-        graphics,
-        bevy::color::Color::srgb(0.25, 0.8, 0.19),
-        15.0 * 1_000_000.0,
-        200.0,
-        0.84,
-        0.0,
-        core::f32::consts::FRAC_PI_4,
-    )?;
-    transform_set_position(spot_light, Vec3::new(40.0, 0.0, 70.0))?;
-    transform_look_at(spot_light, Vec3::new(0.0, 0.0, 0.0))?;
-
-    graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(100.0, -100.0, 300.0))?;
-    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
-
-    let mut angle = 0.0;
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-        graphics_light(graphics, dir_light)?;
-        graphics_light(graphics, point_light_a)?;
-        graphics_light(graphics, point_light_b)?;
-        graphics_light(graphics, spot_light)?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.18, 0.20, 0.15)),
-        )?;
-
-        graphics_record_command(graphics, DrawCommand::Fill(bevy::color::Color::WHITE))?;
-        graphics_record_command(graphics, DrawCommand::Material(pbr_mat))?;
-
-        graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Rotate {
-                angle: -angle,
-                axis: Vec3::Z,
-            },
-        )?;
-        graphics_record_command(graphics, DrawCommand::Geometry(box_geo))?;
-        graphics_record_command(graphics, DrawCommand::PopMatrix)?;
-
-        graphics_end_draw(graphics)?;
-
-        angle += 0.02;
+impl Sketch for Lights {
+    fn settings() -> Settings {
+        Settings::size(400, 400)
     }
-    Ok(())
+
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.camera_position((100, -100, 300));
+        g.camera_look_at((0, 0, 0));
+
+        let cube = Geometry::cube(100)?;
+        let mut shiny = Material::pbr()?;
+        shiny.set("roughness", 0.0);
+
+        let sun = g.create_directional_light((0.35, 0.25, 0.5), 500);
+
+        let warm = g.create_point_light((1.0, 0.5, 0.25), 1_000_000, 200, 0.5);
+        warm.position((-25, -5, 51)).look_at((0, 0, 0));
+
+        let cool = g.create_point_light((0.0, 0.5, 0.75), 2_000_000, 200, 0.25);
+        cool.position((0.0, -5.0, 50.5)).look_at((0, 0, 0));
+
+        let spot = g.create_spot_light((0.25, 0.8, 0.19), 15_000_000, 200, 0.84, 0, QUARTER_PI);
+        spot.position((40, 0, 70)).look_at((0, 0, 0));
+
+        Ok(Lights {
+            cube,
+            shiny,
+            sun,
+            warm,
+            cool,
+            spot,
+            angle: 0.0,
+        })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        g.light(&self.sun);
+        g.light(&self.warm);
+        g.light(&self.cool);
+        g.light(&self.spot);
+
+        g.background((0.18, 0.20, 0.15));
+        g.fill(255);
+        g.material(&self.shiny);
+
+        {
+            let g = g.push();
+            g.rotate(-self.angle);
+            g.model(&self.cube);
+        }
+
+        self.angle += 0.02;
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<Lights>()
 }

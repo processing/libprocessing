@@ -1,72 +1,50 @@
-use processing_glfw::GlfwContext;
-
-use bevy::math::{Vec3, Vec4};
 use processing::prelude::*;
-use processing_render::geometry::{AttributeFormat, Topology};
-use processing_render::render::command::DrawCommand;
 
-fn main() {
-    match sketch() {
-        Ok(_) => {
-            eprintln!("Sketch completed successfully");
-            exit(0).unwrap();
-        }
-        Err(e) => {
-            eprintln!("Sketch error: {:?}", e);
-            exit(1).unwrap();
-        }
-    };
+struct CustomAttribute {
+    mesh: Geometry,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(600, 600, false)?;
-    init(Config::default())?;
-
-    let width = 600;
-    let height = 600;
-    let surface = glfw_ctx.create_surface(width, height, false)?;
-    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
-
-    let custom_attr = geometry_attribute_create("Custom", AttributeFormat::Float)?;
-
-    let layout = geometry_layout_create()?;
-    geometry_layout_add_position(layout)?;
-    geometry_layout_add_normal(layout)?;
-    geometry_layout_add_color(layout)?;
-    geometry_layout_add_attribute(layout, custom_attr)?;
-
-    let mesh = geometry_create_with_layout(layout, Topology::LineStrip)?;
-
-    geometry_color(mesh, Vec4::new(1.0, 0.0, 0.0, 1.0))?;
-    geometry_normal(mesh, Vec3::new(0.0, 0.0, 1.0))?;
-    geometry_attribute_float(mesh, custom_attr, 0.0)?;
-    geometry_vertex(mesh, Vec3::new(-50.0, 50.0, 0.0))?;
-
-    geometry_color(mesh, Vec4::new(0.0, 1.0, 0.0, 1.0))?;
-    geometry_attribute_float(mesh, custom_attr, 0.5)?;
-    geometry_vertex(mesh, Vec3::new(50.0, 50.0, 0.0))?;
-
-    geometry_color(mesh, Vec4::new(0.0, 0.0, 1.0, 1.0))?;
-    geometry_attribute_float(mesh, custom_attr, 1.0)?;
-    geometry_vertex(mesh, Vec3::new(0.0, -50.0, 0.0))?;
-
-    geometry_index(mesh, 0)?;
-    geometry_index(mesh, 1)?;
-    geometry_index(mesh, 2)?;
-    geometry_index(mesh, 0)?;
-
-    graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, 0.0, 200.0))?;
-    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.1, 0.1, 0.12)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::Geometry(mesh))?;
-        graphics_end_draw(graphics)?;
+impl Sketch for CustomAttribute {
+    fn settings() -> Settings {
+        Settings::size(600, 600)
     }
-    Ok(())
+
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.camera_position((0, 0, 200));
+        g.camera_look_at((0, 0, 0));
+
+        let custom = Attribute::new("Custom", AttributeFormat::Float)?;
+        let layout = Layout::new()?.position().normal().color().attribute(custom);
+
+        let mut mesh = Geometry::with_layout(&layout, Topology::LineStrip)?;
+        mesh.color((1.0, 0.0, 0.0));
+        mesh.normal((0, 0, 1));
+        mesh.attribute(custom, 0.0);
+        mesh.vertex((-50, 50));
+
+        mesh.color((0.0, 1.0, 0.0));
+        mesh.attribute(custom, 0.5);
+        mesh.vertex((50, 50));
+
+        mesh.color((0.0, 0.0, 1.0));
+        mesh.attribute(custom, 1.0);
+        mesh.vertex((0, -50));
+
+        mesh.index(0);
+        mesh.index(1);
+        mesh.index(2);
+        mesh.index(0);
+
+        Ok(CustomAttribute { mesh })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        g.background((0.1, 0.1, 0.12));
+        g.model(&self.mesh);
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<CustomAttribute>()
 }

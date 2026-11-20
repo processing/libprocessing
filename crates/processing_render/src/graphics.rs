@@ -33,7 +33,7 @@ use crate::{
     image::{Image, create_readback_buffer, pixel_size, pixels_to_bytes},
     render::{
         BATCH_INDEX_STEP, DrawTransients, RenderState,
-        command::{CommandBuffer, DrawCommand},
+        command::{CommandBuffer, CommandSlot, DrawCommand},
         filter,
     },
     surface::Surface,
@@ -714,7 +714,7 @@ pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
         app.update();
         let pending = graphics_mut!(app, entity)
             .get::<CommandBuffer>()
-            .is_some_and(|buffer| !buffer.commands.is_empty());
+            .is_some_and(|buffer| !buffer.is_empty());
         if !pending {
             break;
         }
@@ -726,7 +726,7 @@ pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
 fn has_commands(app: &App, entity: Entity) -> bool {
     app.world()
         .get::<CommandBuffer>(entity)
-        .is_some_and(|buffer| !buffer.commands.is_empty())
+        .is_some_and(|buffer| !buffer.is_empty())
 }
 
 /// Uploads the canvas pixels `set` wrote since the last upload
@@ -1002,6 +1002,16 @@ pub fn record_command(
 
     command_buffer.push(cmd);
     Ok(())
+}
+
+pub fn record_command_slot(
+    In((graphics_entity, cmd)): In<(Entity, DrawCommand)>,
+    mut graphics_query: Query<&mut CommandBuffer>,
+) -> Result<CommandSlot> {
+    let mut command_buffer = graphics_query
+        .get_mut(graphics_entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+    Ok(command_buffer.push_slot(graphics_entity, cmd))
 }
 
 pub struct ReadbackData {

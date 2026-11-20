@@ -1,5 +1,5 @@
 use bevy::prelude::Entity;
-use processing::prelude::*;
+use processing::engine::*;
 use pyo3::{
     exceptions::{PyIndexError, PyRuntimeError, PyTypeError, PyValueError},
     prelude::*,
@@ -184,7 +184,7 @@ impl Buffer {
 
     #[pyo3(signature = (op = "sum"))]
     pub fn reduce(&self, op: &str) -> PyResult<f32> {
-        use processing::prelude::constants as c;
+        use processing::engine::constants as c;
         use processing_render::particles::reduce::{
             REDUCE_OP_MAX, REDUCE_OP_MIN, REDUCE_OP_SUM, reduce as reduce_buffer,
         };

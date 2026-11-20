@@ -24,6 +24,7 @@ use skrifa::{
     outline::{DrawSettings, OutlinePen},
 };
 
+use crate::render::style::Style;
 use crate::render::{
     RenderState,
     command::{TextAlignH, TextAlignV, TextStyle, TextWrapMode},
@@ -91,19 +92,23 @@ impl OwnedTextParams {
     /// Snapshot a `RenderState`'s text state. `glyph_colors` is left unset; the
     /// draw path fills it in, measurement queries don't need it.
     pub fn from_render_state(state: &RenderState, max_w: Option<f32>, max_h: Option<f32>) -> Self {
+        Self::from_style(&state.style, max_w, max_h)
+    }
+
+    pub fn from_style(style: &Style, max_w: Option<f32>, max_h: Option<f32>) -> Self {
         Self {
-            text_size: state.style.text_size,
-            align_h: state.style.text_align_h,
-            align_v: state.style.text_align_v,
-            leading: state.style.text_leading,
+            text_size: style.text_size,
+            align_h: style.text_align_h,
+            align_v: style.text_align_v,
+            leading: style.text_leading,
             max_w,
             max_h,
-            wrap: state.style.text_wrap,
-            font_family: state.style.text_font_family.clone(),
-            text_style: state.style.text_style,
-            text_weight: state.style.text_weight,
-            text_variations: state.style.text_variations.clone(),
-            text_features: state.style.text_features.clone(),
+            wrap: style.text_wrap,
+            font_family: style.text_font_family.clone(),
+            text_style: style.text_style,
+            text_weight: style.text_weight,
+            text_variations: style.text_variations.clone(),
+            text_features: style.text_features.clone(),
             glyph_colors: None,
         }
     }
@@ -473,8 +478,7 @@ pub fn text_to_points(
     })
 }
 
-/// 3D extruded mesh from text outlines: front and back faces plus side walls,
-/// in Bevy's Y-up convention.
+/// 3D extruded mesh from text outlines: front and back faces plus side walls.
 pub fn text_to_model(
     content: &str,
     x: f32,
@@ -610,6 +614,8 @@ pub fn text_to_model(
         }
     });
 
+    // built y-up
+    crate::geometry::mirror_y(&mut mesh);
     mesh
 }
 

@@ -1,60 +1,37 @@
-use processing_glfw::GlfwContext;
-
-use bevy::math::Vec3;
 use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
 
-fn main() {
-    match sketch() {
-        Ok(_) => {
-            eprintln!("Sketch completed successfully");
-            exit(0).unwrap();
-        }
-        Err(e) => {
-            eprintln!("Sketch error: {:?}", e);
-            exit(1).unwrap();
-        }
-    };
+struct BoxSketch {
+    cube: Geometry,
+    angle: f32,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(400, 400, false)?;
-    init(Config::default())?;
-
-    let width = 400;
-    let height = 400;
-    let surface = glfw_ctx.create_surface(width, height, false)?;
-    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
-    let box_geo = geometry_box(100.0, 100.0, 100.0)?;
-
-    graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(100.0, -100.0, 300.0))?;
-    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
-
-    let mut angle: f32 = 0.0;
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.1, 0.1, 0.15)),
-        )?;
-
-        graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Rotate {
-                angle: -angle,
-                axis: Vec3::Z,
-            },
-        )?;
-        graphics_record_command(graphics, DrawCommand::Geometry(box_geo))?;
-        graphics_record_command(graphics, DrawCommand::PopMatrix)?;
-
-        graphics_end_draw(graphics)?;
-
-        angle += 0.02;
+impl Sketch for BoxSketch {
+    fn settings() -> Settings {
+        Settings::size(400, 400)
     }
-    Ok(())
+
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.camera_position((100, -100, 300));
+        g.camera_look_at((0, 0, 0));
+
+        let cube = Geometry::cube(100)?;
+        Ok(BoxSketch { cube, angle: 0.0 })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        g.background((0.1, 0.1, 0.15));
+
+        {
+            let g = g.push();
+            g.rotate(-self.angle);
+            g.model(&self.cube);
+        }
+
+        self.angle += 0.02;
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<BoxSketch>()
 }

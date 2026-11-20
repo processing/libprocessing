@@ -1,7 +1,4 @@
-use bevy::color::{Color, ColorToComponents};
 use processing::prelude::*;
-use processing_glfw::GlfwContext;
-use processing_render::render::command::DrawCommand;
 
 const PENTATONIC: [u8; 5] = [0, 3, 5, 7, 10];
 const ROOT: u8 = 48;
@@ -35,148 +32,115 @@ struct Ripple {
     color: Color,
 }
 
-fn main() {
-    if let Err(e) = sketch() {
-        eprintln!("Sketch error: {e:?}");
-        exit(1).unwrap();
-    }
-    exit(0).unwrap();
+struct Midi {
+    held: Option<u8>,
+    ripples: Vec<Ripple>,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(WIDTH, HEIGHT, false)?;
-    init(Config::default())?;
-
-    let surface = glfw_ctx.create_surface(WIDTH, HEIGHT, false)?;
-    let graphics = graphics_create(surface, WIDTH, HEIGHT, TextureFormat::Rgba16Float)?;
-
-    midi_refresh_ports()?;
-    let ports = midi_list_ports()?;
-    if ports.is_empty() {
-        eprintln!("no MIDI output ports found — connect a synth or virtual port and retry");
-        return Ok(());
+impl Midi {
+    fn play(&mut self, note: u8, x: f32, y: f32) -> Result<()> {
+        midi::note_on(note, velocity_at_y(y))?;
+        self.ripples.push(Ripple {
+            x,
+            y,
+            age: 0.0,
+            color: note_color(note),
+        });
+        self.held = Some(note);
+        Ok(())
     }
-    for p in &ports {
-        println!("{p}");
-    }
-    midi_connect(0)?;
 
-    let mut held: Option<u8> = None;
-    let mut ripples: Vec<Ripple> = Vec::new();
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-
-        let mx = input_mouse_x(surface)?;
-        let my = input_mouse_y(surface)?;
-        let pressed = input_mouse_is_pressed()?;
-
-        match (pressed, held) {
-            (true, None) => {
-                let note = note_at_x(mx);
-                let velocity = velocity_at_y(my);
-                midi_note_on(note, velocity)?;
-                ripples.push(Ripple {
-                    x: mx,
-                    y: my,
-                    age: 0.0,
-                    color: note_color(note),
-                });
-                held = Some(note);
-            }
+    fn update_notes(&mut self, g: &Graphics) -> Result<()> {
+        let x = g.mouse_x();
+        let y = g.mouse_y();
+        match (g.mouse_pressed(), self.held) {
+            (true, None) => self.play(note_at_x(x), x, y)?,
             (true, Some(note)) => {
-                let target = note_at_x(mx);
+                let target = note_at_x(x);
                 if target != note {
-                    midi_note_off(note)?;
-                    let velocity = velocity_at_y(my);
-                    midi_note_on(target, velocity)?;
-                    ripples.push(Ripple {
-                        x: mx,
-                        y: my,
-                        age: 0.0,
-                        color: note_color(target),
-                    });
-                    held = Some(target);
+                    midi::note_off(note)?;
+                    self.play(target, x, y)?;
                 }
             }
             (false, Some(note)) => {
-                midi_note_off(note)?;
-                held = None;
+                midi::note_off(note)?;
+                self.held = None;
             }
-            _ => {}
+            (false, None) => {}
+        }
+        Ok(())
+    }
+}
+
+impl Sketch for Midi {
+    fn settings() -> Settings {
+        Settings::size(WIDTH, HEIGHT)
+    }
+
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        midi::refresh_ports()?;
+        let ports = midi::ports()?;
+        if ports.is_empty() {
+            eprintln!("no MIDI output ports found — connect a synth or virtual port and retry");
+            g.exit();
+        } else {
+            for port in &ports {
+                println!("{port}");
+            }
+            midi::connect(0)?;
+        }
+        Ok(Midi {
+            held: None,
+            ripples: Vec::new(),
+        })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        if let Err(e) = self.update_notes(g) {
+            eprintln!("midi: {e}");
         }
 
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(Color::srgb(0.04, 0.04, 0.07)),
-        )?;
+        g.background((0.04, 0.04, 0.07));
+        g.no_stroke();
 
         let octave_w = WIDTH as f32 / OCTAVES as f32;
         for i in 0..OCTAVES {
-            let alpha = if i % 2 == 0 { 0.04 } else { 0.0 };
-            graphics_record_command(
-                graphics,
-                DrawCommand::Fill(Color::srgba(1.0, 1.0, 1.0, alpha)),
-            )?;
-            graphics_record_command(
-                graphics,
-                DrawCommand::Rect {
-                    x: i as f32 * octave_w,
-                    y: 0.0,
-                    w: octave_w,
-                    h: HEIGHT as f32,
-                    radii: [0.0; 4],
-                },
-            )?;
+            if i % 2 == 0 {
+                g.fill((1.0, 1.0, 1.0, 0.04));
+                g.rect(i as f32 * octave_w, 0, octave_w, HEIGHT);
+            }
         }
 
-        ripples.retain_mut(|r| {
-            r.age += 0.022;
-            r.age < 1.0
-        });
-        for r in &ripples {
-            let size = 24.0 + r.age * 220.0;
-            let alpha = (1.0 - r.age).powi(2);
-            let lin = r.color.to_linear().to_f32_array();
-            graphics_record_command(
-                graphics,
-                DrawCommand::Fill(Color::linear_rgba(lin[0], lin[1], lin[2], alpha)),
-            )?;
-            graphics_record_command(
-                graphics,
-                DrawCommand::Rect {
-                    x: r.x - size / 2.0,
-                    y: r.y - size / 2.0,
-                    w: size,
-                    h: size,
-                    radii: [size / 2.0; 4],
-                },
-            )?;
+        for ripple in &mut self.ripples {
+            ripple.age += 0.022;
+        }
+        self.ripples.retain(|r| r.age < 1.0);
+
+        for ripple in &self.ripples {
+            let size = 24.0 + ripple.age * 220.0;
+            let alpha = (1.0 - ripple.age).powi(2);
+            g.fill(ripple.color.with_alpha(alpha));
+            g.circle(ripple.x, ripple.y, size);
         }
 
-        let preview = note_color(note_at_x(mx));
-        graphics_record_command(graphics, DrawCommand::Fill(preview))?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Rect {
-                x: mx - 8.0,
-                y: my - 8.0,
-                w: 16.0,
-                h: 16.0,
-                radii: [8.0; 4],
-            },
-        )?;
+        g.fill(note_color(note_at_x(g.mouse_x())));
+        g.circle(g.mouse_x(), g.mouse_y(), 16);
 
-        graphics_end_draw(graphics)?;
-
-        if input_key_is_pressed()? && input_key_is_down(KeyCode::Escape)? {
-            break;
+        if g.key_pressed() && g.key_down(Key::Escape) {
+            g.exit();
         }
     }
+}
 
-    if let Some(note) = held {
-        midi_note_off(note)?;
+impl Drop for Midi {
+    fn drop(&mut self) {
+        if let Some(note) = self.held {
+            let _ = midi::note_off(note);
+        }
+        let _ = midi::disconnect();
     }
-    midi_disconnect()?;
-    Ok(())
+}
+
+fn main() -> Result<()> {
+    processing::run::<Midi>()
 }

@@ -1,8 +1,6 @@
-use processing_glfw::GlfwContext;
-
 use processing::prelude::*;
 
-const MODES: &[BlendMode] = &[
+const MODES: [BlendMode; 10] = [
     BlendMode::Blend,
     BlendMode::Add,
     BlendMode::Subtract,
@@ -15,95 +13,43 @@ const MODES: &[BlendMode] = &[
     BlendMode::Replace,
 ];
 
-fn main() {
-    match sketch() {
-        Ok(_) => exit(0).unwrap(),
-        Err(e) => {
-            eprintln!("Error: {e:?}");
-            exit(1).unwrap();
+struct BlendModes {
+    index: usize,
+}
+
+impl Sketch for BlendModes {
+    fn settings() -> Settings {
+        Settings::size(500, 500)
+    }
+
+    fn setup(_g: &mut Graphics) -> Result<Self> {
+        Ok(BlendModes { index: 0 })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        if g.key_just_pressed(Key::Right) || g.key_just_pressed(Key::Space) {
+            self.index = (self.index + 1) % MODES.len();
+            eprintln!("{}", MODES[self.index].name());
+        } else if g.key_just_pressed(Key::Left) {
+            self.index = (self.index + MODES.len() - 1) % MODES.len();
+            eprintln!("{}", MODES[self.index].name());
         }
+
+        g.background((0.15, 0.15, 0.15));
+        g.no_stroke();
+        g.blend_mode(MODES[self.index]);
+
+        g.fill((0.9, 0.2, 0.2, 0.75));
+        g.rect(80, 100, 200, 250);
+
+        g.fill((0.2, 0.8, 0.2, 0.75));
+        g.rect(180, 80, 200, 250);
+
+        g.fill((0.2, 0.3, 0.9, 0.75));
+        g.rect(130, 200, 200, 200);
     }
 }
 
-fn sketch() -> error::Result<()> {
-    let width = 500;
-    let height = 500;
-    let mut glfw_ctx = GlfwContext::new(width, height, false)?;
-    init(Config::default())?;
-
-    let surface = glfw_ctx.create_surface(width, height, false)?;
-    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
-
-    let mut index: usize = 0;
-
-    while glfw_ctx.poll_events() {
-        if input_key_just_pressed(KeyCode::ArrowRight)? || input_key_just_pressed(KeyCode::Space)? {
-            index = (index + 1) % MODES.len();
-            eprintln!("{}", MODES[index].name());
-        } else if input_key_just_pressed(KeyCode::ArrowLeft)? {
-            index = (index + MODES.len() - 1) % MODES.len();
-            eprintln!("{}", MODES[index].name());
-        }
-
-        graphics_begin_draw(graphics)?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgba(0.15, 0.15, 0.15, 1.0)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::NoStroke)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::BlendMode(MODES[index].to_blend_state()),
-        )?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Fill(bevy::color::Color::srgba(0.9, 0.2, 0.2, 0.75)),
-        )?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Rect {
-                x: 80.0,
-                y: 100.0,
-                w: 200.0,
-                h: 250.0,
-                radii: [0.0; 4],
-            },
-        )?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Fill(bevy::color::Color::srgba(0.2, 0.8, 0.2, 0.75)),
-        )?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Rect {
-                x: 180.0,
-                y: 80.0,
-                w: 200.0,
-                h: 250.0,
-                radii: [0.0; 4],
-            },
-        )?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Fill(bevy::color::Color::srgba(0.2, 0.3, 0.9, 0.75)),
-        )?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Rect {
-                x: 130.0,
-                y: 200.0,
-                w: 200.0,
-                h: 200.0,
-                radii: [0.0; 4],
-            },
-        )?;
-
-        graphics_end_draw(graphics)?;
-    }
-
-    Ok(())
+fn main() -> Result<()> {
+    processing::run::<BlendModes>()
 }

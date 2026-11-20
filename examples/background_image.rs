@@ -1,37 +1,24 @@
-use processing_glfw::GlfwContext;
-
 use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
 
-fn main() {
-    match sketch() {
-        Ok(_) => {
-            eprintln!("Sketch completed successfully");
-            exit(0).unwrap();
-        }
-        Err(e) => {
-            eprintln!("Sketch error: {:?}", e);
-            exit(1).unwrap();
-        }
-    };
+struct BackgroundImage {
+    logo: Image,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(400, 400, false)?;
-    init(Config::default())?;
-
-    let width = 400;
-    let height = 400;
-    let surface = glfw_ctx.create_surface(width, height, false)?;
-    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
-    let image = image_load("images/logo.png")?;
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-
-        graphics_record_command(graphics, DrawCommand::BackgroundImage(image))?;
-
-        graphics_end_draw(graphics)?;
+impl Sketch for BackgroundImage {
+    fn settings() -> Settings {
+        Settings::size(400, 400)
     }
-    Ok(())
+
+    fn setup(_g: &mut Graphics) -> Result<Self> {
+        let logo = Image::load("images/logo.png")?;
+        Ok(BackgroundImage { logo })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        g.background_image(&self.logo);
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<BackgroundImage>()
 }

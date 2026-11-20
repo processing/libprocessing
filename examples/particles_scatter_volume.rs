@@ -1,10 +1,4 @@
-use processing_glfw::GlfwContext;
-use std::time::Instant;
-
-use bevy::math::Vec3;
 use processing::prelude::*;
-use processing_render::geometry::AttributeFormat;
-use processing_render::render::command::DrawCommand;
 
 const AGE_SHADER: &str = r#"
 struct Params { dt: f32, ttl: f32, _pad0: f32, _pad1: f32 }
@@ -34,85 +28,79 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 "#;
 
-fn main() {
-    sketch().unwrap();
-    exit(0).unwrap();
+const BURST: u32 = 250;
+const DT: f32 = 1.0 / 60.0;
+const TTL: f32 = 5.0;
+
+struct ParticlesScatterVolume {
+    particles: Particles,
+    particle: Geometry,
+    // read by the scatter kernel
+    _duck: Geometry,
+    scatter: Compute,
+    aging: Compute,
+    mat: Material,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(600, 400, false)?;
-    init(Config::default())?;
-
-    let surface = glfw_ctx.create_surface(900, 700, false)?;
-    let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
-
-    graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, -100.0, 400.0))?;
-    transform_look_at(graphics, Vec3::new(0.0, -80.0, 0.0))?;
-    graphics_orbit_camera(graphics)?;
-
-    let gltf = gltf_load(graphics, "gltf/Duck.glb")?;
-    let duck = gltf_geometry(gltf, "LOD3spShape")?;
-    let scatter = particles_scatter_volume_create(duck)?;
-
-    let particle = geometry_sphere(0.15, 4, 3)?;
-
-    let capacity: u32 = 30_000;
-    let position_attr = geometry_attribute_position();
-    let scale_attr = geometry_attribute_scale();
-    let life_attr = geometry_attribute_life();
-    let age_attr = geometry_attribute_create("age", AttributeFormat::Float)?;
-
-    let p = particles_create(
-        capacity,
-        vec![position_attr, scale_attr, life_attr, age_attr],
-    )?;
-
-    let age_shader = shader_create(AGE_SHADER)?;
-    let aging = compute_create(age_shader)?;
-
-    let mat = material_create_unlit()?;
-    material_set(
-        mat,
-        "color",
-        shader_value::ShaderValue::Float4([1.0, 1.0, 1.0, 1.0]),
-    )?;
-
-    let burst: u32 = 250;
-    let dt: f32 = 1.0 / 60.0;
-    let ttl: f32 = 5.0;
-    let start = Instant::now();
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.03, 0.03, 0.05)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::Material(mat))?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Particles {
-                particles: p,
-                geometry: Some(particle),
-                topology: Default::default(),
-            },
-        )?;
-        graphics_end_draw(graphics)?;
-
-        let t = start.elapsed().as_secs_f32();
-
-        compute_set(
-            scatter,
-            "seed",
-            shader_value::ShaderValue::UInt((t * 1000.0) as u32 ^ 0xc0ffeeu32),
-        )?;
-        particles_emit_gpu(p, burst, scatter)?;
-
-        compute_set(aging, "dt", shader_value::ShaderValue::Float(dt))?;
-        compute_set(aging, "ttl", shader_value::ShaderValue::Float(ttl))?;
-        particles_apply(p, aging)?;
+impl Sketch for ParticlesScatterVolume {
+    fn settings() -> Settings {
+        Settings::size(900, 700)
     }
 
-    Ok(())
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.camera_position((0, -100, 400));
+        g.camera_look_at((0, -80, 0));
+        g.orbit_camera();
+
+        let gltf = Gltf::load(g, "gltf/Duck.glb")?;
+        let duck = gltf.geometry("LOD3spShape")?;
+        let scatter = Particles::scatter_volume(&duck)?;
+
+        let particle = Geometry::sphere(0.15, 4, 3)?;
+
+        let age = Attribute::new("age", AttributeFormat::Float)?;
+        let particles = Particles::new(
+            30_000,
+            &[
+                Attribute::position(),
+                Attribute::scale(),
+                Attribute::life(),
+                age,
+            ],
+        )?;
+
+        let aging = Compute::new(&Shader::new(AGE_SHADER)?)?;
+
+        let mut mat = Material::unlit()?;
+        mat.set("color", (1.0, 1.0, 1.0, 1.0));
+
+        Ok(ParticlesScatterVolume {
+            particles,
+            particle,
+            _duck: duck,
+            scatter,
+            aging,
+            mat,
+        })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        g.background((0.03, 0.03, 0.05));
+        g.material(&self.mat);
+        g.particles(&self.particles).geometry(&self.particle);
+
+        let t = g.elapsed_time();
+        let seed = (t * 1000.0) as u32 ^ 0xc0ffee;
+        self.scatter.set("seed", seed);
+        self.particles.emit_gpu(BURST, &self.scatter);
+
+        self.aging.set("dt", DT);
+        self.aging.set("ttl", TTL);
+        self.particles.apply(&self.aging);
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<ParticlesScatterVolume>()
 }

@@ -1,100 +1,41 @@
-use bevy::prelude::Color;
-use processing_glfw::GlfwContext;
-
 use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
 
-fn main() {
-    match sketch() {
-        Ok(_) => {
-            eprintln!("Sketch completed successfully");
-            exit(0).unwrap();
-        }
-        Err(e) => {
-            eprintln!("Sketch error: {:?}", e);
-            exit(1).unwrap();
-        }
-    };
+struct Text;
+
+impl Sketch for Text {
+    fn settings() -> Settings {
+        Settings::size(600, 400)
+    }
+
+    fn setup(_g: &mut Graphics) -> Result<Self> {
+        Ok(Text)
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        g.background(255);
+        g.fill(0);
+
+        g.text_size(32);
+        g.text("Hello, Processing!", 50, 100);
+
+        g.text_size(18);
+        g.text("Text rendering with parley + skrifa + lyon", 50, 160);
+
+        g.text_size(16);
+        g.text(
+            "This is a longer paragraph of text that should wrap within its bounding box. \
+             The text uses parley for layout, skrifa for glyph outlines, and lyon for tessellation.",
+            50,
+            220,
+        )
+        .bounds(300, 200);
+
+        g.text_align((TextAlignH::Center, TextAlignV::Top));
+        g.text_size(24);
+        g.text("Centered", 450, 100).max_width(200);
+    }
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(600, 400, false)?;
-    init(Config::default())?;
-
-    let width = 600;
-    let height = 400;
-    let surface = glfw_ctx.create_surface(width, height, false)?;
-    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-
-        graphics_record_command(graphics, DrawCommand::BackgroundColor(Color::WHITE))?;
-        graphics_record_command(graphics, DrawCommand::Fill(Color::BLACK))?;
-        graphics_record_command(graphics, DrawCommand::TextSize(32.0))?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Text {
-                content: "Hello, Processing!".to_string(),
-                x: 50.0,
-                y: 100.0,
-                z: 0.0,
-                max_w: None,
-                max_h: None,
-            },
-        )?;
-
-        graphics_record_command(graphics, DrawCommand::TextSize(18.0))?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Text {
-                content: "Text rendering with parley + skrifa + lyon".to_string(),
-                x: 50.0,
-                y: 160.0,
-                z: 0.0,
-                max_w: None,
-                max_h: None,
-            },
-        )?;
-
-        graphics_record_command(graphics, DrawCommand::TextSize(16.0))?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Text {
-                content: "This is a longer paragraph of text that should wrap within its bounding box. The text uses parley for layout, skrifa for glyph outlines, and lyon for tessellation.".to_string(),
-                x: 50.0,
-                y: 220.0,
-                z: 0.0,
-                max_w: Some(300.0),
-                max_h: Some(200.0),
-            },
-        )?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::TextAlign {
-                h: TextAlignH::Center,
-                v: TextAlignV::Top,
-            },
-        )?;
-        graphics_record_command(graphics, DrawCommand::TextSize(24.0))?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::Text {
-                content: "Centered".to_string(),
-                x: 450.0,
-                y: 100.0,
-                z: 0.0,
-                max_w: Some(200.0),
-                max_h: None,
-            },
-        )?;
-
-        graphics_end_draw(graphics)?;
-    }
-    Ok(())
+fn main() -> Result<()> {
+    processing::run::<Text>()
 }

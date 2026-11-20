@@ -4,7 +4,7 @@ use std::{
     panic,
 };
 
-pub(crate) use processing::prelude::error::ProcessingError;
+pub(crate) use processing::engine::error::ProcessingError;
 
 thread_local! {
     static LAST_ERROR: RefCell<Option<CString>> = const { RefCell::new(None) };

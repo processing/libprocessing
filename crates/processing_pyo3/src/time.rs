@@ -1,15 +1,15 @@
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
 pub fn frame_count() -> PyResult<u32> {
-    processing::prelude::frame_count().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    processing::engine::frame_count().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }
 
 pub fn delta_time() -> PyResult<f32> {
-    processing::prelude::delta_time().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    processing::engine::delta_time().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }
 
 pub fn elapsed_time() -> PyResult<f32> {
-    processing::prelude::elapsed_time().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    processing::engine::elapsed_time().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }
 
 pub fn sync_globals(globals: &Bound<'_, PyAny>) -> PyResult<()> {

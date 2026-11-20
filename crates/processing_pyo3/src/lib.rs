@@ -184,10 +184,10 @@ pub(crate) fn reset_tracked_globals() {
 fn sync_globals(module: &Bound<'_, PyModule>, globals: &Bound<'_, PyAny>) -> PyResult<()> {
     let graphics =
         get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-    let width = ::processing::prelude::surface_width(graphics.surface.entity)
+    let width = ::processing::engine::surface_width(graphics.surface.entity)
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
     let width = if width == 0 { graphics.width } else { width };
-    let height = ::processing::prelude::surface_height(graphics.surface.entity)
+    let height = ::processing::engine::surface_height(graphics.surface.entity)
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
     let height = if height == 0 { graphics.height } else { height };
     input::sync_globals(globals, graphics.surface.entity, width, height)?;
@@ -207,9 +207,9 @@ fn try_call(locals: &Bound<'_, PyAny>, name: &str) -> PyResult<()> {
 }
 
 fn dispatch_event_callbacks(locals: &Bound<'_, PyAny>) -> PyResult<()> {
-    use processing::prelude::*;
+    use processing::engine::*;
     let err =
-        |e: processing::prelude::error::ProcessingError| PyRuntimeError::new_err(format!("{e}"));
+        |e: processing::engine::error::ProcessingError| PyRuntimeError::new_err(format!("{e}"));
 
     if input_mouse_any_just_pressed().map_err(err)? {
         try_call(locals, "mouse_pressed")?;
@@ -620,7 +620,7 @@ pub mod processing_py {
     fn load_gltf(module: &Bound<'_, PyModule>, path: &str) -> PyResult<Gltf> {
         let graphics =
             get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        let entity = ::processing::prelude::gltf_load(graphics.entity, path)
+        let entity = ::processing::engine::gltf_load(graphics.entity, path)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(Gltf::from_entity(entity))
     }
@@ -836,7 +836,7 @@ pub mod processing_py {
             return Ok(false);
         }
 
-        processing::prelude::advance_frame_count()
+        processing::engine::advance_frame_count()
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
         let windows = collect_windows(module)?;
@@ -919,7 +919,7 @@ pub mod processing_py {
         let Some(graphics) = get_graphics(module)? else {
             return Ok(());
         };
-        ::processing::prelude::surface_resize(graphics.surface.entity, w, h)
+        ::processing::engine::surface_resize(graphics.surface.entity, w, h)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
@@ -1162,7 +1162,7 @@ pub mod processing_py {
                 }
                 first_frame = false;
 
-                processing::prelude::advance_frame_count()
+                processing::engine::advance_frame_count()
                     .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
 
                 // One draw() per frame drives every window. Globals target the
@@ -1511,7 +1511,7 @@ pub mod processing_py {
     }
 
     #[pyfunction]
-    #[pyo3(pass_module, signature = (mode=processing::prelude::constants::PBR_NEUTRAL))]
+    #[pyo3(pass_module, signature = (mode=processing::engine::constants::PBR_NEUTRAL))]
     fn tonemapping(module: &Bound<'_, PyModule>, mode: &str) -> PyResult<()> {
         graphics!(module).tonemapping(mode)
     }
@@ -1630,7 +1630,7 @@ pub mod processing_py {
         };
         // The GLFW window is created with the title, but the Window component
         // (which the per-frame sync applies) defaults otherwise — set it too.
-        ::processing::prelude::surface_set_title(surface_entity, title.to_string())
+        ::processing::engine::surface_set_title(surface_entity, title.to_string())
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         let window = Py::new(
             module.py(),
@@ -2198,7 +2198,7 @@ pub mod processing_py {
     }
 
     #[pyfunction]
-    #[pyo3(pass_module, signature = (cx, cy, w, h, start, stop, mode=processing::prelude::constants::OPEN))]
+    #[pyo3(pass_module, signature = (cx, cy, w, h, start, stop, mode=processing::engine::constants::OPEN))]
     fn arc(
         module: &Bound<'_, PyModule>,
         cx: f32,
@@ -2245,7 +2245,7 @@ pub mod processing_py {
     }
 
     #[pyfunction]
-    #[pyo3(pass_module, signature = (kind=processing::prelude::constants::POLYGON))]
+    #[pyo3(pass_module, signature = (kind=processing::engine::constants::POLYGON))]
     fn begin_shape(module: &Bound<'_, PyModule>, kind: &str) -> PyResult<()> {
         graphics!(module).begin_shape(kind)
     }
@@ -2426,7 +2426,7 @@ pub mod processing_py {
     #[pyfunction]
     #[pyo3(pass_module, signature = (filename=None))]
     fn save_frame(module: &Bound<'_, PyModule>, filename: Option<&str>) -> PyResult<()> {
-        let count = ::processing::prelude::frame_count()
+        let count = ::processing::engine::frame_count()
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         let name = match filename {
             Some(f) => substitute_frame_number(f, count),

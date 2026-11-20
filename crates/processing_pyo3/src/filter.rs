@@ -1,5 +1,5 @@
 use bevy::prelude::Entity;
-use processing::prelude::*;
+use processing::engine::*;
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError, PyValueError},
     prelude::*,

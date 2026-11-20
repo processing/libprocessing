@@ -1,104 +1,69 @@
-use processing_glfw::GlfwContext;
-
-use bevy::math::Vec3;
 use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
 
-fn main() {
-    match sketch() {
-        Ok(_) => {
-            eprintln!("Sketch completed successfully");
-            exit(0).unwrap();
-        }
-        Err(e) => {
-            eprintln!("Sketch error: {:?}", e);
-            exit(1).unwrap();
-        }
-    };
+struct CameraControllers {
+    cube: Geometry,
+    sun: Light,
+    angle: f32,
+    mode: u8,
 }
 
-fn sketch() -> error::Result<()> {
-    let width = 800;
-    let height = 600;
-    let mut glfw_ctx = GlfwContext::new(width, height, false)?;
-    init(Config::default())?;
-
-    let surface = glfw_ctx.create_surface(width, height, false)?;
-    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
-    let box_geo = geometry_box(100.0, 100.0, 100.0)?;
-
-    graphics_mode_3d(graphics)?;
-    graphics_orbit_camera(graphics)?;
-
-    let dir_light =
-        light_create_directional(graphics, bevy::color::Color::srgb(1.0, 0.98, 0.95), 1_500.0)?;
-    transform_set_position(dir_light, Vec3::new(300.0, -400.0, 300.0))?;
-    transform_look_at(dir_light, Vec3::ZERO)?;
-
-    let mut angle: f32 = 0.0;
-    let mut mode = 0u8;
-
-    while glfw_ctx.poll_events() {
-        if input_key_just_pressed(KeyCode::Digit1)? {
-            graphics_mode_3d(graphics)?;
-            graphics_orbit_camera(graphics)?;
-            mode = 0;
-        }
-        if input_key_just_pressed(KeyCode::Digit2)? {
-            graphics_mode_3d(graphics)?;
-            graphics_free_camera(graphics)?;
-            mode = 1;
-        }
-        if input_key_just_pressed(KeyCode::Digit3)? {
-            graphics_mode_2d(graphics)?;
-            graphics_pan_camera(graphics)?;
-            mode = 2;
-        }
-
-        graphics_begin_draw(graphics)?;
-        graphics_light(graphics, dir_light)?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.05, 0.05, 0.07)),
-        )?;
-
-        if mode < 2 {
-            graphics_record_command(
-                graphics,
-                DrawCommand::Fill(bevy::color::Color::srgb(1.0, 0.85, 0.57)),
-            )?;
-            graphics_record_command(graphics, DrawCommand::Roughness(0.3))?;
-            graphics_record_command(graphics, DrawCommand::Metallic(0.8))?;
-            graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-            graphics_record_command(
-                graphics,
-                DrawCommand::Rotate {
-                    angle: -angle,
-                    axis: Vec3::Z,
-                },
-            )?;
-            graphics_record_command(graphics, DrawCommand::Geometry(box_geo))?;
-            graphics_record_command(graphics, DrawCommand::PopMatrix)?;
-        } else {
-            graphics_record_command(
-                graphics,
-                DrawCommand::Fill(bevy::color::Color::srgb(0.8, 0.3, 0.2)),
-            )?;
-            graphics_record_command(
-                graphics,
-                DrawCommand::Rect {
-                    x: 300.0,
-                    y: 200.0,
-                    w: 200.0,
-                    h: 200.0,
-                    radii: [0.0; 4],
-                },
-            )?;
-        }
-
-        graphics_end_draw(graphics)?;
-        angle += 0.02;
+impl Sketch for CameraControllers {
+    fn settings() -> Settings {
+        Settings::size(800, 600)
     }
-    Ok(())
+
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.orbit_camera();
+
+        let sun = g.create_directional_light((1.0, 0.98, 0.95), 1500);
+        sun.position((300, -400, 300)).look_at((0, 0, 0));
+
+        let cube = Geometry::cube(100)?;
+        Ok(CameraControllers {
+            cube,
+            sun,
+            angle: 0.0,
+            mode: 0,
+        })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        if g.key_just_pressed(Key::Num1) {
+            g.mode_3d();
+            g.orbit_camera();
+            self.mode = 0;
+        }
+        if g.key_just_pressed(Key::Num2) {
+            g.mode_3d();
+            g.free_camera();
+            self.mode = 1;
+        }
+        if g.key_just_pressed(Key::Num3) {
+            g.mode_2d();
+            g.pan_camera();
+            self.mode = 2;
+        }
+
+        g.light(&self.sun);
+        g.background((0.05, 0.05, 0.07));
+
+        if self.mode < 2 {
+            g.fill((1.0, 0.85, 0.57));
+            g.roughness(0.3);
+            g.metallic(0.8);
+            let g = g.push();
+            g.rotate(-self.angle);
+            g.model(&self.cube);
+        } else {
+            g.fill((0.8, 0.3, 0.2));
+            g.rect(300, 200, 200, 200);
+        }
+
+        self.angle += 0.02;
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<CameraControllers>()
 }

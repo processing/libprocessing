@@ -12,9 +12,9 @@ use napi::bindgen_prelude::{
 };
 use napi::{Env, Error, Result};
 use napi_derive::napi;
-use processing::prelude::color::{ColorMode, ColorSpace};
-use processing::prelude::error::ProcessingError;
-use processing::prelude::{shader_value::ShaderValue, *};
+use processing::engine::color::{ColorMode, ColorSpace};
+use processing::engine::error::ProcessingError;
+use processing::engine::{shader_value::ShaderValue, *};
 use processing_glfw::GlfwContext;
 
 fn check<T, E: std::fmt::Display>(result: std::result::Result<T, E>) -> Result<T> {
@@ -3123,7 +3123,7 @@ pub fn js_mouse_wheel() -> Result<f64> {
     check(input_mouse_wheel()).map(f64::from)
 }
 
-fn key_code_from_u32(val: u32) -> processing::prelude::error::Result<KeyCode> {
+fn key_code_from_u32(val: u32) -> processing::engine::error::Result<KeyCode> {
     match val {
         PROCESSING_KEY_SPACE => Ok(KeyCode::Space),
         PROCESSING_KEY_QUOTE => Ok(KeyCode::Quote),

@@ -1,73 +1,47 @@
-use processing_glfw::GlfwContext;
-
-use bevy::math::Vec3;
 use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
 
-fn main() {
-    match sketch() {
-        Ok(_) => {
-            eprintln!("Sketch completed successfully");
-            exit(0).unwrap();
-        }
-        Err(e) => {
-            eprintln!("Sketch error: {:?}", e);
-            exit(1).unwrap();
-        }
-    };
+struct CustomMaterial {
+    cube: Geometry,
+    material: Material,
+    angle: f32,
 }
 
-fn sketch() -> error::Result<()> {
-    let width = 400;
-    let height = 400;
-    let mut glfw_ctx = GlfwContext::new(width, height, false)?;
-    init(Config::default())?;
-
-    let surface = glfw_ctx.create_surface(width, height, false)?;
-    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
-    let box_geo = geometry_box(100.0, 100.0, 100.0)?;
-
-    graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(100.0, -100.0, 300.0))?;
-    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
-
-    let shader = shader_load("shaders/custom_material.wesl")?;
-    let mat = material_create_custom(shader)?;
-    material_set(
-        mat,
-        "color",
-        shader_value::ShaderValue::Float4([1.0, 0.2, 0.4, 1.0]),
-    )?;
-
-    let mut angle = 0.0;
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.1, 0.1, 0.15)),
-        )?;
-
-        graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Rotate {
-                angle: -angle,
-                axis: Vec3::Z,
-            },
-        )?;
-        graphics_record_command(graphics, DrawCommand::Material(mat))?;
-        graphics_record_command(graphics, DrawCommand::Geometry(box_geo))?;
-        graphics_record_command(graphics, DrawCommand::PopMatrix)?;
-
-        graphics_end_draw(graphics)?;
-
-        angle += 0.02;
+impl Sketch for CustomMaterial {
+    fn settings() -> Settings {
+        Settings::size(400, 400)
     }
 
-    material_destroy(mat)?;
-    shader_destroy(shader)?;
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.camera_position((100, -100, 300));
+        g.camera_look_at((0, 0, 0));
 
-    Ok(())
+        let shader = Shader::load("shaders/custom_material.wesl")?;
+        let mut material = Material::new(&shader)?;
+        material.set("color", (1.0, 0.2, 0.4, 1.0));
+
+        let cube = Geometry::cube(100)?;
+        Ok(CustomMaterial {
+            cube,
+            material,
+            angle: 0.0,
+        })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        g.background((0.1, 0.1, 0.15));
+
+        {
+            let g = g.push();
+            g.rotate(-self.angle);
+            g.material(&self.material);
+            g.model(&self.cube);
+        }
+
+        self.angle += 0.02;
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<CustomMaterial>()
 }

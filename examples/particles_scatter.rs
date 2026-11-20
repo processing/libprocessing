@@ -1,10 +1,4 @@
-use processing_glfw::GlfwContext;
-use std::time::Instant;
-
-use bevy::math::Vec3;
 use processing::prelude::*;
-use processing_render::geometry::AttributeFormat;
-use processing_render::render::command::DrawCommand;
 
 const AGE_SHADER: &str = r#"
 struct Params { dt: f32, ttl: f32, _pad0: f32, _pad1: f32 }
@@ -34,91 +28,87 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 "#;
 
-fn main() {
-    sketch().unwrap();
-    exit(0).unwrap();
+const BURST: u32 = 600;
+const DT: f32 = 1.0 / 60.0;
+const TTL: f32 = 4.0;
+
+struct ParticlesScatter {
+    particles: Particles,
+    particle: Geometry,
+    // read by the scatter kernel
+    _source: Geometry,
+    scatter: Compute,
+    aging: Compute,
+    mat: Material,
+    key: Light,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(900, 700, false)?;
-    init(Config::default())?;
-
-    let surface = glfw_ctx.create_surface(900, 700, false)?;
-    let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
-
-    graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, -0.4, 4.5))?;
-    transform_look_at(graphics, Vec3::ZERO)?;
-
-    let key =
-        light_create_directional(graphics, bevy::color::Color::srgb(1.0, 0.95, 0.85), 4500.0)?;
-
-    let source = geometry_sphere(1.2, 96, 48)?;
-    let scatter = particles_scatter_create(source)?;
-
-    let particle = geometry_sphere(0.005, 6, 4)?;
-
-    let capacity: u32 = 40_000;
-    let position_attr = geometry_attribute_position();
-    let scale_attr = geometry_attribute_scale();
-    let life_attr = geometry_attribute_life();
-    let age_attr = geometry_attribute_create("age", AttributeFormat::Float)?;
-
-    let p = particles_create(
-        capacity,
-        vec![position_attr, scale_attr, life_attr, age_attr],
-    )?;
-
-    let age_shader = shader_create(AGE_SHADER)?;
-    let aging = compute_create(age_shader)?;
-
-    let mat = material_create_pbr()?;
-    material_set(
-        mat,
-        "color",
-        shader_value::ShaderValue::Float4([0.9, 0.85, 1.0, 1.0]),
-    )?;
-
-    let burst: u32 = 600;
-    let dt: f32 = 1.0 / 60.0;
-    let ttl: f32 = 4.0;
-    let start = Instant::now();
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-        graphics_light(graphics, key)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.03, 0.03, 0.05)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::Material(mat))?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Particles {
-                particles: p,
-                geometry: Some(particle),
-                topology: Default::default(),
-            },
-        )?;
-        graphics_end_draw(graphics)?;
-
-        let t = start.elapsed().as_secs_f32();
-        let cam_x = (t * 0.25).cos() * 4.5;
-        let cam_z = (t * 0.25).sin() * 4.5;
-        transform_set_position(graphics, Vec3::new(cam_x, -0.4, cam_z))?;
-        transform_look_at(graphics, Vec3::ZERO)?;
-
-        compute_set(
-            scatter,
-            "seed",
-            shader_value::ShaderValue::UInt((t * 1000.0) as u32 ^ 0xc0ffeeu32),
-        )?;
-        particles_emit_gpu(p, burst, scatter)?;
-
-        compute_set(aging, "dt", shader_value::ShaderValue::Float(dt))?;
-        compute_set(aging, "ttl", shader_value::ShaderValue::Float(ttl))?;
-        particles_apply(p, aging)?;
+impl Sketch for ParticlesScatter {
+    fn settings() -> Settings {
+        Settings::size(900, 700)
     }
 
-    Ok(())
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.camera_position((0.0, -0.4, 4.5));
+        g.camera_look_at((0, 0, 0));
+
+        let key = g.create_directional_light((1.0, 0.95, 0.85), 4500.0);
+
+        let source = Geometry::sphere(1.2, 96, 48)?;
+        let scatter = Particles::scatter_surface(&source)?;
+
+        let particle = Geometry::sphere(0.005, 6, 4)?;
+
+        let age = Attribute::new("age", AttributeFormat::Float)?;
+        let particles = Particles::new(
+            40_000,
+            &[
+                Attribute::position(),
+                Attribute::scale(),
+                Attribute::life(),
+                age,
+            ],
+        )?;
+
+        let aging = Compute::new(&Shader::new(AGE_SHADER)?)?;
+
+        let mut mat = Material::pbr()?;
+        mat.set("color", (0.9, 0.85, 1.0, 1.0));
+
+        Ok(ParticlesScatter {
+            particles,
+            particle,
+            _source: source,
+            scatter,
+            aging,
+            mat,
+            key,
+        })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        g.light(&self.key);
+        g.background((0.03, 0.03, 0.05));
+        g.material(&self.mat);
+        g.particles(&self.particles).geometry(&self.particle);
+
+        let t = g.elapsed_time();
+        let cam_x = (t * 0.25).cos() * 4.5;
+        let cam_z = (t * 0.25).sin() * 4.5;
+        g.camera_position((cam_x, -0.4, cam_z));
+        g.camera_look_at((0, 0, 0));
+
+        let seed = (t * 1000.0) as u32 ^ 0xc0ffee;
+        self.scatter.set("seed", seed);
+        self.particles.emit_gpu(BURST, &self.scatter);
+
+        self.aging.set("dt", DT);
+        self.aging.set("ttl", TTL);
+        self.particles.apply(&self.aging);
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<ParticlesScatter>()
 }

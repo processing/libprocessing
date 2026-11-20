@@ -6226,6 +6226,7 @@ name = "processing"
 version = "0.4.0"
 dependencies = [
  "bevy",
+ "bytemuck",
  "js-sys",
  "processing_audio",
  "processing_core",

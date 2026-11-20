@@ -762,6 +762,34 @@ pub fn graphics_record_command(graphics_entity: Entity, cmd: DrawCommand) -> err
     })
 }
 
+pub fn graphics_record_command_slot(
+    graphics_entity: Entity,
+    cmd: DrawCommand,
+) -> error::Result<render::command::CommandSlot> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(graphics::record_command_slot, (graphics_entity, cmd))
+            .unwrap()
+    })
+}
+
+pub fn graphics_amend_command(
+    slot: render::command::CommandSlot,
+    amend: impl FnOnce(&mut DrawCommand),
+) -> error::Result<()> {
+    app_mut(|app| {
+        let mut buffer = app
+            .world_mut()
+            .get_mut::<render::command::CommandBuffer>(slot.graphics())
+            .ok_or(error::ProcessingError::GraphicsNotFound)?;
+        let cmd = buffer.get_mut(slot).ok_or_else(|| {
+            error::ProcessingError::InvalidArgument("command was already flushed".to_string())
+        })?;
+        amend(cmd);
+        Ok(())
+    })
+}
+
 pub fn graphics_mode_3d(graphics_entity: Entity) -> error::Result<()> {
     app_mut(|app| {
         flush(app, graphics_entity)?;
@@ -1397,7 +1425,7 @@ pub fn graphics_immediate_light(
     graphics_entity: Entity,
     kind: render::command::LightKind,
     transform: Transform,
-) -> error::Result<()> {
+) -> error::Result<Entity> {
     app_mut(|app| {
         let light_entity = app
             .world_mut()
@@ -1411,7 +1439,8 @@ pub fn graphics_immediate_light(
                 graphics::record_command,
                 (graphics_entity, DrawCommand::Light(light_entity)),
             )
-            .unwrap()
+            .unwrap()?;
+        Ok(light_entity)
     })
 }
 
@@ -2821,11 +2850,28 @@ fn text_query_state(
     render::primitive::text::OwnedTextParams,
     text::font::TextContext,
 )> {
-    let state = app
-        .world()
+    let world = app.world();
+    let state = world
         .get::<render::RenderState>(graphics_entity)
         .ok_or(error::ProcessingError::GraphicsNotFound)?;
-    let params = render::primitive::text::OwnedTextParams::from_render_state(state, max_w, max_h);
+    // plus unflushed text settings
+    let mut style = state.style.clone();
+    if let Some(buffer) = world.get::<render::command::CommandBuffer>(graphics_entity) {
+        for cmd in buffer.iter() {
+            match cmd {
+                DrawCommand::PushStyle => style.push(),
+                DrawCommand::PopStyle => style.pop(),
+                cmd => {
+                    style.apply_text(cmd, |font| {
+                        world
+                            .get::<text::font::Font>(font)
+                            .map(|f| f.family_name.clone())
+                    });
+                }
+            }
+        }
+    }
+    let params = render::primitive::text::OwnedTextParams::from_style(&style, max_w, max_h);
     let text_cx = app.world().resource::<text::font::TextContext>().clone();
     Ok((params, text_cx))
 }

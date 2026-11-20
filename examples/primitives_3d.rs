@@ -1,130 +1,63 @@
-use processing_glfw::GlfwContext;
-
-use bevy::math::{Vec2, Vec3};
 use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
 
-fn main() {
-    sketch().unwrap();
-    exit(0).unwrap();
+struct Primitives3d {
+    t: f32,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(900, 400, false)?;
-    init(Config::default())?;
-
-    let surface = glfw_ctx.create_surface(900, 400, false)?;
-    let graphics = graphics_create(surface, 900, 400, TextureFormat::Rgba16Float)?;
-
-    graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, -80.0, 800.0))?;
-    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
-
-    let light =
-        light_create_directional(graphics, bevy::color::Color::srgb(0.9, 0.85, 0.8), 300.0)?;
-
-    let pbr = material_create_pbr()?;
-    material_set(pbr, "roughness", shader_value::ShaderValue::Float(0.35))?;
-
-    let mut t: f32 = 0.0;
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-        graphics_light(graphics, light)?;
-
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.06, 0.06, 0.08)),
-        )?;
-
-        graphics_record_command(graphics, DrawCommand::Fill(bevy::color::Color::WHITE))?;
-        graphics_record_command(graphics, DrawCommand::Material(pbr))?;
-
-        let shapes: Vec<(f32, Box<dyn Fn(f32) -> DrawCommand>)> = vec![
-            (
-                -315.0,
-                Box::new(|_| DrawCommand::Box {
-                    width: 50.0,
-                    height: 50.0,
-                    depth: 50.0,
-                }),
-            ),
-            (
-                -225.0,
-                Box::new(|_| DrawCommand::Sphere {
-                    radius: 30.0,
-                    sectors: 24,
-                    stacks: 16,
-                }),
-            ),
-            (
-                -135.0,
-                Box::new(|_| DrawCommand::Cylinder {
-                    radius: 25.0,
-                    height: 60.0,
-                    detail: 24,
-                }),
-            ),
-            (
-                -45.0,
-                Box::new(|_| DrawCommand::Cone {
-                    radius: 25.0,
-                    height: 60.0,
-                    detail: 24,
-                }),
-            ),
-            (
-                45.0,
-                Box::new(|_| DrawCommand::Torus {
-                    radius: 30.0,
-                    tube_radius: 10.0,
-                    major_segments: 24,
-                    minor_segments: 16,
-                }),
-            ),
-            (
-                135.0,
-                Box::new(|_| DrawCommand::Capsule {
-                    radius: 15.0,
-                    length: 40.0,
-                    detail: 24,
-                }),
-            ),
-            (
-                225.0,
-                Box::new(|_| DrawCommand::ConicalFrustum {
-                    radius_top: 15.0,
-                    radius_bottom: 25.0,
-                    height: 60.0,
-                    detail: 24,
-                }),
-            ),
-            (
-                315.0,
-                Box::new(|_| DrawCommand::Tetrahedron { radius: 30.0 }),
-            ),
-        ];
-
-        for (x_offset, make_cmd) in &shapes {
-            graphics_record_command(graphics, DrawCommand::PushMatrix)?;
-            graphics_record_command(
-                graphics,
-                DrawCommand::Translate(Vec2::new(*x_offset, 0.0).extend(0.0)),
-            )?;
-            graphics_record_command(
-                graphics,
-                DrawCommand::Rotate {
-                    angle: -t,
-                    axis: Vec3::Z,
-                },
-            )?;
-            graphics_record_command(graphics, make_cmd(t))?;
-            graphics_record_command(graphics, DrawCommand::PopMatrix)?;
-        }
-
-        graphics_end_draw(graphics)?;
-        t += 0.015;
+impl Sketch for Primitives3d {
+    fn settings() -> Settings {
+        Settings::size(900, 400)
     }
 
-    Ok(())
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        g.camera_position((0, -80, 800));
+        g.camera_look_at((0, 0, 0));
+        Ok(Primitives3d { t: 0.0 })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        g.background((0.06, 0.06, 0.08));
+        g.directional_light((0.9, 0.85, 0.8), 300);
+        g.fill(255);
+        g.roughness(0.35);
+
+        for i in 0..8 {
+            let g = g.push();
+            g.translate((-315 + i * 90, 0));
+            g.rotate(-self.t);
+            match i {
+                0 => {
+                    g.cube(50);
+                }
+                1 => {
+                    g.sphere(30).detail(24, 16);
+                }
+                2 => {
+                    g.cylinder(25, 60).detail(24);
+                }
+                3 => {
+                    g.cone(25, 60).detail(24);
+                }
+                4 => {
+                    g.torus(30, 10).detail(24, 16);
+                }
+                5 => {
+                    g.capsule(15, 40).detail(24);
+                }
+                6 => {
+                    g.conical_frustum(15, 25, 60).detail(24);
+                }
+                _ => {
+                    g.tetrahedron(30);
+                }
+            }
+        }
+
+        self.t += 0.015;
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<Primitives3d>()
 }

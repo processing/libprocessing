@@ -1,5 +1,5 @@
 use bevy::prelude::Entity;
-use processing::prelude::*;
+use processing::engine::*;
 use processing_render::geometry;
 use pyo3::types::{PyDict, PyTuple};
 use pyo3::{
@@ -18,7 +18,7 @@ use processing_render::particles::compact::compact as compact_indices;
 use crate::compute::{Buffer, Compute};
 use crate::graphics::{Geometry, Image};
 
-use processing::prelude::constants as c;
+use processing::engine::constants as c;
 use processing_render::{
     COMBINE_ADD, COMBINE_DIV, COMBINE_MAX, COMBINE_MIN, COMBINE_MUL, COMBINE_POW, COMBINE_SUB,
 };

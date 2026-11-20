@@ -4,6 +4,7 @@ use bevy_naga_reflect::dynamic_shader::DynamicShader;
 use bevy_naga_reflect::reflect::ParameterCategory;
 
 use crate::compute::{Buffer, Compute, MeshBindingRef};
+use crate::geometry::Geometry;
 use crate::image::Image as PImage;
 use crate::material::custom::{apply_field_coerced, apply_reflect_field, shader_value_to_reflect};
 use crate::particles::grid::Grid;
@@ -30,10 +31,30 @@ fn require_read_only_storage(shader: &DynamicShader, name: &str, kind: &str) -> 
     Ok(())
 }
 
-fn bind_compute_mesh(compute: &mut Compute, name: String, value: ShaderValue) -> Result<()> {
+fn bind_compute_mesh(
+    compute: &mut Compute,
+    name: String,
+    value: ShaderValue,
+    geometries: &Query<&Geometry>,
+    meshes: &mut Assets<Mesh>,
+) -> Result<()> {
     match value {
         ShaderValue::MeshAttribute(geom, attribute) => {
             require_read_only_storage(&compute.shader, &name, "mesh attribute")?;
+            // an attribute binds as its own vertex buffer
+            let handle = &geometries
+                .get(geom)
+                .map_err(|_| ProcessingError::GeometryNotFound)?
+                .handle;
+            let mesh = meshes
+                .get(handle)
+                .ok_or(ProcessingError::GeometryNotFound)?;
+            if mesh.binding_count() < mesh.attributes().count() {
+                meshes
+                    .get_mut(handle)
+                    .ok_or(ProcessingError::GeometryNotFound)?
+                    .deinterleave();
+            }
             compute
                 .mesh_bindings
                 .insert(name, MeshBindingRef::Attribute { geom, attribute });
@@ -155,10 +176,12 @@ pub fn set_property(
     mut p_buffers: Query<&mut Buffer>,
     mut p_images: Query<&mut PImage>,
     grids: Query<&Grid>,
+    geometries: Query<&Geometry>,
+    mut meshes: ResMut<Assets<Mesh>>,
 ) -> Result<bool> {
     let shader = if let Ok(compute) = computes.get_mut(entity) {
         if let ShaderValue::MeshAttribute(..) | ShaderValue::MeshIndex(..) = value {
-            bind_compute_mesh(compute.into_inner(), name, value)?;
+            bind_compute_mesh(compute.into_inner(), name, value, &geometries, &mut meshes)?;
             return Ok(true);
         }
         &mut compute.into_inner().shader

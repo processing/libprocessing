@@ -1,82 +1,60 @@
-use processing_glfw::GlfwContext;
-
-use bevy::{color::Color, prelude::LinearRgba};
 use processing::prelude::*;
 
-fn main() {
-    match sketch() {
-        Ok(_) => {
-            eprintln!("Sketch completed successfully");
-            exit(0).unwrap();
-        }
-        Err(e) => {
-            eprintln!("Sketch error: {:?}", e);
-            exit(1).unwrap();
-        }
-    };
+struct UpdatePixels {
+    first_frame: bool,
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(100, 100, false)?;
-    init(Config::default())?;
-
-    let width = 100;
-    let height = 100;
-    let surface = glfw_ctx.create_surface(width, height, false)?;
-    let graphics = graphics_create(surface, width, height, TextureFormat::Rgba16Float)?;
-
-    let rect_w = 10;
-    let rect_h = 10;
-    let red = LinearRgba::new(1.0, 0.0, 0.0, 1.0);
-    let red_pixels: Vec<LinearRgba> = vec![red; rect_w * rect_h];
-
-    let blue = LinearRgba::new(0.0, 0.0, 1.0, 1.0);
-    let blue_pixels: Vec<LinearRgba> = vec![blue; rect_w * rect_h];
-
-    let mut first_frame = true;
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-
-        graphics_record_command(graphics, DrawCommand::BackgroundColor(Color::BLACK))?;
-        graphics_flush(graphics)?;
-        graphics_update_region(graphics, 20, 20, rect_w as u32, rect_h as u32, &red_pixels)?;
-        graphics_update_region(graphics, 60, 60, rect_w as u32, rect_h as u32, &blue_pixels)?;
-
-        graphics_end_draw(graphics)?;
-
-        if first_frame {
-            first_frame = false;
-
-            let pixels = graphics_readback(graphics)?;
-            eprintln!("Total pixels: {}", pixels.len());
-
-            for y in 0..height {
-                for x in 0..width {
-                    let idx = (y * width + x) as usize;
-                    if idx < pixels.len() {
-                        let pixel = pixels[idx];
-                        if pixel.red > 0.5 {
-                            eprint!("R");
-                        } else if pixel.blue > 0.5 {
-                            eprint!("B");
-                        } else if pixel.alpha > 0.5 {
-                            eprint!(".");
-                        } else {
-                            eprint!(" ");
-                        }
-                    }
-                }
-                eprintln!();
-            }
-
-            eprintln!("\nSample pixels:");
-            eprintln!("(25, 25): {:?}", pixels[25 * width as usize + 25]);
-            eprintln!("(65, 65): {:?}", pixels[65 * width as usize + 65]);
-            eprintln!("(0, 0): {:?}", pixels[0]);
-            eprintln!("(50, 50): {:?}", pixels[50 * width as usize + 50]);
-        }
+impl Sketch for UpdatePixels {
+    fn settings() -> Settings {
+        Settings::size(100, 100)
     }
 
-    Ok(())
+    fn setup(_g: &mut Graphics) -> Result<Self> {
+        Ok(UpdatePixels { first_frame: true })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        g.background(0);
+
+        let red = vec![Color::rgb(1.0, 0.0, 0.0); 10 * 10];
+        let blue = vec![Color::rgb(0.0, 0.0, 1.0); 10 * 10];
+        g.set_pixels_region(20, 20, 10, 10, &red).unwrap();
+        g.set_pixels_region(60, 60, 10, 10, &blue).unwrap();
+
+        if self.first_frame {
+            self.first_frame = false;
+            print_pixels(g);
+        }
+    }
+}
+
+fn print_pixels(g: &mut Graphics) {
+    let pixels = g.pixels().unwrap();
+    let width = g.pixel_width() as usize;
+    eprintln!("Total pixels: {}", pixels.len());
+
+    for row in pixels.chunks(width) {
+        for pixel in row {
+            if pixel.red() > 0.5 {
+                eprint!("R");
+            } else if pixel.blue() > 0.5 {
+                eprint!("B");
+            } else if pixel.alpha() > 0.5 {
+                eprint!(".");
+            } else {
+                eprint!(" ");
+            }
+        }
+        eprintln!();
+    }
+
+    eprintln!("\nSample pixels:");
+    eprintln!("(25, 25): {:?}", pixels[25 * width + 25]);
+    eprintln!("(65, 65): {:?}", pixels[65 * width + 65]);
+    eprintln!("(0, 0): {:?}", pixels[0]);
+    eprintln!("(50, 50): {:?}", pixels[50 * width + 50]);
+}
+
+fn main() -> Result<()> {
+    processing::run::<UpdatePixels>()
 }

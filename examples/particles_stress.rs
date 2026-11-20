@@ -1,8 +1,4 @@
-use processing_glfw::GlfwContext;
-
-use bevy::math::Vec3;
 use processing::prelude::*;
-use processing_render::render::command::DrawCommand;
 
 const GRID: u32 = 100; // GRID^3 particles
 const SPACING: f32 = 1.0;
@@ -29,11 +25,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 }
 "#;
 
-fn main() {
-    sketch().unwrap();
-    exit(0).unwrap();
-}
-
 fn hash_u32(mut x: u32) -> u32 {
     x = (x ^ 61).wrapping_add(x >> 16);
     x = x.wrapping_add(x << 3);
@@ -47,100 +38,91 @@ fn hash_unit(seed: u32) -> f32 {
     (hash_u32(seed) as f32) / (u32::MAX as f32)
 }
 
-fn sketch() -> error::Result<()> {
-    let mut glfw_ctx = GlfwContext::new(900, 700, false)?;
-    init(Config::default())?;
+struct ParticlesStress {
+    red: Light,
+    green: Light,
+    blue: Light,
+    cube: Geometry,
+    particles: Particles,
+    mat: Material,
+    spin: Compute,
+}
 
-    let surface = glfw_ctx.create_surface(900, 700, false)?;
-    let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
-
-    graphics_mode_3d(graphics)?;
-    let extent = (GRID as f32) * SPACING * 0.5;
-    transform_set_position(graphics, Vec3::new(0.0, -extent * 0.6, extent * 2.5))?;
-    transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
-    graphics_orbit_camera(graphics)?;
-
-    let red = light_create_directional(graphics, bevy::color::Color::srgb(1.0, 0.0, 0.0), 1000.0)?;
-    transform_set_position(red, Vec3::new(1.0, 0.0, 0.0))?;
-    transform_look_at(red, Vec3::ZERO)?;
-
-    let green =
-        light_create_directional(graphics, bevy::color::Color::srgb(0.0, 1.0, 0.0), 1000.0)?;
-    transform_set_position(green, Vec3::new(0.0, -1.0, 0.0))?;
-    transform_look_at(green, Vec3::ZERO)?;
-
-    let blue = light_create_directional(graphics, bevy::color::Color::srgb(0.0, 0.0, 1.0), 1000.0)?;
-    transform_set_position(blue, Vec3::new(0.0, 0.0, 1.0))?;
-    transform_look_at(blue, Vec3::ZERO)?;
-
-    let cube = geometry_box(0.35, 0.35, 0.35)?;
-
-    let capacity = GRID * GRID * GRID;
-    let position_attr = geometry_attribute_position();
-    let color_attr = geometry_attribute_color();
-    let p = particles_create(capacity, vec![position_attr, color_attr])?;
-
-    let mut positions: Vec<f32> = Vec::with_capacity(capacity as usize * 3);
-    let mut colors: Vec<f32> = Vec::with_capacity(capacity as usize * 4);
-    let extent_half = (GRID as f32) * SPACING * 0.5;
-    for i in 0..capacity {
-        let rx = hash_unit(i.wrapping_mul(2654435761).wrapping_add(0x9E37));
-        let ry = hash_unit(i.wrapping_mul(40503).wrapping_add(0x68E1));
-        let rz = hash_unit(i.wrapping_mul(2246822519).wrapping_add(0xC2B2));
-        positions.push((rx * 2.0 - 1.0) * extent_half);
-        positions.push((1.0 - ry * 2.0) * extent_half);
-        positions.push((rz * 2.0 - 1.0) * extent_half);
-        colors.push(rx);
-        colors.push(ry);
-        colors.push(rz);
-        colors.push(1.0);
-    }
-    let position_buf =
-        particles_buffer(p, position_attr)?.ok_or(error::ProcessingError::ParticlesNotFound)?;
-    let color_buf =
-        particles_buffer(p, color_attr)?.ok_or(error::ProcessingError::ParticlesNotFound)?;
-    buffer_write(
-        position_buf,
-        positions.iter().flat_map(|f| f.to_le_bytes()).collect(),
-    )?;
-    buffer_write(
-        color_buf,
-        colors.iter().flat_map(|f| f.to_le_bytes()).collect(),
-    )?;
-
-    let mat = {
-        let m = material_create_pbr()?;
-        material_set_albedo_buffer(m, color_buf)?;
-        m
-    };
-    let spin_shader = shader_create(SPIN_SHADER)?;
-    let spin = compute_create(spin_shader)?;
-
-    eprintln!("{capacity} particles");
-
-    while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-        graphics_light(graphics, red)?;
-        graphics_light(graphics, green)?;
-        graphics_light(graphics, blue)?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.04, 0.04, 0.07)),
-        )?;
-        graphics_record_command(graphics, DrawCommand::Material(mat))?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Particles {
-                particles: p,
-                geometry: Some(cube),
-                topology: Default::default(),
-            },
-        )?;
-        graphics_end_draw(graphics)?;
-
-        compute_set(spin, "dt", shader_value::ShaderValue::Float(0.003))?;
-        particles_apply(p, spin)?;
+impl Sketch for ParticlesStress {
+    fn settings() -> Settings {
+        Settings::size(900, 700)
     }
 
-    Ok(())
+    fn setup(g: &mut Graphics) -> Result<Self> {
+        g.mode_3d();
+        let extent = (GRID as f32) * SPACING * 0.5;
+        g.camera_position((0.0, -extent * 0.6, extent * 2.5));
+        g.camera_look_at((0, 0, 0));
+        g.orbit_camera();
+
+        let red = g.create_directional_light((1.0, 0.0, 0.0), 1000.0);
+        red.position((1, 0, 0)).look_at((0, 0, 0));
+
+        let green = g.create_directional_light((0.0, 1.0, 0.0), 1000.0);
+        green.position((0, -1, 0)).look_at((0, 0, 0));
+
+        let blue = g.create_directional_light((0.0, 0.0, 1.0), 1000.0);
+        blue.position((0, 0, 1)).look_at((0, 0, 0));
+
+        let cube = Geometry::cube((0.35, 0.35, 0.35))?;
+
+        let capacity = GRID * GRID * GRID;
+        let particles = Particles::new(capacity, &[Attribute::position(), Attribute::color()])?;
+
+        let mut positions: Vec<Vec3> = Vec::with_capacity(capacity as usize);
+        let mut colors: Vec<Color> = Vec::with_capacity(capacity as usize);
+        let extent_half = (GRID as f32) * SPACING * 0.5;
+        for i in 0..capacity {
+            let rx = hash_unit(i.wrapping_mul(2654435761).wrapping_add(0x9E37));
+            let ry = hash_unit(i.wrapping_mul(40503).wrapping_add(0x68E1));
+            let rz = hash_unit(i.wrapping_mul(2246822519).wrapping_add(0xC2B2));
+            positions.push(Vec3::new(
+                (rx * 2.0 - 1.0) * extent_half,
+                (1.0 - ry * 2.0) * extent_half,
+                (rz * 2.0 - 1.0) * extent_half,
+            ));
+            colors.push(Color::rgb(rx, ry, rz));
+        }
+        particles.buffer(Attribute::position()).write(&positions);
+        let mut color_buf = particles.buffer(Attribute::color());
+        color_buf.write(&colors);
+
+        let mut mat = Material::pbr()?;
+        mat.albedo_buffer(&color_buf);
+
+        let spin = Compute::new(&Shader::new(SPIN_SHADER)?)?;
+
+        eprintln!("{capacity} particles");
+
+        Ok(ParticlesStress {
+            red,
+            green,
+            blue,
+            cube,
+            particles,
+            mat,
+            spin,
+        })
+    }
+
+    fn draw(&mut self, g: &mut Graphics) {
+        g.light(&self.red);
+        g.light(&self.green);
+        g.light(&self.blue);
+        g.background((0.04, 0.04, 0.07));
+        g.material(&self.mat);
+        g.particles(&self.particles).geometry(&self.cube);
+
+        self.spin.set("dt", 0.003);
+        self.particles.apply(&self.spin);
+    }
+}
+
+fn main() -> Result<()> {
+    processing::run::<ParticlesStress>()
 }

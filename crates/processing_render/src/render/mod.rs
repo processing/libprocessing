@@ -208,7 +208,7 @@ pub fn flush_draw_commands(
             }
         }
 
-        let draw_commands = std::mem::take(&mut cmd_buffer.commands);
+        let draw_commands = cmd_buffer.take();
         let mut batch = BatchState::new(graphics_entity, render_layers.clone());
         let mut pending = draw_commands.into_iter();
         let mut drained = true;
@@ -218,6 +218,23 @@ pub fn flush_draw_commands(
             let opens_pass =
                 |batch: &BatchState| batch.draw_index == 0 && batch.current_mesh.is_none();
             match cmd {
+                DrawCommand::TextFont(_)
+                | DrawCommand::TextStyle(_)
+                | DrawCommand::TextWeight(_)
+                | DrawCommand::TextVariation { .. }
+                | DrawCommand::ClearTextVariations
+                | DrawCommand::TextFeature { .. }
+                | DrawCommand::NoTextFeature { .. }
+                | DrawCommand::ClearTextFeatures
+                | DrawCommand::TextSize(_)
+                | DrawCommand::TextAlign { .. }
+                | DrawCommand::TextLeading(_)
+                | DrawCommand::TextWrap(_)
+                | DrawCommand::TextGlyphColors(_) => {
+                    state.style.apply_text(&cmd, |font| {
+                        p_fonts.get(font).ok().map(|f| f.family_name.clone())
+                    });
+                }
                 DrawCommand::Light(entity) => {
                     if let Ok((light, transform)) = p_lights.get(entity) {
                         let placed = crate::light::place(state.transform.current(), transform);
@@ -900,7 +917,7 @@ pub fn flush_draw_commands(
                 }
                 DrawCommand::BackgroundColor(color) => {
                     if !opens_pass(&batch) {
-                        cmd_buffer.commands = std::iter::once(cmd).chain(pending).collect();
+                        cmd_buffer.requeue(std::iter::once(cmd).chain(pending));
                         drained = false;
                         break;
                     }
@@ -913,7 +930,7 @@ pub fn flush_draw_commands(
                         continue;
                     };
                     if !opens_pass(&batch) {
-                        cmd_buffer.commands = std::iter::once(cmd).chain(pending).collect();
+                        cmd_buffer.requeue(std::iter::once(cmd).chain(pending));
                         drained = false;
                         break;
                     }
@@ -1281,71 +1298,6 @@ pub fn flush_draw_commands(
                         tetrahedron_mesh(radius),
                         &p_material_handles,
                     );
-                }
-                DrawCommand::TextFont(font_entity) => {
-                    if let Some(entity) = font_entity {
-                        if let Ok(font) = p_fonts.get(entity) {
-                            state.style.text_font_family = Some(font.family_name.clone());
-                        }
-                    } else {
-                        state.style.text_font_family = None;
-                    }
-                }
-                DrawCommand::TextStyle(style) => {
-                    state.style.text_style = style;
-                }
-                DrawCommand::TextWeight(weight) => {
-                    state.style.text_weight = Some(weight);
-                }
-                DrawCommand::TextVariation { tag, value } => {
-                    if let Some(existing) = state
-                        .style
-                        .text_variations
-                        .iter_mut()
-                        .find(|(t, _)| *t == tag)
-                    {
-                        existing.1 = value;
-                    } else {
-                        state.style.text_variations.push((tag, value));
-                    }
-                }
-                DrawCommand::ClearTextVariations => {
-                    state.style.text_variations.clear();
-                }
-                DrawCommand::TextFeature { tag, value } => {
-                    if let Some(existing) = state
-                        .style
-                        .text_features
-                        .iter_mut()
-                        .find(|(t, _)| *t == tag)
-                    {
-                        existing.1 = value;
-                    } else {
-                        state.style.text_features.push((tag, value));
-                    }
-                }
-                DrawCommand::NoTextFeature { tag } => {
-                    state.style.text_features.retain(|(t, _)| *t != tag);
-                }
-                DrawCommand::ClearTextFeatures => {
-                    state.style.text_features.clear();
-                }
-                DrawCommand::TextSize(size) => {
-                    state.style.text_size = size;
-                    state.style.text_leading = None;
-                }
-                DrawCommand::TextAlign { h, v } => {
-                    state.style.text_align_h = h;
-                    state.style.text_align_v = v;
-                }
-                DrawCommand::TextLeading(leading) => {
-                    state.style.text_leading = Some(leading);
-                }
-                DrawCommand::TextWrap(mode) => {
-                    state.style.text_wrap = mode;
-                }
-                DrawCommand::TextGlyphColors(colors) => {
-                    state.style.text_glyph_colors = Some(colors);
                 }
                 DrawCommand::Text {
                     content,
