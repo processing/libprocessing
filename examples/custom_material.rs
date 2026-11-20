@@ -1,4 +1,4 @@
-use processing::{Geometry, Graphics, Material, Result, Settings, Shader, Sketch};
+use processing::prelude::*;
 
 struct CustomMaterial {
     cube: Geometry,
@@ -32,7 +32,7 @@ impl Sketch for CustomMaterial {
         g.background((0.1, 0.1, 0.15));
 
         {
-            let mut g = g.push();
+            let g = g.push();
             g.rotate(-self.angle);
             g.material(&self.material);
             g.model(&self.cube);

@@ -3,7 +3,7 @@ use bevy::{
     prelude::Entity,
     render::render_resource::{Extent3d, TextureFormat},
 };
-use processing::prelude::{error::ProcessingError, shader_value::ShaderValue, *};
+use processing::engine::{error::ProcessingError, shader_value::ShaderValue, *};
 
 use crate::color::Color;
 
@@ -333,12 +333,12 @@ pub extern "C" fn processing_color_mode(
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
     error::check(|| {
-        let space = processing::prelude::color::ColorSpace::from_u8(space).ok_or_else(|| {
-            processing::prelude::error::ProcessingError::InvalidArgument(format!(
+        let space = processing::engine::color::ColorSpace::from_u8(space).ok_or_else(|| {
+            processing::engine::error::ProcessingError::InvalidArgument(format!(
                 "unknown color space: {space}"
             ))
         })?;
-        let mode = processing::prelude::color::ColorMode::new(space, max1, max2, max3, max_alpha);
+        let mode = processing::engine::color::ColorMode::new(space, max1, max2, max3, max_alpha);
         graphics_set_color_mode(graphics_entity, mode)
     });
 }
@@ -396,7 +396,7 @@ pub extern "C" fn processing_set_stroke_cap(graphics_id: u64, cap: u8) {
     error::check(|| {
         graphics_record_command(
             graphics_entity,
-            DrawCommand::StrokeCap(processing::prelude::StrokeCapMode::from(cap)),
+            DrawCommand::StrokeCap(processing::engine::StrokeCapMode::from(cap)),
         )
     });
 }
@@ -409,7 +409,7 @@ pub extern "C" fn processing_set_stroke_join(graphics_id: u64, join: u8) {
     error::check(|| {
         graphics_record_command(
             graphics_entity,
-            DrawCommand::StrokeJoin(processing::prelude::StrokeJoinMode::from(join)),
+            DrawCommand::StrokeJoin(processing::engine::StrokeJoinMode::from(join)),
         )
     });
 }
@@ -422,7 +422,7 @@ pub extern "C" fn processing_rect_mode(graphics_id: u64, mode: u8) {
     error::check(|| {
         graphics_record_command(
             graphics_entity,
-            DrawCommand::RectMode(processing::prelude::ShapeMode::from(mode)),
+            DrawCommand::RectMode(processing::engine::ShapeMode::from(mode)),
         )
     });
 }
@@ -435,7 +435,7 @@ pub extern "C" fn processing_ellipse_mode(graphics_id: u64, mode: u8) {
     error::check(|| {
         graphics_record_command(
             graphics_entity,
-            DrawCommand::EllipseMode(processing::prelude::ShapeMode::from(mode)),
+            DrawCommand::EllipseMode(processing::engine::ShapeMode::from(mode)),
         )
     });
 }
@@ -631,7 +631,7 @@ pub extern "C" fn processing_set_blend_mode(graphics_id: u64, mode: u8) {
     error::clear_error();
     let graphics_entity = Entity::from_bits(graphics_id);
     error::check(|| {
-        let blend_state = processing::prelude::BlendMode::try_from(mode)?.to_blend_state();
+        let blend_state = processing::engine::BlendMode::try_from(mode)?.to_blend_state();
         graphics_record_command(graphics_entity, DrawCommand::BlendMode(blend_state))
     });
 }
@@ -828,7 +828,7 @@ pub extern "C" fn processing_arc(
                 h,
                 start,
                 stop,
-                mode: processing::prelude::ArcMode::from(mode),
+                mode: processing::engine::ArcMode::from(mode),
             },
         )
     });
@@ -1022,7 +1022,7 @@ pub extern "C" fn processing_begin_shape(graphics_id: u64, kind: u8) {
         graphics_record_command(
             graphics_entity,
             DrawCommand::BeginShape {
-                kind: processing::prelude::ShapeKind::from(kind),
+                kind: processing::engine::ShapeKind::from(kind),
             },
         )
     });
@@ -1827,7 +1827,7 @@ pub extern "C" fn processing_image_mode(graphics_id: u64, mode: u8) {
     error::check(|| {
         graphics_record_command(
             graphics_entity,
-            DrawCommand::ImageMode(processing::prelude::ShapeMode::from(mode)),
+            DrawCommand::ImageMode(processing::engine::ShapeMode::from(mode)),
         )
     });
 }
@@ -4009,8 +4009,8 @@ pub extern "C" fn processing_graphics_tonemapping(graphics_id: u64, mode: u8) {
     error::clear_error();
     error::check(|| {
         let tonemapping =
-            processing::prelude::graphics::tonemapping_from_u8(mode).ok_or_else(|| {
-                processing::prelude::error::ProcessingError::InvalidArgument(format!(
+            processing::engine::graphics::tonemapping_from_u8(mode).ok_or_else(|| {
+                processing::engine::error::ProcessingError::InvalidArgument(format!(
                     "unknown tonemapping: {mode}"
                 ))
             })?;
@@ -4348,7 +4348,7 @@ pub extern "C" fn processing_mouse_wheel() -> f32 {
     error::check(input_mouse_wheel).unwrap_or(0.0)
 }
 
-fn key_code_from_u32(val: u32) -> processing::prelude::error::Result<KeyCode> {
+fn key_code_from_u32(val: u32) -> processing::engine::error::Result<KeyCode> {
     match val {
         PROCESSING_KEY_SPACE => Ok(KeyCode::Space),
         PROCESSING_KEY_QUOTE => Ok(KeyCode::Quote),

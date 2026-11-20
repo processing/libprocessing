@@ -1,5 +1,6 @@
 use bevy::prelude::Entity;
-use processing_core::error::Result;
+use processing_core::error::{ProcessingError, Result};
+use processing_render::geometry_attribute_info;
 use processing_render::particles::{
     particles_apply, particles_capacity, particles_create, particles_create_from_geometry,
     particles_destroy, particles_emit, particles_emit_gpu, particles_ensure_attribute,
@@ -12,7 +13,71 @@ use processing_render::particles::{
 };
 
 use crate::graphics::expect;
-use crate::{Attribute, Buffer, Compute, Geometry};
+use crate::{Attribute, Buffer, BufferElement, Compute, Geometry};
+
+/// A slice or `Vec` of [`BufferElement`]s.
+pub trait BufferData {
+    #[doc(hidden)]
+    fn bytes(&self) -> Vec<u8>;
+    #[doc(hidden)]
+    fn element(&self) -> ElementInfo;
+}
+
+#[doc(hidden)]
+pub struct ElementInfo {
+    name: &'static str,
+    float: bool,
+    components: usize,
+}
+
+impl ElementInfo {
+    fn of<T: BufferElement>() -> Self {
+        Self {
+            name: std::any::type_name::<T>(),
+            float: T::FLOAT,
+            components: T::COMPONENTS,
+        }
+    }
+}
+
+impl<T: BufferElement> BufferData for [T] {
+    fn bytes(&self) -> Vec<u8> {
+        T::to_bytes(self)
+    }
+    fn element(&self) -> ElementInfo {
+        ElementInfo::of::<T>()
+    }
+}
+
+impl<T: BufferElement> BufferData for Vec<T> {
+    fn bytes(&self) -> Vec<u8> {
+        T::to_bytes(self)
+    }
+    fn element(&self) -> ElementInfo {
+        ElementInfo::of::<T>()
+    }
+}
+
+impl<T: BufferElement, const N: usize> BufferData for [T; N] {
+    fn bytes(&self) -> Vec<u8> {
+        T::to_bytes(self)
+    }
+    fn element(&self) -> ElementInfo {
+        ElementInfo::of::<T>()
+    }
+}
+
+fn check_element(attribute: &Attribute, element: &ElementInfo) -> Result<()> {
+    let (name, format) = geometry_attribute_info(attribute.0)?;
+    let components = format as usize;
+    if element.float && (element.components == 1 || element.components == components) {
+        return Ok(());
+    }
+    Err(ProcessingError::InvalidArgument(format!(
+        "can't write {} to {format:?} attribute `{name}`",
+        element.name
+    )))
+}
 
 #[derive(Debug)]
 pub struct Particles(pub(crate) Entity);
@@ -42,11 +107,12 @@ impl Particles {
     }
 
     /// Replaces the oldest when full.
-    pub fn emit(&mut self, count: u32, values: &[(Attribute, &[f32])]) {
-        let data = values
-            .iter()
-            .map(|(attribute, v)| (attribute.0, bytemuck::cast_slice(v).to_vec()))
-            .collect();
+    pub fn emit(&mut self, count: u32, values: &[(Attribute, &dyn BufferData)]) {
+        let mut data = Vec::with_capacity(values.len());
+        for (attribute, v) in values {
+            expect(check_element(attribute, &v.element()));
+            data.push((attribute.0, v.bytes()));
+        }
         expect(particles_emit(self.0, count, data));
     }
 

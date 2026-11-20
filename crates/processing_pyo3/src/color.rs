@@ -6,7 +6,7 @@ use pyo3::{exceptions::PyTypeError, prelude::*, types::PyTuple};
 
 use crate::math::{PyVec3, PyVec4, PyVecIter, hash_f32};
 
-pub use processing::prelude::color::{ColorMode, ColorSpace};
+pub use processing::engine::color::{ColorMode, ColorSpace};
 
 fn int_maxes(space: &ColorSpace) -> [f32; 4] {
     match space {

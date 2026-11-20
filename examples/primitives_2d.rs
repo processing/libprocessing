@@ -1,6 +1,4 @@
-use std::f32::consts::PI;
-
-use processing::{Graphics, Result, Settings, Sketch};
+use processing::prelude::*;
 
 struct Primitives2d {
     t: f32,
@@ -21,7 +19,6 @@ impl Sketch for Primitives2d {
         let cy = 300.0;
         g.background((0.95, 0.93, 0.9));
 
-        // concentric arcs
         g.no_fill();
         g.stroke_weight(2);
         for i in 0..12 {
@@ -32,7 +29,6 @@ impl Sketch for Primitives2d {
             g.arc(cx, cy, r * 2.0, r * 2.0, start, start + PI * 1.2);
         }
 
-        // dots riding the arcs
         g.no_stroke();
         for i in 0..12 {
             let r = 40.0 + i as f32 * 18.0;
@@ -41,7 +37,6 @@ impl Sketch for Primitives2d {
             g.circle(cx + r * angle.cos(), cy + r * angle.sin(), 6);
         }
 
-        // orbiting triangles
         g.fill((0.1, 0.1, 0.1, 0.15));
         for i in 0..6 {
             let angle = t * 0.5 + i as f32 * PI / 3.0;
@@ -58,7 +53,6 @@ impl Sketch for Primitives2d {
             );
         }
 
-        // pulsing diamond
         let d = 15.0 + 5.0 * (t * 3.0).sin();
         g.fill((0.9, 0.4, 0.1, 0.4));
         g.quad(cx, cy - d, cx + d, cy, cx, cy + d, cx - d, cy);

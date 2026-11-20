@@ -1,4 +1,4 @@
-use processing::{Graphics, Result, Settings, Sketch, StrokeJoin};
+use processing::prelude::*;
 
 struct Stroke2d;
 

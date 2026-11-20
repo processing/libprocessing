@@ -1,4 +1,4 @@
-use processing::{Filter, Graphics, Result, Settings, Sketch};
+use processing::prelude::*;
 
 const FILTERS: [Filter; 8] = [
     Filter::Invert,
@@ -39,7 +39,6 @@ impl Sketch for Filters {
         let filter = FILTERS[(seconds / 2) as usize % FILTERS.len()];
         g.filter(filter);
 
-        // unfiltered
         g.fill((0.0, 0.0, 1.0));
         g.rect(160, 160, 80, 80);
     }

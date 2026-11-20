@@ -1,4 +1,4 @@
-use processing::{Geometry, Graphics, Key, Light, Result, Settings, Sketch};
+use processing::prelude::*;
 
 struct CameraControllers {
     cube: Geometry,
@@ -52,7 +52,7 @@ impl Sketch for CameraControllers {
             g.fill((1.0, 0.85, 0.57));
             g.roughness(0.3);
             g.metallic(0.8);
-            let mut g = g.push();
+            let g = g.push();
             g.rotate(-self.angle);
             g.model(&self.cube);
         } else {

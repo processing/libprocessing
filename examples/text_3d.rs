@@ -1,4 +1,4 @@
-use processing::{Geometry, Graphics, Light, Material, Result, Settings, Sketch, TextStyle};
+use processing::prelude::*;
 
 struct Text3d {
     word: Geometry,
@@ -45,8 +45,8 @@ impl Sketch for Text3d {
         g.material(&self.glow);
 
         {
-            let mut g = g.push();
-            g.scale((15, 15));
+            let g = g.push();
+            g.scale((1.5, 1.5));
             g.rotate(-self.t * 0.3);
             g.model(&self.word);
         }

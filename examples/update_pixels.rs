@@ -1,4 +1,4 @@
-use processing::{Color, Graphics, Result, Settings, Sketch};
+use processing::prelude::*;
 
 struct UpdatePixels {
     first_frame: bool,
@@ -28,7 +28,7 @@ impl Sketch for UpdatePixels {
     }
 }
 
-fn print_pixels(g: &Graphics) {
+fn print_pixels(g: &mut Graphics) {
     let pixels = g.pixels().unwrap();
     let width = g.pixel_width() as usize;
     eprintln!("Total pixels: {}", pixels.len());

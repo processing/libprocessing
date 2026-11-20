@@ -1,4 +1,4 @@
-use processing::{Graphics, Result, Settings, Sketch};
+use processing::prelude::*;
 
 struct Rectangle;
 

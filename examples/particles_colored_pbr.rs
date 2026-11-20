@@ -1,6 +1,4 @@
-use processing::{
-    Attribute, Geometry, Graphics, Light, Material, Particles, Result, Settings, Sketch,
-};
+use processing::prelude::*;
 
 struct ParticlesColoredPbr {
     sun: Light,
@@ -24,18 +22,17 @@ impl Sketch for ParticlesColoredPbr {
         let sphere = Geometry::sphere(0.3, 16, 12)?;
 
         let capacity: u32 = 512;
-        let mut positions: Vec<f32> = Vec::with_capacity(capacity as usize * 3);
-        let mut colors: Vec<f32> = Vec::with_capacity(capacity as usize * 4);
+        let mut positions: Vec<Vec3> = Vec::with_capacity(capacity as usize);
+        let mut colors: Vec<Color> = Vec::with_capacity(capacity as usize);
         for x in 0..8 {
             for y in 0..8 {
                 for z in 0..8 {
-                    positions.push((x as f32 - 3.5) * 1.4);
-                    positions.push((3.5 - y as f32) * 1.4);
-                    positions.push((z as f32 - 3.5) * 1.4);
-                    colors.push(x as f32 / 7.0);
-                    colors.push(y as f32 / 7.0);
-                    colors.push(z as f32 / 7.0);
-                    colors.push(1.0);
+                    positions.push(Vec3::new(
+                        (x as f32 - 3.5) * 1.4,
+                        (3.5 - y as f32) * 1.4,
+                        (z as f32 - 3.5) * 1.4,
+                    ));
+                    colors.push(Color::rgb(x as f32 / 7.0, y as f32 / 7.0, z as f32 / 7.0));
                 }
             }
         }

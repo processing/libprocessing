@@ -1,6 +1,6 @@
 use bevy::prelude::Entity;
 use bevy::window::{MonitorSelection, WindowLevel, WindowMode};
-use processing::prelude::*;
+use processing::engine::*;
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 
 use crate::glfw::GlfwContext;

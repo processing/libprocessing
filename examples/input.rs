@@ -1,4 +1,4 @@
-use processing::{Graphics, Key, Result, Settings, Sketch};
+use processing::prelude::*;
 
 struct Input;
 

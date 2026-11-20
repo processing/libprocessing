@@ -478,8 +478,7 @@ pub fn text_to_points(
     })
 }
 
-/// 3D extruded mesh from text outlines: front and back faces plus side walls,
-/// in Bevy's Y-up convention.
+/// 3D extruded mesh from text outlines: front and back faces plus side walls.
 pub fn text_to_model(
     content: &str,
     x: f32,
@@ -615,6 +614,8 @@ pub fn text_to_model(
         }
     });
 
+    // built y-up
+    crate::geometry::mirror_y(&mut mesh);
     mesh
 }
 

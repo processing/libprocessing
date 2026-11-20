@@ -16,7 +16,7 @@
 use std::collections::HashMap;
 
 use bevy::prelude::Entity;
-use processing::prelude::*;
+use processing::engine::*;
 use processing_render::geometry::AttributeFormat;
 use pyo3::buffer::PyBuffer;
 use pyo3::exceptions::{PyRuntimeError, PyValueError};

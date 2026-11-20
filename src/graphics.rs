@@ -1,3 +1,4 @@
+use std::cell::{Cell, RefCell};
 use std::fmt::Display;
 
 use bevy::math::{Affine3A, Vec3, Vec4};
@@ -9,21 +10,23 @@ use processing_input::{
     input_mouse_is_pressed, input_mouse_wheel, input_mouse_x, input_mouse_y, input_moved_x,
     input_moved_y, input_pmouse_x, input_pmouse_y,
 };
+use processing_render::color::ColorMode;
 use processing_render::render::command::{
-    BlendMode, DrawCommand, LightKind, ShapeKind, ShapeMode, StrokeCapMode, StrokeJoinMode,
-    TextAlignH, TextAlignV, TextStyle, TextWrapMode,
+    BlendMode, CommandSlot, DrawCommand, LightKind, ShapeKind, ShapeMode, StrokeCapMode,
+    StrokeJoinMode, TextAlignH, TextAlignV, TextStyle, TextWrapMode,
 };
 use processing_render::{
     camera_reset, camera_set_center, camera_set_distance, delta_time, elapsed_time, frame_count,
-    geometry_create_from_mesh, graphics_apply_filter, graphics_begin_draw, graphics_create,
-    graphics_destroy, graphics_disable_camera_controller, graphics_end_draw, graphics_flush,
-    graphics_free_camera, graphics_get_matrix, graphics_light, graphics_mode_2d, graphics_mode_3d,
-    graphics_orbit_camera, graphics_ortho, graphics_pan_camera, graphics_perspective,
-    graphics_readback, graphics_record_command, graphics_screen_point, graphics_set_color_mode,
-    graphics_text_ascent, graphics_text_descent, graphics_text_to_model, graphics_text_width,
-    graphics_update, graphics_update_region, light_create_directional, light_create_point,
-    light_create_spot, light_destroy, surface_create_offscreen, surface_destroy,
-    surface_physical_height, surface_physical_width, transform_look_at, transform_set_position,
+    geometry_create_from_mesh, graphics_amend_command, graphics_apply_filter, graphics_begin_draw,
+    graphics_create, graphics_destroy, graphics_disable_camera_controller, graphics_end_draw,
+    graphics_flush, graphics_free_camera, graphics_get_matrix, graphics_light, graphics_mode_2d,
+    graphics_mode_3d, graphics_orbit_camera, graphics_ortho, graphics_pan_camera,
+    graphics_perspective, graphics_readback, graphics_record_command, graphics_record_command_slot,
+    graphics_screen_point, graphics_set_color_mode, graphics_text_ascent, graphics_text_descent,
+    graphics_text_to_model, graphics_text_width, graphics_update, graphics_update_region,
+    light_create_directional, light_create_point, light_create_spot, light_destroy,
+    surface_create_offscreen, surface_destroy, surface_physical_height, surface_physical_width,
+    transform_look_at, transform_set_position,
 };
 
 use crate::color::{ColorArg, ColorSpace, ColorState, IntoColorMax};
@@ -43,10 +46,10 @@ pub struct Graphics {
     pub(crate) surface: Entity,
     width: u32,
     height: u32,
-    color: ColorState,
-    style_stack: Vec<ColorState>,
+    color: Cell<ColorState>,
+    style_stack: RefCell<Vec<ColorState>>,
     offscreen: bool,
-    exit_requested: bool,
+    exit_requested: Cell<bool>,
 }
 
 impl Graphics {
@@ -56,10 +59,10 @@ impl Graphics {
             surface,
             width,
             height,
-            color: ColorState::default(),
-            style_stack: Vec::new(),
+            color: Cell::new(ColorState::default()),
+            style_stack: RefCell::new(Vec::new()),
             offscreen: false,
-            exit_requested: false,
+            exit_requested: Cell::new(false),
         }
     }
 
@@ -76,18 +79,26 @@ impl Graphics {
     pub fn begin_draw(&mut self) -> BeginDraw<'_> {
         assert!(
             self.offscreen,
-            "processing: begin_draw is for Graphics::create surfaces; the sketch window is drawn every frame"
+            "processing: begin_draw needs a Graphics::create surface"
         );
         self.begin_frame();
         BeginDraw::new(self)
     }
 
-    pub(crate) fn record(&mut self, cmd: DrawCommand) {
+    pub(crate) fn record(&self, cmd: DrawCommand) {
         expect(graphics_record_command(self.entity, cmd));
     }
 
+    pub(crate) fn record_slot(&self, cmd: DrawCommand) -> CommandSlot {
+        expect(graphics_record_command_slot(self.entity, cmd))
+    }
+
+    pub(crate) fn amend(&self, slot: CommandSlot, amend: impl FnOnce(&mut DrawCommand)) {
+        expect(graphics_amend_command(slot, amend));
+    }
+
     pub(crate) fn begin_frame(&mut self) {
-        self.style_stack.clear();
+        self.style_stack.get_mut().clear();
         expect(graphics_begin_draw(self.entity));
     }
 
@@ -96,7 +107,7 @@ impl Graphics {
     }
 
     pub(crate) fn resolve(&self, color: impl Into<ColorArg>) -> bevy::color::Color {
-        self.color.resolve(color.into()).0
+        self.color.get().resolve(color.into()).0
     }
 
     pub fn width(&self) -> f32 {
@@ -142,106 +153,100 @@ impl Graphics {
         (expect(elapsed_time()) * 1000.0) as u32
     }
 
-    pub fn exit(&mut self) {
-        self.exit_requested = true;
+    pub fn exit(&self) {
+        self.exit_requested.set(true);
     }
 
     pub(crate) fn exit_requested(&self) -> bool {
-        self.exit_requested
+        self.exit_requested.get()
     }
 
-    pub fn color_mode(&mut self, space: ColorSpace) -> ColorModeBuilder<'_> {
-        ColorModeBuilder {
-            g: self,
-            space,
-            max: None,
-        }
+    pub fn color_mode(&self, space: ColorSpace) -> ColorModeBuilder<'_> {
+        self.set_color_state(ColorState {
+            mode: ColorMode::with_defaults(space),
+            explicit_max: false,
+        });
+        ColorModeBuilder { g: self, space }
     }
 
     pub fn color(&self, color: impl Into<ColorArg>) -> Color {
-        self.color.resolve(color.into())
+        self.color.get().resolve(color.into())
     }
 
-    pub fn background(&mut self, color: impl Into<ColorArg>) {
+    pub fn background(&self, color: impl Into<ColorArg>) {
         let c = self.resolve(color);
         self.record(DrawCommand::BackgroundColor(c));
     }
 
-    pub fn background_image(&mut self, image: &impl AsImage) {
+    pub fn background_image(&self, image: &impl AsImage) {
         self.record(DrawCommand::BackgroundImage(image.image_entity()));
     }
 
-    pub fn fill(&mut self, color: impl Into<ColorArg>) {
+    pub fn fill(&self, color: impl Into<ColorArg>) {
         let c = self.resolve(color);
         self.record(DrawCommand::Fill(c));
     }
 
-    pub fn no_fill(&mut self) {
+    pub fn no_fill(&self) {
         self.record(DrawCommand::NoFill);
     }
 
-    pub fn stroke(&mut self, color: impl Into<ColorArg>) {
+    pub fn stroke(&self, color: impl Into<ColorArg>) {
         let c = self.resolve(color);
         self.record(DrawCommand::StrokeColor(c));
     }
 
-    pub fn no_stroke(&mut self) {
+    pub fn no_stroke(&self) {
         self.record(DrawCommand::NoStroke);
     }
 
-    pub fn stroke_weight(&mut self, weight: impl Scalar) {
+    pub fn stroke_weight(&self, weight: impl Scalar) {
         self.record(DrawCommand::StrokeWeight(weight.to_f32()));
     }
 
-    pub fn stroke_cap(&mut self, cap: StrokeCapMode) {
+    pub fn stroke_cap(&self, cap: StrokeCapMode) {
         self.record(DrawCommand::StrokeCap(cap));
     }
 
-    pub fn stroke_join(&mut self, join: StrokeJoinMode) {
+    pub fn stroke_join(&self, join: StrokeJoinMode) {
         self.record(DrawCommand::StrokeJoin(join));
     }
 
-    pub fn tint(&mut self, color: impl Into<ColorArg>) {
+    pub fn tint(&self, color: impl Into<ColorArg>) {
         let c = self.resolve(color);
         self.record(DrawCommand::Tint(c));
     }
 
-    pub fn no_tint(&mut self) {
+    pub fn no_tint(&self) {
         self.record(DrawCommand::NoTint);
     }
 
-    pub fn blend_mode(&mut self, mode: BlendMode) {
+    pub fn blend_mode(&self, mode: BlendMode) {
         self.record(DrawCommand::BlendMode(mode.to_blend_state()));
     }
 
-    pub fn rect_mode(&mut self, mode: ShapeMode) {
+    pub fn rect_mode(&self, mode: ShapeMode) {
         self.record(DrawCommand::RectMode(mode));
     }
 
-    pub fn ellipse_mode(&mut self, mode: ShapeMode) {
+    pub fn ellipse_mode(&self, mode: ShapeMode) {
         self.record(DrawCommand::EllipseMode(mode));
     }
 
-    pub fn image_mode(&mut self, mode: ShapeMode) {
+    pub fn image_mode(&self, mode: ShapeMode) {
         self.record(DrawCommand::ImageMode(mode));
     }
 
-    pub fn rect(
-        &mut self,
-        x: impl Scalar,
-        y: impl Scalar,
-        w: impl Scalar,
-        h: impl Scalar,
-    ) -> Rect<'_> {
+    pub fn rect(&self, x: impl Scalar, y: impl Scalar, w: impl Scalar, h: impl Scalar) -> Rect<'_> {
         Rect::new(self, x.to_f32(), y.to_f32(), w.to_f32(), h.to_f32())
     }
 
-    pub fn square(&mut self, x: impl Scalar, y: impl Scalar, size: impl Scalar) -> Rect<'_> {
+    pub fn square(&self, x: impl Scalar, y: impl Scalar, size: impl Scalar) -> Rect<'_> {
         let s = size.to_f32();
         Rect::new(self, x.to_f32(), y.to_f32(), s, s)
     }
 
-    pub fn ellipse(&mut self, x: impl Scalar, y: impl Scalar, w: impl Scalar, h: impl Scalar) {
+    pub fn ellipse(&self, x: impl Scalar, y: impl Scalar, w: impl Scalar, h: impl Scalar) {
         self.record(DrawCommand::Ellipse {
             cx: x.to_f32(),
             cy: y.to_f32(),
@@ -250,13 +255,13 @@ impl Graphics {
         });
     }
 
-    pub fn circle(&mut self, x: impl Scalar, y: impl Scalar, diameter: impl Scalar) {
+    pub fn circle(&self, x: impl Scalar, y: impl Scalar, diameter: impl Scalar) {
         let d = diameter.to_f32();
         self.ellipse(x, y, d, d);
     }
 
     pub fn arc(
-        &mut self,
+        &self,
         x: impl Scalar,
         y: impl Scalar,
         w: impl Scalar,
@@ -272,7 +277,7 @@ impl Graphics {
         )
     }
 
-    pub fn line(&mut self, x1: impl Scalar, y1: impl Scalar, x2: impl Scalar, y2: impl Scalar) {
+    pub fn line(&self, x1: impl Scalar, y1: impl Scalar, x2: impl Scalar, y2: impl Scalar) {
         self.record(DrawCommand::Line {
             x1: x1.to_f32(),
             y1: y1.to_f32(),
@@ -281,7 +286,7 @@ impl Graphics {
         });
     }
 
-    pub fn point(&mut self, x: impl Scalar, y: impl Scalar) {
+    pub fn point(&self, x: impl Scalar, y: impl Scalar) {
         self.record(DrawCommand::Point {
             x: x.to_f32(),
             y: y.to_f32(),
@@ -289,7 +294,7 @@ impl Graphics {
     }
 
     pub fn triangle(
-        &mut self,
+        &self,
         x1: impl Scalar,
         y1: impl Scalar,
         x2: impl Scalar,
@@ -308,7 +313,7 @@ impl Graphics {
     }
 
     pub fn quad(
-        &mut self,
+        &self,
         x1: impl Scalar,
         y1: impl Scalar,
         x2: impl Scalar,
@@ -331,7 +336,7 @@ impl Graphics {
     }
 
     pub fn bezier(
-        &mut self,
+        &self,
         x1: impl Scalar,
         y1: impl Scalar,
         x2: impl Scalar,
@@ -354,7 +359,7 @@ impl Graphics {
     }
 
     pub fn curve(
-        &mut self,
+        &self,
         x1: impl Scalar,
         y1: impl Scalar,
         x2: impl Scalar,
@@ -380,36 +385,36 @@ impl Graphics {
         Shape::new(self, kind)
     }
 
-    pub fn image(&mut self, image: &impl AsImage, x: impl Scalar, y: impl Scalar) -> ImageDraw<'_> {
+    pub fn image(&self, image: &impl AsImage, x: impl Scalar, y: impl Scalar) -> ImageDraw<'_> {
         ImageDraw::new(self, image.image_entity(), x.to_f32(), y.to_f32())
     }
 
-    pub fn text(&mut self, content: impl Display, x: impl Scalar, y: impl Scalar) -> Text<'_> {
+    pub fn text(&self, content: impl Display, x: impl Scalar, y: impl Scalar) -> Text<'_> {
         Text::new(self, content.to_string(), x.to_f32(), y.to_f32())
     }
 
-    pub fn text_font(&mut self, font: Font) {
+    pub fn text_font(&self, font: Font) {
         self.record(DrawCommand::TextFont(Some(font.0)));
     }
 
-    pub fn text_size(&mut self, size: impl Scalar) {
+    pub fn text_size(&self, size: impl Scalar) {
         self.record(DrawCommand::TextSize(size.to_f32()));
     }
 
-    pub fn text_leading(&mut self, leading: impl Scalar) {
+    pub fn text_leading(&self, leading: impl Scalar) {
         self.record(DrawCommand::TextLeading(leading.to_f32()));
     }
 
-    pub fn text_align(&mut self, align: impl Into<TextAlign>) {
+    pub fn text_align(&self, align: impl Into<TextAlign>) {
         let TextAlign(h, v) = align.into();
         self.record(DrawCommand::TextAlign { h, v });
     }
 
-    pub fn text_style(&mut self, style: TextStyle) {
+    pub fn text_style(&self, style: TextStyle) {
         self.record(DrawCommand::TextStyle(style));
     }
 
-    pub fn text_wrap(&mut self, mode: TextWrapMode) {
+    pub fn text_wrap(&self, mode: TextWrapMode) {
         self.record(DrawCommand::TextWrap(mode));
     }
 
@@ -431,82 +436,83 @@ impl Graphics {
         Push::new(self)
     }
 
-    pub fn push_matrix(&mut self) {
+    pub fn push_matrix(&self) {
         self.record(DrawCommand::PushMatrix);
     }
 
-    pub fn pop_matrix(&mut self) {
+    pub fn pop_matrix(&self) {
         self.record(DrawCommand::PopMatrix);
     }
 
-    pub fn push_style(&mut self) {
-        self.style_stack.push(self.color);
+    pub fn push_style(&self) {
+        self.style_stack.borrow_mut().push(self.color.get());
         self.record(DrawCommand::PushStyle);
     }
 
-    pub fn pop_style(&mut self) {
-        if let Some(color) = self.style_stack.pop() {
+    pub fn pop_style(&self) {
+        let color = self.style_stack.borrow_mut().pop();
+        if let Some(color) = color {
             self.set_color_state(color);
         }
         self.record(DrawCommand::PopStyle);
     }
 
-    pub fn translate(&mut self, offset: impl IntoPoint) {
+    pub fn translate(&self, offset: impl IntoPoint) {
         self.record(DrawCommand::Translate(offset.into_point()));
     }
 
-    pub fn rotate(&mut self, angle: impl Scalar) {
+    pub fn rotate(&self, angle: impl Scalar) {
         self.rotate_axis(angle, Vec3::Z);
     }
 
-    pub fn rotate_x(&mut self, angle: impl Scalar) {
+    pub fn rotate_x(&self, angle: impl Scalar) {
         self.rotate_axis(angle, Vec3::X);
     }
 
-    pub fn rotate_y(&mut self, angle: impl Scalar) {
+    pub fn rotate_y(&self, angle: impl Scalar) {
         self.rotate_axis(angle, Vec3::Y);
     }
 
-    pub fn rotate_z(&mut self, angle: impl Scalar) {
+    pub fn rotate_z(&self, angle: impl Scalar) {
         self.rotate_axis(angle, Vec3::Z);
     }
 
-    pub fn rotate_axis(&mut self, angle: impl Scalar, axis: impl IntoPoint) {
+    pub fn rotate_axis(&self, angle: impl Scalar, axis: impl IntoPoint) {
         self.record(DrawCommand::Rotate {
             angle: angle.to_f32(),
             axis: axis.into_point(),
         });
     }
 
-    pub fn scale(&mut self, factor: impl IntoExtent) {
+    pub fn scale(&self, factor: impl IntoExtent) {
         self.record(DrawCommand::Scale(factor.into_extent()));
     }
 
-    pub fn shear_x(&mut self, angle: impl Scalar) {
+    pub fn shear_x(&self, angle: impl Scalar) {
         self.record(DrawCommand::ShearX {
             angle: angle.to_f32(),
         });
     }
 
-    pub fn shear_y(&mut self, angle: impl Scalar) {
+    pub fn shear_y(&self, angle: impl Scalar) {
         self.record(DrawCommand::ShearY {
             angle: angle.to_f32(),
         });
     }
 
-    pub fn reset_matrix(&mut self) {
+    pub fn reset_matrix(&self) {
         self.record(DrawCommand::ResetMatrix);
     }
 
-    pub fn apply_matrix(&mut self, matrix: Affine3A) {
+    pub fn apply_matrix(&self, matrix: Affine3A) {
         self.record(DrawCommand::ApplyMatrix(matrix));
     }
 
-    pub fn matrix(&self) -> bevy::math::Mat4 {
+    pub fn matrix(&mut self) -> bevy::math::Mat4 {
         expect(graphics_get_matrix(self.entity))
     }
 
-    pub fn screen_point(&self, point: impl IntoPoint) -> Vec3 {
+    pub fn screen_point(&mut self, point: impl IntoPoint) -> Vec3 {
         expect(graphics_screen_point(self.entity, point.into_point()))
     }
 
@@ -518,7 +524,7 @@ impl Graphics {
         expect(graphics_mode_2d(self.entity));
     }
 
-    pub fn cube(&mut self, size: impl IntoExtent) {
+    pub fn cube(&self, size: impl IntoExtent) {
         let s = size.into_extent();
         self.record(DrawCommand::Box {
             width: s.x,
@@ -527,7 +533,7 @@ impl Graphics {
         });
     }
 
-    pub fn sphere(&mut self, radius: impl Scalar) -> Detail<'_, 2> {
+    pub fn sphere(&self, radius: impl Scalar) -> Detail<'_, 2> {
         Detail::new(
             self,
             [radius.to_f32(), 0.0, 0.0],
@@ -540,7 +546,7 @@ impl Graphics {
         )
     }
 
-    pub fn cylinder(&mut self, radius: impl Scalar, height: impl Scalar) -> Detail<'_, 1> {
+    pub fn cylinder(&self, radius: impl Scalar, height: impl Scalar) -> Detail<'_, 1> {
         let size = [radius.to_f32(), height.to_f32(), 0.0];
         Detail::new(self, size, [24], |[radius, height, _], [detail]| {
             DrawCommand::Cylinder {
@@ -551,7 +557,7 @@ impl Graphics {
         })
     }
 
-    pub fn cone(&mut self, radius: impl Scalar, height: impl Scalar) -> Detail<'_, 1> {
+    pub fn cone(&self, radius: impl Scalar, height: impl Scalar) -> Detail<'_, 1> {
         let size = [radius.to_f32(), height.to_f32(), 0.0];
         Detail::new(self, size, [24], |[radius, height, _], [detail]| {
             DrawCommand::Cone {
@@ -562,7 +568,7 @@ impl Graphics {
         })
     }
 
-    pub fn torus(&mut self, radius: impl Scalar, tube_radius: impl Scalar) -> Detail<'_, 2> {
+    pub fn torus(&self, radius: impl Scalar, tube_radius: impl Scalar) -> Detail<'_, 2> {
         let size = [radius.to_f32(), tube_radius.to_f32(), 0.0];
         Detail::new(
             self,
@@ -577,7 +583,7 @@ impl Graphics {
         )
     }
 
-    pub fn capsule(&mut self, radius: impl Scalar, length: impl Scalar) -> Detail<'_, 1> {
+    pub fn capsule(&self, radius: impl Scalar, length: impl Scalar) -> Detail<'_, 1> {
         let size = [radius.to_f32(), length.to_f32(), 0.0];
         Detail::new(self, size, [16], |[radius, length, _], [detail]| {
             DrawCommand::Capsule {
@@ -589,7 +595,7 @@ impl Graphics {
     }
 
     pub fn conical_frustum(
-        &mut self,
+        &self,
         radius_top: impl Scalar,
         radius_bottom: impl Scalar,
         height: impl Scalar,
@@ -608,49 +614,49 @@ impl Graphics {
         )
     }
 
-    pub fn plane(&mut self, width: impl Scalar, height: impl Scalar) {
+    pub fn plane(&self, width: impl Scalar, height: impl Scalar) {
         self.record(DrawCommand::Plane {
             width: width.to_f32(),
             height: height.to_f32(),
         });
     }
 
-    pub fn tetrahedron(&mut self, radius: impl Scalar) {
+    pub fn tetrahedron(&self, radius: impl Scalar) {
         self.record(DrawCommand::Tetrahedron {
             radius: radius.to_f32(),
         });
     }
 
-    pub fn roughness(&mut self, value: impl Scalar) {
+    pub fn roughness(&self, value: impl Scalar) {
         self.record(DrawCommand::Roughness(value.to_f32()));
     }
 
-    pub fn metallic(&mut self, value: impl Scalar) {
+    pub fn metallic(&self, value: impl Scalar) {
         self.record(DrawCommand::Metallic(value.to_f32()));
     }
 
-    pub fn emissive(&mut self, color: impl Into<ColorArg>) {
+    pub fn emissive(&self, color: impl Into<ColorArg>) {
         let c = self.resolve(color);
         self.record(DrawCommand::Emissive(c));
     }
 
-    pub fn unlit(&mut self) {
+    pub fn unlit(&self) {
         self.record(DrawCommand::Unlit);
     }
 
-    pub fn texture(&mut self, image: &impl AsImage) {
+    pub fn texture(&self, image: &impl AsImage) {
         self.record(DrawCommand::Texture(image.image_entity()));
     }
 
-    pub fn no_texture(&mut self) {
+    pub fn no_texture(&self) {
         self.record(DrawCommand::NoTexture);
     }
 
-    pub fn camera_position(&mut self, eye: impl IntoPoint) {
+    pub fn camera_position(&self, eye: impl IntoPoint) {
         expect(transform_set_position(self.entity, eye.into_point()));
     }
 
-    pub fn camera_look_at(&mut self, target: impl IntoPoint) {
+    pub fn camera_look_at(&self, target: impl IntoPoint) {
         expect(transform_look_at(self.entity, target.into_point()));
     }
 
@@ -692,40 +698,40 @@ impl Graphics {
         ));
     }
 
-    pub fn orbit_camera(&mut self) {
+    pub fn orbit_camera(&self) {
         expect(graphics_orbit_camera(self.entity));
     }
 
-    pub fn free_camera(&mut self) {
+    pub fn free_camera(&self) {
         expect(graphics_free_camera(self.entity));
     }
 
-    pub fn pan_camera(&mut self) {
+    pub fn pan_camera(&self) {
         expect(graphics_pan_camera(self.entity));
     }
 
-    pub fn disable_camera(&mut self) {
+    pub fn disable_camera(&self) {
         expect(graphics_disable_camera_controller(self.entity));
     }
 
-    pub fn camera_distance(&mut self, distance: impl Scalar) {
+    pub fn camera_distance(&self, distance: impl Scalar) {
         expect(camera_set_distance(self.entity, distance.to_f32()));
     }
 
-    pub fn camera_center(&mut self, center: impl IntoPoint) {
+    pub fn camera_center(&self, center: impl IntoPoint) {
         expect(camera_set_center(self.entity, center.into_point()));
     }
 
-    pub fn camera_reset(&mut self) {
+    pub fn camera_reset(&self) {
         expect(camera_reset(self.entity));
     }
 
-    pub fn light(&mut self, light: &Light) {
+    pub fn light(&self, light: &Light) {
         expect(graphics_light(self.entity, light.0));
     }
 
     pub fn directional_light(
-        &mut self,
+        &self,
         color: impl Into<ColorArg>,
         illuminance: impl Scalar,
     ) -> LightDraw<'_> {
@@ -740,7 +746,7 @@ impl Graphics {
     }
 
     pub fn point_light(
-        &mut self,
+        &self,
         color: impl Into<ColorArg>,
         intensity: impl Scalar,
         range: impl Scalar,
@@ -759,7 +765,7 @@ impl Graphics {
     }
 
     pub fn spot_light(
-        &mut self,
+        &self,
         color: impl Into<ColorArg>,
         intensity: impl Scalar,
         range: impl Scalar,
@@ -782,7 +788,7 @@ impl Graphics {
     }
 
     pub fn create_directional_light(
-        &mut self,
+        &self,
         color: impl Into<ColorArg>,
         illuminance: impl Scalar,
     ) -> Light {
@@ -795,7 +801,7 @@ impl Graphics {
     }
 
     pub fn create_point_light(
-        &mut self,
+        &self,
         color: impl Into<ColorArg>,
         intensity: impl Scalar,
         range: impl Scalar,
@@ -812,7 +818,7 @@ impl Graphics {
     }
 
     pub fn create_spot_light(
-        &mut self,
+        &self,
         color: impl Into<ColorArg>,
         intensity: impl Scalar,
         range: impl Scalar,
@@ -832,21 +838,21 @@ impl Graphics {
         )))
     }
 
-    pub fn model(&mut self, geometry: &Geometry) {
+    pub fn model(&self, geometry: &Geometry) {
         self.record(DrawCommand::Geometry(geometry.0));
     }
 
-    pub fn material(&mut self, material: &Material) {
+    pub fn material(&self, material: &Material) {
         self.record(DrawCommand::Material(material.0));
     }
 
     /// One color per particle.
-    pub fn fill_buffer(&mut self, buffer: &Buffer) {
+    pub fn fill_buffer(&self, buffer: &Buffer) {
         self.record(DrawCommand::FillBuffer(buffer.entity));
     }
 
     /// Points unless given a geometry.
-    pub fn particles(&mut self, particles: &Particles) -> ParticlesDraw<'_> {
+    pub fn particles(&self, particles: &Particles) -> ParticlesDraw<'_> {
         ParticlesDraw::new(self, particles.0)
     }
 
@@ -868,7 +874,7 @@ impl Graphics {
     }
 
     /// Row-major.
-    pub fn pixels(&self) -> Result<Vec<Color>> {
+    pub fn pixels(&mut self) -> Result<Vec<Color>> {
         Ok(graphics_readback(self.entity)?
             .into_iter()
             .map(Color::from_linear)
@@ -884,15 +890,15 @@ impl Graphics {
 
     pub fn set_pixels_region(
         &mut self,
-        x: u32,
-        y: u32,
+        x: i32,
+        y: i32,
         w: u32,
         h: u32,
         pixels: &[Color],
     ) -> Result<()> {
         let linear: Vec<_> = pixels.iter().map(|c| c.to_linear()).collect();
         graphics_flush(self.entity)?;
-        graphics_update_region(self.entity, x, y, w, h, &linear)
+        graphics_update_region(self.entity, x.into(), y.into(), w, h, &linear)
     }
 
     pub fn mouse_x(&self) -> f32 {
@@ -951,8 +957,8 @@ impl Graphics {
         expect(input_key_just_pressed(key.code()))
     }
 
-    fn set_color_state(&mut self, color: ColorState) {
-        self.color = color;
+    fn set_color_state(&self, color: ColorState) {
+        self.color.set(color);
         expect(graphics_set_color_mode(self.entity, color.mode));
     }
 }
@@ -977,33 +983,19 @@ impl Drop for Graphics {
 }
 
 pub struct ColorModeBuilder<'g> {
-    g: &'g mut Graphics,
+    g: &'g Graphics,
     space: ColorSpace,
-    max: Option<[f32; 4]>,
 }
 
 impl ColorModeBuilder<'_> {
     /// `max(255)`, `max((360, 100, 100))` or `max((360, 100, 100, 1))`.
-    pub fn max(mut self, max: impl IntoColorMax) -> Self {
-        self.max = Some(max.into_color_max(self.space));
+    pub fn max(self, max: impl IntoColorMax) -> Self {
+        let [m1, m2, m3, ma] = max.into_color_max(self.space);
+        self.g.set_color_state(ColorState {
+            mode: ColorMode::new(self.space, m1, m2, m3, ma),
+            explicit_max: true,
+        });
         self
-    }
-}
-
-impl Drop for ColorModeBuilder<'_> {
-    fn drop(&mut self) {
-        use processing_render::color::ColorMode;
-        let state = match self.max {
-            Some([m1, m2, m3, ma]) => ColorState {
-                mode: ColorMode::new(self.space, m1, m2, m3, ma),
-                explicit_max: true,
-            },
-            None => ColorState {
-                mode: ColorMode::with_defaults(self.space),
-                explicit_max: false,
-            },
-        };
-        self.g.set_color_state(state);
     }
 }
 

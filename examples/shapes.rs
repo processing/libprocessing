@@ -1,6 +1,4 @@
-use std::f32::consts::PI;
-
-use processing::{Graphics, Result, Settings, ShapeKind, Sketch};
+use processing::prelude::*;
 
 struct Shapes {
     t: f32,
@@ -19,12 +17,11 @@ impl Sketch for Shapes {
         let t = self.t;
         g.background((235, 230, 222));
 
-        // a wobbling blob made of curve vertices
         g.fill((0.2, 0.3, 0.5, 0.25));
         g.stroke_weight(1.5);
         g.stroke((38, 51, 89));
         let n = 8;
-        let mut blob = g.begin_shape(ShapeKind::Polygon);
+        let blob = g.begin_shape(ShapeKind::Polygon);
         for i in 0..n + 3 {
             let idx = (i + n - 1) % n;
             let angle = idx as f32 * 2.0 * PI / n as f32;
@@ -33,23 +30,21 @@ impl Sketch for Shapes {
         }
         blob.close();
 
-        // a pulsing lens made of two bezier segments
         g.fill((0.15, 0.5, 0.3, 0.2));
         g.stroke_weight(1);
         g.stroke((26, 89, 51));
         let cx = 430.0;
         let cy = 200.0;
         let s = 70.0 + 10.0 * (t * 1.5).sin();
-        let mut lens = g.begin_shape(ShapeKind::Polygon);
+        let lens = g.begin_shape(ShapeKind::Polygon);
         lens.vertex(cx, cy - s);
         lens.bezier_vertex(cx + s, cy - s, cx + s, cy + s, cx, cy + s);
         lens.bezier_vertex(cx - s, cy + s, cx - s, cy - s, cx, cy - s);
         lens.close();
 
-        // a flower as a triangle fan
         g.fill((0.8, 0.35, 0.1, 0.15));
         g.no_stroke();
-        let mut fan = g.begin_shape(ShapeKind::TriangleFan);
+        let fan = g.begin_shape(ShapeKind::TriangleFan);
         fan.vertex(170, 450);
         for i in 0..=16 {
             let angle = i as f32 * 2.0 * PI / 16.0;
@@ -58,11 +53,10 @@ impl Sketch for Shapes {
         }
         fan.close();
 
-        // a wave as a triangle strip
         g.fill((0.5, 0.2, 0.6, 0.2));
         g.stroke_weight(0.5);
         g.stroke((77, 26, 102, 102));
-        let mut strip = g.begin_shape(ShapeKind::TriangleStrip);
+        let strip = g.begin_shape(ShapeKind::TriangleStrip);
         for i in 0..16 {
             let x = 320.0 + i as f32 * 17.0;
             let wave = 30.0 * (t * 2.0 + i as f32 * 0.4).sin();

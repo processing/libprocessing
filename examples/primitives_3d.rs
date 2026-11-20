@@ -1,4 +1,4 @@
-use processing::{Graphics, Result, Settings, Sketch};
+use processing::prelude::*;
 
 struct Primitives3d {
     t: f32,
@@ -23,7 +23,7 @@ impl Sketch for Primitives3d {
         g.roughness(0.35);
 
         for i in 0..8 {
-            let mut g = g.push();
+            let g = g.push();
             g.translate((-315 + i * 90, 0));
             g.rotate(-self.t);
             match i {

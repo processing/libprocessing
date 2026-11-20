@@ -1,7 +1,4 @@
-use processing::{
-    Attribute, Compute, Geometry, Graphics, Light, Material, Particles, Result, Settings, Shader,
-    Sketch,
-};
+use processing::prelude::*;
 
 const SPIN_SHADER: &str = r#"
 struct Params {
@@ -50,13 +47,15 @@ impl Sketch for ParticlesAnimated {
         let sphere = Geometry::sphere(0.25, 12, 8)?;
 
         let capacity: u32 = 1000;
-        let mut positions: Vec<f32> = Vec::with_capacity(capacity as usize * 3);
+        let mut positions: Vec<Vec3> = Vec::with_capacity(capacity as usize);
         for x in 0..10 {
             for y in 0..10 {
                 for z in 0..10 {
-                    positions.push((x as f32 - 4.5) * 1.0);
-                    positions.push((y as f32 - 4.5) * 1.0);
-                    positions.push((z as f32 - 4.5) * 1.0);
+                    positions.push(Vec3::new(
+                        (x as f32 - 4.5) * 1.0,
+                        (y as f32 - 4.5) * 1.0,
+                        (z as f32 - 4.5) * 1.0,
+                    ));
                 }
             }
         }

@@ -1,6 +1,4 @@
-use std::f32::consts::PI;
-
-use processing::{Graphics, Result, Settings, Sketch};
+use processing::prelude::*;
 
 struct Transforms {
     t: f32,
@@ -20,7 +18,7 @@ impl Sketch for Transforms {
 
         for i in 0..4 {
             for j in 0..4 {
-                let mut g = g.push();
+                let g = g.push();
                 g.translate((50 + j * 100, 50 + i * 100));
                 g.rotate(self.t + (i + j) as f32 * PI / 8.0);
                 g.scale(0.8 + (self.t * 2.0 + (i * j) as f32).sin() * 0.2);

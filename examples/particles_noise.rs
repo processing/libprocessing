@@ -1,6 +1,4 @@
-use processing::{
-    Attribute, Compute, Geometry, Graphics, Light, Material, Particles, Result, Settings, Sketch,
-};
+use processing::prelude::*;
 
 struct ParticlesNoise {
     sun: Light,
@@ -28,15 +26,10 @@ impl Sketch for ParticlesNoise {
             &[Attribute::position(), Attribute::uv(), Attribute::color()],
         )?;
 
-        // hue from u
-        let uvs = particles.buffer(Attribute::uv()).read::<f32>()?;
-        let mut colors: Vec<f32> = Vec::with_capacity(uvs.len() * 2);
-        for uv in uvs.chunks_exact(2) {
-            let (r, g, b) = hsv_to_rgb(uv[0], 0.85, 1.0);
-            colors.push(r);
-            colors.push(g);
-            colors.push(b);
-            colors.push(1.0);
+        let uvs = particles.buffer(Attribute::uv()).read::<Vec2>()?;
+        let mut colors: Vec<Color> = Vec::with_capacity(uvs.len());
+        for uv in &uvs {
+            colors.push(Color::hsv(uv.x * 360.0, 0.85, 1.0));
         }
         let mut color_buf = particles.buffer(Attribute::color());
         color_buf.write(&colors);
@@ -67,22 +60,6 @@ impl Sketch for ParticlesNoise {
         self.noise.set("strength", 0.02);
         self.noise.set("time", t * 0.5);
         self.particles.apply(&self.noise);
-    }
-}
-
-fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (f32, f32, f32) {
-    let i = (h * 6.0).floor();
-    let f = h * 6.0 - i;
-    let p = v * (1.0 - s);
-    let q = v * (1.0 - f * s);
-    let t = v * (1.0 - (1.0 - f) * s);
-    match (i as i32).rem_euclid(6) {
-        0 => (v, t, p),
-        1 => (q, v, p),
-        2 => (p, v, t),
-        3 => (p, q, v),
-        4 => (t, p, v),
-        _ => (v, p, q),
     }
 }
 

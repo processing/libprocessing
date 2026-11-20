@@ -1,4 +1,4 @@
-use processing::{Geometry, Graphics, Result, Settings, Sketch};
+use processing::prelude::*;
 
 struct BoxSketch {
     cube: Geometry,
@@ -23,7 +23,7 @@ impl Sketch for BoxSketch {
         g.background((0.1, 0.1, 0.15));
 
         {
-            let mut g = g.push();
+            let g = g.push();
             g.rotate(-self.angle);
             g.model(&self.cube);
         }

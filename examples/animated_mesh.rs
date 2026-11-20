@@ -1,4 +1,4 @@
-use processing::{Geometry, Graphics, Result, Settings, Sketch, Topology};
+use processing::prelude::*;
 
 const GRID: u32 = 20;
 const SPACING: f32 = 10.0;

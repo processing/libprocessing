@@ -1,7 +1,4 @@
-use processing::{
-    Attribute, Compute, Geometry, Graphics, Light, Material, Particles, Result, Settings, Shader,
-    Sketch,
-};
+use processing::prelude::*;
 
 const SPIN_SHADER: &str = r#"
 @group(0) @binding(0) var<storage, read_write> rotation: array<f32>;
@@ -61,23 +58,20 @@ impl Sketch for ParticlesOriented {
         let cube = Geometry::cube((0.6, 0.6, 0.6))?;
 
         let capacity: u32 = 125;
-        let mut positions: Vec<f32> = Vec::with_capacity(capacity as usize * 3);
-        let mut rotations: Vec<f32> = Vec::with_capacity(capacity as usize * 4);
-        let mut scales: Vec<f32> = Vec::with_capacity(capacity as usize * 3);
+        let mut positions: Vec<Vec3> = Vec::with_capacity(capacity as usize);
+        let mut rotations: Vec<Vec4> = Vec::with_capacity(capacity as usize);
+        let mut scales: Vec<Vec3> = Vec::with_capacity(capacity as usize);
         for x in 0..5 {
             for y in 0..5 {
                 for z in 0..5 {
-                    positions.push((x as f32 - 2.0) * 1.6);
-                    positions.push((2.0 - y as f32) * 1.6);
-                    positions.push((z as f32 - 2.0) * 1.6);
-                    rotations.push(0.0);
-                    rotations.push(0.0);
-                    rotations.push(0.0);
-                    rotations.push(1.0);
+                    positions.push(Vec3::new(
+                        (x as f32 - 2.0) * 1.6,
+                        (2.0 - y as f32) * 1.6,
+                        (z as f32 - 2.0) * 1.6,
+                    ));
+                    rotations.push(Vec4::new(0.0, 0.0, 0.0, 1.0));
                     let s = 0.5 + ((x + y + z) as f32 * 0.06);
-                    scales.push(s);
-                    scales.push(s);
-                    scales.push(s);
+                    scales.push(Vec3::new(s, s, s));
                 }
             }
         }

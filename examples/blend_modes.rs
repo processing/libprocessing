@@ -1,4 +1,4 @@
-use processing::{BlendMode, Graphics, Key, Result, Settings, Sketch};
+use processing::prelude::*;
 
 const MODES: [BlendMode; 10] = [
     BlendMode::Blend,

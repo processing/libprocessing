@@ -1,4 +1,4 @@
-use processing::{Color, Graphics, Key, Result, Settings, Sketch, midi};
+use processing::prelude::*;
 
 const PENTATONIC: [u8; 5] = [0, 3, 5, 7, 10];
 const ROOT: u8 = 48;

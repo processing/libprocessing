@@ -1,4 +1,4 @@
-use processing::{Graphics, Result, Settings, Sketch};
+use processing::prelude::*;
 
 struct CreateGraphics {
     pg: Graphics,
@@ -24,12 +24,12 @@ impl Sketch for CreateGraphics {
         g.no_stroke();
         g.ellipse(mx, my, 60, 60);
 
-        let mut pg = self.pg.begin_draw();
+        let pg = self.pg.begin_draw();
         pg.background(51);
         pg.no_fill();
         pg.stroke(255);
         pg.ellipse(mx - 120.0, my - 60.0, 60, 60);
-        drop(pg);
+        pg.end_draw();
 
         g.image(&self.pg, 120, 60);
     }

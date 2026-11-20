@@ -1,6 +1,4 @@
-use processing::{
-    Attribute, AttributeFormat, Geometry, Graphics, Layout, Result, Settings, Sketch, Topology,
-};
+use processing::prelude::*;
 
 struct CustomAttribute {
     mesh: Geometry,

@@ -1,4 +1,4 @@
-use processing::{Graphics, Result, Settings, Sketch, Webcam};
+use processing::prelude::*;
 
 struct WebcamSketch {
     camera: Webcam,

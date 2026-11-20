@@ -1,6 +1,4 @@
-use std::f32::consts::FRAC_PI_4;
-
-use processing::{Geometry, Graphics, Light, Material, Result, Settings, Sketch};
+use processing::prelude::*;
 
 struct Lights {
     cube: Geometry,
@@ -34,7 +32,7 @@ impl Sketch for Lights {
         let cool = g.create_point_light((0.0, 0.5, 0.75), 2_000_000, 200, 0.25);
         cool.position((0.0, -5.0, 50.5)).look_at((0, 0, 0));
 
-        let spot = g.create_spot_light((0.25, 0.8, 0.19), 15_000_000, 200, 0.84, 0, FRAC_PI_4);
+        let spot = g.create_spot_light((0.25, 0.8, 0.19), 15_000_000, 200, 0.84, 0, QUARTER_PI);
         spot.position((40, 0, 70)).look_at((0, 0, 0));
 
         Ok(Lights {
@@ -59,7 +57,7 @@ impl Sketch for Lights {
         g.material(&self.shiny);
 
         {
-            let mut g = g.push();
+            let g = g.push();
             g.rotate(-self.angle);
             g.model(&self.cube);
         }

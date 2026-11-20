@@ -5,6 +5,7 @@ use processing_render::render::command::{DrawCommand, ShapeKind};
 use crate::{Graphics, Scalar};
 
 /// Ends open when dropped.
+#[must_use]
 pub struct Shape<'g> {
     g: &'g mut Graphics,
     close: bool,
@@ -16,7 +17,7 @@ impl<'g> Shape<'g> {
         Self { g, close: false }
     }
 
-    pub fn vertex(&mut self, x: impl Scalar, y: impl Scalar) {
+    pub fn vertex(&self, x: impl Scalar, y: impl Scalar) {
         self.g.record(DrawCommand::ShapeVertex {
             x: x.to_f32(),
             y: y.to_f32(),
@@ -24,7 +25,7 @@ impl<'g> Shape<'g> {
     }
 
     pub fn bezier_vertex(
-        &mut self,
+        &self,
         cx1: impl Scalar,
         cy1: impl Scalar,
         cx2: impl Scalar,
@@ -43,7 +44,7 @@ impl<'g> Shape<'g> {
     }
 
     pub fn quadratic_vertex(
-        &mut self,
+        &self,
         cx: impl Scalar,
         cy: impl Scalar,
         x: impl Scalar,
@@ -57,7 +58,7 @@ impl<'g> Shape<'g> {
         });
     }
 
-    pub fn curve_vertex(&mut self, x: impl Scalar, y: impl Scalar) {
+    pub fn curve_vertex(&self, x: impl Scalar, y: impl Scalar) {
         self.g.record(DrawCommand::ShapeCurveVertex {
             x: x.to_f32(),
             y: y.to_f32(),
@@ -83,8 +84,13 @@ impl Drop for Shape<'_> {
     }
 }
 
+#[must_use]
 pub struct Contour<'s, 'g> {
     shape: &'s mut Shape<'g>,
+}
+
+impl Contour<'_, '_> {
+    pub fn end(self) {}
 }
 
 impl<'g> Deref for Contour<'_, 'g> {

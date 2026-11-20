@@ -1,4 +1,4 @@
-use processing::{Buffer, Compute, Graphics, Result, Settings, Shader, Sketch};
+use processing::prelude::*;
 
 const TWO_BINDING_SRC: &str = r#"
 @group(0) @binding(0) var<storage, read>       src: array<f32>;

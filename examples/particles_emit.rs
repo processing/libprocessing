@@ -1,4 +1,4 @@
-use processing::{Attribute, Geometry, Graphics, Material, Particles, Result, Settings, Sketch};
+use processing::prelude::*;
 
 struct ParticlesEmit {
     sphere: Geometry,
@@ -23,7 +23,7 @@ impl Sketch for ParticlesEmit {
         let particles = Particles::new(capacity, &[Attribute::position(), Attribute::color()])?;
 
         // offscreen until emitted
-        let far_away: Vec<f32> = vec![1.0e6; capacity as usize * 3];
+        let far_away = vec![Vec3::splat(1.0e6); capacity as usize];
         particles.buffer(Attribute::position()).write(&far_away);
 
         let mut material = Material::unlit()?;
@@ -43,22 +43,16 @@ impl Sketch for ParticlesEmit {
         g.particles(&self.particles).geometry(&self.sphere);
 
         let burst = 4u32;
-        let mut positions: Vec<f32> = Vec::with_capacity(burst as usize * 3);
-        let mut colors: Vec<f32> = Vec::with_capacity(burst as usize * 4);
+        let mut positions: Vec<Vec3> = Vec::with_capacity(burst as usize);
+        let mut colors: Vec<Color> = Vec::with_capacity(burst as usize);
         for k in 0..burst {
             let i = self.frame * burst + k;
             let t = i as f32 * 0.05;
             let radius = 1.5 + (t * 0.02).min(3.0);
             let height = -(t * 0.1).sin() * 2.0;
-            positions.push(t.cos() * radius);
-            positions.push(height);
-            positions.push(t.sin() * radius);
+            positions.push(Vec3::new(t.cos() * radius, height, t.sin() * radius));
             let h = (i as f32 * 0.012) % 1.0;
-            let (r, g, b) = hsv_to_rgb(h, 0.85, 1.0);
-            colors.push(r);
-            colors.push(g);
-            colors.push(b);
-            colors.push(1.0);
+            colors.push(Color::hsv(h * 360.0, 0.85, 1.0));
         }
 
         self.particles.emit(
@@ -69,22 +63,6 @@ impl Sketch for ParticlesEmit {
             ],
         );
         self.frame += 1;
-    }
-}
-
-fn hsv_to_rgb(h: f32, s: f32, v: f32) -> (f32, f32, f32) {
-    let i = (h * 6.0).floor();
-    let f = h * 6.0 - i;
-    let p = v * (1.0 - s);
-    let q = v * (1.0 - f * s);
-    let t = v * (1.0 - (1.0 - f) * s);
-    match (i as i32) % 6 {
-        0 => (v, t, p),
-        1 => (q, v, p),
-        2 => (p, v, t),
-        3 => (p, q, v),
-        4 => (t, p, v),
-        _ => (v, p, q),
     }
 }
 

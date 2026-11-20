@@ -1,4 +1,4 @@
-use processing::{Graphics, Result, Settings, Sketch};
+use processing::prelude::*;
 
 struct Curves {
     t: f32,
@@ -18,7 +18,6 @@ impl Sketch for Curves {
         g.background((0.04, 0.04, 0.06));
         g.no_fill();
 
-        // bezier waves
         g.stroke_weight(1.5);
         for i in 0..20 {
             let y = 20.0 + i as f32 * 15.0;
@@ -38,7 +37,6 @@ impl Sketch for Curves {
             );
         }
 
-        // catmull-rom curves
         g.stroke_weight(0.8);
         g.stroke((1.0, 0.6, 0.2, 0.4));
         for i in 0..8 {
@@ -56,7 +54,6 @@ impl Sketch for Curves {
             );
         }
 
-        // guide lines
         g.stroke_weight(0.3);
         g.stroke((1.0, 1.0, 1.0, 0.08));
         for i in 0..20 {

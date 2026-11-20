@@ -1,7 +1,4 @@
-use processing::{
-    Attribute, Buffer, Compute, Geometry, Graphics, Material, Particles, Result, Settings, Shader,
-    Sketch, TextStyle,
-};
+use processing::prelude::*;
 
 const BASE_COUNT: u32 = 6000;
 const TRAIL_LEN_MIN: u32 = 8;

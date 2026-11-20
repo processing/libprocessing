@@ -1,4 +1,4 @@
-use processing::{Geometry, Gltf, Graphics, Light, Material, Result, Settings, Sketch};
+use processing::prelude::*;
 
 struct GltfLoad {
     duck: Geometry,

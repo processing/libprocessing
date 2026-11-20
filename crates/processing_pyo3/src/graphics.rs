@@ -8,7 +8,7 @@ use bevy::{
     prelude::{Entity, Transform},
     render::render_resource::{Extent3d, TextureFormat},
 };
-use processing::prelude::*;
+use processing::engine::*;
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
@@ -1594,7 +1594,7 @@ impl Graphics {
     }
 
     pub fn text_style(&self, style: &str) -> PyResult<()> {
-        use processing::prelude::TextStyle;
+        use processing::engine::TextStyle;
         let style = TextStyle::parse(style)
             .ok_or_else(|| PyValueError::new_err(format!("unknown text style: {style:?}")))?;
         graphics_text_style(self.entity, style as u8)
@@ -1723,7 +1723,7 @@ impl Graphics {
 
     #[pyo3(signature = (h, v=None))]
     pub fn text_align(&self, h: &str, v: Option<&str>) -> PyResult<()> {
-        use processing::prelude::{TextAlignH, TextAlignV};
+        use processing::engine::{TextAlignH, TextAlignV};
         let h = TextAlignH::parse(h).ok_or_else(|| {
             PyValueError::new_err(format!("unknown horizontal text align: {h:?}"))
         })?;
@@ -1743,7 +1743,7 @@ impl Graphics {
     }
 
     pub fn text_wrap(&self, mode: &str) -> PyResult<()> {
-        use processing::prelude::TextWrapMode;
+        use processing::engine::TextWrapMode;
         let mode = TextWrapMode::parse(mode)
             .ok_or_else(|| PyValueError::new_err(format!("unknown text wrap mode: {mode:?}")))?;
         graphics_record_command(self.entity, DrawCommand::TextWrap(mode))
@@ -2333,7 +2333,7 @@ impl Graphics {
         graphics_no_bloom(self.entity).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    #[pyo3(signature = (mode=processing::prelude::constants::PBR_NEUTRAL))]
+    #[pyo3(signature = (mode=processing::engine::constants::PBR_NEUTRAL))]
     pub fn tonemapping(&self, mode: &str) -> PyResult<()> {
         let tonemapping = processing_render::graphics::parse_tonemapping(mode)
             .ok_or_else(|| PyValueError::new_err(format!("unknown tonemapping {mode:?}")))?;
@@ -2774,6 +2774,7 @@ impl Graphics {
             transform.look_at(target.into_vec3(), Vec3::Y);
         }
         graphics_immediate_light(self.entity, kind, transform)
+            .map(|_| ())
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 }

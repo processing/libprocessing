@@ -1,3 +1,4 @@
+use bevy::color::{ColorToComponents, LinearRgba};
 use bevy::math::{Mat4, Vec2, Vec3, Vec4};
 use bevy::prelude::Entity;
 use processing_core::error::Result;
@@ -10,8 +11,8 @@ use processing_render::{
     shader_create, shader_destroy, shader_load,
 };
 
-use crate::AsImage;
 use crate::graphics::expect;
+use crate::{AsImage, Color};
 
 /// WGSL or WESL.
 #[derive(Debug)]
@@ -87,7 +88,7 @@ impl Buffer {
     }
 
     pub fn from_slice<T: BufferElement>(data: &[T]) -> Result<Self> {
-        buffer_create_with_data(bytemuck::cast_slice(data).to_vec()).map(Self::owned)
+        buffer_create_with_data(T::to_bytes(data)).map(Self::owned)
     }
 
     fn owned(entity: Entity) -> Self {
@@ -111,15 +112,11 @@ impl Buffer {
     }
 
     pub fn write<T: BufferElement>(&mut self, data: &[T]) {
-        expect(buffer_write(
-            self.entity,
-            bytemuck::cast_slice(data).to_vec(),
-        ));
+        expect(buffer_write(self.entity, T::to_bytes(data)));
     }
 
     pub fn read<T: BufferElement>(&self) -> Result<Vec<T>> {
-        let bytes = buffer_read(self.entity)?;
-        Ok(bytemuck::pod_collect_to_vec(&bytes))
+        Ok(T::from_bytes(&buffer_read(self.entity)?))
     }
 }
 
@@ -135,22 +132,57 @@ mod sealed {
     pub trait Sealed {}
 }
 
-/// `f32`, `i32`, `u32`, or arrays of 2-4 of them.
-pub trait BufferElement: sealed::Sealed + bytemuck::Pod {}
+/// `f32`, `i32`, `u32`, arrays of 2-4 of them, `Vec2`-`Vec4`, or `Color` (linear RGBA).
+pub trait BufferElement: sealed::Sealed + Sized {
+    #[doc(hidden)]
+    const FLOAT: bool;
+    #[doc(hidden)]
+    const COMPONENTS: usize;
+    #[doc(hidden)]
+    fn to_bytes(data: &[Self]) -> Vec<u8>;
+    #[doc(hidden)]
+    fn from_bytes(bytes: &[u8]) -> Vec<Self>;
+}
 
-macro_rules! buffer_element {
-    ($($t:ty),*) => {$(
+macro_rules! pod_element {
+    ($($t:ty => $float:expr, $n:expr);* $(;)?) => {$(
         impl sealed::Sealed for $t {}
-        impl BufferElement for $t {}
-        impl sealed::Sealed for [$t; 2] {}
-        impl BufferElement for [$t; 2] {}
-        impl sealed::Sealed for [$t; 3] {}
-        impl BufferElement for [$t; 3] {}
-        impl sealed::Sealed for [$t; 4] {}
-        impl BufferElement for [$t; 4] {}
+        impl BufferElement for $t {
+            const FLOAT: bool = $float;
+            const COMPONENTS: usize = $n;
+            fn to_bytes(data: &[Self]) -> Vec<u8> {
+                bytemuck::cast_slice(data).to_vec()
+            }
+            fn from_bytes(bytes: &[u8]) -> Vec<Self> {
+                bytemuck::pod_collect_to_vec(bytes)
+            }
+        }
     )*};
 }
-buffer_element!(f32, i32, u32);
+
+macro_rules! buffer_element {
+    ($($t:ty => $float:expr),*) => {$(
+        pod_element!($t => $float, 1; [$t; 2] => $float, 2; [$t; 3] => $float, 3; [$t; 4] => $float, 4);
+    )*};
+}
+buffer_element!(f32 => true, i32 => false, u32 => false);
+pod_element!(Vec2 => true, 2; Vec3 => true, 3; Vec4 => true, 4);
+
+impl sealed::Sealed for Color {}
+impl BufferElement for Color {
+    const FLOAT: bool = true;
+    const COMPONENTS: usize = 4;
+    fn to_bytes(data: &[Self]) -> Vec<u8> {
+        let linear: Vec<[f32; 4]> = data.iter().map(|c| c.to_linear().to_f32_array()).collect();
+        bytemuck::cast_slice(&linear).to_vec()
+    }
+    fn from_bytes(bytes: &[u8]) -> Vec<Self> {
+        bytemuck::pod_collect_to_vec::<u8, [f32; 4]>(bytes)
+            .into_iter()
+            .map(|c| Color::from_linear(LinearRgba::from_f32_array(c)))
+            .collect()
+    }
+}
 
 #[derive(Debug)]
 pub struct Compute(pub(crate) Entity);

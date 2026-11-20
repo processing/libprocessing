@@ -1,4 +1,4 @@
-use processing::{Graphics, Result, Settings, Sketch, TextAlignH, TextAlignV};
+use processing::prelude::*;
 
 struct Text;
 

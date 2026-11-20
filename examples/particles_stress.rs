@@ -1,7 +1,4 @@
-use processing::{
-    Attribute, Compute, Geometry, Graphics, Light, Material, Particles, Result, Settings, Shader,
-    Sketch,
-};
+use processing::prelude::*;
 
 const GRID: u32 = 100; // GRID^3 particles
 const SPACING: f32 = 1.0;
@@ -77,20 +74,19 @@ impl Sketch for ParticlesStress {
         let capacity = GRID * GRID * GRID;
         let particles = Particles::new(capacity, &[Attribute::position(), Attribute::color()])?;
 
-        let mut positions: Vec<f32> = Vec::with_capacity(capacity as usize * 3);
-        let mut colors: Vec<f32> = Vec::with_capacity(capacity as usize * 4);
+        let mut positions: Vec<Vec3> = Vec::with_capacity(capacity as usize);
+        let mut colors: Vec<Color> = Vec::with_capacity(capacity as usize);
         let extent_half = (GRID as f32) * SPACING * 0.5;
         for i in 0..capacity {
             let rx = hash_unit(i.wrapping_mul(2654435761).wrapping_add(0x9E37));
             let ry = hash_unit(i.wrapping_mul(40503).wrapping_add(0x68E1));
             let rz = hash_unit(i.wrapping_mul(2246822519).wrapping_add(0xC2B2));
-            positions.push((rx * 2.0 - 1.0) * extent_half);
-            positions.push((1.0 - ry * 2.0) * extent_half);
-            positions.push((rz * 2.0 - 1.0) * extent_half);
-            colors.push(rx);
-            colors.push(ry);
-            colors.push(rz);
-            colors.push(1.0);
+            positions.push(Vec3::new(
+                (rx * 2.0 - 1.0) * extent_half,
+                (1.0 - ry * 2.0) * extent_half,
+                (rz * 2.0 - 1.0) * extent_half,
+            ));
+            colors.push(Color::rgb(rx, ry, rz));
         }
         particles.buffer(Attribute::position()).write(&positions);
         let mut color_buf = particles.buffer(Attribute::color());

@@ -208,7 +208,7 @@ pub fn flush_draw_commands(
             }
         }
 
-        let draw_commands = std::mem::take(&mut cmd_buffer.commands);
+        let draw_commands = cmd_buffer.take();
         let mut batch = BatchState::new(graphics_entity, render_layers.clone());
         let mut pending = draw_commands.into_iter();
         let mut drained = true;
@@ -917,7 +917,7 @@ pub fn flush_draw_commands(
                 }
                 DrawCommand::BackgroundColor(color) => {
                     if !opens_pass(&batch) {
-                        cmd_buffer.commands = std::iter::once(cmd).chain(pending).collect();
+                        cmd_buffer.requeue(std::iter::once(cmd).chain(pending));
                         drained = false;
                         break;
                     }
@@ -930,7 +930,7 @@ pub fn flush_draw_commands(
                         continue;
                     };
                     if !opens_pass(&batch) {
-                        cmd_buffer.commands = std::iter::once(cmd).chain(pending).collect();
+                        cmd_buffer.requeue(std::iter::once(cmd).chain(pending));
                         drained = false;
                         break;
                     }

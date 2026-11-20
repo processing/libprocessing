@@ -1,7 +1,4 @@
-use processing::{
-    Attribute, AttributeFormat, Compute, Geometry, Graphics, Light, Material, Particles, Result,
-    Settings, Shader, Sketch,
-};
+use processing::prelude::*;
 
 const AGE_SHADER: &str = r#"
 struct Params { dt: f32, ttl: f32, _pad0: f32, _pad1: f32 }

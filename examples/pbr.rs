@@ -1,4 +1,4 @@
-use processing::{Color, Graphics, Light, Result, Settings, Sketch};
+use processing::prelude::*;
 
 const COLS: u32 = 11;
 const ROWS: u32 = 5;
@@ -40,7 +40,7 @@ impl Sketch for Pbr {
                 g.roughness(col as f32 / (COLS - 1) as f32);
                 g.metallic(row as f32 / (ROWS - 1) as f32);
 
-                let mut g = g.push();
+                let g = g.push();
                 g.translate((
                     col as f32 * SPACING - offset_x,
                     offset_y - row as f32 * SPACING,

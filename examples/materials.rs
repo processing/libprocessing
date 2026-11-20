@@ -1,4 +1,4 @@
-use processing::{Color, Geometry, Graphics, Light, Material, Result, Settings, Sketch};
+use processing::prelude::*;
 
 const COLS: usize = 11;
 const ROWS: usize = 5;
@@ -26,7 +26,6 @@ impl Sketch for Materials {
         let lamp = g.create_point_light(Color::WHITE, 100_000, 800, 0);
         lamp.position((200, -200, 400));
 
-        // roughness across, metallic down
         let mut materials = Vec::new();
         for row in 0..ROWS {
             for col in 0..COLS {
@@ -56,7 +55,7 @@ impl Sketch for Materials {
         let offset_y = (ROWS - 1) as f32 * SPACING / 2.0;
         for row in 0..ROWS {
             for col in 0..COLS {
-                let mut g = g.push();
+                let g = g.push();
                 g.translate((
                     col as f32 * SPACING - offset_x,
                     offset_y - row as f32 * SPACING,

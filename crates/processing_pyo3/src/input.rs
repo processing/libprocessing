@@ -1,41 +1,41 @@
 use bevy::prelude::Entity;
-use processing::prelude::*;
+use processing::engine::*;
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
 };
 
 pub fn mouse_x(surface: Entity, width: u32) -> PyResult<f32> {
-    let raw = processing::prelude::input_mouse_x(surface)
+    let raw = processing::engine::input_mouse_x(surface)
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
     Ok(raw.clamp(0.0, width as f32))
 }
 
 pub fn mouse_y(surface: Entity, height: u32) -> PyResult<f32> {
-    let raw = processing::prelude::input_mouse_y(surface)
+    let raw = processing::engine::input_mouse_y(surface)
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
     Ok(raw.clamp(0.0, height as f32))
 }
 
 pub fn pmouse_x(surface: Entity, width: u32) -> PyResult<f32> {
-    let raw = processing::prelude::input_pmouse_x(surface)
+    let raw = processing::engine::input_pmouse_x(surface)
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
     Ok(raw.clamp(0.0, width as f32))
 }
 
 pub fn pmouse_y(surface: Entity, height: u32) -> PyResult<f32> {
-    let raw = processing::prelude::input_pmouse_y(surface)
+    let raw = processing::engine::input_pmouse_y(surface)
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
     Ok(raw.clamp(0.0, height as f32))
 }
 
 pub fn mouse_is_pressed() -> PyResult<bool> {
-    processing::prelude::input_mouse_is_pressed()
+    processing::engine::input_mouse_is_pressed()
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }
 
 pub fn mouse_button() -> PyResult<Option<String>> {
-    processing::prelude::input_mouse_button()
+    processing::engine::input_mouse_button()
         .map(|opt| {
             opt.map(|b| match b {
                 MouseButton::Left => constants::LEFT.to_string(),
@@ -48,40 +48,40 @@ pub fn mouse_button() -> PyResult<Option<String>> {
 }
 
 pub fn moved_x() -> PyResult<f32> {
-    processing::prelude::input_moved_x().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    processing::engine::input_moved_x().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }
 
 pub fn moved_y() -> PyResult<f32> {
-    processing::prelude::input_moved_y().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    processing::engine::input_moved_y().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }
 
 pub fn mouse_wheel() -> PyResult<f32> {
-    processing::prelude::input_mouse_wheel().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    processing::engine::input_mouse_wheel().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }
 
 pub fn key_is_pressed() -> PyResult<bool> {
-    processing::prelude::input_key_is_pressed().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    processing::engine::input_key_is_pressed().map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }
 
 pub fn key_is_down(key_code: u32) -> PyResult<bool> {
     let kc = u32_to_key_code(key_code)?;
-    processing::prelude::input_key_is_down(kc).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+    processing::engine::input_key_is_down(kc).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }
 
 pub fn key_just_pressed(key_code: u32) -> PyResult<bool> {
     let kc = u32_to_key_code(key_code)?;
-    processing::prelude::input_key_just_pressed(kc)
+    processing::engine::input_key_just_pressed(kc)
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }
 
 pub fn key() -> PyResult<Option<String>> {
-    processing::prelude::input_key()
+    processing::engine::input_key()
         .map(|opt| opt.map(String::from))
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }
 
 pub fn key_code() -> PyResult<Option<u32>> {
-    processing::prelude::input_key_code()
+    processing::engine::input_key_code()
         .map(|opt| opt.map(key_code_to_u32))
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
 }

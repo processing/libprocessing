@@ -1,5 +1,5 @@
-use processing::prelude::BlendMode;
-use processing::prelude::constants as c;
+use processing::engine::BlendMode;
+use processing::engine::constants as c;
 use pyo3::prelude::*;
 use pyo3::types::PyModule;
 

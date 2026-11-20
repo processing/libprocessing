@@ -1,7 +1,4 @@
-use processing::{
-    Attribute, Compute, Geometry, Graphics, Light, Material, Particles, Result, Settings, Shader,
-    Sketch,
-};
+use processing::prelude::*;
 
 const SPAWN_SHADER: &str = r#"
 struct Spawn {

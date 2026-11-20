@@ -1,6 +1,4 @@
-use processing::{
-    Attribute, Geometry, Graphics, Light, Material, Particles, Result, Settings, Sketch,
-};
+use processing::prelude::*;
 
 struct ParticlesBasic {
     sun: Light,
@@ -24,13 +22,11 @@ impl Sketch for ParticlesBasic {
         let sphere = Geometry::sphere(0.25, 12, 8)?;
 
         let capacity: u32 = 1000;
-        let mut positions: Vec<f32> = Vec::with_capacity(capacity as usize * 3);
+        let mut positions: Vec<Vec3> = Vec::with_capacity(capacity as usize);
         for x in 0..10 {
             for y in 0..10 {
                 for z in 0..10 {
-                    positions.push(x as f32 - 4.5);
-                    positions.push(y as f32 - 4.5);
-                    positions.push(z as f32 - 4.5);
+                    positions.push(Vec3::new(x as f32 - 4.5, y as f32 - 4.5, z as f32 - 4.5));
                 }
             }
         }

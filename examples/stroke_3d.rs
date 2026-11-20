@@ -1,4 +1,4 @@
-use processing::{Graphics, Result, Settings, Sketch};
+use processing::prelude::*;
 
 struct Stroke3d {
     angle: f32,
@@ -23,7 +23,7 @@ impl Sketch for Stroke3d {
 
         // thin wireframe box
         {
-            let mut g = g.push();
+            let g = g.push();
             g.translate((-80, 0));
             g.rotate(-angle);
             g.fill((0.3, 0.4, 0.7));
@@ -34,7 +34,7 @@ impl Sketch for Stroke3d {
 
         // thick wireframe box
         {
-            let mut g = g.push();
+            let g = g.push();
             g.rotate(-angle * 0.7);
             g.fill((0.7, 0.3, 0.4));
             g.stroke((1.0, 0.9, 0.2));
@@ -44,7 +44,7 @@ impl Sketch for Stroke3d {
 
         // thick wireframe sphere
         {
-            let mut g = g.push();
+            let g = g.push();
             g.translate((80, 0));
             g.rotate(-angle * 0.5);
             g.fill((0.3, 0.7, 0.4));
@@ -55,7 +55,7 @@ impl Sketch for Stroke3d {
 
         // wireframe-only sphere
         {
-            let mut g = g.push();
+            let g = g.push();
             g.translate((160, 0));
             g.rotate(angle * 0.3);
             g.no_fill();

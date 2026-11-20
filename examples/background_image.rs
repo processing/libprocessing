@@ -1,4 +1,4 @@
-use processing::{Graphics, Image, Result, Settings, Sketch};
+use processing::prelude::*;
 
 struct BackgroundImage {
     logo: Image,

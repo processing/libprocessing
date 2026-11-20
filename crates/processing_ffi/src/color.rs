@@ -1,5 +1,5 @@
 use bevy::color::LinearRgba;
-use processing::prelude::color::{ColorMode, ColorSpace};
+use processing::engine::color::{ColorMode, ColorSpace};
 
 /// A color with 4 float components and its color space.
 #[repr(C)]
