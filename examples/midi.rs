@@ -1,38 +1,20 @@
-use bevy::color::{Color, ColorToComponents};
+// MIDI out and in example
+// MIDI OUT: click to play a note, showing up as colorful ripples
+// MIDI IN: incoming MIDI notes show up as colorful bars. control change (CC) changes brightness of the bar.
+
+use bevy::color::{Alpha, Color};
 use processing::prelude::*;
 use processing_glfw::GlfwContext;
 use processing_render::render::command::DrawCommand;
 
-const PENTATONIC: [u8; 5] = [0, 3, 5, 7, 10];
-const ROOT: u8 = 48;
-const OCTAVES: u8 = 3;
 const WIDTH: u32 = 640;
-const HEIGHT: u32 = 400;
-
-fn note_at_x(x: f32) -> u8 {
-    let steps = (PENTATONIC.len() as u8) * OCTAVES;
-    let t = (x / WIDTH as f32).clamp(0.0, 0.999);
-    let idx = (t * steps as f32) as u8;
-    let octave = idx / PENTATONIC.len() as u8;
-    let degree = (idx % PENTATONIC.len() as u8) as usize;
-    ROOT + octave * 12 + PENTATONIC[degree]
-}
-
-fn velocity_at_y(y: f32) -> u8 {
-    let t = 1.0 - (y / HEIGHT as f32).clamp(0.0, 1.0);
-    (16.0 + t * 110.0) as u8
-}
+const HEIGHT: u32 = 480;
+const LOW_NOTE: u8 = 48; // C3
+const NOTES: u8 = 36; // notes range 3 octaves
+const PLAY_H: f32 = 250.0;
 
 fn note_color(note: u8) -> Color {
-    let hue = ((note - ROOT) as f32 / 12.0).fract() * 360.0;
-    Color::hsv(hue, 0.7, 0.95)
-}
-
-struct Ripple {
-    x: f32,
-    y: f32,
-    age: f32,
-    color: Color,
+    Color::hsv((note % 12) as f32 / 12.0 * 360.0, 0.7, 0.95)
 }
 
 fn main() {
@@ -46,137 +28,124 @@ fn main() {
 fn sketch() -> error::Result<()> {
     let mut glfw_ctx = GlfwContext::new(WIDTH, HEIGHT, false)?;
     init(Config::default())?;
-
     let surface = glfw_ctx.create_surface(WIDTH, HEIGHT, false)?;
     let graphics = graphics_create(surface, WIDTH, HEIGHT, TextureFormat::Rgba16Float)?;
 
     midi_refresh_ports()?;
-    let ports = midi_list_ports()?;
-    if ports.is_empty() {
-        eprintln!("no MIDI output ports found — connect a synth or virtual port and retry");
-        return Ok(());
-    }
-    for p in &ports {
-        println!("{p}");
-    }
+    let outputs = midi_list_ports()?;
+    println!("MIDI outputs: {outputs:?}");
+    println!("MIDI inputs: {:?}", midi_list_input_ports()?);
     midi_connect(0)?;
 
-    let mut held: Option<u8> = None;
-    let mut ripples: Vec<Ripple> = Vec::new();
+    let out_port = outputs[0]
+        .split_once(": ")
+        .map_or(&*outputs[0], |(_, name)| name);
+    let in_port = midi_connect_input(0)?;
+    println!("sending to {out_port}");
+    println!("listening to {in_port}");
+    let out_label = format!("MIDI OUT: {out_port} (click to play)");
+    let in_label = format!("MIDI IN: {in_port}");
+
+    let key_w = WIDTH as f32 / NOTES as f32;
+    let mut playing: Option<u8> = None;
+    let mut ripples: Vec<(f32, f32, f32, Color)> = Vec::new(); // (x, y, age, color) per note played
+    let mut held_in = [0u8; 128]; // incoming notes: velocity per note number
+    let mut cc = 0.0; // last control change value, 0-1
+
+    let draw = |command| graphics_record_command(graphics, command);
+    let rect = |x, y, w, h| {
+        draw(DrawCommand::Rect {
+            x,
+            y,
+            w,
+            h,
+            radii: [0.0; 4],
+        })
+    };
 
     while glfw_ctx.poll_events() {
-        graphics_begin_draw(graphics)?;
-
         let mx = input_mouse_x(surface)?;
         let my = input_mouse_y(surface)?;
+
+        // MIDI OUT
         let pressed = input_mouse_is_pressed()?;
-
-        match (pressed, held) {
-            (true, None) => {
-                let note = note_at_x(mx);
-                let velocity = velocity_at_y(my);
-                midi_note_on(note, velocity)?;
-                ripples.push(Ripple {
-                    x: mx,
-                    y: my,
-                    age: 0.0,
-                    color: note_color(note),
-                });
-                held = Some(note);
-            }
-            (true, Some(note)) => {
-                let target = note_at_x(mx);
-                if target != note {
-                    midi_note_off(note)?;
-                    let velocity = velocity_at_y(my);
-                    midi_note_on(target, velocity)?;
-                    ripples.push(Ripple {
-                        x: mx,
-                        y: my,
-                        age: 0.0,
-                        color: note_color(target),
-                    });
-                    held = Some(target);
-                }
-            }
-            (false, Some(note)) => {
-                midi_note_off(note)?;
-                held = None;
-            }
-            _ => {}
+        if pressed && playing.is_none() && my < PLAY_H {
+            let note = LOW_NOTE + ((mx / key_w) as u8).min(NOTES - 1);
+            midi_note_on(note, 100)?;
+            ripples.push((mx, my, 0.0, note_color(note)));
+            playing = Some(note);
+        } else if !pressed && let Some(note) = playing {
+            midi_note_off(note)?;
+            playing = None;
         }
 
-        graphics_record_command(
-            graphics,
-            DrawCommand::BackgroundColor(Color::srgb(0.04, 0.04, 0.07)),
-        )?;
-
-        let octave_w = WIDTH as f32 / OCTAVES as f32;
-        for i in 0..OCTAVES {
-            let alpha = if i % 2 == 0 { 0.04 } else { 0.0 };
-            graphics_record_command(
-                graphics,
-                DrawCommand::Fill(Color::srgba(1.0, 1.0, 1.0, alpha)),
-            )?;
-            graphics_record_command(
-                graphics,
-                DrawCommand::Rect {
-                    x: i as f32 * octave_w,
-                    y: 0.0,
-                    w: octave_w,
-                    h: HEIGHT as f32,
-                    radii: [0.0; 4],
-                },
-            )?;
+        // MIDI IN
+        for msg in midi_read()? {
+            let [_, data1, data2] = msg.msg;
+            match midi_message_kind(&msg) {
+                MidiMessageKind::NoteOn => held_in[data1 as usize] = data2,
+                MidiMessageKind::NoteOff => held_in[data1 as usize] = 0,
+                MidiMessageKind::ControlChange => cc = data2 as f32 / 127.0,
+                _ => {}
+            }
         }
 
-        ripples.retain_mut(|r| {
-            r.age += 0.022;
-            r.age < 1.0
-        });
-        for r in &ripples {
-            let size = 24.0 + r.age * 220.0;
-            let alpha = (1.0 - r.age).powi(2);
-            let lin = r.color.to_linear().to_f32_array();
-            graphics_record_command(
-                graphics,
-                DrawCommand::Fill(Color::linear_rgba(lin[0], lin[1], lin[2], alpha)),
-            )?;
-            graphics_record_command(
-                graphics,
-                DrawCommand::Rect {
-                    x: r.x - size / 2.0,
-                    y: r.y - size / 2.0,
-                    w: size,
-                    h: size,
-                    radii: [size / 2.0; 4],
-                },
-            )?;
+        graphics_begin_draw(graphics)?;
+        draw(DrawCommand::NoStroke)?;
+        draw(DrawCommand::BackgroundColor(Color::BLACK))?;
+
+        // MIDI OUT dot visualizer
+        for (x, y, age, color) in ripples.iter_mut() {
+            *age += 0.02;
+            let size = 24.0 + *age * 220.0;
+            draw(DrawCommand::Fill(color.with_alpha((1.0 - *age).powi(2))))?;
+            draw(DrawCommand::Ellipse {
+                cx: *x,
+                cy: *y,
+                w: size,
+                h: size,
+            })?;
+        }
+        ripples.retain(|&(_, _, age, _)| age < 1.0);
+
+        // MIDI IN bar visualizer
+        draw(DrawCommand::Fill(Color::srgb(cc * 0.4, cc * 0.4, cc * 0.4)))?;
+        rect(0.0, PLAY_H, WIDTH as f32, HEIGHT as f32 - PLAY_H)?;
+        draw(DrawCommand::Fill(Color::srgb(0.3, 0.3, 0.3)))?;
+        rect(0.0, PLAY_H, WIDTH as f32, 1.0)?;
+        for (n, &velocity) in held_in.iter().enumerate() {
+            if velocity > 0 {
+                let h = velocity as f32 / 127.0 * (HEIGHT as f32 - PLAY_H - 36.0);
+                draw(DrawCommand::Fill(note_color(n as u8)))?;
+                rect(
+                    (n as f32 - LOW_NOTE as f32) * key_w,
+                    HEIGHT as f32 - h,
+                    key_w - 2.0,
+                    h,
+                )?;
+            }
         }
 
-        let preview = note_color(note_at_x(mx));
-        graphics_record_command(graphics, DrawCommand::Fill(preview))?;
-        graphics_record_command(
-            graphics,
-            DrawCommand::Rect {
-                x: mx - 8.0,
-                y: my - 8.0,
-                w: 16.0,
-                h: 16.0,
-                radii: [8.0; 4],
-            },
-        )?;
+        draw(DrawCommand::Fill(Color::WHITE))?;
+        draw(DrawCommand::TextSize(14.0))?;
+        for (label, y) in [(&out_label, 22.0), (&in_label, PLAY_H + 22.0)] {
+            draw(DrawCommand::Text {
+                content: label.to_string(),
+                x: 12.0,
+                y,
+                z: 0.0,
+                max_w: None,
+                max_h: None,
+            })?;
+        }
 
         graphics_end_draw(graphics)?;
-
-        if input_key_is_pressed()? && input_key_is_down(KeyCode::Escape)? {
-            break;
-        }
     }
 
-    if let Some(note) = held {
+    if let Some(note) = playing {
         midi_note_off(note)?;
     }
     midi_disconnect()?;
+    midi_disconnect_input()?;
     Ok(())
 }

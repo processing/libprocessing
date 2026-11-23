@@ -455,6 +455,8 @@ pub mod processing_py {
     #[pymodule_export]
     use super::math::PyVec4;
     #[pymodule_export]
+    use super::midi::PyMidiMessage;
+    #[pymodule_export]
     use super::monitor::Monitor;
     #[pymodule_export]
     use super::particles::Attribute;
@@ -2595,6 +2597,27 @@ pub mod processing_py {
     #[pyfunction]
     fn midi_note_off(note: u8) -> PyResult<()> {
         midi::note_off(note)
+    }
+    #[pyfunction]
+    fn midi_list_input_ports() -> PyResult<Vec<String>> {
+        midi::list_input_ports()
+    }
+    /// Connect to a MIDI input and return its name. `port` is a number from
+    /// `midi_list_input_ports()` or part of a port name like `"IAC"`; the
+    /// default is the first port.
+    #[pyfunction]
+    #[pyo3(signature = (port=None))]
+    fn midi_connect_input(port: Option<&Bound<'_, PyAny>>) -> PyResult<String> {
+        midi::connect_input(port)
+    }
+    #[pyfunction]
+    fn midi_disconnect_input() -> PyResult<()> {
+        midi::disconnect_input()
+    }
+    /// Every MIDI message received since the last call, oldest first.
+    #[pyfunction]
+    fn midi_read() -> PyResult<Vec<midi::PyMidiMessage>> {
+        midi::read()
     }
 
     #[pyfunction]
