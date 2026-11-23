@@ -601,8 +601,7 @@ pub fn flush_draw_commands(
                     );
                 }
                 DrawCommand::Point { x, y } => {
-                    if let Some(color) = state.style.stroke_color {
-                        let d = state.style.stroke_weight;
+                    if let Some((color, d)) = state.style.stroke() {
                         let material_key = material_key_with_color(
                             &state.style.material_key,
                             color,
@@ -828,8 +827,7 @@ pub fn flush_draw_commands(
                                 );
                             }
                             ShapeKind::Points => {
-                                if let Some(color) = state.style.stroke_color {
-                                    let d = state.style.stroke_weight;
+                                if let Some((color, d)) = state.style.stroke() {
                                     let material_key = material_key_with_color(
                                         &state.style.material_key,
                                         color,
@@ -1428,11 +1426,12 @@ pub fn flush_draw_commands(
                     );
 
                     if let Some(weight) = stroke_weight {
-                        add_stroke(
+                        add_stroke_weighted(
                             &mut res,
                             &mut batch,
                             &state,
-                            |mesh, color, _| {
+                            weight,
+                            |mesh, color, weight| {
                                 // per-glyph fill colors don't apply to the stroke
                                 let mut params = text_params.as_params();
                                 params.glyph_colors = None;
@@ -1672,10 +1671,26 @@ fn add_stroke(
     tessellate: impl FnOnce(&mut Mesh, Color, f32),
     material_handles: &Query<&UntypedMaterial>,
 ) {
+    let weight = state.style.stroke_weight;
+    add_stroke_weighted(res, batch, state, weight, tessellate, material_handles);
+}
+
+/// A stroke in the current stroke color at `stroke_weight`; a weight of zero draws nothing.
+fn add_stroke_weighted(
+    res: &mut RenderResources,
+    batch: &mut BatchState,
+    state: &RenderState,
+    stroke_weight: f32,
+    tessellate: impl FnOnce(&mut Mesh, Color, f32),
+    material_handles: &Query<&UntypedMaterial>,
+) {
     let Some(color) = state.style.stroke_color else {
         return;
     };
-    let stroke_weight = state.style.stroke_weight;
+    // a zero-width stroke tessellates to NaN vertices, which cull the whole batch
+    if stroke_weight <= 0.0 || stroke_weight.is_nan() {
+        return;
+    }
     let material_key =
         material_key_with_color(&state.style.material_key, color, state.style.blend_state);
 
@@ -1688,12 +1703,19 @@ fn add_stroke(
     }
 }
 
+/// Nothing to draw; the mesh allocator also rejects a zero-size mesh.
+fn mesh_is_empty(mesh: &Mesh) -> bool {
+    mesh.count_vertices() == 0 || mesh.indices().is_some_and(|indices| indices.is_empty())
+}
+
 fn flush_batch(
     res: &mut RenderResources,
     batch: &mut BatchState,
     material_handles: &Query<&UntypedMaterial>,
 ) {
-    if let Some(mesh) = batch.current_mesh.take() {
+    if let Some(mesh) = batch.current_mesh.take()
+        && !mesh_is_empty(&mesh)
+    {
         let z_offset = layer_z(batch.draw_index);
         spawn_mesh(res, batch, mesh, z_offset, material_handles);
         batch.draw_index += 1;
@@ -1755,6 +1777,10 @@ fn draw_mesh3d(
 ) {
     flush_batch(res, batch, material_handles);
 
+    if res.meshes.get(&draw.mesh).is_some_and(mesh_is_empty) {
+        return;
+    }
+
     let (color, stroke) = match draw.paint {
         MeshPaint::Surface { edges } => {
             let color = match state.style.fill {
@@ -1762,9 +1788,9 @@ fn draw_mesh3d(
                 Fill::Color(color) => Some(color),
                 Fill::Buffer(_) => Some(Color::WHITE),
             };
-            (color, edges.zip(state.style.stroke_color))
+            (color, edges.zip(state.style.stroke()))
         }
-        MeshPaint::Lines => (state.style.stroke_color, None),
+        MeshPaint::Lines => (state.style.stroke().map(|(color, _)| color), None),
     };
     if color.is_none() && stroke.is_none() {
         return;
@@ -1845,16 +1871,12 @@ fn draw_mesh3d(
     if let Some(material_handle) = material_handle {
         entity.insert(UntypedMaterial(material_handle));
     }
-    if let Some((edges, color)) = stroke {
+    if let Some((edges, (color, weight))) = stroke {
         entity.insert((
             Wireframe,
             WireframeColor { color },
             WireframeLineWidth {
-                width: if draw.hairline {
-                    1.0
-                } else {
-                    state.style.stroke_weight
-                },
+                width: if draw.hairline { 1.0 } else { weight },
             },
             edges,
         ));

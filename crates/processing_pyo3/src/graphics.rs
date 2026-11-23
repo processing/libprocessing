@@ -9,6 +9,7 @@ use bevy::{
     render::render_resource::{Extent3d, TextureFormat},
 };
 use processing::prelude::*;
+use processing_render::color::pixel_to_srgba;
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
@@ -37,7 +38,7 @@ fn flatten_floats(args: &Bound<'_, PyTuple>) -> PyResult<Vec<f32>> {
 fn pixels_to_pylist(py: Python<'_>, pixels: &[LinearRgba]) -> PyResult<Py<PyList>> {
     let colors = pixels
         .iter()
-        .map(|p| crate::color::PyColor(bevy::prelude::Color::Srgba(Srgba::from(*p))));
+        .map(|p| crate::color::PyColor(bevy::prelude::Color::Srgba(pixel_to_srgba(*p))));
     Ok(PyList::new(py, colors)?.unbind())
 }
 
@@ -702,7 +703,7 @@ impl Image {
         let p = image_get_pixel(self.entity, x, y)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(crate::color::PyColor(bevy::prelude::Color::Srgba(
-            p.map_or(Srgba::NONE, Srgba::from),
+            p.map_or(Srgba::NONE, pixel_to_srgba),
         )))
     }
 
@@ -1156,7 +1157,7 @@ impl Graphics {
         let p = graphics_get_pixel(self.entity, x, y)
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
         Ok(crate::color::PyColor(bevy::prelude::Color::Srgba(
-            p.map_or(Srgba::NONE, Srgba::from),
+            p.map_or(Srgba::NONE, pixel_to_srgba),
         )))
     }
 
