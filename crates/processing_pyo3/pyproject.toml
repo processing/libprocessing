@@ -26,6 +26,7 @@ dynamic = ["version"]
 dependencies = [
     "ipython>=8.12.3",
     "jupyter>=1.1.1",
+    "jurigged>=0.6.1",
 ]
 
 [project.urls]
