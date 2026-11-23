@@ -75,16 +75,29 @@ impl Default for AppliedWindow {
 
 impl GlfwContext {
     pub fn new(width: u32, height: u32, transparent: bool) -> Result<Self> {
+        let mut ctx = Self::init()?;
+        ctx.open_window(width, height, transparent);
+        Ok(ctx)
+    }
+
+    /// Start GLFW with no window yet, so monitors can be read before the sketch has a size.
+    pub fn init() -> Result<Self> {
         if processing_render::ci::enabled() {
             // Without the menubar GLFW never becomes a foreground (Dock, focus-taking) app on macOS.
             glfw::init_hint(glfw::InitHint::CocoaMenubar(false));
         }
-        let mut glfw = glfw::init(glfw::fail_on_errors).unwrap();
-        let main = Self::spawn_window(&mut glfw, width, height, transparent, "Processing");
+        let glfw = glfw::init(glfw::fail_on_errors).unwrap();
         Ok(Self {
             glfw,
-            windows: vec![main],
+            windows: Vec::new(),
         })
+    }
+
+    /// Create the main window; a context has exactly one.
+    pub fn open_window(&mut self, width: u32, height: u32, transparent: bool) {
+        debug_assert!(self.windows.is_empty(), "the main window already exists");
+        let main = Self::spawn_window(&mut self.glfw, width, height, transparent, "Processing");
+        self.windows.insert(0, main);
     }
 
     /// Create a GLFW window on the shared instance and return its per-window state.
@@ -151,7 +164,8 @@ impl GlfwContext {
         }
     }
 
-    fn sync_monitors(&mut self) {
+    /// Mirror the connected monitors into the engine; needs the engine initialized.
+    pub fn sync_monitors(&mut self) {
         let primary_name = self
             .glfw
             .with_primary_monitor(|_, monitor| monitor.and_then(|m| m.get_name()));
@@ -249,6 +263,11 @@ impl GlfwContext {
 
     /// Create the render surface for the main window (index 0).
     pub fn create_surface(&mut self, width: u32, height: u32, transparent: bool) -> Result<Entity> {
+        if self.windows.is_empty() {
+            return Err(processing_core::error::ProcessingError::InvalidArgument(
+                "the main window has not been opened".to_string(),
+            ));
+        }
         self.create_surface_for(0, width, height, transparent)
     }
 
