@@ -358,7 +358,11 @@ fn create_graphics_context(
     let env = detect_environment(module)?;
 
     let interactive = env != "script";
-    let log_level = if interactive { Some("error") } else { None };
+    let log_level = if interactive {
+        Some("error")
+    } else {
+        Some("warn")
+    };
 
     let has_existing = module
         .getattr("_graphics")
@@ -1290,6 +1294,7 @@ pub mod processing_py {
                     .end_draw()?;
 
                 loop {
+                    py.check_signals()?;
                     {
                         let mut graphics = get_graphics_mut(module)?
                             .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
@@ -1315,6 +1320,8 @@ pub mod processing_py {
             let mut draw_failed = false;
 
             loop {
+                // catches Ctrl-C while paused
+                py.check_signals()?;
                 if let Some(ref hot) = hot {
                     let setup_changed = hot.call_method0("poll")?;
                     if !setup_changed.is_none() {
@@ -1387,7 +1394,7 @@ pub mod processing_py {
                 }
                 if let Err(e) = drawn {
                     if hot.is_none() {
-                        return Err(PyRuntimeError::new_err(format!("{e}")));
+                        return Err(e);
                     }
                     report_live_error(py, e)?;
                     draw_failed = true;
@@ -1403,6 +1410,16 @@ pub mod processing_py {
             }
 
             Ok(())
+        })
+        .or_else(|e: PyErr| {
+            // Ctrl-C quits the sketch like closing its window
+            Python::attach(|py| {
+                if e.is_instance_of::<pyo3::exceptions::PyKeyboardInterrupt>(py) {
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            })
         });
 
         // tear down the app while the thread-local is still alive; the eager
