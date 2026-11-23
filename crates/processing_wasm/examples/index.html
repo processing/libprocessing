@@ -25,22 +25,23 @@
         async function main() {
             await init();
             await p.init();
-            const surface = p.createSurface('canvas', 600, 600);
+            const surface = p.surfaceCreateFromCanvas('canvas', 600, 600);
+            const graphics = p.graphicsCreate(surface, 600, 600);
 
-            const bgImage = await p.loadImage('images/logo.png');
+            const bgImage = await p.imageLoad('images/logo.png');
 
             let frame = 0;
 
             function draw() {
                 try {
-                    p.beginDraw(surface);
-                    p.backgroundImage(surface, bgImage);
+                    p.beginDraw(graphics);
+                    p.backgroundImage(graphics, bgImage);
 
                     const x = 250 + Math.sin(frame * 0.02) * 200;
-                    p.fill(surface, 0.9, 0.1, 0.3, 1.0);
-                    p.rect(surface, x, 50, 100, 100, 20, 20, 20, 20);
+                    p.setFill(graphics, 0.9, 0.1, 0.3, 1.0, 0 /* sRGB */);
+                    p.rect(graphics, x, 50, 100, 100, 20, 20, 20, 20);
 
-                    p.endDraw(surface);
+                    p.endDraw(graphics);
 
                     frame++;
                 } catch (e) {

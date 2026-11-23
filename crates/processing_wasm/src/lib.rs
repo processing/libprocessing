@@ -282,6 +282,24 @@ pub fn js_no_stroke(graphics_id: u64) -> Result<(), JsValue> {
     ))
 }
 
+#[wasm_bindgen(js_name = "pushStyle")]
+pub fn js_push_style(graphics_id: u64) -> Result<(), JsValue> {
+    let graphics_entity = Entity::from_bits(graphics_id);
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::PushStyle,
+    ))
+}
+
+#[wasm_bindgen(js_name = "popStyle")]
+pub fn js_pop_style(graphics_id: u64) -> Result<(), JsValue> {
+    let graphics_entity = Entity::from_bits(graphics_id);
+    check(graphics_record_command(
+        graphics_entity,
+        DrawCommand::PopStyle,
+    ))
+}
+
 #[wasm_bindgen(js_name = "pushMatrix")]
 pub fn js_push_matrix(graphics_id: u64) -> Result<(), JsValue> {
     let graphics_entity = Entity::from_bits(graphics_id);
