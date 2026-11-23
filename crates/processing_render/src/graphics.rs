@@ -762,6 +762,7 @@ pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
         }
     }
     graphics_mut!(app, entity).remove::<Flush>();
+    crate::destroy::run_pending(app.world_mut());
     Ok(())
 }
 
@@ -875,6 +876,43 @@ fn pixel_scale(app: &App, entity: Entity) -> Result<(u32, u32, f64, f64)> {
     ))
 }
 
+/// The color of logical pixel (`lx`, `ly`), an alpha-weighted average of its physical pixels.
+fn logical_pixel(
+    data: &[u8],
+    format: TextureFormat,
+    (pw, ph): (usize, usize),
+    (sx, sy): (f64, f64),
+    lx: i64,
+    ly: i64,
+) -> Result<LinearRgba> {
+    let px_size = pixel_size(format)?;
+    let px0 = ((lx as f64 * sx) as usize).min(pw - 1);
+    let py0 = ((ly as f64 * sy) as usize).min(ph - 1);
+    let px1 = (((lx + 1) as f64 * sx) as usize).clamp(px0 + 1, pw);
+    let py1 = (((ly + 1) as f64 * sy) as usize).clamp(py0 + 1, ph);
+    let mut sum = [0.0f32; 4];
+    for py in py0..py1 {
+        for px in px0..px1 {
+            let at = (py * pw + px) * px_size;
+            let p = crate::image::decode_pixel(&data[at..at + px_size], format)?;
+            sum[0] += p.red * p.alpha;
+            sum[1] += p.green * p.alpha;
+            sum[2] += p.blue * p.alpha;
+            sum[3] += p.alpha;
+        }
+    }
+    if sum[3] <= 0.0 {
+        return Ok(LinearRgba::NONE);
+    }
+    let count = ((px1 - px0) * (py1 - py0)) as f32;
+    Ok(LinearRgba::new(
+        sum[0] / sum[3],
+        sum[1] / sum[3],
+        sum[2] / sum[3],
+        sum[3] / count,
+    ))
+}
+
 /// The pixel at logical (`x`, `y`); `None` outside the canvas
 pub fn get_pixel(app: &mut App, entity: Entity, x: i64, y: i64) -> Result<Option<LinearRgba>> {
     let (lw, lh, sx, sy) = pixel_scale(app, entity)?;
@@ -889,11 +927,60 @@ pub fn get_pixel(app: &mut App, entity: Entity, x: i64, y: i64) -> Result<Option
     let Some(data) = graphics.pixels.as_deref() else {
         return Ok(None);
     };
-    let px_size = pixel_size(graphics.texture_format)?;
-    let px = ((x as f64 * sx) as usize).min(graphics.size.width as usize - 1);
-    let py = ((y as f64 * sy) as usize).min(graphics.size.height as usize - 1);
-    let at = (py * graphics.size.width as usize + px) * px_size;
-    crate::image::decode_pixel(&data[at..at + px_size], graphics.texture_format).map(Some)
+    let physical = (graphics.size.width as usize, graphics.size.height as usize);
+    logical_pixel(data, graphics.texture_format, physical, (sx, sy), x, y).map(Some)
+}
+
+/// A new `width` x `height` image of the logical block at (`x`, `y`).
+pub fn get_region(
+    app: &mut App,
+    entity: Entity,
+    x: i64,
+    y: i64,
+    width: u32,
+    height: u32,
+) -> Result<Entity> {
+    if width == 0 || height == 0 {
+        return Err(ProcessingError::InvalidArgument(
+            "a sub-image needs a width and height above zero".to_string(),
+        ));
+    }
+    let (lw, lh, sx, sy) = pixel_scale(app, entity)?;
+    ensure_pixels(app, entity)?;
+    let graphics = app
+        .world()
+        .get::<Graphics>(entity)
+        .ok_or(ProcessingError::GraphicsNotFound)?;
+    let data = graphics
+        .pixels
+        .as_deref()
+        .ok_or(ProcessingError::GraphicsNotFound)?;
+    let format = graphics.texture_format;
+    let (pw, ph) = (graphics.size.width as usize, graphics.size.height as usize);
+
+    let mut pixels = Vec::with_capacity(width as usize * height as usize);
+    for row in 0..height as i64 {
+        for col in 0..width as i64 {
+            let (lx, ly) = (x + col, y + row);
+            if lx < 0 || ly < 0 || lx >= lw as i64 || ly >= lh as i64 {
+                pixels.push(LinearRgba::NONE);
+                continue;
+            }
+            pixels.push(logical_pixel(data, format, (pw, ph), (sx, sy), lx, ly)?);
+        }
+    }
+
+    let format = TextureFormat::Rgba8UnormSrgb;
+    let bytes = pixels_to_bytes(&pixels, format)?;
+    let size = Extent3d {
+        width,
+        height,
+        depth_or_array_layers: 1,
+    };
+    Ok(app
+        .world_mut()
+        .run_system_cached_with(crate::image::create, (size, bytes, format))
+        .unwrap())
 }
 
 /// Sets the pixel at logical (`x`, `y`), which covers a block of physical pixels
