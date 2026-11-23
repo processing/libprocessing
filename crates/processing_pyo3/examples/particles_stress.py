@@ -42,6 +42,7 @@ def setup():
     ])
 
     fill(color_buf)
+    roughness(0.4)
     cube = Geometry.box(0.35, 0.35, 0.35)
     spin = Particles.transform()
 
