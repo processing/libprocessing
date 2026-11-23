@@ -104,8 +104,6 @@ thread_local! {
 #[napi(object)]
 pub struct InitConfig {
     pub asset_root_path: Option<String>,
-    pub sketch_root_path: Option<String>,
-    pub sketch_file_name: Option<String>,
     pub log_level: Option<String>,
 }
 
@@ -141,8 +139,6 @@ pub fn js_init(env: Env, config: Option<InitConfig>) -> Result<()> {
     if let Some(c) = config {
         for (key, value) in [
             (ConfigKey::AssetRootPath, c.asset_root_path),
-            (ConfigKey::SketchRootPath, c.sketch_root_path),
-            (ConfigKey::SketchFileName, c.sketch_file_name),
             (ConfigKey::LogLevel, c.log_level),
         ] {
             if let Some(value) = value {
