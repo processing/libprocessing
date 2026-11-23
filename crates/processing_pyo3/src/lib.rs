@@ -1320,7 +1320,7 @@ pub mod processing_py {
             let mut draw_failed = false;
 
             loop {
-                // also catches Ctrl-C while paused, when no Python code runs
+                // catches Ctrl-C while paused
                 py.check_signals()?;
                 if let Some(ref hot) = hot {
                     let setup_changed = hot.call_method0("poll")?;
@@ -1412,8 +1412,7 @@ pub mod processing_py {
             Ok(())
         })
         .or_else(|e: PyErr| {
-            // Ctrl-C quits the sketch like closing its window, rather than a
-            // traceback from wherever draw() happened to be
+            // Ctrl-C quits the sketch like closing its window
             Python::attach(|py| {
                 if e.is_instance_of::<pyo3::exceptions::PyKeyboardInterrupt>(py) {
                     Ok(())

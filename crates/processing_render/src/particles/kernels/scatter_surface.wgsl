@@ -93,7 +93,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     position[slot * 3u + 0u] = p.x;
     position[slot * 3u + 1u] = p.y;
     position[slot * 3u + 2u] = p.z;
-    // texture coordinate at the same spot, for LOOKUP
+    // texture coordinate at the same spot
     let t0 = vec2<f32>(source_uv[i0 * 2u], source_uv[i0 * 2u + 1u]);
     let t1 = vec2<f32>(source_uv[i1 * 2u], source_uv[i1 * 2u + 1u]);
     let t2 = vec2<f32>(source_uv[i2 * 2u], source_uv[i2 * 2u + 1u]);

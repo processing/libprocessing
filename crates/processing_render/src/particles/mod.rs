@@ -100,8 +100,7 @@ pub struct Particles {
     /// Ring-buffer write cursor; wraps at `capacity`.
     pub emit_head: u32,
     pub neighbor_lists: Option<NeighborLists>,
-    /// The mesh a system made from a `Geometry` came from. Attributes created
-    /// later start from its data when it has them, so only what's used is copied.
+    /// The mesh a system made from a `Geometry` came from.
     pub source_mesh: Option<Handle<Mesh>>,
 }
 

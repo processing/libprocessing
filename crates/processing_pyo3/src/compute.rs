@@ -247,7 +247,7 @@ fn slice_positions(indices: &PySliceIndices) -> impl Iterator<Item = isize> + us
     (0..slicelength as isize).map(move |i| start + i * step)
 }
 
-/// A buffer has no color type: a `Color` is stored as its linear RGBA floats.
+/// A `Color` is stored as its linear RGBA floats.
 fn buffer_element(value: &Bound<'_, PyAny>) -> PyResult<ShaderValue> {
     Ok(match py_to_shader_value(value)? {
         ShaderValue::Color(c) => ShaderValue::Float4(c.to_linear().to_f32_array()),

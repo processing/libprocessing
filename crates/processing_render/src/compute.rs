@@ -374,7 +374,7 @@ pub fn dispatch(
         if !ready {
             return Err(ProcessingError::ResourceNotReady(name.to_string()));
         }
-        // wgpu treats an incomplete bind group as fatal, so fail here instead
+        // wgpu treats an incomplete bind group as fatal
         if matches!(param.category(), ParameterCategory::Storage { .. })
             && shader.buffer_handle(name).is_none()
             && !mesh_bindings.iter().any(|(n, _)| n == name)

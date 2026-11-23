@@ -15,7 +15,7 @@ pub enum ShaderValue {
     UInt3([u32; 3]),
     UInt4([u32; 4]),
     Mat4([f32; 16]),
-    /// Linear RGBA in a shader; PBR color properties take it as-is.
+    /// Linear RGBA.
     Color(Color),
     Texture(Entity),
     Buffer(Entity),

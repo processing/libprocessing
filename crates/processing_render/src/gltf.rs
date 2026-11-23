@@ -215,8 +215,7 @@ pub fn geometry(
     Ok(entity)
 }
 
-/// The scene entity bevy spawned for a mesh, by the name it gave that mesh (from the
-/// glTF node, or computed).
+/// The scene entity bevy spawned for a mesh, by the name it gave that mesh.
 fn find_mesh_entity(
     world: &World,
     instance_id: bevy::world_serialization::InstanceId,
@@ -231,7 +230,7 @@ fn find_mesh_entity(
         })
 }
 
-/// The base color texture of a mesh's material, as an [`Image`](crate::image::Image).
+/// The base color texture of a mesh's material.
 pub fn texture(In((gltf_entity, name)): In<(Entity, String)>, world: &mut World) -> Result<Entity> {
     let gltf_handle = world
         .get::<GltfHandle>(gltf_entity)

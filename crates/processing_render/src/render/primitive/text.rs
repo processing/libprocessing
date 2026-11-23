@@ -399,7 +399,7 @@ pub fn text_to_paths(
 /// Default `sample_factor` for [`text_to_points`].
 pub const DEFAULT_SAMPLE_FACTOR: f32 = 0.1;
 
-/// Samples a segment at `step` points per unit of length, like p5's `textToPoints`.
+/// Samples a segment at `step` points per unit of length.
 fn sample_outline(
     points: &mut Vec<[f32; 2]>,
     step: f32,
@@ -491,7 +491,7 @@ pub fn text_to_points(
                         },
                         true,
                     ),
-                    // the closing edge back to the start; its endpoint is the Begin point
+                    // the closing edge back to the start
                     Event::End { last, first, close } => {
                         if close && last != first {
                             sample_outline(&mut points, step, &lerp(last, first), false);

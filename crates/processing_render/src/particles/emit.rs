@@ -17,10 +17,7 @@ use bevy_naga_reflect::reflect::ParameterCategory;
 
 const WORKGROUP_SIZE: u32 = 64;
 
-/// Creates every column `compute_entity` reads or writes that the system doesn't
-/// have yet: the kernel's declared requirements, plus any storage array the shader
-/// names after a known attribute. A storage array left unbound would make the
-/// bind group incomplete, which wgpu treats as fatal, so an unknown name is an error.
+/// Creates every column `compute_entity` reads or writes that the system doesn't have yet.
 fn ensure_columns(particles_entity: Entity, compute_entity: Entity) -> error::Result<()> {
     let (required, missing) = app_mut(|app| {
         let world = app.world();
@@ -77,8 +74,7 @@ fn ensure_columns(particles_entity: Entity, compute_entity: Entity) -> error::Re
     Ok(())
 }
 
-/// Binds each column the shader declares and records them as this system's, so a
-/// later system that lacks one doesn't inherit the binding.
+/// Binds each column the shader declares and records them as this system's.
 fn bind_columns(compute_entity: Entity, buffers: Vec<(String, Entity)>) -> error::Result<()> {
     let mut bound = HashSet::with_capacity(buffers.len());
     for (name, buf_entity) in buffers {

@@ -2866,7 +2866,7 @@ fn text_query_state(
     let state = world
         .get::<render::RenderState>(graphics_entity)
         .ok_or(error::ProcessingError::GraphicsNotFound)?;
-    // text_size() and friends are queued until the next flush, so replay them
+    // text style commands are queued until the next flush
     let mut style = state.style.clone();
     if let Some(buffer) = world.get::<render::command::CommandBuffer>(graphics_entity) {
         for cmd in &buffer.commands {

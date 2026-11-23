@@ -96,8 +96,7 @@ impl BatchState {
     }
 }
 
-/// Applies a text-style command to `style`; shared by the flush and by text queries, which
-/// replay the frame's pending commands. `font_family` resolves a font entity.
+/// Applies a text-style command to `style`.
 pub(crate) fn apply_text_style_command(
     style: &mut StyleStack,
     cmd: DrawCommand,
@@ -247,7 +246,7 @@ pub fn flush_draw_commands(
         target,
     ) in graphics.iter_mut()
     {
-        // an opaque window ignores background alpha, as in Processing
+        // an opaque window ignores background alpha
         let opaque_window = matches!(
             target,
             Some(RenderTarget::Window(WindowRef::Entity(window)))

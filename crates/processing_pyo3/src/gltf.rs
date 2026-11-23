@@ -35,7 +35,7 @@ impl Gltf {
         Ok(Material { entity })
     }
 
-    /// The texture on the named mesh, e.g. for `LOOKUP`.
+    /// The texture on the named mesh.
     pub fn texture(&self, name: &str) -> PyResult<Image> {
         let entity =
             gltf_texture(self.entity, name).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;

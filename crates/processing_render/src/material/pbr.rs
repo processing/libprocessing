@@ -12,7 +12,7 @@ pub fn set_property(
     match name {
         "base_color" | "color" => {
             material.base_color = match value {
-                // plain numbers are colors as written, i.e. sRGB
+                // plain numbers are sRGB
                 ShaderValue::Float4(c) => Color::srgba(c[0], c[1], c[2], c[3]),
                 ShaderValue::Color(c) => *c,
                 _ => {

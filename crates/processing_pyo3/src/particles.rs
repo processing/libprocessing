@@ -118,13 +118,12 @@ fn parse_falloff(s: &str) -> PyResult<u32> {
     }
 }
 
-/// `emit()` data: flat numbers, or one value per particle (`[x, y, z]`, a `Color`, ...)
-/// converted like `Buffer.write`.
+/// `emit()` data: flat numbers, or one value per particle.
 fn emit_bytes(name: &str, value: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
     let mut bytes = Vec::new();
     for item in value.try_iter()? {
         let item = item?;
-        // a bare int would become an i32 shader value; attributes are floats
+        // a bare int would become an i32 shader value
         if let Ok(f) = item.extract::<f32>() {
             bytes.extend_from_slice(&f.to_le_bytes());
             continue;
