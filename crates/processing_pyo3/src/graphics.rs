@@ -1689,7 +1689,9 @@ impl Graphics {
 
     // --- Text ---
 
-    #[pyo3(signature = (content, x, y, *args, max_w=None, max_h=None))]
+    /// Draws text in the fill color; `stroke_weight` also outlines it in the stroke color.
+    #[pyo3(signature = (content, x, y, *args, max_w=None, max_h=None, stroke_weight=None))]
+    #[allow(clippy::too_many_arguments)]
     pub fn text(
         &self,
         content: &str,
@@ -1698,6 +1700,7 @@ impl Graphics {
         args: &Bound<'_, pyo3::types::PyTuple>,
         max_w: Option<f32>,
         max_h: Option<f32>,
+        stroke_weight: Option<f32>,
     ) -> PyResult<()> {
         // text(content, x, y) or text(content, x, y, z) or text(content, x, y, max_w, max_h)
         let (z, mw, mh) = match args.len() {
@@ -1732,6 +1735,7 @@ impl Graphics {
                 z,
                 max_w: mw,
                 max_h: mh,
+                stroke_weight,
             },
         )
         .map_err(|e| PyRuntimeError::new_err(format!("{e}")))

@@ -2230,7 +2230,8 @@ pub mod processing_py {
     // --- Text ---
 
     #[pyfunction]
-    #[pyo3(pass_module, signature = (content, x, y, *args, max_w=None, max_h=None))]
+    #[pyo3(pass_module, signature = (content, x, y, *args, max_w=None, max_h=None, stroke_weight=None))]
+    #[allow(clippy::too_many_arguments)]
     fn text(
         module: &Bound<'_, PyModule>,
         content: &str,
@@ -2239,8 +2240,9 @@ pub mod processing_py {
         args: &Bound<'_, PyTuple>,
         max_w: Option<f32>,
         max_h: Option<f32>,
+        stroke_weight: Option<f32>,
     ) -> PyResult<()> {
-        graphics!(module).text(content, x, y, args, max_w, max_h)
+        graphics!(module).text(content, x, y, args, max_w, max_h, stroke_weight)
     }
 
     #[pyfunction]

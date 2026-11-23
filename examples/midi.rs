@@ -136,6 +136,7 @@ fn sketch() -> error::Result<()> {
                 z: 0.0,
                 max_w: None,
                 max_h: None,
+                stroke_weight: None,
             })?;
         }
 

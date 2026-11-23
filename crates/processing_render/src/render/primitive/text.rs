@@ -149,7 +149,7 @@ pub fn text(
 
     text_cx.with(|font_cx, layout_cx| {
         let layout = build_layout(font_cx, layout_cx, content, color, params);
-        let (base_x, base_y) = compute_text_origin(&layout, x, y, params.align_v);
+        let (base_x, base_y) = compute_text_origin(&layout, x, y, params);
         tessellate_layout(
             mesh,
             &layout,
@@ -178,7 +178,7 @@ pub fn text_stroke(
 
     text_cx.with(|font_cx, layout_cx| {
         let layout = build_layout(font_cx, layout_cx, content, color, params);
-        let (base_x, base_y) = compute_text_origin(&layout, x, y, params.align_v);
+        let (base_x, base_y) = compute_text_origin(&layout, x, y, params);
         stroke_layout(
             mesh,
             &layout,
@@ -248,7 +248,7 @@ pub fn text_bounds(
         let layout = build_layout(font_cx, layout_cx, content, Color::BLACK, params);
 
         // the text origin is the layout's top-left corner
-        let (box_x, box_y) = compute_text_origin(&layout, x, y, params.align_v);
+        let (box_x, box_y) = compute_text_origin(&layout, x, y, params);
         let width = layout.width();
         let height = match params.max_h {
             Some(h) => layout.height().min(h),
@@ -298,7 +298,7 @@ pub fn text_lines(
     }
     text_cx.with(|font_cx, layout_cx| {
         let layout = build_layout(font_cx, layout_cx, content, Color::BLACK, params);
-        let (base_x, base_y) = compute_text_origin(&layout, x, y, params.align_v);
+        let (base_x, base_y) = compute_text_origin(&layout, x, y, params);
         let mut result = Vec::new();
 
         for line_idx in 0..layout.len() {
@@ -343,7 +343,7 @@ pub fn text_glyph_rects(
     }
     text_cx.with(|font_cx, layout_cx| {
         let layout = build_layout(font_cx, layout_cx, content, Color::BLACK, params);
-        let (base_x, base_y) = compute_text_origin(&layout, x, y, params.align_v);
+        let (base_x, base_y) = compute_text_origin(&layout, x, y, params);
         let mut result = Vec::new();
 
         for line_idx in 0..layout.len() {
@@ -391,7 +391,7 @@ pub fn text_to_paths(
 
     text_cx.with(|font_cx, layout_cx| {
         let layout = build_layout(font_cx, layout_cx, content, Color::BLACK, params);
-        let (base_x, base_y) = compute_text_origin(&layout, x, y, params.align_v);
+        let (base_x, base_y) = compute_text_origin(&layout, x, y, params);
         extract_glyph_path_commands(&layout, base_x, base_y, params.max_h)
     })
 }
@@ -436,7 +436,7 @@ pub fn text_to_points(
 
     text_cx.with(|font_cx, layout_cx| {
         let layout = build_layout(font_cx, layout_cx, content, Color::BLACK, params);
-        let (base_x, base_y) = compute_text_origin(&layout, x, y, params.align_v);
+        let (base_x, base_y) = compute_text_origin(&layout, x, y, params);
         let glyph_paths = extract_glyph_lyon_paths(&layout, base_x, base_y, params.max_h);
 
         let step = sample_factor.max(0.001);
@@ -523,7 +523,7 @@ pub fn text_to_model(
 
     text_cx.with(|font_cx, layout_cx| {
         let layout = build_layout(font_cx, layout_cx, content, Color::WHITE, params);
-        let (base_x, base_y) = compute_text_origin(&layout, x, y, params.align_v);
+        let (base_x, base_y) = compute_text_origin(&layout, x, y, params);
         let glyph_paths = extract_glyph_lyon_paths_yup(&layout, base_x, base_y, params.max_h);
 
         let half_depth = depth / 2.0;
@@ -731,7 +731,14 @@ impl<'a> FillGeometryBuilder for Extrusion3DBuilder<'a> {
 /// Absolute position of the layout's top-left corner — parley's glyph
 /// positions are measured against it. `y` is the first line's baseline for
 /// `Baseline` align, otherwise the top/center/bottom of the text block.
-fn compute_text_origin(layout: &Layout<Color>, x: f32, y: f32, align_v: TextAlignV) -> (f32, f32) {
+fn compute_text_origin(layout: &Layout<Color>, x: f32, y: f32, params: &TextParams) -> (f32, f32) {
+    // without a box to align in, x is the anchor the lines hang from
+    let x_offset = match (params.max_w, params.align_h) {
+        (Some(_), _) | (None, TextAlignH::Left) => x,
+        (None, TextAlignH::Center) => x - layout.width() / 2.0,
+        (None, TextAlignH::Right) => x - layout.width(),
+    };
+    let align_v = params.align_v;
     let total_height = layout.height();
     let first_baseline = layout
         .get(0)
@@ -745,7 +752,7 @@ fn compute_text_origin(layout: &Layout<Color>, x: f32, y: f32, align_v: TextAlig
         TextAlignV::Bottom => y - total_height,
     };
 
-    (x, y_offset)
+    (x_offset, y_offset)
 }
 
 /// Extract text outlines, one `PathCommand` vec per contour.
@@ -762,7 +769,7 @@ pub fn text_to_contours(
 
     text_cx.with(|font_cx, layout_cx| {
         let layout = build_layout(font_cx, layout_cx, content, Color::BLACK, params);
-        let (base_x, base_y) = compute_text_origin(&layout, x, y, params.align_v);
+        let (base_x, base_y) = compute_text_origin(&layout, x, y, params);
         let lyon_paths = extract_glyph_lyon_paths(&layout, base_x, base_y, params.max_h);
 
         let mut contours = Vec::new();

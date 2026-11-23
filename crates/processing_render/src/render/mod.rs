@@ -1361,6 +1361,7 @@ pub fn flush_draw_commands(
                     z,
                     max_w,
                     max_h,
+                    stroke_weight,
                 } => {
                     // rectMode applies to the bounding-box form
                     let (x, y, max_w, max_h) = if let (Some(w), Some(h)) = (max_w, max_h) {
@@ -1400,20 +1401,22 @@ pub fn flush_draw_commands(
                         &p_material_handles,
                     );
 
-                    add_stroke(
-                        &mut res,
-                        &mut batch,
-                        &state,
-                        |mesh, color, weight| {
-                            // per-glyph fill colors don't apply to the stroke
-                            let mut params = text_params.as_params();
-                            params.glyph_colors = None;
-                            primitive::text::text_stroke(
-                                mesh, &content, x, y, color, weight, &params, &text_cx,
-                            );
-                        },
-                        &p_material_handles,
-                    );
+                    if let Some(weight) = stroke_weight {
+                        add_stroke(
+                            &mut res,
+                            &mut batch,
+                            &state,
+                            |mesh, color, _| {
+                                // per-glyph fill colors don't apply to the stroke
+                                let mut params = text_params.as_params();
+                                params.glyph_colors = None;
+                                primitive::text::text_stroke(
+                                    mesh, &content, x, y, color, weight, &params, &text_cx,
+                                );
+                            },
+                            &p_material_handles,
+                        );
+                    }
 
                     if z != 0.0 {
                         state

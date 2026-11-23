@@ -847,6 +847,7 @@ pub fn js_text(graphics_id: u64, content: &str, x: f32, y: f32) -> Result<(), Js
             z: 0.0,
             max_w: None,
             max_h: None,
+            stroke_weight: None,
         },
     ))
 }
@@ -864,6 +865,7 @@ pub fn js_text_3d(graphics_id: u64, content: &str, x: f32, y: f32, z: f32) -> Re
             z,
             max_w: None,
             max_h: None,
+            stroke_weight: None,
         },
     ))
 }
@@ -881,6 +883,7 @@ pub fn js_text_int(graphics_id: u64, value: i32, x: f32, y: f32) -> Result<(), J
             z: 0.0,
             max_w: None,
             max_h: None,
+            stroke_weight: None,
         },
     ))
 }
@@ -898,6 +901,7 @@ pub fn js_text_float(graphics_id: u64, value: f32, x: f32, y: f32) -> Result<(),
             z: 0.0,
             max_w: None,
             max_h: None,
+            stroke_weight: None,
         },
     ))
 }
@@ -922,6 +926,7 @@ pub fn js_text_box(
             z: 0.0,
             max_w: Some(w),
             max_h: Some(h),
+            stroke_weight: None,
         },
     ))
 }
