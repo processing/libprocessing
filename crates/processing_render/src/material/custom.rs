@@ -58,6 +58,7 @@ use processing_core::error::{ProcessingError, Result};
 
 #[derive(Clone, Hash, PartialEq)]
 struct CustomMaterialKey {
+    shader: AssetId<ShaderAsset>,
     blend_state: Option<BlendState>,
     double_sided: Option<bool>,
     depth_write: Option<bool>,
@@ -97,6 +98,16 @@ pub struct Shader {
     pub module: naga::Module,
     pub shader_handle: Handle<ShaderAsset>,
 }
+
+/// A compiled shader and the file it was loaded from, kept so edits to the file reload it.
+struct ShaderFile {
+    file: Handle<ShaderAsset>,
+    source: String,
+    compiled: AssetId<ShaderAsset>,
+}
+
+#[derive(Resource, Default)]
+struct ShaderFiles(Vec<ShaderFile>);
 
 #[derive(Component, Clone)]
 pub struct CustomMaterial3d(pub Handle<CustomMaterial>);
@@ -287,26 +298,21 @@ pub fn load_shader(In(path): In<String>, world: &mut World) -> Result<Entity> {
         world.run_system_once(handle_internal_asset_events).unwrap();
     }
 
-    let source = {
-        let shader_assets = world.resource::<Assets<ShaderAsset>>();
-        let shader = shader_assets
-            .get(&handle)
-            .ok_or(ProcessingError::ShaderNotFound)?;
-        match &shader.source {
-            bevy::shader::Source::Wesl(s) | bevy::shader::Source::Wgsl(s) => s.to_string(),
-            _ => {
-                return Err(ProcessingError::ShaderCompilationError(
-                    "Unsupported shader source format".to_string(),
-                ));
-            }
-        }
-    };
-
+    let source = shader_file_source(world.resource::<Assets<ShaderAsset>>(), handle.id())?;
     let (compiled_wgsl, module) = compile_shader(&source)?;
 
     let shader_handle = world
         .resource_mut::<Assets<ShaderAsset>>()
         .add(ShaderAsset::from_wgsl(compiled_wgsl, "custom_material"));
+
+    world
+        .get_resource_or_insert_with(ShaderFiles::default)
+        .0
+        .push(ShaderFile {
+            file: handle,
+            source,
+            compiled: shader_handle.id(),
+        });
 
     Ok(world
         .spawn(Shader {
@@ -314,6 +320,97 @@ pub fn load_shader(In(path): In<String>, world: &mut World) -> Result<Entity> {
             shader_handle,
         })
         .id())
+}
+
+fn shader_file_source(shaders: &Assets<ShaderAsset>, id: AssetId<ShaderAsset>) -> Result<String> {
+    let shader = shaders.get(id).ok_or(ProcessingError::ShaderNotFound)?;
+    match &shader.source {
+        bevy::shader::Source::Wesl(s) | bevy::shader::Source::Wgsl(s) => Ok(s.to_string()),
+        _ => Err(ProcessingError::ShaderCompilationError(
+            "Unsupported shader source format".to_string(),
+        )),
+    }
+}
+
+fn has_stage(module: &naga::Module, stage: naga::ShaderStage) -> bool {
+    module.entry_points.iter().any(|ep| ep.stage == stage)
+}
+
+/// Recompiles shaders loaded from a file when that file changes.
+fn reload_shaders(
+    mut events: MessageReader<AssetEvent<ShaderAsset>>,
+    mut files: ResMut<ShaderFiles>,
+    mut programs: Query<&mut Shader>,
+    mut shaders: ResMut<Assets<ShaderAsset>>,
+    mut materials: ResMut<Assets<CustomMaterial>>,
+) {
+    // forget compiled shaders nothing uses any more
+    files.0.retain(|f| shaders.contains(f.compiled));
+
+    for event in events.read() {
+        // a reloaded file reports as loaded again, not always as modified
+        let (AssetEvent::Modified { id } | AssetEvent::LoadedWithDependencies { id }) = event
+        else {
+            continue;
+        };
+        for entry in files.0.iter_mut().filter(|f| f.file.id() == *id) {
+            let Ok(source) = shader_file_source(&shaders, *id) else {
+                continue;
+            };
+            if source == entry.source {
+                continue;
+            }
+            let compiled = compile_shader(&source);
+            entry.source = source;
+            let (wgsl, module) = match compiled {
+                Ok(compiled) => compiled,
+                Err(e) => {
+                    // keep rendering the last version that compiled
+                    error!("shader reload failed: {e}");
+                    continue;
+                }
+            };
+            // a new asset, not an in-place swap: pipelines built for the old
+            // bindings would otherwise be recompiled against the new shader
+            let handle = shaders.add(ShaderAsset::from_wgsl(wgsl, "custom_material"));
+            let old = std::mem::replace(&mut entry.compiled, handle.id());
+
+            for mut program in &mut programs {
+                if program.shader_handle.id() == old {
+                    program.module = module.clone();
+                    program.shader_handle = handle.clone();
+                }
+            }
+
+            let using: Vec<_> = materials
+                .iter()
+                .filter(|(_, m)| m.shader_handle.id() == old)
+                .map(|(id, _)| id)
+                .collect();
+            for material_id in using {
+                let Some(mut material) = materials.get_mut(material_id) else {
+                    continue;
+                };
+                let Ok(mut shader) = DynamicShader::new(module.clone()) else {
+                    continue;
+                };
+                shader.init();
+                // carry over every value whose uniform survived the edit
+                for i in 0..material.shader.field_len() {
+                    if let Some(name) = material.shader.name_at(i)
+                        && let Some(old) = material.shader.field_at(i)
+                        && let Some(new) = shader.field_mut(name)
+                    {
+                        let _ = new.try_apply(old);
+                    }
+                }
+                material.shader = shader;
+                material.shader_handle = handle.clone();
+                material.has_vertex = has_stage(&module, naga::ShaderStage::Vertex);
+                material.has_fragment = has_stage(&module, naga::ShaderStage::Fragment);
+            }
+        }
+    }
 }
 
 pub fn destroy_shader(In(entity): In<Entity>, mut commands: Commands) -> Result<()> {
@@ -331,16 +428,8 @@ pub fn create_custom(
         .get(shader_entity)
         .map_err(|_| ProcessingError::ShaderNotFound)?;
 
-    let has_vertex = program
-        .module
-        .entry_points
-        .iter()
-        .any(|ep| ep.stage == naga::ShaderStage::Vertex);
-    let has_fragment = program
-        .module
-        .entry_points
-        .iter()
-        .any(|ep| ep.stage == naga::ShaderStage::Fragment);
+    let has_vertex = has_stage(&program.module, naga::ShaderStage::Vertex);
+    let has_fragment = has_stage(&program.module, naga::ShaderStage::Fragment);
 
     let mut shader = DynamicShader::new(program.module.clone())
         .map_err(|e| ProcessingError::ShaderCompilationError(e.to_string()))?;
@@ -600,6 +689,8 @@ impl Plugin for CustomMaterialPlugin {
     fn build(&self, app: &mut App) {
         app.init_asset::<CustomMaterial>()
             .add_plugins(ErasedRenderAssetPlugin::<CustomMaterial>::default())
+            .init_resource::<ShaderFiles>()
+            .add_systems(Update, reload_shaders)
             .add_systems(
                 PostUpdate,
                 check_entities_needing_specialization.after(AssetEventSystems),
@@ -711,6 +802,7 @@ impl ErasedRenderAsset for CustomMaterial {
             base_specialize: Some(base_specialize),
             material_layout: Some(bind_group_layout),
             material_key: ErasedMaterialKey::new(CustomMaterialKey {
+                shader: source_asset.shader_handle.id(),
                 blend_state,
                 double_sided: source_asset.double_sided,
                 depth_write: source_asset.depth_write,

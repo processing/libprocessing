@@ -752,11 +752,6 @@ pub struct Geometry {
     pub(crate) entity: Entity,
 }
 
-#[pyclass]
-pub struct Sketch {
-    pub source: String,
-}
-
 impl Geometry {
     pub(crate) fn create(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
         let topology = match kwargs.and_then(|k| k.get_item("topology").ok().flatten()) {
@@ -928,13 +923,10 @@ impl Graphics {
     }
 
     #[new]
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         width: u32,
         height: u32,
         asset_path: &str,
-        sketch_root_path: &str,
-        sketch_file_name: &str,
         log_level: Option<&str>,
         transparent: bool,
     ) -> PyResult<Self> {
@@ -943,8 +935,6 @@ impl Graphics {
 
         let mut config = Config::new();
         config.set(ConfigKey::AssetRootPath, asset_path.to_string());
-        config.set(ConfigKey::SketchRootPath, sketch_root_path.to_string());
-        config.set(ConfigKey::SketchFileName, sketch_file_name.to_string());
         if let Some(level) = log_level {
             config.set(ConfigKey::LogLevel, level.to_string());
         }
@@ -1131,17 +1121,6 @@ impl Graphics {
         let seq = resolve_pixels_arg(py, pixels, &self.pixel_cache)?;
         let data = pyseq_to_pixels(&seq)?;
         graphics_update(self.entity, &data).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
-    }
-
-    pub fn poll_for_sketch_update(&self) -> PyResult<Sketch> {
-        match poll_for_sketch_updates().map_err(|_| PyRuntimeError::new_err("SKETCH UPDATE ERR"))? {
-            Some(sketch) => Ok(Sketch {
-                source: sketch.source,
-            }),
-            None => Ok(Sketch {
-                source: "".to_string(),
-            }),
-        }
     }
 
     #[pyo3(signature = (kind, *args, **kwargs))]

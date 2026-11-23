@@ -43,7 +43,7 @@ use pyo3::{
     types::{PyDict, PyList, PyTuple},
 };
 use shader::Shader;
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 
 /// Register a window `Graphics` in the module's `_windows` list so the run loop
 /// draws + presents it each frame.
@@ -277,6 +277,15 @@ fn call_event_callback(
     Ok(())
 }
 
+/// Prints an error raised while live-coding; exits and interrupts still propagate.
+fn report_live_error(py: Python<'_>, e: PyErr) -> PyResult<()> {
+    if !e.is_instance_of::<pyo3::exceptions::PyException>(py) {
+        return Err(e);
+    }
+    e.print(py);
+    Ok(())
+}
+
 fn dispatch_event_callbacks(
     module: &Bound<'_, PyModule>,
     locals: &Bound<'_, PyAny>,
@@ -388,16 +397,8 @@ fn create_graphics_context(
         }
         "ipython" => {
             let asset_path = get_asset_root()?;
-            let (sketch_root, sketch_file) = get_sketch_info()?;
-            let graphics = Graphics::new(
-                width,
-                height,
-                asset_path.as_str(),
-                sketch_root.as_str(),
-                sketch_file.as_str(),
-                log_level,
-                transparent,
-            )?;
+            let graphics =
+                Graphics::new(width, height, asset_path.as_str(), log_level, transparent)?;
             module.setattr("_graphics", graphics)?;
 
             if !has_existing {
@@ -414,16 +415,8 @@ fn create_graphics_context(
         }
         _ => {
             let asset_path = get_asset_root()?;
-            let (sketch_root, sketch_file) = get_sketch_info()?;
-            let graphics = Graphics::new(
-                width,
-                height,
-                asset_path.as_str(),
-                sketch_root.as_str(),
-                sketch_file.as_str(),
-                log_level,
-                transparent,
-            )?;
+            let graphics =
+                Graphics::new(width, height, asset_path.as_str(), log_level, transparent)?;
             module.setattr("_graphics", graphics)?;
         }
     }
@@ -433,6 +426,14 @@ fn create_graphics_context(
 
 const DEFAULT_WIDTH: u32 = 100;
 const DEFAULT_HEIGHT: u32 = 100;
+
+/// Whether `run()` has taken over driving frames.
+fn run_called(module: &Bound<'_, PyModule>) -> PyResult<bool> {
+    match module.getattr("_run_called") {
+        Ok(flag) => flag.is_truthy(),
+        Err(_) => Ok(false),
+    }
+}
 
 fn ensure_graphics(module: &Bound<'_, PyModule>) -> PyResult<()> {
     if get_graphics(module)?.is_some() {
@@ -468,30 +469,6 @@ fn get_asset_root() -> PyResult<String> {
 
         let dirname = path.getattr("dirname")?.call1((filename,))?;
         Ok(path.getattr("abspath")?.call1((dirname,))?.to_string())
-    })
-}
-
-pub(crate) fn reset_tracked_globals() {
-    LAST_GLOBALS.with(|cache| cache.borrow_mut().clear());
-}
-
-fn get_sketch_info() -> PyResult<(String, String)> {
-    Python::attach(|py| {
-        let sys = PyModule::import(py, "sys")?;
-        let argv: Vec<String> = sys.getattr("argv")?.extract()?;
-        let filename = argv.first().map(|s| s.as_str()).unwrap_or("");
-        let os = PyModule::import(py, "os")?;
-        let path = os.getattr("path")?;
-
-        if filename.is_empty() || !path.getattr("isfile")?.call1((filename,))?.is_truthy()? {
-            let cwd = os.getattr("getcwd")?.call0()?.to_string();
-            return Ok((cwd, String::new()));
-        }
-
-        let dirname = path.getattr("dirname")?.call1((filename,))?;
-        let abspath = path.getattr("abspath")?.call1((dirname,))?;
-        let basename = path.getattr("basename")?.call1((filename,))?;
-        Ok((abspath.to_string(), basename.to_string()))
     })
 }
 
@@ -582,6 +559,8 @@ pub mod processing_py {
     use super::math::PyVec3;
     #[pymodule_export]
     use super::math::PyVec4;
+    #[pymodule_export]
+    use super::midi::PyMidiMessage;
     #[pymodule_export]
     use super::monitor::Monitor;
     #[pymodule_export]
@@ -1214,7 +1193,27 @@ pub mod processing_py {
         height: u32,
         transparent: bool,
     ) -> PyResult<()> {
-        create_graphics_context(module, width, height, transparent)?;
+        // a re-run setup() keeps its window and resizes it; only transparency needs a new one
+        let keep_window = run_called(module)?
+            && match get_graphics_mut(module)? {
+                Some(mut g) => {
+                    let err = |e| PyRuntimeError::new_err(format!("{e}"));
+                    let same_kind = processing::prelude::surface_transparent(g.surface.entity)
+                        .map_err(err)?
+                        == transparent;
+                    if same_kind {
+                        processing::prelude::surface_resize(g.surface.entity, width, height)
+                            .map_err(err)?;
+                        g.width = width;
+                        g.height = height;
+                    }
+                    same_kind
+                }
+                None => false,
+            };
+        if !keep_window {
+            create_graphics_context(module, width, height, transparent)?;
+        }
 
         let py = module.py();
         let sys = PyModule::import(py, "sys")?;
@@ -1225,9 +1224,10 @@ pub mod processing_py {
         Ok(())
     }
 
+    /// Runs the sketch until its window closes.
     #[pyfunction]
-    #[pyo3(pass_module)]
-    fn run(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    #[pyo3(pass_module, signature = (*, hot_reload=None))]
+    fn run(module: &Bound<'_, PyModule>, hot_reload: Option<bool>) -> PyResult<()> {
         let env = detect_environment(module)?;
 
         if env != "script" {
@@ -1235,9 +1235,15 @@ pub mod processing_py {
             return Ok(());
         }
 
+        // a reload can re-execute the sketch's own run() line
+        if run_called(module)? {
+            return Ok(());
+        }
+        module.setattr("_run_called", true)?;
+
         let result: PyResult<()> = Python::attach(|py| {
             let builtins = PyModule::import(py, "builtins")?;
-            let locals = builtins.getattr("locals")?.call0()?;
+            let locals = &builtins.getattr("locals")?.call0()?;
 
             let setup_fn = locals.get_item("setup").ok();
             let mut draw_fn = locals.get_item("draw").ok();
@@ -1254,19 +1260,25 @@ pub mod processing_py {
 
             ensure_graphics(module)?;
 
-            let mut globals = if let Some(ref draw) = draw_fn {
+            let globals = if let Some(ref draw) = draw_fn {
                 draw.getattr("__globals__")?
             } else if let Some(ref setup) = setup_fn {
                 setup.getattr("__globals__")?
             } else {
-                let sys = PyModule::import(py, "sys")?;
-                let frame = sys.getattr("_getframe")?.call1((0,))?;
-                frame.getattr("f_globals")?
+                locals.clone()
             };
             sync_globals(module, &globals)?;
 
+            let hot_module = PyModule::import(py, "processing_py._hot")?;
+
             // no draw is defined. flush any top level code and then idle
             if draw_fn.is_none() {
+                if hot_module
+                    .call_method1("enabled", (hot_reload,))?
+                    .is_truthy()?
+                {
+                    warn!("hot reload needs a draw() function; running without it.");
+                }
                 {
                     let mut graphics = get_graphics_mut(module)?
                         .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
@@ -1285,7 +1297,7 @@ pub mod processing_py {
                             break;
                         }
                     }
-                    dispatch_event_callbacks(module, &locals)?;
+                    dispatch_event_callbacks(module, locals)?;
                     if exit_requested() {
                         break;
                     }
@@ -1297,49 +1309,58 @@ pub mod processing_py {
             let draw_fn_ref = draw_fn.as_mut().expect("checked above");
             let mut first_frame = true;
 
+            let hot = hot_module.call_method1("start", (&globals, hot_reload))?;
+            let hot = (!hot.is_none()).then_some(hot);
+            // under hot reload, a failed draw() waits for the next edit
+            let mut draw_failed = false;
+
             loop {
+                if let Some(ref hot) = hot {
+                    let setup_changed = hot.call_method0("poll")?;
+                    if !setup_changed.is_none() {
+                        if setup_changed.is_truthy()?
+                            && let Ok(setup) = globals.get_item("setup")
+                        {
+                            // a changed setup() restarts the sketch in place
+                            LOOP_STATE.set(LoopState::default());
+                            processing::prelude::set_frame_count(0)
+                                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+                            if let Err(e) = setup.call0() {
+                                report_live_error(py, e)?;
+                            }
+                        }
+                        if let Ok(draw) = globals.get_item("draw") {
+                            *draw_fn_ref = draw;
+                        }
+                        draw_failed = false;
+                        first_frame = true;
+                    }
+                }
+
                 {
                     let mut graphics = get_graphics_mut(module)?
                         .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-
-                    // TODO: this shouldn't be on the graphics object
-                    let sketch = graphics.poll_for_sketch_update()?;
-                    if !sketch.source.is_empty() {
-                        let locals = PyDict::new(py);
-
-                        let ok = CString::new(sketch.source.as_str()).unwrap();
-                        let cstr: &CStr = ok.as_c_str();
-
-                        match py.run(cstr, None, Some(&locals)) {
-                            Ok(_) => {}
-                            Err(e) => {
-                                eprintln!("sketch reload error: {e}");
-                            }
-                        }
-
-                        *draw_fn_ref = locals.get_item("draw").unwrap().unwrap();
-                        globals = draw_fn_ref.getattr("__globals__")?;
-                        reset_tracked_globals();
-                        first_frame = true;
-
-                        dbg!(locals);
-                    }
-
                     if !graphics.surface.poll_events() {
                         break;
                     }
                 }
 
-                dispatch_event_callbacks(module, &locals)?;
+                if let Err(e) = dispatch_event_callbacks(module, locals) {
+                    if hot.is_none() {
+                        return Err(e);
+                    }
+                    report_live_error(py, e)?;
+                }
                 if exit_requested() {
                     break;
                 }
 
-                let should_draw = first_frame
-                    || LOOP_STATE.with(|s| {
-                        let state = s.get();
-                        state.looping || state.redraw_requested
-                    });
+                let should_draw = !draw_failed
+                    && (first_frame
+                        || LOOP_STATE.with(|s| {
+                            let state = s.get();
+                            state.looping || state.redraw_requested
+                        }));
 
                 if !should_draw {
                     std::thread::sleep(std::time::Duration::from_millis(16));
@@ -1360,11 +1381,16 @@ pub mod processing_py {
                     wg.bind(py).borrow().begin_draw()?;
                 }
                 sync_globals(module, &globals)?;
-                draw_fn_ref
-                    .call0()
-                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+                let drawn = draw_fn_ref.call0();
                 for wg in &windows {
                     wg.bind(py).borrow().end_draw()?;
+                }
+                if let Err(e) = drawn {
+                    if hot.is_none() {
+                        return Err(PyRuntimeError::new_err(format!("{e}")));
+                    }
+                    report_live_error(py, e)?;
+                    draw_failed = true;
                 }
 
                 update_loop_state(|s| s.redraw_requested = false);
@@ -2839,6 +2865,27 @@ pub mod processing_py {
     #[pyfunction]
     fn midi_note_off(note: u8) -> PyResult<()> {
         midi::note_off(note)
+    }
+    #[pyfunction]
+    fn midi_list_input_ports() -> PyResult<Vec<String>> {
+        midi::list_input_ports()
+    }
+    /// Connect to a MIDI input and return its name. `port` is a number from
+    /// `midi_list_input_ports()` or part of a port name like `"IAC"`; the
+    /// default is the first port.
+    #[pyfunction]
+    #[pyo3(signature = (port=None))]
+    fn midi_connect_input(port: Option<&Bound<'_, PyAny>>) -> PyResult<String> {
+        midi::connect_input(port)
+    }
+    #[pyfunction]
+    fn midi_disconnect_input() -> PyResult<()> {
+        midi::disconnect_input()
+    }
+    /// Every MIDI message received since the last call, oldest first.
+    #[pyfunction]
+    fn midi_read() -> PyResult<Vec<midi::PyMidiMessage>> {
+        midi::read()
     }
 
     #[pyfunction]

@@ -15,7 +15,6 @@ pub mod particles;
 pub mod render;
 pub mod shader_property;
 pub mod shader_value;
-pub mod sketch;
 pub mod surface;
 pub mod text;
 pub mod time;
@@ -60,7 +59,6 @@ use bevy::{
     render::render_resource::{Extent3d, TextureFormat},
 };
 use processing_core::app_mut;
-use processing_core::config::*;
 use processing_core::error;
 
 use crate::geometry::{AttributeFormat, AttributeValue};
@@ -77,20 +75,11 @@ impl Plugin for ProcessingRenderPlugin {
         use render::material::{add_custom_materials, add_processing_materials};
         use render::{activate_cameras, clear_flush_transients, flush_draw_commands};
 
-        let config = app.world().resource::<Config>().clone();
-
         app.init_resource::<time::ProcessingFrame>();
         app.init_resource::<time::ProcessingFrameRate>();
         app.init_resource::<time::ProcessingFrameTime>();
         // sketch time is wall time: no 250ms cap on a slow or paused frame
         app.insert_resource(Time::<Virtual>::from_max_delta(std::time::Duration::MAX));
-
-        let has_sketch_file = config
-            .get(ConfigKey::SketchFileName)
-            .is_some_and(|f| !f.is_empty());
-        if has_sketch_file {
-            app.add_plugins(sketch::LivecodePlugin);
-        }
 
         app.add_plugins((
             image::ImagePlugin,
@@ -1860,16 +1849,6 @@ pub fn geometry_grid(nx: u32, ny: u32, nz: u32, spacing: f32) -> error::Result<E
     })
 }
 
-pub fn poll_for_sketch_updates() -> error::Result<Option<sketch::Sketch>> {
-    app_mut(|app| {
-        Ok(app
-            .world_mut()
-            .run_system_cached(sketch::sketch_update_handler)
-            .ok()
-            .flatten())
-    })
-}
-
 pub fn shader_create(source: &str) -> error::Result<Entity> {
     app_mut(|app| {
         app.world_mut()
@@ -2111,6 +2090,15 @@ pub fn surface_focused(entity: Entity) -> error::Result<bool> {
         Ok(app
             .world_mut()
             .run_system_cached_with(surface::focused, entity)
+            .unwrap())
+    })
+}
+
+pub fn surface_transparent(entity: Entity) -> error::Result<bool> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(surface::transparent, entity)
             .unwrap())
     })
 }
