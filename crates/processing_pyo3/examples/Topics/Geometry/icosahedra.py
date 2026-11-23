@@ -30,7 +30,7 @@ def draw():
     rotate_y(frame_count * PI / -200)
     stroke(0.67, 0.0, 0.0)
     no_fill()
-    ico1.create()  # GAP: stroke()/no_fill() wireframe outline on draw_geometry
+    ico1.create()
     pop_matrix()
 
     push_matrix()
@@ -38,7 +38,7 @@ def draw():
     rotate_y(frame_count * PI / 300)
     stroke(0.59, 0.0, 0.71)
     fill(0.67, 0.67, 0.0)
-    ico2.create()  # GAP: stroke() outline on draw_geometry
+    ico2.create()
     pop_matrix()
 
     push_matrix()

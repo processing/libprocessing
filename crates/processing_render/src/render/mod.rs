@@ -15,7 +15,9 @@ use bevy::{
     },
     ecs::{query::Has, system::SystemParam},
     math::{Affine2, Affine3A, Vec3A},
+    mesh::PrimitiveTopology,
     pbr::gpu_instance_batch::GpuBatchedMesh3d,
+    pbr::wireframe::{Wireframe, WireframeColor, WireframeLineWidth, WireframeTopology},
     prelude::*,
     render::render_resource::BlendState,
     window::WindowRef,
@@ -33,7 +35,7 @@ use transform::TransformStack;
 
 use crate::{
     Flush,
-    geometry::Geometry,
+    geometry::{Edges, Geometry},
     gltf::GltfNodeTransform,
     image::Image,
     light::ProcessingLight,
@@ -1006,52 +1008,39 @@ pub fn flush_draw_commands(
                         continue;
                     };
 
-                    let mut material_key = material_key_with_fill(&state);
-                    if geometry.translucent {
-                        material_key = material_key.transparent();
-                    }
-                    let material_handle = match &material_key {
-                        MaterialKey::Custom {
-                            entity: mat_entity,
-                            blend_state,
-                        } => {
-                            let Some(untyped) = p_material_handles.get(*mat_entity).ok() else {
-                                warn!("Could not find material for entity {:?}", mat_entity);
-                                continue;
-                            };
-                            clone_custom_material_with_blend(
-                                &mut res.custom_materials,
-                                &untyped.0,
-                                *blend_state,
-                            )
+                    let topology = res
+                        .meshes
+                        .get(&geometry.handle)
+                        .map(|mesh| mesh.primitive_topology())
+                        .unwrap_or_default();
+                    let triangles = topology.is_triangles();
+                    let paint = if triangles {
+                        MeshPaint::Surface {
+                            edges: match geometry.edges {
+                                Edges::Triangles => Some(WireframeTopology::Triangles),
+                                Edges::Quads => Some(WireframeTopology::Quads),
+                                Edges::None => None,
+                            },
                         }
-                        _ => material_key
-                            .to_material(&mut res.materials, sort_bias(batch.draw_index)),
+                    } else {
+                        MeshPaint::Lines
                     };
 
-                    flush_batch(&mut res, &mut batch, &p_material_handles);
-
-                    let z_offset = layer_z(batch.draw_index);
-                    let mut transform = state.transform.to_bevy_transform();
-
-                    // if the "source" geometry was parented in a gltf scene, we need to make sure that
-                    // we apply the parent transform here to ensure the correct final transform
-                    // TODO: think about how hierarchies should work, especially for retained
-                    if let Some(nt) = node_transform {
-                        transform =
-                            Transform::from_matrix(transform.to_matrix() * nt.0.to_matrix());
-                    }
-                    transform.translation.z += z_offset;
-
-                    res.commands.spawn((
-                        Mesh3d(geometry.handle.clone()),
-                        UntypedMaterial(material_handle),
-                        FlushTransient(batch.graphics_entity),
-                        transform,
-                        batch.render_layers.clone(),
-                    ));
-
-                    batch.draw_index += 1;
+                    draw_mesh3d(
+                        &mut res,
+                        &mut batch,
+                        &state,
+                        Mesh3dDraw {
+                            mesh: geometry.handle.clone(),
+                            translucent: geometry.translucent,
+                            // a geometry parented in a gltf scene keeps its node transform
+                            // TODO: think about how hierarchies should work, especially for retained
+                            local: node_transform.map(|nt| nt.0),
+                            paint,
+                            hairline: topology == PrimitiveTopology::TriangleStrip,
+                        },
+                        &p_material_handles,
+                    );
                 }
                 DrawCommand::Particles {
                     particles,
@@ -1684,77 +1673,146 @@ fn add_shape3d(
     mesh: Mesh,
     material_handles: &Query<&UntypedMaterial>,
 ) {
-    use bevy::pbr::wireframe::{Wireframe, WireframeColor, WireframeLineWidth, WireframeTopology};
+    let mesh = res.meshes.add(mesh);
+    draw_mesh3d(
+        res,
+        batch,
+        state,
+        Mesh3dDraw {
+            mesh,
+            translucent: false,
+            local: None,
+            paint: MeshPaint::Surface {
+                edges: Some(WireframeTopology::Quads),
+            },
+            hairline: false,
+        },
+        material_handles,
+    );
+}
 
+struct Mesh3dDraw {
+    mesh: Handle<Mesh>,
+    /// blend even with an opaque fill (translucent vertex colors)
+    translucent: bool,
+    /// applied under the current matrix
+    local: Option<Transform>,
+    paint: MeshPaint,
+    /// the wide wireframe pass only draws triangle lists, so a strip is stroked one pixel wide
+    hairline: bool,
+}
+
+/// How the current style colors a mesh.
+enum MeshPaint {
+    /// fill colors the surface, stroke draws these edges
+    Surface { edges: Option<WireframeTopology> },
+    /// lines and points take the stroke color
+    Lines,
+}
+
+/// Draws a mesh colored by the current fill and stroke.
+fn draw_mesh3d(
+    res: &mut RenderResources,
+    batch: &mut BatchState,
+    state: &RenderState,
+    draw: Mesh3dDraw,
+    material_handles: &Query<&UntypedMaterial>,
+) {
     flush_batch(res, batch, material_handles);
 
-    let mesh_handle = res.meshes.add(mesh);
-    let fill_color = state.style.fill.color().unwrap_or(Color::WHITE);
-    let material_handle = match &state.style.material_key {
-        MaterialKey::Custom { entity, .. } => {
-            let Some(untyped) = material_handles.get(*entity).ok() else {
-                warn!("Custom material entity {:?} not found", entity);
-                return;
+    let (color, stroke) = match draw.paint {
+        MeshPaint::Surface { edges } => {
+            let color = match state.style.fill {
+                Fill::None => None,
+                Fill::Color(color) => Some(color),
+                Fill::Buffer(_) => Some(Color::WHITE),
             };
-            clone_custom_material_with_blend(
-                &mut res.custom_materials,
-                &untyped.0,
-                state.style.blend_state,
-            )
+            (color, edges.zip(state.style.stroke_color))
         }
-        // TODO: in 2d, we use vertex colors. `to_material` becomes complicated if we also encode
-        // a base color in the material, so for simplicity we just create a new material here
-        // that is unlit and uses the fill color as the base color
-        MaterialKey::Color { .. } => {
-            let base = StandardMaterial {
-                base_color: fill_color,
-                unlit: true,
-                cull_mode: None,
-                alpha_mode: if state.style.blend_state.is_some() || state.fill_is_transparent() {
-                    AlphaMode::Blend
-                } else {
-                    AlphaMode::Opaque
-                },
-                depth_bias: sort_bias(batch.draw_index),
-                ..default()
-            };
-            let extended = ProcessingExtendedMaterial {
-                base,
-                extension: ProcessingMaterial {
-                    blend_state: state.style.blend_state,
-                    depth_write: None,
-                },
-            };
-            res.materials.add(extended).untyped()
-        }
-        _ => {
-            let key = material_key_with_fill(state);
-            key.to_material(&mut res.materials, sort_bias(batch.draw_index))
-        }
+        MeshPaint::Lines => (state.style.stroke_color, None),
+    };
+    if color.is_none() && stroke.is_none() {
+        return;
+    }
+
+    let material_handle = match color {
+        None => None,
+        Some(color) => Some(match &state.style.material_key {
+            MaterialKey::Custom { entity, .. } => {
+                let Some(untyped) = material_handles.get(*entity).ok() else {
+                    warn!("Custom material entity {:?} not found", entity);
+                    return;
+                };
+                clone_custom_material_with_blend(
+                    &mut res.custom_materials,
+                    &untyped.0,
+                    state.style.blend_state,
+                )
+            }
+            // TODO: in 2d, we use vertex colors. `to_material` becomes complicated if we also encode
+            // a base color in the material, so for simplicity we just create a new material here
+            // that is unlit and uses the fill color as the base color
+            MaterialKey::Color { .. } => {
+                let blended =
+                    state.style.blend_state.is_some() || color.alpha() < 1.0 || draw.translucent;
+                let base = StandardMaterial {
+                    base_color: color,
+                    unlit: true,
+                    cull_mode: None,
+                    alpha_mode: if blended {
+                        AlphaMode::Blend
+                    } else {
+                        AlphaMode::Opaque
+                    },
+                    depth_bias: sort_bias(batch.draw_index),
+                    ..default()
+                };
+                let extended = ProcessingExtendedMaterial {
+                    base,
+                    extension: ProcessingMaterial {
+                        blend_state: state.style.blend_state,
+                        depth_write: None,
+                    },
+                };
+                res.materials.add(extended).untyped()
+            }
+            key @ MaterialKey::Pbr { .. } => {
+                let mut key = material_key_with_color(key, color, state.style.blend_state);
+                if draw.translucent {
+                    key = key.transparent();
+                }
+                key.to_material(&mut res.materials, sort_bias(batch.draw_index))
+            }
+        }),
     };
 
-    let z_offset = layer_z(batch.draw_index);
     let mut transform = state.transform.to_bevy_transform();
-    transform.translation.z += z_offset;
+    if let Some(local) = draw.local {
+        transform = Transform::from_matrix(transform.to_matrix() * local.to_matrix());
+    }
+    transform.translation.z += layer_z(batch.draw_index);
 
     let mut entity = res.commands.spawn((
-        Mesh3d(mesh_handle),
-        UntypedMaterial(material_handle),
+        Mesh3d(draw.mesh),
         FlushTransient(batch.graphics_entity),
         transform,
         batch.render_layers.clone(),
     ));
-
-    if let Some(stroke_color) = state.style.stroke_color {
+    if let Some(material_handle) = material_handle {
+        entity.insert(UntypedMaterial(material_handle));
+    }
+    if let Some((edges, color)) = stroke {
         entity.insert((
             Wireframe,
-            WireframeColor {
-                color: stroke_color,
-            },
+            WireframeColor { color },
             WireframeLineWidth {
-                width: state.style.stroke_weight,
+                width: if draw.hairline {
+                    1.0
+                } else {
+                    state.style.stroke_weight
+                },
             },
-            WireframeTopology::Quads,
+            edges,
         ));
     }
 

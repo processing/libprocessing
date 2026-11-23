@@ -75,6 +75,17 @@ impl Topology {
     }
 }
 
+/// Which edges of a triangle mesh the stroke draws.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Edges {
+    #[default]
+    Triangles,
+    /// built-in primitives, whose triangle pairs are faces
+    Quads,
+    /// an imported model, which is never stroked
+    None,
+}
+
 #[derive(Component)]
 pub struct Geometry {
     pub handle: Handle<Mesh>,
@@ -85,6 +96,7 @@ pub struct Geometry {
     pub custom_current: HashMap<MeshVertexAttributeId, AttributeValue>,
     /// set once a color with alpha below one is used; never cleared
     pub translucent: bool,
+    pub edges: Edges,
 }
 
 impl Geometry {
@@ -97,7 +109,13 @@ impl Geometry {
             current_uv: [0.0, 0.0],
             custom_current: HashMap::new(),
             translucent: false,
+            edges: Edges::default(),
         }
+    }
+
+    pub fn with_edges(mut self, edges: Edges) -> Self {
+        self.edges = edges;
+        self
     }
 }
 
@@ -187,7 +205,9 @@ pub fn create_box(
         ]))
         .id();
 
-    commands.spawn(Geometry::new(handle, layout_entity)).id()
+    commands
+        .spawn(Geometry::new(handle, layout_entity).with_edges(Edges::Quads))
+        .id()
 }
 
 pub fn create_sphere(
@@ -207,7 +227,9 @@ pub fn create_sphere(
         ]))
         .id();
 
-    commands.spawn(Geometry::new(handle, layout_entity)).id()
+    commands
+        .spawn(Geometry::new(handle, layout_entity).with_edges(Edges::Quads))
+        .id()
 }
 
 pub fn create_grid(
@@ -257,12 +279,12 @@ pub fn normal(world: &mut World, entity: Entity, normal: Vec3) -> Result<()> {
     Ok(())
 }
 
-pub fn color(world: &mut World, entity: Entity, color: Vec4) -> Result<()> {
+pub fn color(world: &mut World, entity: Entity, color: Color) -> Result<()> {
     let mut geometry = world
         .get_mut::<Geometry>(entity)
         .ok_or(ProcessingError::GeometryNotFound)?;
-    geometry.current_color = color.to_array();
-    if color.w < 1.0 {
+    geometry.current_color = color.to_linear().to_f32_array();
+    if color.alpha() < 1.0 {
         geometry.translucent = true;
     }
     Ok(())

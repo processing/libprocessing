@@ -46,6 +46,7 @@ def draw():
     camera_position(150.0, -150.0, 150.0)
     camera_look_at( 0.0, 0.0, 0.0)
     background(220, 200, 140)
+    no_stroke()
 
     for z in range(grid_size):
         for x in range(grid_size):

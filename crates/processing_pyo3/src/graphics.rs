@@ -1,7 +1,7 @@
 use crate::color::{ColorMode, ColorSpace, extract_color_with_mode, parse_numeric};
 use crate::glfw::GlfwContext;
 use crate::input;
-use crate::math::{Vec3Like, extract_vec2, extract_vec3, extract_vec4};
+use crate::math::{Vec3Like, extract_vec2, extract_vec3};
 use bevy::{
     color::{ColorToPacked, LinearRgba, Srgba},
     math::{Affine3A, Mat4, Vec3, Vec4},
@@ -830,8 +830,8 @@ impl Geometry {
 
     #[pyo3(signature = (*args))]
     pub fn color(&self, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let v = extract_vec4(args)?;
-        geometry_color(self.entity, v).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
+        let color = extract_color_with_mode(args, &ColorMode::default())?;
+        geometry_color(self.entity, color).map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
     #[pyo3(signature = (*args))]

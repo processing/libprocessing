@@ -1715,7 +1715,7 @@ pub fn js_geometry_normal(geo_id: BigInt, nx: f64, ny: f64, nz: f64) -> Result<(
 pub fn js_geometry_color(geo_id: BigInt, r: f64, g: f64, b: f64, a: f64) -> Result<()> {
     check(geometry_color(
         ent(geo_id),
-        Vec4::new(r as f32, g as f32, b as f32, a as f32),
+        bevy::color::Color::srgba(r as f32, g as f32, b as f32, a as f32),
     ))
 }
 

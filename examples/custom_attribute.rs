@@ -1,6 +1,7 @@
 use processing_glfw::GlfwContext;
 
-use bevy::math::{Vec3, Vec4};
+use bevy::color::Color;
+use bevy::math::Vec3;
 use processing::prelude::*;
 use processing_render::geometry::{AttributeFormat, Topology};
 use processing_render::render::command::DrawCommand;
@@ -37,16 +38,16 @@ fn sketch() -> error::Result<()> {
 
     let mesh = geometry_create_with_layout(layout, Topology::LineStrip)?;
 
-    geometry_color(mesh, Vec4::new(1.0, 0.0, 0.0, 1.0))?;
+    geometry_color(mesh, Color::srgba(1.0, 0.0, 0.0, 1.0))?;
     geometry_normal(mesh, Vec3::new(0.0, 0.0, 1.0))?;
     geometry_attribute_float(mesh, custom_attr, 0.0)?;
     geometry_vertex(mesh, Vec3::new(-50.0, 50.0, 0.0))?;
 
-    geometry_color(mesh, Vec4::new(0.0, 1.0, 0.0, 1.0))?;
+    geometry_color(mesh, Color::srgba(0.0, 1.0, 0.0, 1.0))?;
     geometry_attribute_float(mesh, custom_attr, 0.5)?;
     geometry_vertex(mesh, Vec3::new(50.0, 50.0, 0.0))?;
 
-    geometry_color(mesh, Vec4::new(0.0, 0.0, 1.0, 1.0))?;
+    geometry_color(mesh, Color::srgba(0.0, 0.0, 1.0, 1.0))?;
     geometry_attribute_float(mesh, custom_attr, 1.0)?;
     geometry_vertex(mesh, Vec3::new(0.0, -50.0, 0.0))?;
 
@@ -65,6 +66,7 @@ fn sketch() -> error::Result<()> {
             graphics,
             DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.1, 0.1, 0.12)),
         )?;
+        graphics_record_command(graphics, DrawCommand::StrokeColor(Color::WHITE))?;
         graphics_record_command(graphics, DrawCommand::Geometry(mesh))?;
         graphics_end_draw(graphics)?;
     }

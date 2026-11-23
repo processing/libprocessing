@@ -1347,7 +1347,10 @@ pub fn js_geometry_normal(geo_id: u64, nx: f32, ny: f32, nz: f32) -> Result<(), 
 #[wasm_bindgen(js_name = "geometryColor")]
 pub fn js_geometry_color(geo_id: u64, r: f32, g: f32, b: f32, a: f32) -> Result<(), JsValue> {
     let entity = Entity::from_bits(geo_id);
-    check(geometry_color(entity, Vec4::new(r, g, b, a)))
+    check(geometry_color(
+        entity,
+        bevy::color::Color::srgba(r, g, b, a),
+    ))
 }
 
 #[wasm_bindgen(js_name = "geometryUv")]

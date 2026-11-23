@@ -1,6 +1,7 @@
 use processing_glfw::GlfwContext;
 
-use bevy::math::{Vec3, Vec4};
+use bevy::color::Color;
+use bevy::math::Vec3;
 use processing::prelude::*;
 use processing_render::geometry::Topology;
 use processing_render::render::command::DrawCommand;
@@ -39,7 +40,7 @@ fn sketch() -> error::Result<()> {
             let pz = z as f32 * spacing - offset;
             geometry_color(
                 mesh,
-                Vec4::new(
+                Color::srgba(
                     x as f32 / grid_size as f32,
                     0.5,
                     z as f32 / grid_size as f32,
@@ -90,6 +91,7 @@ fn sketch() -> error::Result<()> {
             graphics,
             DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.05, 0.05, 0.1)),
         )?;
+        graphics_record_command(graphics, DrawCommand::NoStroke)?;
         graphics_record_command(graphics, DrawCommand::Geometry(mesh))?;
         graphics_end_draw(graphics)?;
 

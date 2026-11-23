@@ -14,7 +14,7 @@ use bevy::{
     world_serialization::{InstanceId, WorldInstanceSpawner},
 };
 
-use crate::geometry::{BuiltinAttributes, Geometry, layout::VertexLayout};
+use crate::geometry::{BuiltinAttributes, Edges, Geometry, layout::VertexLayout};
 use crate::graphics;
 use crate::light::{LightOf, ProcessingLight};
 use crate::material::ProcessingMaterial;
@@ -208,7 +208,7 @@ pub fn geometry(
     let layout_entity = world.spawn(VertexLayout::with_attributes(attrs)).id();
     let entity = world
         .spawn((
-            Geometry::new(mesh_handle, layout_entity),
+            Geometry::new(mesh_handle, layout_entity).with_edges(Edges::None),
             GltfNodeTransform(global_transform),
         ))
         .id();

@@ -47,7 +47,11 @@ def draw():
     arcball.run()
 
     translate(model_shift.x, model_shift.y, model_shift.z)
-    no_stroke()
+    if render_mode == 0:
+        # Lines take the stroke color, multiplied by the vertex colors
+        stroke(1.0)
+    else:
+        no_stroke()
     for i in range(len(models)):
         draw_geometry(models[i])
 
@@ -462,7 +466,7 @@ def create_ribbon_model(residues, trj):
         for line in (vertices0, vertices1, vertices2):
             model = create_geometry(topology=LINE_STRIP)
             for pos_vec in line:
-                model.color(ribbon_color.r, ribbon_color.g, ribbon_color.b, ribbon_color.a)
+                model.color(ribbon_color)
                 model.vertex(pos_vec.x, pos_vec.y, pos_vec.z)
             trj.append(model)
     else:
@@ -473,7 +477,7 @@ def create_ribbon_model(residues, trj):
         for i in range(len(vertices)):
             pos_vec = vertices[i]
             norm_vec = normals[i]
-            model.color(ribbon_color.r, ribbon_color.g, ribbon_color.b, ribbon_color.a)
+            model.color(ribbon_color)
             model.normal(-norm_vec.x, -norm_vec.y, -norm_vec.z)
             model.vertex(pos_vec.x, pos_vec.y, pos_vec.z)
         trj.append(model)

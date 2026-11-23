@@ -2405,7 +2405,7 @@ pub extern "C" fn processing_geometry_normal(geo_id: u64, nx: f32, ny: f32, nz: 
 pub extern "C" fn processing_geometry_color(geo_id: u64, r: f32, g: f32, b: f32, a: f32) {
     error::clear_error();
     let entity = Entity::from_bits(geo_id);
-    error::check(|| geometry_color(entity, Vec4::new(r, g, b, a)));
+    error::check(|| geometry_color(entity, bevy::color::Color::srgba(r, g, b, a)));
 }
 
 #[unsafe(no_mangle)]

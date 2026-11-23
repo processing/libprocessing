@@ -60,21 +60,6 @@ impl Vec3Arg {
     }
 }
 
-#[derive(FromPyObject)]
-pub(crate) enum Vec4Arg {
-    Instance((PyVec4,)),
-    Components(f32, f32, f32, f32),
-}
-
-impl Vec4Arg {
-    pub fn into_vec4(self) -> Vec4 {
-        match self {
-            Vec4Arg::Instance((v,)) => v.0,
-            Vec4Arg::Components(x, y, z, w) => Vec4::new(x, y, z, w),
-        }
-    }
-}
-
 // Vec3Like for single-object extraction (e.g., Quat::from_axis_angle(axis, angle))
 #[derive(FromPyObject)]
 pub(crate) enum Vec3Like {
@@ -99,10 +84,6 @@ pub(crate) fn extract_vec2(args: &Bound<'_, PyTuple>) -> PyResult<Vec2> {
 
 pub(crate) fn extract_vec3(args: &Bound<'_, PyTuple>) -> PyResult<Vec3> {
     Ok(args.extract::<Vec3Arg>()?.into_vec3())
-}
-
-pub(crate) fn extract_vec4(args: &Bound<'_, PyTuple>) -> PyResult<Vec4> {
-    Ok(args.extract::<Vec4Arg>()?.into_vec4())
 }
 
 // Implements a PyVecN class with the given name, fields, and underlying glam type,

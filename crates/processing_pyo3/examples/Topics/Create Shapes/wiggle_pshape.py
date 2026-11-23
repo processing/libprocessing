@@ -43,8 +43,7 @@ class Wiggler:
         # Now make the geometry with those vertices
         self.s = create_geometry(topology=TRIANGLES)
         self.s.color(0.5, 0.5, 0.5, 1.0)
-        stroke(0.0)  # GAP: Geometry has no stroke; the outline is not drawn
-        stroke_weight(2)  # GAP: Geometry has no stroke_weight
+        no_stroke()  # GAP: stroke() on a Geometry draws every triangle edge; the polygon outline needs a Shape
         for v in self.original:
             self.s.vertex(v.x, v.y, 0)
         # The circle is convex, so a triangle fan from the first vertex fills it

@@ -40,8 +40,8 @@ def draw():
 
     for i in range(cuantos):
         lista[i].dibujar()
-    # Lines take the fill color, multiplied by the vertex colors
-    fill(1.0)  # GAP: LINES geometry ignores stroke(); it is colored by fill() times vertex colors
+    # Lines take the stroke color, multiplied by the vertex colors
+    stroke(1.0)
     draw_geometry(pelos)
 
 
