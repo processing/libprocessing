@@ -48,6 +48,14 @@ pub struct Style {
     pub text_glyph_colors: Option<Vec<Color>>,
 }
 
+impl Style {
+    /// The stroke color and weight, or `None` when there is nothing to stroke.
+    pub fn stroke(&self) -> Option<(Color, f32)> {
+        let color = self.stroke_color?;
+        (self.stroke_weight > 0.0).then_some((color, self.stroke_weight))
+    }
+}
+
 impl Default for Style {
     fn default() -> Self {
         Self {

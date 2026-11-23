@@ -192,3 +192,48 @@ mod tests {
         assert!((mode.scale(50.0, 2) - 0.5).abs() < 1e-4);
     }
 }
+
+/// The sRGB color of a pixel read back, snapped to 8-bit when within a quarter step.
+pub fn pixel_to_srgba(pixel: LinearRgba) -> Srgba {
+    fn snap(channel: f32) -> f32 {
+        let step = (channel * 255.0).round();
+        if (0.0..=255.0).contains(&step) && (channel * 255.0 - step).abs() < 0.25 {
+            step / 255.0
+        } else {
+            channel
+        }
+    }
+    let srgba = Srgba::from(pixel);
+    Srgba::new(
+        snap(srgba.red),
+        snap(srgba.green),
+        snap(srgba.blue),
+        snap(srgba.alpha),
+    )
+}
+
+#[cfg(test)]
+mod pixel_tests {
+    use super::*;
+
+    #[test]
+    fn eight_bit_colors_survive_a_half_float_canvas() {
+        for byte in 0..=255u8 {
+            let want = byte as f32 / 255.0;
+            let linear = LinearRgba::from(Srgba::new(want, want, want, 1.0));
+            // what an Rgba16Float target keeps of the channel
+            let stored = half::f16::from_f32(linear.red).to_f32();
+            let read = pixel_to_srgba(LinearRgba::new(stored, stored, stored, 1.0));
+            assert_eq!(read.red, want, "byte {byte}");
+        }
+    }
+
+    #[test]
+    fn values_between_steps_are_kept() {
+        let srgba = Srgba::new(0.3, 2.5, -0.1, 1.0);
+        let read = pixel_to_srgba(LinearRgba::from(srgba));
+        assert!((read.red - 0.3).abs() < 1e-5);
+        assert!((read.green - 2.5).abs() < 1e-4);
+        assert!(read.blue < 0.0);
+    }
+}
