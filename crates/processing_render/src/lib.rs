@@ -638,6 +638,7 @@ builtin_filter!(filter_erode, ERODE);
 builtin_filter!(filter_dilate, DILATE);
 builtin_filter!(filter_composite, COMPOSITE);
 builtin_filter!(filter_feedback, FEEDBACK);
+builtin_filter!(filter_copy_region, COPY_REGION);
 
 pub fn filter_set_passes(entity: Entity, passes: u32) -> error::Result<()> {
     app_mut(|app| {
@@ -1241,6 +1242,34 @@ pub fn image_get_pixel(entity: Entity, x: i64, y: i64) -> error::Result<Option<L
     app_mut(|app| {
         image::sync_cpu(app, entity)?;
         image::cpu_pixel(app.world(), entity, x, y)
+    })
+}
+
+/// A new image holding the block at (`x`, `y`).
+pub fn image_get_region(
+    entity: Entity,
+    x: i64,
+    y: i64,
+    width: u32,
+    height: u32,
+) -> error::Result<Entity> {
+    if width == 0 || height == 0 {
+        return Err(error::ProcessingError::InvalidArgument(
+            "a sub-image needs a width and height above zero".to_string(),
+        ));
+    }
+    app_mut(|app| {
+        image::sync_cpu(app, entity)?;
+        let (data, format) = image::cpu_region(app.world(), entity, x, y, width, height)?;
+        let size = Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+        Ok(app
+            .world_mut()
+            .run_system_cached_with(image::create, (size, data, format))
+            .unwrap())
     })
 }
 
@@ -2705,21 +2734,17 @@ pub fn font_load(path: &str) -> error::Result<Entity> {
     }
 }
 
-/// Create a font handle from an existing font family name.
+/// Create a font handle for a family name; an unknown family falls back to the default font.
 pub fn font_create(name: &str) -> error::Result<Entity> {
-    use text::font::{Font, TextContext};
+    use text::font::{DEFAULT_FONT_FAMILY, Font, TextContext};
 
     app_mut(|app| {
         let text_cx = app.world().resource::<TextContext>().clone();
-        if !text_cx.has_font(name) {
-            return Err(error::ProcessingError::FontNotFound);
-        }
-        let entity = app
-            .world_mut()
-            .spawn(Font {
-                family_name: name.to_string(),
-            })
-            .id();
+        let family_name = text_cx.resolve_family(name).unwrap_or_else(|| {
+            warn!("font {name:?} is not installed, using the default font");
+            DEFAULT_FONT_FAMILY.to_string()
+        });
+        let entity = app.world_mut().spawn(Font { family_name }).id();
         Ok(entity)
     })
 }

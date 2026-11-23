@@ -658,6 +658,48 @@ pub fn cpu_pixels(world: &World, entity: Entity) -> Result<Vec<LinearRgba>> {
     )
 }
 
+/// The bytes of a `width` x `height` block at (`x`, `y`) in the image's format.
+pub fn cpu_region(
+    world: &World,
+    entity: Entity,
+    x: i64,
+    y: i64,
+    width: u32,
+    height: u32,
+) -> Result<(Vec<u8>, TextureFormat)> {
+    let p_image = world
+        .get::<Image>(entity)
+        .ok_or(ProcessingError::ImageNotFound)?;
+    let size = p_image.size;
+    let format = p_image.texture_format;
+    let data = world
+        .resource::<Assets<bevy::image::Image>>()
+        .get(&p_image.handle)
+        .and_then(|image| image.data.as_deref())
+        .ok_or(ProcessingError::ImageNotFound)?;
+    let px_size = pixel_size(format)?;
+    let stride = size.width as usize * px_size;
+    check_len(data.len(), stride, size, format)?;
+
+    let mut region = vec![0u8; width as usize * height as usize * px_size];
+    // the columns of the block that fall inside the image
+    let x0 = x.clamp(0, size.width as i64);
+    let x1 = (x + width as i64).clamp(0, size.width as i64);
+    if x0 < x1 {
+        let run = (x1 - x0) as usize * px_size;
+        for row in 0..height as i64 {
+            let src_y = y + row;
+            if src_y < 0 || src_y >= size.height as i64 {
+                continue;
+            }
+            let src = src_y as usize * stride + x0 as usize * px_size;
+            let dst = (row as usize * width as usize + (x0 - x) as usize) * px_size;
+            region[dst..dst + run].copy_from_slice(&data[src..src + run]);
+        }
+    }
+    Ok((region, format))
+}
+
 /// A CPU buffer that disagrees with the image size would make row math index out of bounds
 fn check_len(len: usize, stride: usize, size: Extent3d, format: TextureFormat) -> Result<()> {
     let expected = stride * size.height as usize;

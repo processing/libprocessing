@@ -698,13 +698,34 @@ impl Image {
             .map_err(|e| PyRuntimeError::new_err(format!("{e}")))
     }
 
-    /// Read a single pixel as a `Color` (Processing `get`); outside the image it is transparent black.
-    fn get(&self, x: i64, y: i64) -> PyResult<crate::color::PyColor> {
-        let p = image_get_pixel(self.entity, x, y)
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        Ok(crate::color::PyColor(bevy::prelude::Color::Srgba(
-            p.map_or(Srgba::NONE, pixel_to_srgba),
-        )))
+    /// `get(x, y)` reads one pixel as a `Color`; `get(x, y, w, h)` copies a block into a new `Image`.
+    #[pyo3(signature = (x, y, w=None, h=None))]
+    fn get(
+        &self,
+        py: Python<'_>,
+        x: i64,
+        y: i64,
+        w: Option<u32>,
+        h: Option<u32>,
+    ) -> PyResult<Py<PyAny>> {
+        match (w, h) {
+            (Some(w), Some(h)) => {
+                let entity = image_get_region(self.entity, x, y, w, h)
+                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+                Ok(Py::new(py, Image::wrap(entity))?.into_any())
+            }
+            (None, None) => {
+                let p = image_get_pixel(self.entity, x, y)
+                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+                let color = crate::color::PyColor(bevy::prelude::Color::Srgba(
+                    p.map_or(Srgba::NONE, pixel_to_srgba),
+                ));
+                Ok(Py::new(py, color)?.into_any())
+            }
+            _ => Err(pyo3::exceptions::PyTypeError::new_err(
+                "get() takes x, y or x, y, w, h",
+            )),
+        }
     }
 
     /// Write a single pixel (Processing `set`); outside the image it is dropped. Accepts a
@@ -1073,9 +1094,32 @@ impl Graphics {
         self.surface.focused()
     }
 
-    #[getter]
-    pub fn pixel_density(&self) -> PyResult<f32> {
-        self.surface.pixel_density()
+    /// `pixel_density()` reads the density, `pixel_density(d)` sets it.
+    #[pyo3(signature = (density=None))]
+    pub fn pixel_density(&self, py: Python<'_>, density: Option<f32>) -> PyResult<Py<PyAny>> {
+        let offscreen = image_size(self.surface.entity).is_ok();
+        match density {
+            None if offscreen => Ok(1.0f32.into_pyobject(py)?.into_any().unbind()),
+            None => Ok(self
+                .surface
+                .pixel_density()?
+                .into_pyobject(py)?
+                .into_any()
+                .unbind()),
+            Some(d) if offscreen => {
+                if d == 1.0 {
+                    Ok(py.None())
+                } else {
+                    Err(PyValueError::new_err(
+                        "an offscreen Graphics has a pixel density of 1",
+                    ))
+                }
+            }
+            Some(d) => {
+                self.surface.set_pixel_density(d)?;
+                Ok(py.None())
+            }
+        }
     }
 
     #[getter]
@@ -2547,19 +2591,54 @@ impl Graphics {
         composite_apply(self.entity, src_entity, code, sr, dr, opacity)
     }
 
-    /// Copies a source onto this graphics, replacing pixels (Processing `copy`).
-    /// `src` may be an `Image`, webcam, or `Graphics`. See `blend` for the
-    /// `src_rect`/`dst_rect` semantics.
-    #[pyo3(signature = (src, *, src_rect=None, dst_rect=None))]
+    /// Copies pixels onto this graphics from an `Image`, webcam, `Graphics` or itself.
+    #[pyo3(signature = (*args, src_rect=None, dst_rect=None))]
     pub fn copy(
         &self,
-        src: &Bound<'_, PyAny>,
+        args: &Bound<'_, PyTuple>,
         src_rect: Option<[f32; 4]>,
         dst_rect: Option<[f32; 4]>,
     ) -> PyResult<()> {
-        let src_entity = src.extract::<ImageRef>()?.texture()?;
-        let sr = normalize_src_rect(src_entity, src_rect)?;
+        let (src, rects) = match args.len() {
+            0 => (None, None),
+            1 => (Some(args.get_item(0)?), None),
+            8 => (None, Some(args.extract::<[f32; 8]>()?)),
+            9 => (
+                Some(args.get_item(0)?),
+                Some(args.get_slice(1, 9).extract::<[f32; 8]>()?),
+            ),
+            _ => {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "copy() takes src, or sx, sy, sw, sh, dx, dy, dw, dh, or src followed by those eight",
+                ));
+            }
+        };
+        let (src_rect, dst_rect) = match rects {
+            Some([sx, sy, sw, sh, dx, dy, dw, dh]) => {
+                (Some([sx, sy, sw, sh]), Some([dx, dy, dw, dh]))
+            }
+            None => (src_rect, dst_rect),
+        };
         let dr = normalize_rect(dst_rect, self.width as f32, self.height as f32);
+
+        // this graphics as its own source
+        let own = match &src {
+            None => true,
+            Some(src) => src
+                .extract::<PyRef<Graphics>>()
+                .is_ok_and(|g| g.entity == self.entity),
+        };
+        if own {
+            use shader_value::ShaderValue;
+            let sr = normalize_rect(src_rect, self.width as f32, self.height as f32);
+            let filter = filter_copy_region().map_err(rt_err)?;
+            filter_set(filter, "src_rect", ShaderValue::Float4(sr)).map_err(rt_err)?;
+            filter_set(filter, "dst_rect", ShaderValue::Float4(dr)).map_err(rt_err)?;
+            return graphics_apply_filter(self.entity, filter).map_err(rt_err);
+        }
+
+        let src_entity = src.unwrap().extract::<ImageRef>()?.texture()?;
+        let sr = normalize_src_rect(src_entity, src_rect)?;
         composite_apply(self.entity, src_entity, COMPOSITE_MODE_REPLACE, sr, dr, 1.0)
     }
 

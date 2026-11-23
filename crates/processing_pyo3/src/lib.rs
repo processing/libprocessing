@@ -2208,14 +2208,14 @@ pub mod processing_py {
     }
 
     #[pyfunction]
-    #[pyo3(pass_module, signature = (src, *, src_rect=None, dst_rect=None))]
+    #[pyo3(pass_module, signature = (*args, src_rect=None, dst_rect=None))]
     fn copy(
         module: &Bound<'_, PyModule>,
-        src: &Bound<'_, PyAny>,
+        args: &Bound<'_, PyTuple>,
         src_rect: Option<[f32; 4]>,
         dst_rect: Option<[f32; 4]>,
     ) -> PyResult<()> {
-        graphics!(module).copy(src, src_rect, dst_rect)
+        graphics!(module).copy(args, src_rect, dst_rect)
     }
 
     #[pyfunction]

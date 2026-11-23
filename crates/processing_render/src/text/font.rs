@@ -77,6 +77,18 @@ impl TextContext {
         let mut inner = self.inner.lock().unwrap();
         inner.font_cx.collection.family_id(name).is_some()
     }
+
+    /// The installed family for a name, resolving generic names such as `sans-serif`.
+    pub fn resolve_family(&self, name: &str) -> Option<String> {
+        let mut inner = self.inner.lock().unwrap();
+        let collection = &mut inner.font_cx.collection;
+        if let Some(id) = collection.family_id(name) {
+            return collection.family_name(id).map(str::to_string);
+        }
+        let generic = fontique::GenericFamily::parse(name)?;
+        let id = collection.generic_families(generic).next()?;
+        collection.family_name(id).map(str::to_string)
+    }
 }
 
 impl Default for TextContext {
