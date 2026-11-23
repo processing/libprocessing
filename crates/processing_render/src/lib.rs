@@ -76,6 +76,10 @@ impl Plugin for ProcessingRenderPlugin {
         use render::{activate_cameras, clear_flush_transients, flush_draw_commands};
 
         app.init_resource::<time::ProcessingFrame>();
+        app.init_resource::<time::ProcessingFrameRate>();
+        app.init_resource::<time::ProcessingFrameTime>();
+        // sketch time is wall time: no 250ms cap on a slow or paused frame
+        app.insert_resource(Time::<Virtual>::from_max_delta(std::time::Duration::MAX));
 
         app.add_plugins((
             image::ImagePlugin,
@@ -2233,6 +2237,24 @@ pub fn set_frame_count(n: u32) -> error::Result<()> {
     })
 }
 
+pub fn frame_timing() -> error::Result<time::FrameTiming> {
+    app_mut(|app| {
+        Ok(app
+            .world_mut()
+            .run_system_cached(time::frame_timing)
+            .unwrap())
+    })
+}
+
+pub fn set_frame_timing(timing: time::FrameTiming) -> error::Result<()> {
+    app_mut(|app| {
+        app.world_mut()
+            .run_system_cached_with(time::set_frame_timing, timing)
+            .unwrap();
+        Ok(())
+    })
+}
+
 pub fn advance_frame_count() -> error::Result<()> {
     app_mut(|app| {
         app.world_mut()
@@ -2240,6 +2262,10 @@ pub fn advance_frame_count() -> error::Result<()> {
             .unwrap();
         Ok(())
     })
+}
+
+pub fn frame_rate() -> error::Result<f32> {
+    app_mut(|app| Ok(app.world_mut().run_system_cached(time::frame_rate).unwrap()))
 }
 
 pub fn delta_time() -> error::Result<f32> {

@@ -44,6 +44,8 @@ pub fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     add!(m, WORD, CHAR);
     add!(m, NEAREST, CLAMP, REPEAT, MIRROR);
     add!(m, SRGB, LINEAR, HSL, HSV, HWB, OKLAB, OKLCH, LAB, LCH, XYZ);
+    add!(m, RGB, HSB);
+    add!(m, ARROW, CROSS, HAND, MOVE, TEXT, WAIT);
     add!(
         m,
         PBR_NEUTRAL,

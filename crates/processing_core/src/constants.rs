@@ -54,6 +54,16 @@ pub const OKLCH: &str = "oklch";
 pub const LAB: &str = "lab";
 pub const LCH: &str = "lch";
 pub const XYZ: &str = "xyz";
+// Processing's names for the same spaces
+pub const RGB: &str = SRGB;
+pub const HSB: &str = HSV;
+
+pub const ARROW: &str = "arrow";
+pub const CROSS: &str = "cross";
+pub const HAND: &str = "hand";
+pub const MOVE: &str = "move";
+pub const TEXT: &str = "text";
+pub const WAIT: &str = "wait";
 
 pub const PBR_NEUTRAL: &str = "pbr_neutral"; // tonemapping
 pub const AGX: &str = "agx";
