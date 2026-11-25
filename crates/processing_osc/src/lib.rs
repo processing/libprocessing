@@ -2,7 +2,7 @@
 //!
 //! `std::net::UdpSocket` sends and receives raw bytes;
 //! rosc translates between a message and its raw bytes.
-//! The sockets are stored in one Bevy resource [`OscState`]. 
+//! The sockets are stored in one Bevy resource [`OscState`].
 //! Each `osc_*` function briefly accesses that resource while the sketch runs.
 
 use std::io::ErrorKind;
@@ -184,7 +184,7 @@ pub fn osc_stop() -> Result<()> {
     })
 }
 
-/// Every message received since the last call, oldest first. 
+/// Every message received since the last call, oldest first.
 /// Messages inside bundles are returned individually.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn osc_read() -> Result<Vec<ReceivedOscMessage>> {
