@@ -47,8 +47,8 @@ fn sketch() -> error::Result<()> {
     let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, 100.0, 400.0))?;
-    transform_look_at(graphics, Vec3::new(0.0, 80.0, 0.0))?;
+    transform_set_position(graphics, Vec3::new(0.0, -100.0, 400.0))?;
+    transform_look_at(graphics, Vec3::new(0.0, -80.0, 0.0))?;
     graphics_orbit_camera(graphics)?;
 
     let gltf = gltf_load(graphics, "gltf/Duck.glb")?;

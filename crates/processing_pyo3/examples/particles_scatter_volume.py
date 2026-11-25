@@ -15,8 +15,8 @@ def setup():
     size(900, 700)
     mode_3d()
 
-    camera_position(0.0, 100.0, 400.0)
-    camera_look_at(0.0, 80.0, 0.0)
+    camera_position(0.0, -100.0, 400.0)
+    camera_look_at(0.0, -80.0, 0.0)
     orbit_camera()
 
     gltf = load_gltf("gltf/Duck.glb")

@@ -9,29 +9,26 @@
 from processing_py import *
 
 show_perspective = False
-light = None
 
 
 def setup():
-    global light
     size(600, 360)
     mode_3d()
     no_fill()
     fill(1.0)
     no_stroke()
-    light = directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     roughness(0.6)
 
 
 def draw():
+    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     background(0.0)
     far = remap(mouse_x, 0, width, 120, 400)
     if show_perspective:
         perspective(PI / 3.0, width / height, 10, far)
     else:
         ortho(-width / 2.0, width / 2.0, -height / 2.0, height / 2.0, 10, far)
-    # Rotations about x run the other way in the y-up world
-    rotate_x(PI / 6)
+    rotate_x(-PI / 6)
     rotate_y(PI / 3)
     box(180)
 

@@ -14,15 +14,15 @@ def setup():
     size(640, 360)
     mode_3d()
     rocket = load_model("data/rocket.obj")  # GAP: load_model() (OBJ with .mtl and texture) is missing
-    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     roughness(0.6)
 
 
 def draw():
     global ry
+    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     background(0.0)
 
-    translate(0, -100, -200)
+    translate(0, 100, -200)
     rotate_z(PI)
     rotate_y(ry)
     shape(rocket)  # GAP: shape(model) draws a loaded model

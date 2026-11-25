@@ -125,13 +125,7 @@ pub fn done() -> bool {
 }
 
 pub(crate) fn readback_srgba8(app: &mut App, entity: Entity) -> Result<(u32, u32, Vec<u8>)> {
-    crate::graphics::flush(app, entity)?;
-    let vt = crate::graphics::view_target(app, entity)?;
-    let texture = vt.main_texture().clone();
-    let raw = app
-        .world_mut()
-        .run_system_cached_with(crate::graphics::readback_raw, (entity, texture))
-        .unwrap()?;
+    let raw = crate::graphics::read_pixels(app, entity)?;
     let rgba = match raw.format {
         TextureFormat::Rgba8UnormSrgb => raw.bytes,
         format => {

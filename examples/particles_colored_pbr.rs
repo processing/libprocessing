@@ -17,10 +17,10 @@ fn sketch() -> error::Result<()> {
     let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, 6.0, 18.0))?;
+    transform_set_position(graphics, Vec3::new(0.0, -6.0, 18.0))?;
     transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
-    let _light =
+    let light =
         light_create_directional(graphics, bevy::color::Color::srgb(0.95, 0.9, 0.85), 200.0)?;
 
     let sphere = geometry_sphere(0.3, 16, 12)?;
@@ -32,7 +32,7 @@ fn sketch() -> error::Result<()> {
         for y in 0..8 {
             for z in 0..8 {
                 positions.push((x as f32 - 3.5) * 1.4);
-                positions.push((y as f32 - 3.5) * 1.4);
+                positions.push((3.5 - y as f32) * 1.4);
                 positions.push((z as f32 - 3.5) * 1.4);
                 colors.push(x as f32 / 7.0);
                 colors.push(y as f32 / 7.0);
@@ -66,6 +66,7 @@ fn sketch() -> error::Result<()> {
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;
+        graphics_light(graphics, light)?;
         graphics_record_command(
             graphics,
             DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.06, 0.06, 0.08)),

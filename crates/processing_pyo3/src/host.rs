@@ -9,8 +9,9 @@
 //!    it directly but call these functions on the registered module instead.
 //!    Entities cross as raw bits.
 //! 2. Each sketch has a [`SketchContext`]. The canvas graphics, extra
-//!    windows, `loop()`/`no_loop()` state, the tracked-globals cache and the
-//!    frame counter are otherwise process-global. The host enters a sketch's
+//!    windows, `loop()`/`no_loop()` state, the tracked-globals cache, event
+//!    history, noise field, frame counter and frame timing are otherwise
+//!    process-global. The host enters a sketch's
 //!    context before touching it and exits after.
 
 use std::collections::HashMap;
@@ -23,7 +24,7 @@ use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
-use crate::{LAST_GLOBALS, LOOP_STATE, LoopState};
+use crate::{EVENT_STATE, EventState, LAST_GLOBALS, LOOP_STATE, LoopState, NOISE, new_noise};
 
 fn err(e: impl std::fmt::Display) -> PyErr {
     PyRuntimeError::new_err(format!("{e}"))
@@ -41,7 +42,10 @@ pub struct SketchContext {
     windows: Option<Py<PyAny>>,
     loop_state: LoopState,
     last_globals: HashMap<&'static str, Py<PyAny>>,
+    event_state: EventState,
+    noise: processing_core::noise::Noise,
     frame_count: u32,
+    frame_timing: processing_render::time::FrameTiming,
     entered: bool,
 }
 
@@ -51,7 +55,10 @@ pub(crate) fn context_new() -> SketchContext {
         windows: None,
         loop_state: LoopState::default(),
         last_globals: HashMap::new(),
+        event_state: EventState::default(),
+        noise: new_noise(),
         frame_count: 0,
+        frame_timing: Default::default(),
         entered: false,
     }
 }
@@ -77,8 +84,11 @@ pub(crate) fn context_enter(module: &Bound<'_, PyModule>, ctx: &mut SketchContex
     module.setattr("_windows", ctx.windows.take().unwrap_or_else(|| py.None()))?;
     LOOP_STATE.with(|s| s.set(ctx.loop_state));
     LAST_GLOBALS.with(|c| *c.borrow_mut() = std::mem::take(&mut ctx.last_globals));
+    EVENT_STATE.with(|s| s.set(ctx.event_state));
+    NOISE.with(|n| std::mem::swap(&mut *n.borrow_mut(), &mut ctx.noise));
     // The app may not exist yet (first sketch, before `size()`).
     let _ = set_frame_count(ctx.frame_count);
+    let _ = processing_render::set_frame_timing(ctx.frame_timing);
     ctx.entered = true;
     Ok(())
 }
@@ -91,7 +101,10 @@ pub(crate) fn context_exit(module: &Bound<'_, PyModule>, ctx: &mut SketchContext
     ctx.windows = take_attr(module, "_windows")?;
     ctx.loop_state = LOOP_STATE.with(|s| s.replace(LoopState::default()));
     ctx.last_globals = LAST_GLOBALS.with(|c| std::mem::take(&mut *c.borrow_mut()));
+    ctx.event_state = EVENT_STATE.with(|s| s.replace(EventState::default()));
+    NOISE.with(|n| std::mem::swap(&mut *n.borrow_mut(), &mut ctx.noise));
     ctx.frame_count = frame_count().unwrap_or(ctx.frame_count);
+    ctx.frame_timing = processing_render::frame_timing().unwrap_or(ctx.frame_timing);
     ctx.entered = false;
     Ok(())
 }

@@ -16,7 +16,7 @@ pub struct Material {
 
 pub(crate) fn py_to_shader_value(value: &Bound<'_, PyAny>) -> PyResult<shader_value::ShaderValue> {
     if let Ok(img_ref) = value.extract::<ImageRef>() {
-        return Ok(shader_value::ShaderValue::Texture(img_ref.entity));
+        return Ok(shader_value::ShaderValue::Texture(img_ref.texture()?));
     }
     if let Ok(int_val) = value.cast::<PyInt>() {
         if let Ok(v) = int_val.extract::<i32>() {
@@ -39,12 +39,26 @@ pub(crate) fn py_to_shader_value(value: &Bound<'_, PyAny>) -> PyResult<shader_va
     if let Ok(v) = value.extract::<PyRef<PyVec2>>() {
         return Ok(shader_value::ShaderValue::Float2(v.0.to_array()));
     }
+    // before the sequence fallbacks: a Color iterates in its own space
+    if let Ok(c) = value.extract::<PyRef<PyColor>>() {
+        return Ok(shader_value::ShaderValue::Color(c.0));
+    }
 
     if let Ok(buf) = value.extract::<PyRef<Buffer>>() {
         return Ok(shader_value::ShaderValue::Buffer(buf.entity));
     }
     if let Ok(grid) = value.extract::<PyRef<crate::particles::Grid>>() {
         return Ok(shader_value::ShaderValue::Grid(grid.entity));
+    }
+
+    // row-major like `get_matrix()`, WGSL wants columns
+    if let Ok(rows) = value.extract::<[f32; 16]>() {
+        let m = bevy::math::Mat4::from_cols_array(&rows).transpose();
+        return Ok(shader_value::ShaderValue::Mat4(m.to_cols_array()));
+    }
+    if let Ok(rows) = value.extract::<[[f32; 4]; 4]>() {
+        let m = bevy::math::Mat4::from_cols_array_2d(&rows).transpose();
+        return Ok(shader_value::ShaderValue::Mat4(m.to_cols_array()));
     }
 
     if let Ok(v) = value.extract::<[f32; 4]>() {
@@ -88,6 +102,32 @@ fn apply_albedo(entity: Entity, value: &Bound<'_, PyAny>) -> PyResult<()> {
     )))
 }
 
+fn apply_emissive(entity: Entity, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    let rt = |e| PyRuntimeError::new_err(format!("{e}"));
+    if let Ok(buf) = value.extract::<PyRef<Buffer>>() {
+        return material_set_emissive_buffer(entity, buf.entity).map_err(rt);
+    }
+    // emissive is a linear radiance, not an sRGB color
+    let linear: bevy::color::LinearRgba = if let Ok(c) = value.extract::<PyRef<PyColor>>() {
+        c.0.into()
+    } else if let Ok([r, g, b, a]) = value.extract::<[f32; 4]>() {
+        bevy::color::LinearRgba::new(r, g, b, a)
+    } else if let Ok([r, g, b]) = value.extract::<[f32; 3]>() {
+        bevy::color::LinearRgba::new(r, g, b, 1.0)
+    } else {
+        return Err(PyRuntimeError::new_err(format!(
+            "unsupported emissive type: {} (expected Color, Buffer, or [r,g,b,(a)])",
+            value.get_type().name()?
+        )));
+    };
+    material_set(
+        entity,
+        "emissive",
+        shader_value::ShaderValue::Float4([linear.red, linear.green, linear.blue, linear.alpha]),
+    )
+    .map_err(rt)
+}
+
 fn py_truthy(value: &Bound<'_, PyAny>) -> PyResult<bool> {
     value
         .extract::<bool>()
@@ -100,6 +140,7 @@ fn apply_kwargs(entity: Entity, kwargs: &Bound<'_, PyDict>) -> PyResult<()> {
         let rt = |e| PyRuntimeError::new_err(format!("{e}"));
         match name.as_str() {
             "albedo" => apply_albedo(entity, &value)?,
+            "emissive" => apply_emissive(entity, &value)?,
             "unlit" => material_set_unlit(entity, py_truthy(&value)?).map_err(rt)?,
             "double_sided" => material_set_double_sided(entity, py_truthy(&value)?).map_err(rt)?,
             "depth_write" => material_set_depth_write(entity, py_truthy(&value)?).map_err(rt)?,
@@ -148,17 +189,6 @@ impl Material {
         Ok(Self { entity })
     }
 
-    #[staticmethod]
-    #[pyo3(signature = (**kwargs))]
-    pub fn unlit(kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<Self> {
-        let entity = material_create_pbr().map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        material_set_unlit(entity, true).map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        if let Some(kwargs) = kwargs {
-            apply_kwargs(entity, kwargs)?;
-        }
-        Ok(Self { entity })
-    }
-
     #[pyo3(signature = (**kwargs))]
     pub fn set(&self, kwargs: Option<&Bound<'_, PyDict>>) -> PyResult<()> {
         let Some(kwargs) = kwargs else {
@@ -166,6 +196,48 @@ impl Material {
         };
         apply_kwargs(self.entity, kwargs)
     }
+
+    pub fn opaque(&self) -> PyResult<()> {
+        material_set_alpha_mode(self.entity, 0, 0.0).map_err(rt)
+    }
+
+    /// Discards fragments with alpha below `cutoff`.
+    #[pyo3(signature = (cutoff=0.5))]
+    pub fn mask(&self, cutoff: f32) -> PyResult<()> {
+        material_set_alpha_mode(self.entity, 1, cutoff).map_err(rt)
+    }
+
+    pub fn transparent(&self) -> PyResult<()> {
+        material_set_alpha_mode(self.entity, 2, 0.0).map_err(rt)
+    }
+
+    /// Skips lighting; errors on a custom shader, which does its own.
+    #[pyo3(signature = (value=true, /))]
+    pub fn unlit(&self, value: bool) -> PyResult<()> {
+        material_set_unlit(self.entity, value).map_err(rt)
+    }
+
+    #[pyo3(signature = (value=true, /))]
+    pub fn double_sided(&self, value: bool) -> PyResult<()> {
+        material_set_double_sided(self.entity, value).map_err(rt)
+    }
+
+    #[pyo3(signature = (value=true, /))]
+    pub fn depth_write(&self, value: bool) -> PyResult<()> {
+        material_set_depth_write(self.entity, value).map_err(rt)
+    }
+
+    /// Blends with what's behind it using a `BlendMode` (`ADD`, `MULTIPLY`, a custom one, ...).
+    pub fn blend_mode(&self, mode: &crate::graphics::PyBlendMode) -> PyResult<()> {
+        let state = mode
+            .blend_state
+            .unwrap_or(bevy::render::render_resource::BlendState::ALPHA_BLENDING);
+        material_set_custom_blend(self.entity, state).map_err(rt)
+    }
+}
+
+fn rt(e: impl std::fmt::Display) -> PyErr {
+    PyRuntimeError::new_err(format!("{e}"))
 }
 
 impl Drop for Material {

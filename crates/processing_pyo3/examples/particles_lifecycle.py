@@ -38,7 +38,7 @@ def setup():
 
 def draw():
     global frame
-    camera_position(0.0, 2.0, 14.0)
+    camera_position(0.0, -2.0, 14.0)
     camera_look_at(0.0, 0.0, 0.0)
     background(10, 10, 18)
 
@@ -53,7 +53,7 @@ def draw():
         v = (((i * 40503) >> 8) & 0xFFFF) / 65535.0
         theta = u * math.tau
         r = v * 0.6
-        positions.extend([math.cos(theta) * r, 2.5, math.sin(theta) * r])
+        positions.extend([math.cos(theta) * r, -2.5, math.sin(theta) * r])
         c = hsva((i * 4.68) % 360.0, 0.85, 1.0)
         colors.extend([c.r, c.g, c.b, 1.0])
 

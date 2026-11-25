@@ -4,23 +4,20 @@
 # The camera lifts up (controlled by mouseY) while looking at the same point.
 from processing_py import *
 
-light = None
-
 
 def setup():
-    global light
     size(640, 360)
     mode_3d()
     fill(0.8)
-    light = directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     roughness(0.6)
 
 
 def draw():
+    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     background(0.0)
 
-    # Change height of the camera with mouseY (the world is y-up)
-    camera(30.0, -mouse_y, 220.0,  # eyeX, eyeY, eyeZ
+    # Change height of the camera with mouseY
+    camera(30.0, mouse_y, 220.0,  # eyeX, eyeY, eyeZ
            0.0, 0.0, 0.0,  # centerX, centerY, centerZ
            0.0, 1.0, 0.0)  # upX, upY, upZ
 

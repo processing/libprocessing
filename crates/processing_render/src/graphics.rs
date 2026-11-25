@@ -8,18 +8,21 @@ use bevy::{
         CameraMainTextureUsages, CameraOutputMode, CameraProjection, ClearColorConfig, Hdr,
         ImageRenderTarget, MsaaWriteback, Projection, RenderTarget, visibility::RenderLayers,
     },
-    core_pipeline::tonemapping::Tonemapping,
+    core_pipeline::tonemapping::{DebandDither, Tonemapping},
     ecs::query::QueryEntityError,
-    math::{Mat4, Vec3A},
+    math::{Mat4, Vec3A, Vec4},
     prelude::*,
     render::{
-        RenderApp,
+        Render, RenderApp, RenderSystems,
+        camera::ExtractedCamera,
         render_resource::{
             CommandEncoderDescriptor, Extent3d, MapMode, Origin3d, PollType, TexelCopyBufferInfo,
-            TexelCopyBufferLayout, TexelCopyTextureInfo, Texture, TextureFormat, TextureUsages,
+            TexelCopyBufferLayout, TexelCopyTextureInfo, Texture, TextureDescriptor,
+            TextureDimension, TextureFormat, TextureUsages,
         },
         renderer::{RenderDevice, RenderQueue},
         sync_world::MainEntity,
+        texture::{TextureCache, update_texture_cache_system},
         view::ViewTarget,
     },
     window::WindowRef,
@@ -29,7 +32,7 @@ use crate::{
     Flush,
     image::{Image, create_readback_buffer, pixel_size, pixels_to_bytes},
     render::{
-        BATCH_INDEX_STEP, RenderState,
+        BATCH_INDEX_STEP, DrawTransients, RenderState,
         command::{CommandBuffer, DrawCommand},
         filter,
     },
@@ -44,7 +47,65 @@ pub struct GraphicsPlugin;
 impl Plugin for GraphicsPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RenderLayersManager>()
+            .add_systems(First, crate::image::clear_background_blits)
             .add_systems(PostUpdate, sync_to_surface);
+        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {
+            render_app.add_systems(
+                Render,
+                retain_idle_view_targets
+                    .in_set(RenderSystems::Cleanup)
+                    .before(update_texture_cache_system),
+            );
+        }
+    }
+}
+
+/// Keeps the canvas of a camera that did not render this update in the texture cache, which
+/// otherwise drops it after three updates; a sketch may run many updates between flushes.
+fn retain_idle_view_targets(
+    mut texture_cache: ResMut<TextureCache>,
+    render_device: Res<RenderDevice>,
+    idle: Query<&ViewTarget, Without<ExtractedCamera>>,
+) {
+    for target in &idle {
+        // these mirror the descriptors of bevy's `prepare_view_targets`
+        let main = target.main_texture();
+        let format = main.format();
+        let view_formats: &'static [TextureFormat] = match format {
+            TextureFormat::Bgra8Unorm => &[TextureFormat::Bgra8UnormSrgb],
+            TextureFormat::Rgba8Unorm => &[TextureFormat::Rgba8UnormSrgb],
+            _ => &[],
+        };
+        for label in ["main_texture_a", "main_texture_b"] {
+            texture_cache.get(
+                &render_device,
+                TextureDescriptor {
+                    label: Some(label),
+                    size: main.size(),
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    dimension: TextureDimension::D2,
+                    format,
+                    usage: main.usage(),
+                    view_formats,
+                },
+            );
+        }
+        if let Some(sampled) = target.sampled_main_texture() {
+            texture_cache.get(
+                &render_device,
+                TextureDescriptor {
+                    label: Some("main_texture_sampled"),
+                    size: sampled.size(),
+                    mip_level_count: 1,
+                    sample_count: sampled.sample_count(),
+                    dimension: TextureDimension::D2,
+                    format,
+                    usage: TextureUsages::RENDER_ATTACHMENT,
+                    view_formats,
+                },
+            );
+        }
     }
 }
 
@@ -53,6 +114,10 @@ pub struct Graphics {
     readback_buffer: bevy::render::render_resource::Buffer,
     pub texture_format: TextureFormat,
     pub size: Extent3d,
+    /// CPU copy of the canvas, tightly packed; dropped whenever something draws
+    pixels: Option<Vec<u8>>,
+    /// Part of `pixels` written by `set` and not uploaded yet
+    dirty: Option<URect>,
 }
 
 pub fn view_target(app: &mut App, entity: Entity) -> Result<&ViewTarget> {
@@ -77,49 +142,75 @@ macro_rules! graphics_mut {
 #[derive(Component)]
 pub struct SurfaceSize(pub u32, pub u32);
 
-/// Custom orthographic projection for Processing's coordinate system.
-/// Origin at top-left, Y-axis down, in pixel units (aka screen space).
+/// Screen-space y flip applied after projection, so the world is y-down (origin top-left in 2D,
+/// canvas center in 3D) like Processing's and p5.js WEBGL's, with transforms, cameras and lights
+/// left untouched. The reflection mirrors triangle winding; every pipeline compensates with
+/// `material::apply_processing_winding`.
+pub(crate) const Y_FLIP: Mat4 = Mat4::from_cols(
+    Vec4::new(1.0, 0.0, 0.0, 0.0),
+    Vec4::new(0.0, -1.0, 0.0, 0.0),
+    Vec4::new(0.0, 0.0, 1.0, 0.0),
+    Vec4::new(0.0, 0.0, 0.0, 1.0),
+);
+
+/// Orthographic projection over a y-down world: `bottom` is the smallest visible y (screen
+/// top), `top` the largest (screen bottom), as in Processing's `ortho(left, right, bottom, top)`.
 #[derive(Debug, Clone, Reflect)]
 pub struct ProcessingProjection {
-    pub width: f32,
-    pub height: f32,
+    pub left: f32,
+    pub right: f32,
+    pub bottom: f32,
+    pub top: f32,
     pub near: f32,
     pub far: f32,
+    /// a 2D canvas follows the render target size; an explicit `ortho()` keeps its bounds
+    pub fit_canvas: bool,
 }
 
 impl ProcessingProjection {
+    /// The 2D canvas: pixel units from the top-left corner.
     pub fn new(width: f32, height: f32) -> Self {
         Self {
-            width,
-            height,
-            near: 0.0,
+            left: 0.0,
+            right: width,
+            bottom: 0.0,
+            top: height,
+            // like bevy's 2d camera: the canvas plane sits mid-range, draw layers grow toward
+            // the camera
+            near: -1000.0,
             far: 1000.0,
+            fit_canvas: true,
         }
     }
 }
 
 impl CameraProjection for ProcessingProjection {
     fn get_clip_from_view(&self) -> Mat4 {
-        Mat4::orthographic_rh(
-            0.0,
-            self.width,
-            self.height, // bottom = height
-            0.0,         // top = 0
-            self.near,
-            self.far,
-        )
+        // far/near swapped for reverse-z, which the depth compare (GreaterEqual) assumes
+        Y_FLIP
+            * Mat4::orthographic_rh(
+                self.left,
+                self.right,
+                self.bottom,
+                self.top,
+                self.far,
+                self.near,
+            )
     }
 
     fn get_clip_from_view_for_sub(&self, _sub_view: &bevy::camera::SubCameraView) -> Mat4 {
-        // TODO: implement sub-view support if needed (probably not)
+        // sub-views are not supported on the canvas
         self.get_clip_from_view()
     }
 
-    fn update(&mut self, _width: f32, _height: f32) {
-        // this gets called with the render target's physical dimensions (i.e. accounting for
-        // scale factor), but our projection is in logical pixel units
-        self.width = _width;
-        self.height = _height;
+    /// Bevy passes the logical viewport size, which is the canvas's pixel unit.
+    fn update(&mut self, width: f32, height: f32) {
+        if self.fit_canvas {
+            self.left = 0.0;
+            self.right = width;
+            self.bottom = 0.0;
+            self.top = height;
+        }
     }
 
     fn far(&self) -> f32 {
@@ -128,24 +219,51 @@ impl CameraProjection for ProcessingProjection {
 
     fn get_frustum_corners(&self, z_near: f32, z_far: f32) -> [Vec3A; 8] {
         // order: bottom-right, top-right, top-left, bottom-left for near, then far
-        let near_center = Vec3A::new(self.width / 2.0, self.height / 2.0, z_near);
-        let far_center = Vec3A::new(self.width / 2.0, self.height / 2.0, z_far);
-
-        let half_width = self.width / 2.0;
-        let half_height = self.height / 2.0;
-
+        let (l, r, b, t) = (self.left, self.right, self.bottom, self.top);
         [
-            // near plane
-            near_center + Vec3A::new(half_width, half_height, 0.0), // bottom-right
-            near_center + Vec3A::new(half_width, -half_height, 0.0), // top-right
-            near_center + Vec3A::new(-half_width, -half_height, 0.0), // top-left
-            near_center + Vec3A::new(-half_width, half_height, 0.0), // bottom-left
-            // far plane
-            far_center + Vec3A::new(half_width, half_height, 0.0), // bottom-right
-            far_center + Vec3A::new(half_width, -half_height, 0.0), // top-right
-            far_center + Vec3A::new(-half_width, -half_height, 0.0), // top-left
-            far_center + Vec3A::new(-half_width, half_height, 0.0), // bottom-left
+            Vec3A::new(r, b, z_near),
+            Vec3A::new(r, t, z_near),
+            Vec3A::new(l, t, z_near),
+            Vec3A::new(l, b, z_near),
+            Vec3A::new(r, b, z_far),
+            Vec3A::new(r, t, z_far),
+            Vec3A::new(l, t, z_far),
+            Vec3A::new(l, b, z_far),
         ]
+    }
+}
+
+/// Perspective projection over the same y-down world (3D mode): bevy's reverse-z infinite
+/// perspective with the screen-space y flip.
+#[derive(Debug, Clone, Reflect)]
+pub struct ProcessingPerspective {
+    pub inner: PerspectiveProjection,
+    /// the default 3D camera follows the canvas aspect; an explicit `perspective()` keeps its own
+    pub fit_canvas: bool,
+}
+
+impl CameraProjection for ProcessingPerspective {
+    fn get_clip_from_view(&self) -> Mat4 {
+        Y_FLIP * self.inner.get_clip_from_view()
+    }
+
+    fn get_clip_from_view_for_sub(&self, sub_view: &bevy::camera::SubCameraView) -> Mat4 {
+        Y_FLIP * self.inner.get_clip_from_view_for_sub(sub_view)
+    }
+
+    fn update(&mut self, width: f32, height: f32) {
+        if self.fit_canvas {
+            self.inner.update(width, height);
+        }
+    }
+
+    fn far(&self) -> f32 {
+        self.inner.far()
+    }
+
+    fn get_frustum_corners(&self, z_near: f32, z_far: f32) -> [Vec3A; 8] {
+        // the frustum is symmetric about the view axis, so the flip leaves the corner set as is
+        self.inner.get_frustum_corners(z_near, z_far)
     }
 }
 
@@ -203,13 +321,16 @@ pub fn create(
     let mut entity_commands = commands.spawn((
         Camera3d::default(),
         Camera {
-            // always load the previous frame (provides sketch like behavior)
+            // the previous frame is kept unless a pass opens with `background()`; see
+            // `flush_draw_commands`
             clear_color: ClearColorConfig::None,
             msaa_writeback: MsaaWriteback::Auto,
             ..default()
         },
         target,
         Tonemapping::None,
+        // dithering only applies after tonemapping
+        DebandDither::Disabled,
         // we need to be able to write to the texture
         CameraMainTextureUsages::default().with(TextureUsages::COPY_DST),
         Projection::custom(ProcessingProjection::new(width as f32, height as f32)),
@@ -217,12 +338,15 @@ pub fn create(
         render_layer,
         CommandBuffer::new(),
         RenderState::default(),
+        crate::image::BackgroundBlit::default(),
         crate::color::ColorMode::default(),
         SurfaceSize(width, height),
         Graphics {
             readback_buffer,
             texture_format,
             size,
+            pixels: None,
+            dirty: None,
         },
     ));
 
@@ -276,6 +400,8 @@ pub fn sync_to_surface(
             height: physical_h,
             depth_or_array_layers: 1,
         };
+        graphics.pixels = None;
+        graphics.dirty = None;
         graphics.readback_buffer = create_readback_buffer(
             &render_device,
             physical_w,
@@ -285,6 +411,47 @@ pub fn sync_to_surface(
         )
         .expect("Failed to reallocate readback buffer");
     }
+}
+
+/// The view `mode_3d()` sets up for a canvas, which `camera()`, `perspective()` and `ortho()`
+/// fall back to for arguments left out.
+#[derive(Debug, Clone, Copy)]
+pub struct ViewDefaults {
+    pub width: f32,
+    pub height: f32,
+    pub fov: f32,
+    pub aspect: f32,
+    pub near: f32,
+    pub far: f32,
+    /// Distance at which the canvas fills the view.
+    pub camera_z: f32,
+}
+
+impl ViewDefaults {
+    pub fn new(width: f32, height: f32) -> Self {
+        let fov = std::f32::consts::PI / 3.0; // 60 degrees
+        let camera_z = (height / 2.0) / (fov / 2.0).tan();
+        Self {
+            width,
+            height,
+            fov,
+            aspect: width / height,
+            // Processing4 uses near = camera_z / 10, but that clips anything closer
+            // than ~camera_z/10 to the camera. Since `transform_set_position` lets the
+            // user move the camera without recomputing the projection, a small fixed
+            // near is safer and matches most engines' defaults.
+            near: 1.0,
+            far: camera_z * 10.0,
+            camera_z,
+        }
+    }
+}
+
+pub fn view_defaults(In(entity): In<Entity>, sizes: Query<&SurfaceSize>) -> Result<ViewDefaults> {
+    let SurfaceSize(width, height) = sizes
+        .get(entity)
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+    Ok(ViewDefaults::new(*width as f32, *height as f32))
 }
 
 pub fn mode_3d(
@@ -297,36 +464,37 @@ pub fn mode_3d(
         .get(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
-    let width = *width as f32;
-    let height = *height as f32;
-
-    let fov = std::f32::consts::PI / 3.0; // 60 degrees
-    let aspect = width / height;
-    let camera_z = (height / 2.0) / (fov / 2.0).tan();
-    // Processing4 uses near = camera_z / 10, but that clips anything closer
-    // than ~camera_z/10 to the camera. Since `transform_set_position` lets the
-    // user move the camera without recomputing the projection, a small fixed
-    // near is safer and matches most engines' defaults.
-    let near = 1.0;
-    let far = camera_z * 10.0;
+    let ViewDefaults {
+        fov,
+        aspect,
+        near,
+        far,
+        camera_z,
+        ..
+    } = ViewDefaults::new(*width as f32, *height as f32);
     let near_clip_plane = vec4(0.0, 0.0, -1.0, -near);
 
     let mut projection = projections
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
-    *projection = Projection::Perspective(PerspectiveProjection {
-        fov,
-        aspect_ratio: aspect,
-        near,
-        far,
-        near_clip_plane,
+    *projection = Projection::custom(ProcessingPerspective {
+        inner: PerspectiveProjection {
+            fov,
+            aspect_ratio: aspect,
+            near,
+            far,
+            near_clip_plane,
+        },
+        fit_canvas: true,
     });
 
     let mut transform = transforms
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
+    // origin at the canvas center, +z toward the viewer; the projection's y flip makes +y
+    // point down the screen
     *transform = Transform::from_xyz(0.0, 0.0, camera_z).looking_at(Vec3::ZERO, Vec3::Y);
 
     Ok(())
@@ -358,29 +526,14 @@ pub fn mode_2d(
 }
 
 pub fn perspective(
-    In((
-        entity,
-        PerspectiveProjection {
-            fov,
-            aspect_ratio,
-            near,
-            far,
-            near_clip_plane,
-        },
-    )): In<(Entity, PerspectiveProjection)>,
+    In((entity, inner, fit_canvas)): In<(Entity, PerspectiveProjection, bool)>,
     mut projections: Query<&mut Projection>,
 ) -> Result<()> {
     let mut projection = projections
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
-    *projection = Projection::Perspective(PerspectiveProjection {
-        fov,
-        aspect_ratio,
-        near,
-        far,
-        near_clip_plane,
-    });
+    *projection = Projection::custom(ProcessingPerspective { inner, fit_canvas });
 
     Ok(())
 }
@@ -412,13 +565,14 @@ pub fn ortho(
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
-    // we need a custom projection to support processing's coordinate system
-    // but this is in effect an orthographic projection with the given bounds
     *projection = Projection::custom(ProcessingProjection {
-        width: right - left,
-        height: top - bottom,
+        left,
+        right,
+        bottom,
+        top,
         near,
         far,
+        fit_canvas: false,
     });
 
     Ok(())
@@ -506,11 +660,17 @@ pub fn tonemapping_from_u8(v: u8) -> Option<Tonemapping> {
 
 pub fn set_tonemapping(
     In((entity, tonemapping)): In<(Entity, Tonemapping)>,
-    mut query: Query<&mut Tonemapping>,
+    mut query: Query<(&mut Tonemapping, &mut DebandDither)>,
 ) -> Result<()> {
-    *query
+    let (mut current, mut dither) = query
         .get_mut(entity)
-        .map_err(|_| ProcessingError::GraphicsNotFound)? = tonemapping;
+        .map_err(|_| ProcessingError::GraphicsNotFound)?;
+    *dither = if tonemapping == Tonemapping::None {
+        DebandDither::Disabled
+    } else {
+        DebandDither::Enabled
+    };
+    *current = tonemapping;
     Ok(())
 }
 
@@ -529,11 +689,16 @@ pub fn destroy(
     Ok(())
 }
 
-pub fn begin_draw(In(entity): In<Entity>, mut state_query: Query<&mut RenderState>) -> Result<()> {
+pub fn begin_draw(
+    In(entity): In<Entity>,
+    mut commands: Commands,
+    mut state_query: Query<&mut RenderState>,
+) -> Result<()> {
     let mut state = state_query
         .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
     state.begin_frame();
+    commands.entity(entity).despawn_related::<DrawTransients>();
     Ok(())
 }
 
@@ -578,31 +743,268 @@ pub fn screen_point(
 }
 
 pub fn flush(app: &mut App, entity: Entity) -> Result<()> {
+    // `set` pixels go up first so the draws queued after them land on top
+    upload_dirty(app, entity)?;
+    if has_commands(app, entity)
+        && let Some(mut graphics) = app.world_mut().get_mut::<Graphics>(entity)
+    {
+        graphics.pixels = None;
+    }
     graphics_mut!(app, entity).insert(Flush);
-    app.update();
+    // a mid-frame `background()` leaves the rest of the commands for another pass
+    loop {
+        app.update();
+        let pending = graphics_mut!(app, entity)
+            .get::<CommandBuffer>()
+            .is_some_and(|buffer| !buffer.commands.is_empty());
+        if !pending {
+            break;
+        }
+    }
     graphics_mut!(app, entity).remove::<Flush>();
     Ok(())
+}
+
+/// Brings the target up to date with what was drawn so far; no update when nothing is queued
+pub fn flush_pending(app: &mut App, entity: Entity) -> Result<()> {
+    if has_commands(app, entity) {
+        flush(app, entity)
+    } else {
+        upload_dirty(app, entity)
+    }
+}
+
+fn has_commands(app: &App, entity: Entity) -> bool {
+    app.world()
+        .get::<CommandBuffer>(entity)
+        .is_some_and(|buffer| !buffer.commands.is_empty())
+}
+
+/// Uploads the canvas pixels `set` wrote since the last upload
+fn upload_dirty(app: &mut App, entity: Entity) -> Result<()> {
+    let Some(graphics) = app.world().get::<Graphics>(entity) else {
+        return Ok(());
+    };
+    let Some(rect) = graphics.dirty else {
+        return Ok(());
+    };
+    let (size, format) = (graphics.size, graphics.texture_format);
+    let texture = view_target(app, entity)?.main_texture().clone();
+    let world = app.world();
+    if let Some(data) = world
+        .get::<Graphics>(entity)
+        .and_then(|g| g.pixels.as_deref())
+    {
+        crate::image::write_rect(
+            world.resource::<RenderQueue>(),
+            &texture,
+            data,
+            size,
+            format,
+            rect,
+        )?;
+    }
+    if let Some(mut graphics) = app.world_mut().get_mut::<Graphics>(entity) {
+        graphics.dirty = None;
+    }
+    Ok(())
+}
+
+/// The canvas texture for a GPU reader, with pending `set` pixels uploaded
+pub fn main_texture(app: &mut App, entity: Entity) -> Result<Texture> {
+    upload_dirty(app, entity)?;
+    Ok(view_target(app, entity)?.main_texture().clone())
+}
+
+/// Drops the CPU copy after something other than a flush wrote the canvas texture
+pub fn invalidate_pixels(app: &mut App, entity: Entity) {
+    if let Some(mut graphics) = app.world_mut().get_mut::<Graphics>(entity) {
+        graphics.pixels = None;
+        graphics.dirty = None;
+    }
+}
+
+/// Makes the CPU copy current: one readback serves every read until the next draw
+fn ensure_pixels(app: &mut App, entity: Entity) -> Result<()> {
+    let cached = app
+        .world()
+        .get::<Graphics>(entity)
+        .ok_or(ProcessingError::GraphicsNotFound)?
+        .pixels
+        .is_some();
+    if cached && !has_commands(app, entity) {
+        return Ok(());
+    }
+    flush(app, entity)?;
+    let texture = view_target(app, entity)?.main_texture().clone();
+    app.world_mut()
+        .run_system_cached_with(readback_raw, (entity, texture))
+        .unwrap()
+}
+
+/// The canvas pixels in its texture format
+pub fn read_pixels(app: &mut App, entity: Entity) -> Result<ReadbackData> {
+    ensure_pixels(app, entity)?;
+    let graphics = app
+        .world()
+        .get::<Graphics>(entity)
+        .ok_or(ProcessingError::GraphicsNotFound)?;
+    Ok(ReadbackData {
+        bytes: graphics.pixels.clone().unwrap_or_default(),
+        format: graphics.texture_format,
+        width: graphics.size.width,
+        height: graphics.size.height,
+    })
+}
+
+/// Physical pixels per logical pixel on each axis
+fn pixel_scale(app: &App, entity: Entity) -> Result<(u32, u32, f64, f64)> {
+    let world = app.world();
+    let size = world
+        .get::<Graphics>(entity)
+        .ok_or(ProcessingError::GraphicsNotFound)?
+        .size;
+    let (lw, lh) = world
+        .get::<SurfaceSize>(entity)
+        .map_or((size.width, size.height), |s| (s.0.max(1), s.1.max(1)));
+    Ok((
+        lw,
+        lh,
+        size.width as f64 / lw as f64,
+        size.height as f64 / lh as f64,
+    ))
+}
+
+/// The pixel at logical (`x`, `y`); `None` outside the canvas
+pub fn get_pixel(app: &mut App, entity: Entity, x: i64, y: i64) -> Result<Option<LinearRgba>> {
+    let (lw, lh, sx, sy) = pixel_scale(app, entity)?;
+    if x < 0 || y < 0 || x >= lw as i64 || y >= lh as i64 {
+        return Ok(None);
+    }
+    ensure_pixels(app, entity)?;
+    let graphics = app
+        .world()
+        .get::<Graphics>(entity)
+        .ok_or(ProcessingError::GraphicsNotFound)?;
+    let Some(data) = graphics.pixels.as_deref() else {
+        return Ok(None);
+    };
+    let px_size = pixel_size(graphics.texture_format)?;
+    let px = ((x as f64 * sx) as usize).min(graphics.size.width as usize - 1);
+    let py = ((y as f64 * sy) as usize).min(graphics.size.height as usize - 1);
+    let at = (py * graphics.size.width as usize + px) * px_size;
+    crate::image::decode_pixel(&data[at..at + px_size], graphics.texture_format).map(Some)
+}
+
+/// Sets the pixel at logical (`x`, `y`), which covers a block of physical pixels
+pub fn set_pixel(app: &mut App, entity: Entity, x: i64, y: i64, color: LinearRgba) -> Result<()> {
+    let (lw, lh, sx, sy) = pixel_scale(app, entity)?;
+    if x < 0 || y < 0 || x >= lw as i64 || y >= lh as i64 {
+        return Ok(());
+    }
+    let x0 = (x as f64 * sx) as i64;
+    let y0 = (y as f64 * sy) as i64;
+    let w = (((x + 1) as f64 * sx) as i64 - x0).max(1) as u32;
+    let h = (((y + 1) as f64 * sy) as i64 - y0).max(1) as u32;
+    write_region(app, entity, x0, y0, w, h, &vec![color; (w * h) as usize])
+}
+
+/// Writes a block of physical pixels at (`x`, `y`); parts outside the canvas are dropped
+pub fn write_region(
+    app: &mut App,
+    entity: Entity,
+    x: i64,
+    y: i64,
+    width: u32,
+    height: u32,
+    pixels: &[LinearRgba],
+) -> Result<()> {
+    if pixels.len() != (width * height) as usize {
+        return Err(ProcessingError::InvalidArgument(format!(
+            "Expected {} pixels for {width}x{height} region, got {}",
+            width * height,
+            pixels.len()
+        )));
+    }
+    let size = app
+        .world()
+        .get::<Graphics>(entity)
+        .ok_or(ProcessingError::GraphicsNotFound)?
+        .size;
+    let x0 = x.max(0);
+    let y0 = y.max(0);
+    let x1 = (x + width as i64).min(size.width as i64);
+    let y1 = (y + height as i64).min(size.height as i64);
+    if x1 <= x0 || y1 <= y0 {
+        return Ok(());
+    }
+    // draws queued before this write must land under it
+    if has_commands(app, entity) {
+        flush(app, entity)?;
+    }
+    let (cw, ch) = ((x1 - x0) as u32, (y1 - y0) as u32);
+    let clipped: Vec<LinearRgba> = (y0..y1)
+        .flat_map(|dy| {
+            let row = (dy - y) as usize * width as usize + (x0 - x) as usize;
+            pixels[row..row + cw as usize].iter().copied()
+        })
+        .collect();
+    let rect = URect::new(x0 as u32, y0 as u32, x1 as u32, y1 as u32);
+
+    let mut graphics = app
+        .world_mut()
+        .get_mut::<Graphics>(entity)
+        .ok_or(ProcessingError::GraphicsNotFound)?;
+    let format = graphics.texture_format;
+    let px_size = pixel_size(format)?;
+    let bytes = pixels_to_bytes(&clipped, format)?;
+    let graphics = &mut *graphics;
+    if let Some(data) = graphics.pixels.as_mut() {
+        // the CPU copy is current, so patch it and upload the touched rect once at the next flush
+        let stride = size.width as usize * px_size;
+        let run = cw as usize * px_size;
+        for row in 0..ch as usize {
+            let dst = (y0 as usize + row) * stride + x0 as usize * px_size;
+            data[dst..dst + run].copy_from_slice(&bytes[row * run..(row + 1) * run]);
+        }
+        graphics.dirty = Some(graphics.dirty.map_or(rect, |d| d.union(rect)));
+        return Ok(());
+    }
+    let texture = view_target(app, entity)?.main_texture().clone();
+    app.world_mut()
+        .run_system_cached_with(
+            update_region_write,
+            (
+                entity,
+                texture,
+                x0 as u32,
+                y0 as u32,
+                cw,
+                ch,
+                bytes,
+                px_size as u32,
+            ),
+        )
+        .unwrap()
 }
 
 pub fn apply_filter(app: &mut App, graphics: Entity, filter: Entity) -> Result<()> {
     filter::apply(app, graphics, filter)
 }
 
+/// Only the pass that drains the command buffer writes to the camera's output
+#[derive(Component)]
+pub struct Present;
+
 pub fn present(app: &mut App, entity: Entity) -> Result<()> {
+    graphics_mut!(app, entity).insert(Present);
+    let result = flush(app, entity);
     graphics_mut!(app, entity)
-        .get_mut::<Camera>()
-        .ok_or(ProcessingError::GraphicsNotFound)?
-        .output_mode = CameraOutputMode::Write {
-        blend_state: None,
-        clear_color: ClearColorConfig::None,
-    };
-    flush(app, entity)?;
-    graphics_mut!(app, entity)
+        .remove::<Present>()
         .get_mut::<Camera>()
         .ok_or(ProcessingError::GraphicsNotFound)?
         .output_mode = CameraOutputMode::Skip;
-
-    Ok(())
+    result
 }
 
 /// End the current draw
@@ -619,14 +1021,24 @@ pub fn end_draw(app: &mut App, entity: Entity) -> Result<()> {
 ///
 // TODO: why is metal particularly affected by this? can we remove this?
 pub fn warmup(app: &mut App, entity: Entity) -> Result<()> {
+    // an offscreen buffer starts transparent, like Processing's createGraphics
+    let offscreen = matches!(
+        app.world().get::<RenderTarget>(entity),
+        Some(RenderTarget::Image(_))
+    );
+    let clear = if offscreen {
+        Color::NONE
+    } else {
+        DEFAULT_CLEAR_COLOR
+    };
     for _ in 0..3 {
         app.world_mut()
             .run_system_cached_with(
                 record_command,
-                (entity, DrawCommand::BackgroundColor(DEFAULT_CLEAR_COLOR)),
+                (entity, DrawCommand::BackgroundColor(clear)),
             )
             .unwrap()?;
-        flush(app, entity)?;
+        present(app, entity)?;
     }
     Ok(())
 }
@@ -652,12 +1064,12 @@ pub struct ReadbackData {
 
 pub fn readback_raw(
     In((entity, texture)): In<(Entity, Texture)>,
-    graphics_query: Query<&Graphics>,
+    mut graphics_query: Query<&mut Graphics>,
     render_device: Res<RenderDevice>,
     render_queue: Res<RenderQueue>,
-) -> Result<ReadbackData> {
-    let graphics = graphics_query
-        .get(entity)
+) -> Result<()> {
+    let mut graphics = graphics_query
+        .get_mut(entity)
         .map_err(|_| ProcessingError::GraphicsNotFound)?;
 
     let mut encoder = render_device.create_command_encoder(&CommandEncoderDescriptor::default());
@@ -716,12 +1128,9 @@ pub fn readback_raw(
         data
     };
 
-    Ok(ReadbackData {
-        bytes: unpadded,
-        format: graphics.texture_format,
-        width: graphics.size.width,
-        height: graphics.size.height,
-    })
+    graphics.pixels = Some(unpadded);
+    graphics.dirty = None;
+    Ok(())
 }
 
 pub fn update_region_write(
@@ -868,16 +1277,18 @@ mod tests {
     #[test]
     fn test_processing_projection() {
         let proj = ProcessingProjection {
-            width: 800.0,
-            height: 600.0,
             near: 0.1,
             far: 1000.0,
+            ..ProcessingProjection::new(800.0, 600.0)
         };
         let clip_matrix = proj.get_clip_from_view();
-        // Check some values in the matrix to ensure it's correct
-        // In [0,1] depth orthographic projection, w_axis.z = -near/(far-near)
-        let expected: f32 = -0.1 / (1000.0 - 0.1);
-        assert!((clip_matrix.w_axis.z - expected).abs() < 1e-6);
+        // reverse-z [0,1] depth: the near plane maps to 1 and the far plane to 0
+        let ndc_z = |z_view: f32| {
+            let c = clip_matrix * Vec4::new(0.0, 0.0, z_view, 1.0);
+            c.z / c.w
+        };
+        assert!((ndc_z(-0.1) - 1.0).abs() < 1e-6);
+        assert!(ndc_z(-1000.0).abs() < 1e-6);
     }
 
     #[test]
@@ -890,5 +1301,60 @@ mod tests {
         manager.free(layer1);
         let layer3 = manager.allocate();
         assert_eq!(layer1_clone, layer3);
+    }
+}
+
+#[cfg(test)]
+mod projection_tests {
+    use super::*;
+
+    /// Reverse-z like bevy's cameras: near maps to NDC 1, far to NDC 0, so GreaterEqual
+    /// depth compares make nearer draws win.
+    #[test]
+    fn processing_projection_is_reverse_z() {
+        let proj = ProcessingProjection::new(640.0, 360.0);
+        let clip = proj.get_clip_from_view();
+        let ndc = |z_view: f32| {
+            let c = clip * Vec4::new(0.0, 0.0, z_view, 1.0);
+            c.z / c.w
+        };
+        assert!((ndc(-proj.far) - 0.0).abs() < 1e-6);
+        assert!((ndc(-proj.near) - 1.0).abs() < 1e-6);
+        // the canvas plane (z = 0) sits between them and a layer toward the camera is "nearer"
+        assert!(ndc(0.0) > ndc(-1.0) && ndc(0.0) < ndc(1.0));
+        // top-left of the canvas maps to NDC (-1, 1)
+        let corner = clip * Vec4::new(0.0, 0.0, 0.0, 1.0);
+        assert!(
+            (corner.x / corner.w + 1.0).abs() < 1e-6 && (corner.y / corner.w - 1.0).abs() < 1e-6
+        );
+    }
+
+    /// 3D is the same y-down world: a point above the origin (negative y) projects to the top
+    /// of the screen, +x stays on the right, and nearer points get a larger reverse-z depth.
+    #[test]
+    fn processing_perspective_is_y_down_reverse_z() {
+        let proj = ProcessingPerspective {
+            inner: PerspectiveProjection {
+                fov: std::f32::consts::PI / 3.0,
+                aspect_ratio: 16.0 / 9.0,
+                near: 1.0,
+                far: 1000.0,
+                near_clip_plane: Vec4::new(0.0, 0.0, -1.0, -1.0),
+            },
+            fit_canvas: true,
+        };
+        let clip = proj.get_clip_from_view();
+        let ndc = |v: Vec3| {
+            let c = clip * v.extend(1.0);
+            c.truncate() / c.w
+        };
+        let up = ndc(Vec3::new(0.0, -10.0, -100.0));
+        let right = ndc(Vec3::new(10.0, 0.0, -100.0));
+        assert!(up.y > 0.0, "negative world y must be screen-up, got {up}");
+        assert!(
+            right.x > 0.0,
+            "positive world x must be screen-right, got {right}"
+        );
+        assert!(ndc(Vec3::new(0.0, 0.0, -10.0)).z > ndc(Vec3::new(0.0, 0.0, -100.0)).z);
     }
 }

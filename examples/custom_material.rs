@@ -28,7 +28,7 @@ fn sketch() -> error::Result<()> {
     let box_geo = geometry_box(100.0, 100.0, 100.0)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(100.0, 100.0, 300.0))?;
+    transform_set_position(graphics, Vec3::new(100.0, -100.0, 300.0))?;
     transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
     let shader = shader_load("shaders/custom_material.wesl")?;
@@ -53,7 +53,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(
             graphics,
             DrawCommand::Rotate {
-                angle,
+                angle: -angle,
                 axis: Vec3::Z,
             },
         )?;

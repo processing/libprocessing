@@ -1,6 +1,7 @@
 pub mod config;
 pub mod constants;
 pub mod error;
+pub mod noise;
 
 use std::cell::RefCell;
 use std::sync::OnceLock;
@@ -23,7 +24,7 @@ pub fn app_mut<T>(cb: impl FnOnce(&mut App) -> error::Result<T>) -> error::Resul
             .map_err(|_| error::ProcessingError::AppAccess)?;
         let app = app_borrow
             .as_mut()
-            .ok_or(error::ProcessingError::AppAccess)?;
+            .ok_or(error::ProcessingError::AppNotInitialized)?;
         cb(app)
     });
     match res {

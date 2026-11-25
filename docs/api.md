@@ -36,7 +36,11 @@ not guaranteed to be the same as a user-created image.
 
 ### Light
 
-[//]: # (TODO: Document Image API object)
+`directional_light`, `point_light` and `spot_light` add a light to the frame. `create_directional_light`,
+`create_point_light` and `create_spot_light` return a `Light` that `light(l)` adds to the frame. Both use the current
+matrix. A `Light` belongs to the graphics that created it.
+
+A light also lights shapes drawn before it in the frame, unless a flush (such as `filter`) came between them.
 
 ### Image
 

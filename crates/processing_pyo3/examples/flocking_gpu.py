@@ -22,6 +22,7 @@ RULES = [
 p = None
 boid = None
 mat = None
+sun = None
 grid = None
 title_last_time = 0.0
 title_last_frame = 0
@@ -35,27 +36,27 @@ def boid_geometry(half_width, length, droop):
     n = (half_width * half_width + droop * droop) ** 0.5
     nose = (0.0, 0.0, length * 0.5)
     tail = (0.0, 0.0, -length * 0.5)
-    g.normal(-droop / n, half_width / n, 0.0)
+    g.normal(-droop / n, -half_width / n, 0.0)
     g.vertex(*nose)
-    g.vertex(-half_width, -droop, -length * 0.5)
+    g.vertex(-half_width, droop, -length * 0.5)
     g.vertex(*tail)
-    g.normal(droop / n, half_width / n, 0.0)
+    g.normal(droop / n, -half_width / n, 0.0)
     g.vertex(*nose)
     g.vertex(*tail)
-    g.vertex(half_width, -droop, -length * 0.5)
+    g.vertex(half_width, droop, -length * 0.5)
     for i in range(6):
         g.index(i)
     return g
 
 
 def setup():
-    global p, boid, mat, grid
+    global p, boid, mat, sun, grid
 
     size(900, 700)
     window_title(f"GPU Flocking — {BOID_COUNT:,} boids")
     mode_3d()
 
-    directional_light((0.95, 0.9, 0.85), 800.0)
+    sun = create_directional_light((0.95, 0.9, 0.85), 800.0)
 
     p = create_particles(BOID_COUNT)
 
@@ -131,9 +132,10 @@ def draw():
 
     t = elapsed_time * 0.1
     r = BOUND * 2.6
-    camera_position(cos(t) * r, BOUND * 0.8, sin(t) * r)
+    camera_position(cos(t) * r, -BOUND * 0.8, sin(t) * r)
     camera_look_at(0.0, 0.0, 0.0)
     background(10, 12, 18)
+    light(sun)
 
     flock()
 
@@ -142,7 +144,7 @@ def draw():
 
     p.apply(INTEGRATE, dt=DT)
     p.apply(BOUNDS_BOX, aabb_min=[-BOUND] * 3, aabb_max=[BOUND] * 3, mode=2)
-    p.apply(ORIENT, forward=[0.0, 0.0, 1.0], up=[0.0, 1.0, 0.0])
+    p.apply(ORIENT, forward=[0.0, 0.0, 1.0], up=[0.0, -1.0, 0.0])
 
 
 run()

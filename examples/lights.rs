@@ -29,11 +29,8 @@ fn sketch() -> error::Result<()> {
     let pbr_mat = material_create_pbr()?;
     material_set(pbr_mat, "roughness", shader_value::ShaderValue::Float(0.0))?;
 
-    // We will only declare lights in `setup`
-    // rather than calling some sort of `light()` method inside of `draw`
-
     // create a directional light
-    let _dir_light =
+    let dir_light =
         light_create_directional(graphics, bevy::color::Color::srgb(0.35, 0.25, 0.5), 500.0)?;
 
     // create a point light
@@ -44,7 +41,7 @@ fn sketch() -> error::Result<()> {
         200.0,
         0.5,
     )?;
-    transform_set_position(point_light_a, Vec3::new(-25.0, 5.0, 51.0))?;
+    transform_set_position(point_light_a, Vec3::new(-25.0, -5.0, 51.0))?;
     transform_look_at(point_light_a, Vec3::new(0.0, 0.0, 0.0))?;
 
     // create another point light
@@ -55,7 +52,7 @@ fn sketch() -> error::Result<()> {
         200.0,
         0.25,
     )?;
-    transform_set_position(point_light_b, Vec3::new(0.0, 5.0, 50.5))?;
+    transform_set_position(point_light_b, Vec3::new(0.0, -5.0, 50.5))?;
     transform_look_at(point_light_b, Vec3::new(0.0, 0.0, 0.0))?;
 
     // and a spot light, too!
@@ -72,13 +69,17 @@ fn sketch() -> error::Result<()> {
     transform_look_at(spot_light, Vec3::new(0.0, 0.0, 0.0))?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(100.0, 100.0, 300.0))?;
+    transform_set_position(graphics, Vec3::new(100.0, -100.0, 300.0))?;
     transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
     let mut angle = 0.0;
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;
+        graphics_light(graphics, dir_light)?;
+        graphics_light(graphics, point_light_a)?;
+        graphics_light(graphics, point_light_b)?;
+        graphics_light(graphics, spot_light)?;
 
         graphics_record_command(
             graphics,
@@ -92,7 +93,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(
             graphics,
             DrawCommand::Rotate {
-                angle,
+                angle: -angle,
                 axis: Vec3::Z,
             },
         )?;

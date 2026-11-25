@@ -52,10 +52,10 @@ fn sketch() -> error::Result<()> {
     let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, 6.0, 18.0))?;
+    transform_set_position(graphics, Vec3::new(0.0, -6.0, 18.0))?;
     transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
-    let _light =
+    let light =
         light_create_directional(graphics, bevy::color::Color::srgb(0.9, 0.85, 0.8), 300.0)?;
 
     let cube = geometry_box(0.6, 0.6, 0.6)?;
@@ -68,7 +68,7 @@ fn sketch() -> error::Result<()> {
         for y in 0..5 {
             for z in 0..5 {
                 positions.push((x as f32 - 2.0) * 1.6);
-                positions.push((y as f32 - 2.0) * 1.6);
+                positions.push((2.0 - y as f32) * 1.6);
                 positions.push((z as f32 - 2.0) * 1.6);
                 rotations.push(0.0);
                 rotations.push(0.0);
@@ -113,6 +113,7 @@ fn sketch() -> error::Result<()> {
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;
+        graphics_light(graphics, light)?;
         graphics_record_command(
             graphics,
             DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.06, 0.06, 0.08)),

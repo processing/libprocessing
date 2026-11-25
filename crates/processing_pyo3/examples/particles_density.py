@@ -38,7 +38,7 @@ def draw():
 
     t = elapsed_time
     d = BOX * 2.4
-    camera_position(cos(t * 0.08) * d, BOX * 0.5, sin(t * 0.08) * d)
+    camera_position(cos(t * 0.08) * d, -BOX * 0.5, sin(t * 0.08) * d)
     camera_look_at(0.0, 0.0, 0.0)
 
     p.apply(NOISE, scale=0.12, strength=0.06, time=t * 0.15, divergence_free=1)

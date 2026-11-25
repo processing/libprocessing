@@ -21,11 +21,11 @@ def setup():
         cubie_size = random(5, 15)
         cubies.append(Cube(cubie_size, cubie_size, cubie_size))
 
-    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     roughness(0.6)
 
 
 def draw():
+    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     background(0.2)
 
     # Center in display window

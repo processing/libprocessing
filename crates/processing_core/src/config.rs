@@ -4,8 +4,6 @@ use std::collections::HashMap;
 #[derive(Clone, Hash, Eq, PartialEq)]
 pub enum ConfigKey {
     AssetRootPath,
-    SketchRootPath,
-    SketchFileName,
     LogLevel,
 }
 

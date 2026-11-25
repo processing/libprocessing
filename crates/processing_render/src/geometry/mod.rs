@@ -83,6 +83,8 @@ pub struct Geometry {
     pub current_color: [f32; 4],
     pub current_uv: [f32; 2],
     pub custom_current: HashMap<MeshVertexAttributeId, AttributeValue>,
+    /// set once a color with alpha below one is used; never cleared
+    pub translucent: bool,
 }
 
 impl Geometry {
@@ -94,6 +96,7 @@ impl Geometry {
             current_color: [1.0, 1.0, 1.0, 1.0],
             current_uv: [0.0, 0.0],
             custom_current: HashMap::new(),
+            translucent: false,
         }
     }
 }
@@ -259,6 +262,9 @@ pub fn color(world: &mut World, entity: Entity, color: Vec4) -> Result<()> {
         .get_mut::<Geometry>(entity)
         .ok_or(ProcessingError::GeometryNotFound)?;
     geometry.current_color = color.to_array();
+    if color.w < 1.0 {
+        geometry.translucent = true;
+    }
     Ok(())
 }
 
@@ -438,4 +444,28 @@ pub fn destroy(
     meshes.remove(&geometry.handle);
     commands.entity(entity).despawn();
     Ok(())
+}
+
+/// Reflects a y-up mesh into the y-down world: positions, normals, tangents and winding
+pub(crate) fn mirror_y(mesh: &mut Mesh) {
+    for attr in [Mesh::ATTRIBUTE_POSITION, Mesh::ATTRIBUTE_NORMAL] {
+        if let Some(VertexAttributeValues::Float32x3(v)) = mesh.attribute_mut(attr) {
+            for p in v.iter_mut() {
+                p[1] = -p[1];
+            }
+        }
+    }
+    // the bitangent is `cross(normal, tangent) * w`, and a mirror flips that handedness
+    if let Some(VertexAttributeValues::Float32x4(v)) = mesh.attribute_mut(Mesh::ATTRIBUTE_TANGENT) {
+        for t in v.iter_mut() {
+            t[1] = -t[1];
+            t[3] = -t[3];
+        }
+    }
+    // a reflection reverses winding; `invert_winding` skips unindexed meshes, so index them first
+    if mesh.indices().is_none() && mesh.primitive_topology() == PrimitiveTopology::TriangleList {
+        let n = mesh.count_vertices() as u32;
+        mesh.insert_indices(Indices::U32((0..n).collect()));
+    }
+    let _ = mesh.invert_winding();
 }

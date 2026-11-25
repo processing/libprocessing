@@ -104,8 +104,6 @@ thread_local! {
 #[napi(object)]
 pub struct InitConfig {
     pub asset_root_path: Option<String>,
-    pub sketch_root_path: Option<String>,
-    pub sketch_file_name: Option<String>,
     pub log_level: Option<String>,
 }
 
@@ -141,8 +139,6 @@ pub fn js_init(env: Env, config: Option<InitConfig>) -> Result<()> {
     if let Some(c) = config {
         for (key, value) in [
             (ConfigKey::AssetRootPath, c.asset_root_path),
-            (ConfigKey::SketchRootPath, c.sketch_root_path),
-            (ConfigKey::SketchFileName, c.sketch_file_name),
             (ConfigKey::LogLevel, c.log_level),
         ] {
             if let Some(value) = value {
@@ -1202,8 +1198,8 @@ pub fn js_graphics_update_region(
 ) -> Result<()> {
     check(graphics_update_region(
         ent(graphics_id),
-        x,
-        y,
+        x.into(),
+        y.into(),
         width,
         height,
         &floats_to_linear(&pixels, space),
@@ -1224,8 +1220,8 @@ pub fn js_graphics_set(
     let color = Color::new(c1, c2, c3, a, space).to_linear();
     check(graphics_update_region(
         ent(graphics_id),
-        x,
-        y,
+        x.into(),
+        y.into(),
         1,
         1,
         &[color],
@@ -1345,7 +1341,7 @@ pub fn js_perspective(
     check(graphics_perspective(
         ent(graphics_id),
         fov as f32,
-        aspect as f32,
+        Some(aspect as f32),
         near as f32,
         far as f32,
         Vec4::new(0.0, 0.0, -1.0, -near as f32),

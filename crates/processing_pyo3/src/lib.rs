@@ -43,7 +43,7 @@ use pyo3::{
     types::{PyDict, PyList, PyTuple},
 };
 use shader::Shader;
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 
 /// Register a window `Graphics` in the module's `_windows` list so the run loop
 /// draws + presents it each frame.
@@ -117,6 +117,9 @@ use std::env;
 pub(crate) struct LoopState {
     looping: bool,
     redraw_requested: bool,
+    exit_requested: bool,
+    /// Set by `frame_rate(fps)`. `run()` sleeps out the rest of each frame.
+    frame_interval: Option<std::time::Duration>,
 }
 
 impl Default for LoopState {
@@ -124,13 +127,34 @@ impl Default for LoopState {
         Self {
             looping: true,
             redraw_requested: false,
+            exit_requested: false,
+            frame_interval: None,
         }
     }
+}
+
+/// Input history the derived callbacks need across frames.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct EventState {
+    /// Pressed and not dragged since, so the release is a click.
+    click_pending: bool,
+    canvas_size: Option<(u32, u32)>,
 }
 
 thread_local! {
     pub(crate) static LAST_GLOBALS: RefCell<HashMap<&'static str, Py<PyAny>>> = RefCell::new(HashMap::new());
     pub(crate) static LOOP_STATE: Cell<LoopState> = Cell::new(LoopState::default());
+    pub(crate) static EVENT_STATE: Cell<EventState> = Cell::new(EventState::default());
+    pub(crate) static NOISE: RefCell<processing_core::noise::Noise> = RefCell::new(new_noise());
+}
+
+/// A sketch's noise field: randomly seeded, fixed under CI so captures are stable.
+pub(crate) fn new_noise() -> processing_core::noise::Noise {
+    processing_core::noise::Noise::new(if processing_render::ci::enabled() {
+        0
+    } else {
+        rand::random()
+    })
 }
 
 fn update_loop_state(f: impl FnOnce(&mut LoopState)) {
@@ -177,61 +201,149 @@ where
     Ok(())
 }
 
-pub(crate) fn reset_tracked_globals() {
-    LAST_GLOBALS.with(|cache| cache.borrow_mut().clear());
+fn canvas_size(graphics: &Graphics) -> PyResult<(u32, u32)> {
+    let err =
+        |e: processing::prelude::error::ProcessingError| PyRuntimeError::new_err(format!("{e}"));
+    let width = ::processing::prelude::surface_width(graphics.surface.entity).map_err(err)?;
+    let height = ::processing::prelude::surface_height(graphics.surface.entity).map_err(err)?;
+    Ok((
+        if width == 0 { graphics.width } else { width },
+        if height == 0 { graphics.height } else { height },
+    ))
 }
 
 fn sync_globals(module: &Bound<'_, PyModule>, globals: &Bound<'_, PyAny>) -> PyResult<()> {
     let graphics =
         get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-    let width = ::processing::prelude::surface_width(graphics.surface.entity)
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-    let width = if width == 0 { graphics.width } else { width };
-    let height = ::processing::prelude::surface_height(graphics.surface.entity)
-        .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-    let height = if height == 0 { graphics.height } else { height };
+    let (width, height) = canvas_size(&graphics)?;
     input::sync_globals(globals, graphics.surface.entity, width, height)?;
     surface::sync_globals(globals, &graphics.surface, width, height)?;
     time::sync_globals(globals)?;
     Ok(())
 }
 
-fn try_call(locals: &Bound<'_, PyAny>, name: &str) -> PyResult<()> {
-    if let Ok(cb) = locals.get_item(name)
-        && cb.is_callable()
-    {
-        cb.call0()
-            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+/// The main canvas's color mode, or the default before `size()`.
+fn current_color_mode(module: &Bound<'_, PyModule>) -> PyResult<color::ColorMode> {
+    match get_graphics(module)? {
+        Some(graphics) => graphics.current_color_mode(),
+        None => Ok(color::ColorMode::default()),
+    }
+}
+
+fn mouse_event(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
+    // the graphics borrow has to end before the callback runs, which may draw
+    let event = {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        let (width, height) = canvas_size(&graphics)?;
+        input::MouseEvent::current(graphics.surface.entity, width, height)?
+    };
+    Ok(Py::new(module.py(), event)?.into_any())
+}
+
+fn key_event(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
+    Ok(Py::new(module.py(), input::KeyEvent::current()?)?.into_any())
+}
+
+fn no_event(module: &Bound<'_, PyModule>) -> PyResult<Py<PyAny>> {
+    Ok(module.py().None())
+}
+
+/// Calls the sketch's `name` callback, with an event if it takes a parameter
+/// (`def mouse_pressed(e)`), as py5 and Processing's `mousePressed(MouseEvent)` do.
+fn call_event_callback(
+    module: &Bound<'_, PyModule>,
+    locals: &Bound<'_, PyAny>,
+    name: &str,
+    event: fn(&Bound<'_, PyModule>) -> PyResult<Py<PyAny>>,
+) -> PyResult<()> {
+    let Ok(cb) = locals.get_item(name) else {
+        return Ok(());
+    };
+    if !cb.is_callable() {
+        return Ok(());
+    }
+    let inspect = PyModule::import(module.py(), "inspect")?;
+    // builtins without a signature can't take our event either
+    let takes_event = inspect
+        .call_method1("signature", (&cb,))
+        .and_then(|sig| sig.getattr("parameters")?.len())
+        .is_ok_and(|n| n > 0);
+    if takes_event {
+        cb.call1((event(module)?,))?;
+    } else {
+        cb.call0()?;
     }
     Ok(())
 }
 
-fn dispatch_event_callbacks(locals: &Bound<'_, PyAny>) -> PyResult<()> {
+/// Prints an error raised while live-coding; exits and interrupts still propagate.
+fn report_live_error(py: Python<'_>, e: PyErr) -> PyResult<()> {
+    if !e.is_instance_of::<pyo3::exceptions::PyException>(py) {
+        return Err(e);
+    }
+    e.print(py);
+    Ok(())
+}
+
+fn dispatch_event_callbacks(
+    module: &Bound<'_, PyModule>,
+    locals: &Bound<'_, PyAny>,
+) -> PyResult<()> {
     use processing::prelude::*;
     let err =
         |e: processing::prelude::error::ProcessingError| PyRuntimeError::new_err(format!("{e}"));
 
-    if input_mouse_any_just_pressed().map_err(err)? {
-        try_call(locals, "mouse_pressed")?;
+    let update_events = |f: &dyn Fn(&mut EventState)| {
+        EVENT_STATE.with(|s| {
+            let mut state = s.get();
+            f(&mut state);
+            s.set(state);
+        })
+    };
+
+    let size = {
+        let graphics =
+            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
+        canvas_size(&graphics)?
+    };
+    let previous = EVENT_STATE.with(|s| s.get().canvas_size);
+    update_events(&|s| s.canvas_size = Some(size));
+    if previous.is_some_and(|p| p != size) {
+        call_event_callback(module, locals, "window_resized", no_event)?;
     }
-    if input_mouse_any_just_released().map_err(err)? {
-        try_call(locals, "mouse_released")?;
+
+    if input_mouse_any_just_pressed().map_err(err)? {
+        update_events(&|s| s.click_pending = true);
+        call_event_callback(module, locals, "mouse_pressed", mouse_event)?;
     }
     if input_mouse_moved().map_err(err)? {
         if input_mouse_is_pressed().map_err(err)? {
-            try_call(locals, "mouse_dragged")?;
+            update_events(&|s| s.click_pending = false);
+            call_event_callback(module, locals, "mouse_dragged", mouse_event)?;
         } else {
-            try_call(locals, "mouse_moved")?;
+            call_event_callback(module, locals, "mouse_moved", mouse_event)?;
+        }
+    }
+    if input_mouse_any_just_released().map_err(err)? {
+        call_event_callback(module, locals, "mouse_released", mouse_event)?;
+        if EVENT_STATE.with(|s| s.get().click_pending) {
+            update_events(&|s| s.click_pending = false);
+            call_event_callback(module, locals, "mouse_clicked", mouse_event)?;
         }
     }
     if input_mouse_scrolled().map_err(err)? {
-        try_call(locals, "mouse_wheel")?;
+        call_event_callback(module, locals, "mouse_wheel", mouse_event)?;
     }
     if input_key_any_just_pressed().map_err(err)? {
-        try_call(locals, "key_pressed")?;
+        call_event_callback(module, locals, "key_pressed", key_event)?;
+        // Processing's keyTyped: only keys that produce a character
+        if input_key().map_err(err)?.is_some_and(|c| !c.is_control()) {
+            call_event_callback(module, locals, "key_typed", key_event)?;
+        }
     }
     if input_key_any_just_released().map_err(err)? {
-        try_call(locals, "key_released")?;
+        call_event_callback(module, locals, "key_released", key_event)?;
     }
     Ok(())
 }
@@ -246,7 +358,11 @@ fn create_graphics_context(
     let env = detect_environment(module)?;
 
     let interactive = env != "script";
-    let log_level = if interactive { Some("error") } else { None };
+    let log_level = if interactive {
+        Some("error")
+    } else {
+        Some("warn")
+    };
 
     let has_existing = module
         .getattr("_graphics")
@@ -285,16 +401,8 @@ fn create_graphics_context(
         }
         "ipython" => {
             let asset_path = get_asset_root()?;
-            let (sketch_root, sketch_file) = get_sketch_info()?;
-            let graphics = Graphics::new(
-                width,
-                height,
-                asset_path.as_str(),
-                sketch_root.as_str(),
-                sketch_file.as_str(),
-                log_level,
-                transparent,
-            )?;
+            let graphics =
+                Graphics::new(width, height, asset_path.as_str(), log_level, transparent)?;
             module.setattr("_graphics", graphics)?;
 
             if !has_existing {
@@ -311,16 +419,8 @@ fn create_graphics_context(
         }
         _ => {
             let asset_path = get_asset_root()?;
-            let (sketch_root, sketch_file) = get_sketch_info()?;
-            let graphics = Graphics::new(
-                width,
-                height,
-                asset_path.as_str(),
-                sketch_root.as_str(),
-                sketch_file.as_str(),
-                log_level,
-                transparent,
-            )?;
+            let graphics =
+                Graphics::new(width, height, asset_path.as_str(), log_level, transparent)?;
             module.setattr("_graphics", graphics)?;
         }
     }
@@ -330,6 +430,14 @@ fn create_graphics_context(
 
 const DEFAULT_WIDTH: u32 = 100;
 const DEFAULT_HEIGHT: u32 = 100;
+
+/// Whether `run()` has taken over driving frames.
+fn run_called(module: &Bound<'_, PyModule>) -> PyResult<bool> {
+    match module.getattr("_run_called") {
+        Ok(flag) => flag.is_truthy(),
+        Err(_) => Ok(false),
+    }
+}
 
 fn ensure_graphics(module: &Bound<'_, PyModule>) -> PyResult<()> {
     if get_graphics(module)?.is_some() {
@@ -360,38 +468,11 @@ fn get_asset_root() -> PyResult<String> {
         // in ipython/jupyter argv[0] is weird so we use cwd
         // todo: what is the correct way to get notebook path
         if filename.is_empty() || !path.getattr("isfile")?.call1((filename,))?.is_truthy()? {
-            let cwd = os.getattr("getcwd")?.call0()?.to_string();
-            let asset_root = path.getattr("join")?.call1((cwd, "assets"))?.to_string();
-            return Ok(asset_root);
+            return Ok(os.getattr("getcwd")?.call0()?.to_string());
         }
 
         let dirname = path.getattr("dirname")?.call1((filename,))?;
-        let abspath = path.getattr("abspath")?.call1((dirname,))?;
-        let asset_root = path
-            .getattr("join")?
-            .call1((abspath, "assets"))?
-            .to_string();
-        Ok(asset_root)
-    })
-}
-
-fn get_sketch_info() -> PyResult<(String, String)> {
-    Python::attach(|py| {
-        let sys = PyModule::import(py, "sys")?;
-        let argv: Vec<String> = sys.getattr("argv")?.extract()?;
-        let filename = argv.first().map(|s| s.as_str()).unwrap_or("");
-        let os = PyModule::import(py, "os")?;
-        let path = os.getattr("path")?;
-
-        if filename.is_empty() || !path.getattr("isfile")?.call1((filename,))?.is_truthy()? {
-            let cwd = os.getattr("getcwd")?.call0()?.to_string();
-            return Ok((cwd, String::new()));
-        }
-
-        let dirname = path.getattr("dirname")?.call1((filename,))?;
-        let abspath = path.getattr("abspath")?.call1((dirname,))?;
-        let basename = path.getattr("basename")?.call1((filename,))?;
-        Ok((abspath.to_string(), basename.to_string()))
+        Ok(path.getattr("abspath")?.call1((dirname,))?.to_string())
     })
 }
 
@@ -471,6 +552,10 @@ pub mod processing_py {
     #[pymodule_export]
     use super::cuda::CudaImage;
     #[pymodule_export]
+    use super::input::KeyEvent;
+    #[pymodule_export]
+    use super::input::MouseEvent;
+    #[pymodule_export]
     use super::math::PyQuat;
     #[pymodule_export]
     use super::math::PyVec2;
@@ -478,6 +563,8 @@ pub mod processing_py {
     use super::math::PyVec3;
     #[pymodule_export]
     use super::math::PyVec4;
+    #[pymodule_export]
+    use super::midi::PyMidiMessage;
     #[pymodule_export]
     use super::monitor::Monitor;
     #[pymodule_export]
@@ -693,7 +780,7 @@ pub mod processing_py {
             return Ok(());
         }
         sync_globals(module, ns)?;
-        dispatch_event_callbacks(ns)?;
+        dispatch_event_callbacks(module, ns)?;
         Ok(())
     }
 
@@ -881,6 +968,89 @@ pub mod processing_py {
         Ok(())
     }
 
+    /// The built-in WESL packages as `{package: {relative path: source}}`.
+    #[pyfunction]
+    fn _shader_packages(py: Python<'_>) -> PyResult<Bound<'_, PyDict>> {
+        let packages = PyDict::new(py);
+        for package in processing_render::material::custom::shader_packages() {
+            let files = PyDict::new(py);
+            for (path, contents) in package.files {
+                files.set_item(path, contents)?;
+            }
+            packages.set_item(package.name, files)?;
+        }
+        Ok(packages)
+    }
+
+    /// Ends `run()` once the current `draw()` returns. Processing's `exit()`,
+    /// renamed so it doesn't shadow Python's builtin.
+    #[pyfunction]
+    fn exit_sketch() -> PyResult<()> {
+        update_loop_state(|s| s.exit_requested = true);
+        Ok(())
+    }
+
+    /// `frame_rate()` returns the measured frames per second. `frame_rate(fps)`
+    /// caps how fast `run()` draws (the display's vsync still applies above it).
+    #[pyfunction]
+    #[pyo3(signature = (fps=None))]
+    fn frame_rate(py: Python<'_>, fps: Option<f32>) -> PyResult<Py<PyAny>> {
+        match fps {
+            Some(fps) if fps > 0.0 => {
+                let interval = std::time::Duration::from_secs_f32(1.0 / fps);
+                update_loop_state(|s| s.frame_interval = Some(interval));
+                Ok(py.None())
+            }
+            Some(fps) => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "frame_rate must be positive, got {fps}"
+            ))),
+            None => {
+                let rate = processing::prelude::frame_rate()
+                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+                Ok(rate.into_pyobject(py)?.into_any().unbind())
+            }
+        }
+    }
+
+    /// Milliseconds since the sketch started.
+    #[pyfunction]
+    fn millis() -> PyResult<u64> {
+        let elapsed = processing::prelude::elapsed_time()
+            .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+        Ok((elapsed as f64 * 1000.0) as u64)
+    }
+
+    /// Processing's Perlin noise, in [0, 1).
+    #[pyfunction]
+    #[pyo3(signature = (x, y=0.0, z=0.0))]
+    fn noise(x: f32, y: f32, z: f32) -> f32 {
+        NOISE.with(|n| n.borrow().get(x, y, z))
+    }
+
+    /// `octaves` (default 4) and `falloff` (default 0.5) per octave.
+    #[pyfunction]
+    #[pyo3(signature = (octaves, falloff=None))]
+    fn noise_detail(octaves: i32, falloff: Option<f32>) {
+        NOISE.with(|n| n.borrow_mut().detail(octaves, falloff));
+    }
+
+    #[pyfunction]
+    fn noise_seed(seed: u64) {
+        NOISE.with(|n| n.borrow_mut().seed(seed));
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (kind=processing::prelude::constants::ARROW))]
+    fn cursor(module: &Bound<'_, PyModule>, kind: &str) -> PyResult<()> {
+        graphics!(module).cursor(kind)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn no_cursor(module: &Bound<'_, PyModule>) -> PyResult<()> {
+        graphics!(module).no_cursor()
+    }
+
     #[pyfunction]
     #[pyo3(pass_module)]
     fn window_title(module: &Bound<'_, PyModule>, title: &str) -> PyResult<()> {
@@ -1027,7 +1197,27 @@ pub mod processing_py {
         height: u32,
         transparent: bool,
     ) -> PyResult<()> {
-        create_graphics_context(module, width, height, transparent)?;
+        // a re-run setup() keeps its window and resizes it; only transparency needs a new one
+        let keep_window = run_called(module)?
+            && match get_graphics_mut(module)? {
+                Some(mut g) => {
+                    let err = |e| PyRuntimeError::new_err(format!("{e}"));
+                    let same_kind = processing::prelude::surface_transparent(g.surface.entity)
+                        .map_err(err)?
+                        == transparent;
+                    if same_kind {
+                        processing::prelude::surface_resize(g.surface.entity, width, height)
+                            .map_err(err)?;
+                        g.width = width;
+                        g.height = height;
+                    }
+                    same_kind
+                }
+                None => false,
+            };
+        if !keep_window {
+            create_graphics_context(module, width, height, transparent)?;
+        }
 
         let py = module.py();
         let sys = PyModule::import(py, "sys")?;
@@ -1038,9 +1228,10 @@ pub mod processing_py {
         Ok(())
     }
 
+    /// Runs the sketch until its window closes.
     #[pyfunction]
-    #[pyo3(pass_module)]
-    fn run(module: &Bound<'_, PyModule>) -> PyResult<()> {
+    #[pyo3(pass_module, signature = (*, hot_reload=None))]
+    fn run(module: &Bound<'_, PyModule>, hot_reload: Option<bool>) -> PyResult<()> {
         let env = detect_environment(module)?;
 
         if env != "script" {
@@ -1048,32 +1239,50 @@ pub mod processing_py {
             return Ok(());
         }
 
+        // a reload can re-execute the sketch's own run() line
+        if run_called(module)? {
+            return Ok(());
+        }
+        module.setattr("_run_called", true)?;
+
         let result: PyResult<()> = Python::attach(|py| {
             let builtins = PyModule::import(py, "builtins")?;
-            let locals = builtins.getattr("locals")?.call0()?;
+            let locals = &builtins.getattr("locals")?.call0()?;
 
             let setup_fn = locals.get_item("setup").ok();
             let mut draw_fn = locals.get_item("draw").ok();
 
+            update_loop_state(|s| s.exit_requested = false);
+            let exit_requested = || LOOP_STATE.with(|s| s.get().exit_requested);
+
             if let Some(ref setup) = setup_fn {
                 setup.call0()?;
+            }
+            if exit_requested() {
+                return Ok(());
             }
 
             ensure_graphics(module)?;
 
-            let mut globals = if let Some(ref draw) = draw_fn {
+            let globals = if let Some(ref draw) = draw_fn {
                 draw.getattr("__globals__")?
             } else if let Some(ref setup) = setup_fn {
                 setup.getattr("__globals__")?
             } else {
-                let sys = PyModule::import(py, "sys")?;
-                let frame = sys.getattr("_getframe")?.call1((0,))?;
-                frame.getattr("f_globals")?
+                locals.clone()
             };
             sync_globals(module, &globals)?;
 
+            let hot_module = PyModule::import(py, "processing_py._hot")?;
+
             // no draw is defined. flush any top level code and then idle
             if draw_fn.is_none() {
+                if hot_module
+                    .call_method1("enabled", (hot_reload,))?
+                    .is_truthy()?
+                {
+                    warn!("hot reload needs a draw() function; running without it.");
+                }
                 {
                     let mut graphics = get_graphics_mut(module)?
                         .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
@@ -1085,6 +1294,7 @@ pub mod processing_py {
                     .end_draw()?;
 
                 loop {
+                    py.check_signals()?;
                     {
                         let mut graphics = get_graphics_mut(module)?
                             .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
@@ -1092,7 +1302,10 @@ pub mod processing_py {
                             break;
                         }
                     }
-                    dispatch_event_callbacks(&locals)?;
+                    dispatch_event_callbacks(module, locals)?;
+                    if exit_requested() {
+                        break;
+                    }
                     std::thread::sleep(std::time::Duration::from_millis(16));
                 }
 
@@ -1101,52 +1314,67 @@ pub mod processing_py {
             let draw_fn_ref = draw_fn.as_mut().expect("checked above");
             let mut first_frame = true;
 
+            let hot = hot_module.call_method1("start", (&globals, hot_reload))?;
+            let hot = (!hot.is_none()).then_some(hot);
+            // under hot reload, a failed draw() waits for the next edit
+            let mut draw_failed = false;
+
             loop {
+                // catches Ctrl-C while paused
+                py.check_signals()?;
+                if let Some(ref hot) = hot {
+                    let setup_changed = hot.call_method0("poll")?;
+                    if !setup_changed.is_none() {
+                        if setup_changed.is_truthy()?
+                            && let Ok(setup) = globals.get_item("setup")
+                        {
+                            // a changed setup() restarts the sketch in place
+                            LOOP_STATE.set(LoopState::default());
+                            processing::prelude::set_frame_count(0)
+                                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+                            if let Err(e) = setup.call0() {
+                                report_live_error(py, e)?;
+                            }
+                        }
+                        if let Ok(draw) = globals.get_item("draw") {
+                            *draw_fn_ref = draw;
+                        }
+                        draw_failed = false;
+                        first_frame = true;
+                    }
+                }
+
                 {
                     let mut graphics = get_graphics_mut(module)?
                         .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-
-                    // TODO: this shouldn't be on the graphics object
-                    let sketch = graphics.poll_for_sketch_update()?;
-                    if !sketch.source.is_empty() {
-                        let locals = PyDict::new(py);
-
-                        let ok = CString::new(sketch.source.as_str()).unwrap();
-                        let cstr: &CStr = ok.as_c_str();
-
-                        match py.run(cstr, None, Some(&locals)) {
-                            Ok(_) => {}
-                            Err(e) => {
-                                eprintln!("sketch reload error: {e}");
-                            }
-                        }
-
-                        *draw_fn_ref = locals.get_item("draw").unwrap().unwrap();
-                        globals = draw_fn_ref.getattr("__globals__")?;
-                        reset_tracked_globals();
-                        first_frame = true;
-
-                        dbg!(locals);
-                    }
-
                     if !graphics.surface.poll_events() {
                         break;
                     }
                 }
 
-                dispatch_event_callbacks(&locals)?;
+                if let Err(e) = dispatch_event_callbacks(module, locals) {
+                    if hot.is_none() {
+                        return Err(e);
+                    }
+                    report_live_error(py, e)?;
+                }
+                if exit_requested() {
+                    break;
+                }
 
-                let should_draw = first_frame
-                    || LOOP_STATE.with(|s| {
-                        let state = s.get();
-                        state.looping || state.redraw_requested
-                    });
+                let should_draw = !draw_failed
+                    && (first_frame
+                        || LOOP_STATE.with(|s| {
+                            let state = s.get();
+                            state.looping || state.redraw_requested
+                        }));
 
                 if !should_draw {
                     std::thread::sleep(std::time::Duration::from_millis(16));
                     continue;
                 }
                 first_frame = false;
+                let frame_start = std::time::Instant::now();
 
                 processing::prelude::advance_frame_count()
                     .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
@@ -1160,17 +1388,38 @@ pub mod processing_py {
                     wg.bind(py).borrow().begin_draw()?;
                 }
                 sync_globals(module, &globals)?;
-                draw_fn_ref
-                    .call0()
-                    .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
+                let drawn = draw_fn_ref.call0();
                 for wg in &windows {
                     wg.bind(py).borrow().end_draw()?;
                 }
+                if let Err(e) = drawn {
+                    if hot.is_none() {
+                        return Err(e);
+                    }
+                    report_live_error(py, e)?;
+                    draw_failed = true;
+                }
 
                 update_loop_state(|s| s.redraw_requested = false);
+                if exit_requested() {
+                    break;
+                }
+                if let Some(interval) = LOOP_STATE.with(|s| s.get().frame_interval) {
+                    std::thread::sleep(interval.saturating_sub(frame_start.elapsed()));
+                }
             }
 
             Ok(())
+        })
+        .or_else(|e: PyErr| {
+            // Ctrl-C quits the sketch like closing its window
+            Python::attach(|py| {
+                if e.is_instance_of::<pyo3::exceptions::PyKeyboardInterrupt>(py) {
+                    Ok(())
+                } else {
+                    Err(e)
+                }
+            })
         });
 
         // tear down the app while the thread-local is still alive; the eager
@@ -1388,6 +1637,81 @@ pub mod processing_py {
         )
     }
 
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn red(module: &Bound<'_, PyModule>, color: super::color::ColorLike) -> PyResult<f32> {
+        Ok(super::color::red(
+            color.into_color()?,
+            &current_color_mode(module)?,
+        ))
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn green(module: &Bound<'_, PyModule>, color: super::color::ColorLike) -> PyResult<f32> {
+        Ok(super::color::green(
+            color.into_color()?,
+            &current_color_mode(module)?,
+        ))
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn blue(module: &Bound<'_, PyModule>, color: super::color::ColorLike) -> PyResult<f32> {
+        Ok(super::color::blue(
+            color.into_color()?,
+            &current_color_mode(module)?,
+        ))
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn alpha(module: &Bound<'_, PyModule>, color: super::color::ColorLike) -> PyResult<f32> {
+        Ok(super::color::alpha(
+            color.into_color()?,
+            &current_color_mode(module)?,
+        ))
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn hue(module: &Bound<'_, PyModule>, color: super::color::ColorLike) -> PyResult<f32> {
+        Ok(super::color::hue(
+            color.into_color()?,
+            &current_color_mode(module)?,
+        ))
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn saturation(module: &Bound<'_, PyModule>, color: super::color::ColorLike) -> PyResult<f32> {
+        Ok(super::color::saturation(
+            color.into_color()?,
+            &current_color_mode(module)?,
+        ))
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn brightness(module: &Bound<'_, PyModule>, color: super::color::ColorLike) -> PyResult<f32> {
+        Ok(super::color::brightness(
+            color.into_color()?,
+            &current_color_mode(module)?,
+        ))
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module)]
+    fn lerp_color(
+        module: &Bound<'_, PyModule>,
+        from: super::color::ColorLike,
+        to: super::color::ColorLike,
+        amount: f32,
+    ) -> PyResult<super::color::PyColor> {
+        let mode = current_color_mode(module)?;
+        Ok(super::color::lerp_color(from.into_color()?, to.into_color()?, amount, &mode).into())
+    }
+
     #[pyfunction(name = "color")]
     #[pyo3(pass_module, signature = (*args))]
     fn create_color(
@@ -1406,13 +1730,7 @@ pub mod processing_py {
     #[pyfunction]
     #[pyo3(pass_module, signature = (*args))]
     fn background(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
-        let graphics = graphics!(module);
-        let first = args.get_item(0)?;
-        if first.is_instance_of::<Image>() {
-            graphics.background_image(&*first.extract::<PyRef<Image>>()?)
-        } else {
-            graphics.background(args)
-        }
+        graphics!(module).background(args)
     }
 
     #[pyfunction]
@@ -1482,6 +1800,39 @@ pub mod processing_py {
     #[pyo3(pass_module, signature = (mode))]
     fn blend_mode(module: &Bound<'_, PyModule>, mode: &Bound<'_, PyBlendMode>) -> PyResult<()> {
         graphics!(module).blend_mode(&*mode.extract::<PyRef<PyBlendMode>>()?)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (*args))]
+    fn camera(module: &Bound<'_, PyModule>, args: &Bound<'_, PyTuple>) -> PyResult<()> {
+        graphics!(module).camera(args)
+    }
+
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (fov=None, aspect=None, near=None, far=None))]
+    fn perspective(
+        module: &Bound<'_, PyModule>,
+        fov: Option<f32>,
+        aspect: Option<f32>,
+        near: Option<f32>,
+        far: Option<f32>,
+    ) -> PyResult<()> {
+        graphics!(module).perspective(fov, aspect, near, far)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (left=None, right=None, bottom=None, top=None, near=None, far=None))]
+    fn ortho(
+        module: &Bound<'_, PyModule>,
+        left: Option<f32>,
+        right: Option<f32>,
+        bottom: Option<f32>,
+        top: Option<f32>,
+        near: Option<f32>,
+        far: Option<f32>,
+    ) -> PyResult<()> {
+        graphics!(module).ortho(left, right, bottom, top, near, far)
     }
 
     #[pyfunction]
@@ -1669,22 +2020,14 @@ pub mod processing_py {
         Shader::from_path(path)
     }
 
-    fn apply_light_transform(
-        light: &Light,
-        position: Option<super::math::Vec3Like>,
-        look_at: Option<super::math::Vec3Like>,
-    ) -> PyResult<()> {
-        if let Some(p) = position {
-            ::processing::prelude::transform_set_position(light.entity, p.into_vec3())
-                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        }
-        if let Some(la) = look_at {
-            ::processing::prelude::transform_look_at(light.entity, la.into_vec3())
-                .map_err(|e| PyRuntimeError::new_err(format!("{e}")))?;
-        }
-        Ok(())
+    /// Adds a light to this frame.
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (light))]
+    fn light(module: &Bound<'_, PyModule>, light: &Bound<'_, Light>) -> PyResult<()> {
+        graphics!(module).light(&*light.extract::<PyRef<Light>>()?)
     }
 
+    /// Adds a directional light to this frame.
     #[pyfunction]
     #[pyo3(pass_module, signature = (color, illuminance, *, position=None, look_at=None))]
     fn directional_light(
@@ -1693,14 +2036,11 @@ pub mod processing_py {
         illuminance: f32,
         position: Option<super::math::Vec3Like>,
         look_at: Option<super::math::Vec3Like>,
-    ) -> PyResult<Light> {
-        let graphics =
-            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        let light = graphics.light_directional(color, illuminance)?;
-        apply_light_transform(&light, position, look_at)?;
-        Ok(light)
+    ) -> PyResult<()> {
+        graphics!(module).directional_light(color, illuminance, position, look_at)
     }
 
+    /// Adds a point light to this frame.
     #[pyfunction]
     #[pyo3(pass_module, signature = (color, intensity, range, radius, *, position=None, look_at=None))]
     fn point_light(
@@ -1711,16 +2051,14 @@ pub mod processing_py {
         radius: f32,
         position: Option<super::math::Vec3Like>,
         look_at: Option<super::math::Vec3Like>,
-    ) -> PyResult<Light> {
-        let graphics =
-            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        let light = graphics.light_point(color, intensity, range, radius)?;
-        apply_light_transform(&light, position, look_at)?;
-        Ok(light)
+    ) -> PyResult<()> {
+        graphics!(module).point_light(color, intensity, range, radius, position, look_at)
     }
 
+    /// Adds a spot light to this frame.
     #[pyfunction]
     #[pyo3(pass_module, signature = (color, intensity, range, radius, inner_angle, outer_angle, *, position=None, look_at=None))]
+    #[allow(clippy::too_many_arguments)]
     fn spot_light(
         module: &Bound<'_, PyModule>,
         color: super::color::ColorLike,
@@ -1731,13 +2069,78 @@ pub mod processing_py {
         outer_angle: f32,
         position: Option<super::math::Vec3Like>,
         look_at: Option<super::math::Vec3Like>,
+    ) -> PyResult<()> {
+        graphics!(module).spot_light(
+            color,
+            intensity,
+            range,
+            radius,
+            inner_angle,
+            outer_angle,
+            position,
+            look_at,
+        )
+    }
+
+    /// Creates a directional light.
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (color, illuminance, *, position=None, look_at=None))]
+    fn create_directional_light(
+        module: &Bound<'_, PyModule>,
+        color: super::color::ColorLike,
+        illuminance: f32,
+        position: Option<super::math::Vec3Like>,
+        look_at: Option<super::math::Vec3Like>,
     ) -> PyResult<Light> {
-        let graphics =
-            get_graphics(module)?.ok_or_else(|| PyRuntimeError::new_err("call size() first"))?;
-        let light =
-            graphics.light_spot(color, intensity, range, radius, inner_angle, outer_angle)?;
-        apply_light_transform(&light, position, look_at)?;
-        Ok(light)
+        get_graphics(module)?
+            .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?
+            .create_directional_light(color, illuminance, position, look_at)
+    }
+
+    /// Creates a point light.
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (color, intensity, range, radius, *, position=None, look_at=None))]
+    fn create_point_light(
+        module: &Bound<'_, PyModule>,
+        color: super::color::ColorLike,
+        intensity: f32,
+        range: f32,
+        radius: f32,
+        position: Option<super::math::Vec3Like>,
+        look_at: Option<super::math::Vec3Like>,
+    ) -> PyResult<Light> {
+        get_graphics(module)?
+            .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?
+            .create_point_light(color, intensity, range, radius, position, look_at)
+    }
+
+    /// Creates a spot light.
+    #[pyfunction]
+    #[pyo3(pass_module, signature = (color, intensity, range, radius, inner_angle, outer_angle, *, position=None, look_at=None))]
+    #[allow(clippy::too_many_arguments)]
+    fn create_spot_light(
+        module: &Bound<'_, PyModule>,
+        color: super::color::ColorLike,
+        intensity: f32,
+        range: f32,
+        radius: f32,
+        inner_angle: f32,
+        outer_angle: f32,
+        position: Option<super::math::Vec3Like>,
+        look_at: Option<super::math::Vec3Like>,
+    ) -> PyResult<Light> {
+        get_graphics(module)?
+            .ok_or_else(|| PyRuntimeError::new_err("call size() first"))?
+            .create_spot_light(
+                color,
+                intensity,
+                range,
+                radius,
+                inner_angle,
+                outer_angle,
+                position,
+                look_at,
+            )
     }
 
     #[pyfunction(name = "sphere")]
@@ -2320,7 +2723,7 @@ pub mod processing_py {
 
     #[pyfunction]
     #[pyo3(pass_module)]
-    fn get(module: &Bound<'_, PyModule>, x: u32, y: u32) -> PyResult<PyColor> {
+    fn get(module: &Bound<'_, PyModule>, x: i64, y: i64) -> PyResult<PyColor> {
         graphics!(module).get(x, y)
     }
 
@@ -2328,8 +2731,8 @@ pub mod processing_py {
     #[pyo3(pass_module, signature = (x, y, *args))]
     fn set(
         module: &Bound<'_, PyModule>,
-        x: u32,
-        y: u32,
+        x: i64,
+        y: i64,
         args: &Bound<'_, PyTuple>,
     ) -> PyResult<()> {
         graphics!(module).set(x, y, args)
@@ -2506,6 +2909,27 @@ pub mod processing_py {
     #[pyfunction]
     fn midi_note_off(note: u8) -> PyResult<()> {
         midi::note_off(note)
+    }
+    #[pyfunction]
+    fn midi_list_input_ports() -> PyResult<Vec<String>> {
+        midi::list_input_ports()
+    }
+    /// Connect to a MIDI input and return its name. `port` is a number from
+    /// `midi_list_input_ports()` or part of a port name like `"IAC"`; the
+    /// default is the first port.
+    #[pyfunction]
+    #[pyo3(signature = (port=None))]
+    fn midi_connect_input(port: Option<&Bound<'_, PyAny>>) -> PyResult<String> {
+        midi::connect_input(port)
+    }
+    #[pyfunction]
+    fn midi_disconnect_input() -> PyResult<()> {
+        midi::disconnect_input()
+    }
+    /// Every MIDI message received since the last call, oldest first.
+    #[pyfunction]
+    fn midi_read() -> PyResult<Vec<midi::PyMidiMessage>> {
+        midi::read()
     }
 
     #[pyfunction]

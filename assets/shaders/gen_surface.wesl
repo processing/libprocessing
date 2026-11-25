@@ -40,7 +40,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     h = h + 0.25 * h * abs(h);
 
     position[i * 3u + 0u] = x;
-    position[i * 3u + 1u] = h;
+    position[i * 3u + 1u] = -h;
     position[i * 3u + 2u] = z;
 
     if gx + 1u < nx && gy + 1u < ny {

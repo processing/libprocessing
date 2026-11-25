@@ -26,12 +26,12 @@ def setup():
     # Saving trefoil surface into a geometry
     trefoil = create_trefoil(350, 60, 15)
 
-    # ambient(250, 250, 250); pointLight(255, 255, 255, 0, 0, 200)
-    point_light((1.0, 1.0, 1.0), 1000000.0, 600.0, 1.0, position=(0, 0, 200))
     roughness(0.6)
 
 
 def draw():
+    # ambient(250, 250, 250); pointLight(255, 255, 255, 0, 0, 200)
+    point_light((1.0, 1.0, 1.0), 1000000.0, 600.0, 1.0, position=(0, 0, 200))
     background(0.0)
 
     pg.begin_draw()

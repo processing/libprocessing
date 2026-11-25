@@ -4,6 +4,7 @@ import math
 p = None
 particle = None
 mat = None
+sun = None
 spawn = None
 motion = None
 
@@ -11,17 +12,17 @@ CAPACITY = 40000
 BURST = 120
 DT = 1.0 / 60.0
 TTL = 2.5
-GRAVITY = 9.8
+GRAVITY = -9.8
 SPEED = 5.0
 
 
 def setup():
-    global p, particle, mat, spawn, motion
+    global p, particle, mat, sun, spawn, motion
 
     size(900, 700)
     mode_3d()
 
-    directional_light((0.95, 0.9, 0.85), 800.0)
+    sun = create_directional_light((0.95, 0.9, 0.85), 800.0)
 
     particle = Geometry.sphere(0.12, 8, 6)
 
@@ -47,9 +48,10 @@ def setup():
 
 
 def draw():
-    camera_position(0.0, 4.0, 16.0)
-    camera_look_at(0.0, 2.0, 0.0)
+    camera_position(0.0, -4.0, 16.0)
+    camera_look_at(0.0, -2.0, 0.0)
     background(10, 10, 18)
+    light(sun)
 
     material(mat)
     particles(p, particle)
@@ -57,7 +59,7 @@ def draw():
     t = elapsed_time
     sx = math.cos(t) * 0.4
     sz = math.sin(t) * 0.4
-    spawn.set(pos=[sx, 7.0, sz, 0.0], speed=[SPEED, 0.0, 0.0, 0.0])
+    spawn.set(pos=[sx, -7.0, sz, 0.0], speed=[SPEED, 0.0, 0.0, 0.0])
     p.emit_gpu(BURST, spawn)
 
     motion.set(dt=DT, ttl=TTL, gravity=GRAVITY)

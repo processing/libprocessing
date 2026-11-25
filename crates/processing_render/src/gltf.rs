@@ -6,23 +6,68 @@ use bevy::{
         AssetPath, LoadState, handle_internal_asset_events,
         io::{AssetSourceId, embedded::GetAssetServer},
     },
-    camera::visibility::RenderLayers,
     ecs::system::RunSystemOnce,
-    gltf::{Gltf, GltfMaterial, GltfMeshName},
+    gltf::{Gltf, GltfMaterial, GltfMaterialName, GltfMeshName},
     pbr::ExtendedMaterial,
+    platform::collections::HashSet,
     prelude::*,
-    world_serialization::WorldInstanceSpawner,
+    world_serialization::{InstanceId, WorldInstanceSpawner},
 };
 
 use crate::geometry::{BuiltinAttributes, Geometry, layout::VertexLayout};
 use crate::graphics;
+use crate::light::{LightOf, ProcessingLight};
 use crate::material::ProcessingMaterial;
+use crate::render::command::LightKind;
 use crate::render::material::{ProcessingExtendedMaterial, UntypedMaterial};
 use processing_core::config::{Config, ConfigKey};
 use processing_core::error::{ProcessingError, Result};
 
 #[derive(Component)]
 pub struct GltfNodeTransform(pub Transform);
+
+/// Mesh assets already mirrored into the y-down world; a glTF loaded twice shares them
+#[derive(Resource, Default)]
+struct MirroredMeshes(HashSet<AssetId<Mesh>>);
+
+/// `M * T * M` for the y mirror `M`: conjugating every local transform mirrors the hierarchy
+fn mirror_y(t: Transform) -> Transform {
+    let q = t.rotation;
+    Transform {
+        translation: Vec3::new(t.translation.x, -t.translation.y, t.translation.z),
+        rotation: Quat::from_xyzw(-q.x, q.y, -q.z, q.w),
+        scale: t.scale,
+    }
+}
+
+/// glTF is y-up and the Processing world is y-down, so a scene is mirrored on import to
+/// render as authored.
+fn mirror_instance(world: &mut World, instance_id: InstanceId) {
+    world.init_resource::<MirroredMeshes>();
+    let entities: Vec<Entity> = world
+        .resource::<WorldInstanceSpawner>()
+        .iter_instance_entities(instance_id)
+        .collect();
+    for &e in &entities {
+        if let Some(mut t) = world.get_mut::<Transform>(e) {
+            *t = mirror_y(*t);
+        }
+    }
+    let handles: Vec<Handle<Mesh>> = entities
+        .iter()
+        .filter_map(|&e| world.get::<Mesh3d>(e).map(|m| m.0.clone()))
+        .collect();
+    world.resource_scope(|world, mut meshes: Mut<Assets<Mesh>>| {
+        let mut done = world.resource_mut::<MirroredMeshes>();
+        for handle in handles {
+            if done.0.insert(handle.id())
+                && let Some(mut mesh) = meshes.get_mut(&handle)
+            {
+                crate::geometry::mirror_y(&mut mesh);
+            }
+        }
+    });
+}
 
 fn resolve_asset_path(config: &Config, path: &str) -> AssetPath<'static> {
     let asset_path = AssetPath::parse(path).into_owned();
@@ -118,6 +163,8 @@ pub fn load(
         }
     }
 
+    mirror_instance(world, instance_id);
+
     let entity = world
         .spawn(GltfHandle {
             handle,
@@ -138,21 +185,7 @@ pub fn geometry(
     let instance_id = gltf_handle.instance_id;
 
     let (mesh_handle, global_transform) = {
-        let spawner = world.resource::<WorldInstanceSpawner>();
-
-        // find the mesh with the given name component that bevy added post-spawn
-        // name is derived from gltf node or computed
-        let mesh_entity = spawner
-            .iter_instance_entities(instance_id)
-            .find(|&e| {
-                world
-                    .get::<GltfMeshName>(e)
-                    .map(|n| n.0 == name)
-                    .unwrap_or(false)
-            })
-            .ok_or_else(|| {
-                ProcessingError::GltfLoadError(format!("Mesh '{}' not found in GLTF scene", name))
-            })?;
+        let mesh_entity = find_mesh_entity(world, instance_id, &name)?;
 
         let mesh3d = world.get::<Mesh3d>(mesh_entity).ok_or_else(|| {
             ProcessingError::GltfLoadError(format!(
@@ -180,6 +213,61 @@ pub fn geometry(
         ))
         .id();
     Ok(entity)
+}
+
+/// The scene entity bevy spawned for a mesh, by the name it gave that mesh.
+fn find_mesh_entity(
+    world: &World,
+    instance_id: bevy::world_serialization::InstanceId,
+    name: &str,
+) -> Result<Entity> {
+    world
+        .resource::<WorldInstanceSpawner>()
+        .iter_instance_entities(instance_id)
+        .find(|&e| world.get::<GltfMeshName>(e).is_some_and(|n| n.0 == name))
+        .ok_or_else(|| {
+            ProcessingError::GltfLoadError(format!("Mesh '{}' not found in GLTF scene", name))
+        })
+}
+
+/// The base color texture of a mesh's material.
+pub fn texture(In((gltf_entity, name)): In<(Entity, String)>, world: &mut World) -> Result<Entity> {
+    let gltf_handle = world
+        .get::<GltfHandle>(gltf_entity)
+        .ok_or(ProcessingError::InvalidEntity)?;
+    let (instance_id, handle) = (gltf_handle.instance_id, gltf_handle.handle.clone());
+
+    let mesh_entity = find_mesh_entity(world, instance_id, &name)?;
+    let material_name = world
+        .get::<GltfMaterialName>(mesh_entity)
+        .ok_or_else(|| ProcessingError::GltfLoadError(format!("Mesh '{}' has no material", name)))?
+        .0
+        .clone();
+
+    let texture = {
+        let gltf = world
+            .resource::<Assets<Gltf>>()
+            .get(&handle)
+            .ok_or_else(|| ProcessingError::GltfLoadError("GLTF asset not found".into()))?;
+        let material = gltf
+            .named_materials
+            .get(material_name.as_str())
+            .and_then(|h| world.resource::<Assets<GltfMaterial>>().get(h))
+            .ok_or_else(|| {
+                ProcessingError::GltfLoadError(format!(
+                    "Material '{}' not found in GLTF",
+                    material_name
+                ))
+            })?;
+        material.base_color_texture.clone().ok_or_else(|| {
+            ProcessingError::GltfLoadError(format!("Mesh '{}' has no texture", name))
+        })?
+    };
+
+    block_on_load(world, |w| w.get_asset_server().load_state(&texture))?;
+    world
+        .run_system_once_with(crate::image::from_handle, texture)
+        .unwrap()
 }
 
 /// Translate a bevy [`GltfMaterial`] into the [`StandardMaterial`] base of a
@@ -308,7 +396,7 @@ pub fn camera(In((gltf_entity, index)): In<(Entity, usize)>, world: &mut World) 
     match projection {
         Projection::Perspective(p) => {
             world
-                .run_system_cached_with(graphics::perspective, (graphics_entity, p))
+                .run_system_cached_with(graphics::perspective, (graphics_entity, p, false))
                 .unwrap()?;
         }
         Projection::Orthographic(o) => {
@@ -320,8 +408,8 @@ pub fn camera(In((gltf_entity, index)): In<(Entity, usize)>, world: &mut World) 
                         graphics::OrthoArgs {
                             left: o.area.min.x,
                             right: o.area.max.x,
-                            bottom: o.area.min.y,
-                            top: o.area.max.y,
+                            bottom: -o.area.max.y,
+                            top: -o.area.min.y,
                             near: o.near,
                             far: o.far,
                         },
@@ -344,6 +432,7 @@ pub fn camera(In((gltf_entity, index)): In<(Entity, usize)>, world: &mut World) 
     Ok(())
 }
 
+/// Creates a light from a light in the scene.
 pub fn light(In((gltf_entity, index)): In<(Entity, usize)>, world: &mut World) -> Result<Entity> {
     let gltf_handle = world
         .get::<GltfHandle>(gltf_entity)
@@ -355,11 +444,7 @@ pub fn light(In((gltf_entity, index)): In<(Entity, usize)>, world: &mut World) -
         let spawner = world.resource::<WorldInstanceSpawner>();
         spawner
             .iter_instance_entities(instance_id)
-            .filter(|&e| {
-                world.get::<DirectionalLight>(e).is_some()
-                    || world.get::<PointLight>(e).is_some()
-                    || world.get::<SpotLight>(e).is_some()
-            })
+            .filter(|&e| scene_light_kind(world, e).is_some())
             .collect()
     };
 
@@ -367,16 +452,35 @@ pub fn light(In((gltf_entity, index)): In<(Entity, usize)>, world: &mut World) -
         ProcessingError::GltfLoadError(format!("Light index {} not found", index))
     })?;
 
-    let render_layers = world
-        .get::<RenderLayers>(graphics_entity)
-        .ok_or(ProcessingError::GraphicsNotFound)?
-        .clone();
-    world.entity_mut(scene_light_entity).insert(render_layers);
-
+    let kind = scene_light_kind(world, scene_light_entity).ok_or(ProcessingError::LightNotFound)?;
     let global = compute_global_transform(world, scene_light_entity);
-    *world
-        .get_mut::<Transform>(scene_light_entity)
-        .ok_or(ProcessingError::GraphicsNotFound)? = global;
+    Ok(world
+        .spawn((ProcessingLight(kind), global, LightOf(graphics_entity)))
+        .id())
+}
 
-    Ok(scene_light_entity)
+fn scene_light_kind(world: &World, entity: Entity) -> Option<LightKind> {
+    if let Some(light) = world.get::<DirectionalLight>(entity) {
+        return Some(LightKind::Directional {
+            color: light.color,
+            illuminance: light.illuminance,
+        });
+    }
+    if let Some(light) = world.get::<PointLight>(entity) {
+        return Some(LightKind::Point {
+            color: light.color,
+            intensity: light.intensity,
+            range: light.range,
+            radius: light.radius,
+        });
+    }
+    let light = world.get::<SpotLight>(entity)?;
+    Some(LightKind::Spot {
+        color: light.color,
+        intensity: light.intensity,
+        range: light.range,
+        radius: light.radius,
+        inner_angle: light.inner_angle,
+        outer_angle: light.outer_angle,
+    })
 }

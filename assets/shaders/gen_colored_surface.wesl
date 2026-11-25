@@ -33,7 +33,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     let h = height(x, z, t);
     position[i * 3u + 0u] = x;
-    position[i * 3u + 1u] = h;
+    position[i * 3u + 1u] = -h;
     position[i * 3u + 2u] = z;
 
     let e = 0.12;
@@ -41,7 +41,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let hr = height(x + e, z, t);
     let hd = height(x, z - e, t);
     let hu = height(x, z + e, t);
-    let n = normalize(vec3<f32>(hl - hr, 2.0 * e, hd - hu));
+    let n = normalize(vec3<f32>(hl - hr, -2.0 * e, hd - hu));
     normal[i * 3u + 0u] = n.x;
     normal[i * 3u + 1u] = n.y;
     normal[i * 3u + 2u] = n.z;

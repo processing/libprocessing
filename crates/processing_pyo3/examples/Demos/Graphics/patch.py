@@ -21,13 +21,13 @@ patch = None
 def setup():
     size(1024, 768)
     mode_3d()
-    # lights()
-    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     roughness(0.6)
     build()
 
 
 def draw():
+    # lights()
+    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     background(1.0)
     scale(0.9)
     rotate_y(remap(mouse_x, 0, width, -PI, PI))

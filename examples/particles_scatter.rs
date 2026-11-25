@@ -47,10 +47,10 @@ fn sketch() -> error::Result<()> {
     let graphics = graphics_create(surface, 900, 700, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(0.0, 0.4, 4.5))?;
+    transform_set_position(graphics, Vec3::new(0.0, -0.4, 4.5))?;
     transform_look_at(graphics, Vec3::ZERO)?;
 
-    let _key =
+    let key =
         light_create_directional(graphics, bevy::color::Color::srgb(1.0, 0.95, 0.85), 4500.0)?;
 
     let source = geometry_sphere(1.2, 96, 48)?;
@@ -86,6 +86,7 @@ fn sketch() -> error::Result<()> {
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;
+        graphics_light(graphics, key)?;
         graphics_record_command(
             graphics,
             DrawCommand::BackgroundColor(bevy::color::Color::srgb(0.03, 0.03, 0.05)),
@@ -104,7 +105,7 @@ fn sketch() -> error::Result<()> {
         let t = start.elapsed().as_secs_f32();
         let cam_x = (t * 0.25).cos() * 4.5;
         let cam_z = (t * 0.25).sin() * 4.5;
-        transform_set_position(graphics, Vec3::new(cam_x, 0.4, cam_z))?;
+        transform_set_position(graphics, Vec3::new(cam_x, -0.4, cam_z))?;
         transform_look_at(graphics, Vec3::ZERO)?;
 
         compute_set(

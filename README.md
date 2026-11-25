@@ -73,9 +73,28 @@ uv run sketch.py
 
 _Note: you can use any file name you want for your sketch_
 
+#### Hot reloading
+
+```bash
+# turn it on for one run
+PROCESSING_HOT_RELOAD=1 uv run sketch.py
+```
+
+You can also pass `run(hot_reload=True)` in the sketch, or use the runner, which doesn't need a `run()` call at all:
+
+```bash
+uv run python -m processing_py run --hot-reload sketch.py
+```
+
 ### Rust (libprocessing)
 
 You'll need to install the Rust toolchain to work on this project. Most users will want to install Rust via [`rustup`](https://rustup.rs/), which helps manage Rust toolchain versions.
+
+libprocessing requires **Rust 1.95 or newer** (the minimum is set by `rust-version` in [`Cargo.toml`](Cargo.toml) and follows what our Bevy dependency requires). If you installed Rust a while ago, update to the latest stable toolchain before building:
+
+```bash
+rustup update stable
+```
 
 ### Clone the project and its submodules
 

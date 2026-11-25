@@ -46,7 +46,7 @@ def draw():
     for i in range(0, a.height, 4):
         for j in range(0, a.width, 4):
             stroke(values[j][i] / 255, 1.0)
-            line(j - a.width / 2, a.height / 2 - i, -values[j][i], j - a.width / 2, a.height / 2 - i, -values[j][i] - 10)  # GAP: 3D line(x1, y1, z1, x2, y2, z2)
+            line(j - a.width / 2, i - a.height / 2, -values[j][i], j - a.width / 2, i - a.height / 2, -values[j][i] - 10)  # GAP: 3D line(x1, y1, z1, x2, y2, z2)
 
 
 run()

@@ -56,7 +56,7 @@ def draw():
 
     t = elapsed_time * 0.12
     r = BOX * 3.0
-    camera_position(cos(t) * r, BOX * 0.9, sin(t) * r)
+    camera_position(cos(t) * r, -BOX * 0.9, sin(t) * r)
     camera_look_at(0.0, 0.0, 0.0)
 
     p.apply(INTEGRATE, dt=DT)

@@ -6,6 +6,8 @@ pub type Result<T> = std::result::Result<T, ProcessingError>;
 pub enum ProcessingError {
     #[error("App was accessed from multiple threads")]
     AppAccess,
+    #[error("Not initialized yet; call size() first")]
+    AppNotInitialized,
     #[error("Error initializing tracing: {0}")]
     Tracing(#[from] tracing::subscriber::SetGlobalDefaultError),
     #[error("Surface not found")]
@@ -32,6 +34,10 @@ pub enum ProcessingError {
     TransformNotFound,
     #[error("Material not found")]
     MaterialNotFound,
+    #[error("Light not found")]
+    LightNotFound,
+    #[error("Light belongs to another graphics")]
+    LightOnOtherGraphics,
     #[error("Unknown shader property: {0}")]
     UnknownShaderProperty(String),
     #[error("GLTF load error: {0}")]
@@ -44,6 +50,12 @@ pub enum ProcessingError {
     ShaderNotFound,
     #[error("MIDI port {0} not found")]
     MidiPortNotFound(usize),
+    #[error("No MIDI port matching {0:?}; available ports: {1}")]
+    MidiPortNameNotFound(String, String),
+    #[error("No MIDI input connected; call midi_connect_input() first")]
+    MidiInputNotConnected,
+    #[error("MIDI connection failed: {0}")]
+    MidiConnectionFailed(String),
     #[error("CUDA error: {0}")]
     CudaError(String),
     #[error("Compute shader not found")]

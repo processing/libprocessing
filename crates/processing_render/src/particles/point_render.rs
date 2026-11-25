@@ -114,6 +114,7 @@ impl Specializer<RenderPipeline> for RasterSpecializer {
         descriptor.multisample.count = key.samples;
         let topology = Topology::from_u8(key.topology).unwrap_or(Topology::PointList);
         descriptor.primitive.topology = topology.to_primitive_topology();
+        crate::material::apply_processing_winding(descriptor);
 
         let mut defs: Vec<&str> = Vec::new();
         if key.has_color {

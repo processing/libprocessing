@@ -25,7 +25,7 @@ def draw():
 
     t = elapsed_time
     d = EXTENT * 1.4
-    camera_position(cos(t * 0.1) * d, EXTENT * 0.7, sin(t * 0.1) * d)
+    camera_position(cos(t * 0.1) * d, -EXTENT * 0.7, sin(t * 0.1) * d)
     camera_look_at(0.0, 0.0, 0.0)
 
     gen.set(nx=NX, ny=NY, time=t, extent=EXTENT)

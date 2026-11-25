@@ -28,6 +28,8 @@ pub enum MaterialKey {
         base_color_texture: Option<Handle<Image>>,
         uv_transform: Affine2,
         blend_state: Option<BlendState>,
+        /// blend even with an opaque albedo (e.g. translucent vertex colors)
+        transparent: bool,
     },
     Custom {
         entity: Entity,
@@ -43,6 +45,7 @@ pub struct PbrFields {
     pub base_color_texture: Option<Handle<Image>>,
     pub uv_transform: Affine2,
     pub blend_state: Option<BlendState>,
+    pub transparent: bool,
 }
 
 impl Default for PbrFields {
@@ -55,6 +58,7 @@ impl Default for PbrFields {
             base_color_texture: None,
             uv_transform: Affine2::IDENTITY,
             blend_state: None,
+            transparent: false,
         }
     }
 }
@@ -69,6 +73,7 @@ impl From<PbrFields> for MaterialKey {
             base_color_texture: f.base_color_texture,
             uv_transform: f.uv_transform,
             blend_state: f.blend_state,
+            transparent: f.transparent,
         }
     }
 }
@@ -84,8 +89,10 @@ impl MaterialKey {
                 base_color_texture,
                 uv_transform,
                 blend_state,
+                transparent,
             } => PbrFields {
                 albedo: *albedo,
+                transparent: *transparent,
                 roughness: *roughness,
                 metallic: *metallic,
                 emissive: *emissive,
@@ -94,6 +101,30 @@ impl MaterialKey {
                 blend_state: *blend_state,
             },
             _ => PbrFields::default(),
+        }
+    }
+
+    /// The same key, but rendered in the blended phase (translucent vertex colors). Custom
+    /// materials own their blend state and are returned unchanged.
+    pub fn transparent(self) -> MaterialKey {
+        match self {
+            MaterialKey::Color {
+                background_image,
+                uv_transform,
+                blend_state,
+                ..
+            } => MaterialKey::Color {
+                transparent: true,
+                background_image,
+                uv_transform,
+                blend_state,
+            },
+            MaterialKey::Pbr { .. } => {
+                let mut pbr = self.as_pbr();
+                pbr.transparent = true;
+                pbr.into()
+            }
+            custom => custom,
         }
     }
 
@@ -132,7 +163,8 @@ impl MaterialKey {
                 emissive,
                 base_color_texture,
                 uv_transform,
-                ..
+                blend_state,
+                transparent,
             } => {
                 let base_color = Color::srgba(
                     albedo[0] as f32 / 255.0,
@@ -144,6 +176,11 @@ impl MaterialKey {
                     base_color,
                     unlit: false,
                     cull_mode: None,
+                    alpha_mode: if blend_state.is_some() || albedo[3] < 255 || *transparent {
+                        AlphaMode::Blend
+                    } else {
+                        AlphaMode::Opaque
+                    },
                     perceptual_roughness: *roughness as f32 / 255.0,
                     metallic: *metallic as f32 / 255.0,
                     emissive: LinearRgba::new(
@@ -164,9 +201,11 @@ impl MaterialKey {
     pub fn to_material(
         &self,
         materials: &mut ResMut<Assets<ProcessingExtendedMaterial>>,
+        depth_bias: f32,
     ) -> UntypedHandle {
         let blend_state = self.blend_state();
-        let base = self.to_standard_material();
+        let mut base = self.to_standard_material();
+        base.depth_bias = depth_bias;
         let extended = ProcessingExtendedMaterial {
             base,
             extension: ProcessingMaterial {

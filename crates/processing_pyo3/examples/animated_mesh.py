@@ -17,7 +17,7 @@ def setup():
             px = x * spacing - offset
             pz = z * spacing - offset
             geometry.color(x/grid_size, 0.5, z/grid_size, 1.0)
-            geometry.normal(0.0, 1.0, 0.0)
+            geometry.normal(0.0, -1.0, 0.0)
             geometry.vertex(px, 0.0, pz)
 
     for z in range(grid_size-1):
@@ -43,7 +43,7 @@ def draw():
     global spacing
     global time
 
-    camera_position(150.0, 150.0, 150.0)
+    camera_position(150.0, -150.0, 150.0)
     camera_look_at( 0.0, 0.0, 0.0)
     background(220, 200, 140)
 
@@ -53,7 +53,7 @@ def draw():
             px = x * spacing - offset
             pz = z * spacing - offset
             wave = sin(px * 0.1 + time) * cos(pz * 0.1 + time) * 20.0
-            geometry.set_vertex(idx, px, wave, pz)
+            geometry.set_vertex(idx, px, -wave, pz)
 
     draw_geometry(geometry)
 

@@ -21,6 +21,11 @@ fn is_wayland(glfw: &Glfw) -> bool {
     cfg!(target_os = "linux") && glfw.get_platform() == glfw::Platform::Wayland
 }
 
+/// Capture runs keep windows unmapped, except on Wayland where an unmapped surface never presents.
+fn offscreen(glfw: &Glfw) -> bool {
+    processing_render::ci::enabled() && !is_wayland(glfw)
+}
+
 /// A single GLFW instance drives every window (GLFW's event pump is global). The
 /// main window is `windows[0]`; `create_window` appends more.
 pub struct GlfwContext {
@@ -70,6 +75,10 @@ impl Default for AppliedWindow {
 
 impl GlfwContext {
     pub fn new(width: u32, height: u32, transparent: bool) -> Result<Self> {
+        if processing_render::ci::enabled() {
+            // Without the menubar GLFW never becomes a foreground (Dock, focus-taking) app on macOS.
+            glfw::init_hint(glfw::InitHint::CocoaMenubar(false));
+        }
         let mut glfw = glfw::init(glfw::fail_on_errors).unwrap();
         let main = Self::spawn_window(&mut glfw, width, height, transparent, "Processing");
         Ok(Self {
@@ -129,7 +138,9 @@ impl GlfwContext {
             }
         }
 
-        window.show();
+        if !offscreen(glfw) {
+            window.show();
+        }
 
         ManagedWindow {
             window,
@@ -467,7 +478,7 @@ impl ManagedWindow {
         if desired.maximize {
             self.window.maximize();
         }
-        if desired.focus && !is_wayland(glfw) {
+        if desired.focus && !is_wayland(glfw) && !offscreen(glfw) {
             self.window.focus();
         }
 
@@ -521,7 +532,7 @@ impl ManagedWindow {
             last.size = desired.size;
         }
         if desired.visible != last.visible {
-            if desired.visible {
+            if desired.visible && !offscreen(glfw) {
                 self.window.show();
             } else {
                 self.window.hide();

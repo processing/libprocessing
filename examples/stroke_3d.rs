@@ -17,16 +17,17 @@ fn sketch() -> error::Result<()> {
     let graphics = graphics_create(surface, 600, 400, TextureFormat::Rgba16Float)?;
 
     graphics_mode_3d(graphics)?;
-    transform_set_position(graphics, Vec3::new(200.0, 150.0, 350.0))?;
+    transform_set_position(graphics, Vec3::new(200.0, -150.0, 350.0))?;
     transform_look_at(graphics, Vec3::new(0.0, 0.0, 0.0))?;
 
-    let _light =
+    let light =
         light_create_directional(graphics, bevy::color::Color::srgb(0.9, 0.85, 0.8), 800.0)?;
 
     let mut angle: f32 = 0.0;
 
     while glfw_ctx.poll_events() {
         graphics_begin_draw(graphics)?;
+        graphics_light(graphics, light)?;
 
         graphics_record_command(
             graphics,
@@ -42,7 +43,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(
             graphics,
             DrawCommand::Rotate {
-                angle,
+                angle: -angle,
                 axis: Vec3::Z,
             },
         )?;
@@ -73,7 +74,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(
             graphics,
             DrawCommand::Rotate {
-                angle: angle * 0.7,
+                angle: -angle * 0.7,
                 axis: Vec3::Z,
             },
         )?;
@@ -107,7 +108,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(
             graphics,
             DrawCommand::Rotate {
-                angle: angle * 0.5,
+                angle: -angle * 0.5,
                 axis: Vec3::Z,
             },
         )?;
@@ -141,7 +142,7 @@ fn sketch() -> error::Result<()> {
         graphics_record_command(
             graphics,
             DrawCommand::Rotate {
-                angle: -angle * 0.3,
+                angle: angle * 0.3,
                 axis: Vec3::Z,
             },
         )?;

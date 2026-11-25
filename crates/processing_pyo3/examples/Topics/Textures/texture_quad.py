@@ -15,17 +15,16 @@ def setup():
     img = load_image("data/berlin-1.jpg")
     no_stroke()
 
-    # uv coordinates are the image coordinates divided by the image size,
-    # and the world is y-up (the top edge is +100)
+    # uv coordinates are the image coordinates divided by the image size
     quad = create_geometry(topology=TRIANGLES)
     quad.uv(0, 0)
-    quad.vertex(-100, 100, 0)
-    quad.uv(1, 0)
-    quad.vertex(100, 100, 0)
-    quad.uv(1, 1)
-    quad.vertex(100, -100, 0)
-    quad.uv(0, 1)
     quad.vertex(-100, -100, 0)
+    quad.uv(1, 0)
+    quad.vertex(100, -100, 0)
+    quad.uv(1, 1)
+    quad.vertex(100, 100, 0)
+    quad.uv(0, 1)
+    quad.vertex(-100, 100, 0)
     for i in (0, 1, 2, 0, 2, 3):
         quad.index(i)
 
@@ -33,8 +32,7 @@ def setup():
 def draw():
     background(0.0)
     rotate_y(remap(mouse_x, 0, width, -PI, PI))
-    # Rotations about z run the other way in the y-up world
-    rotate_z(-PI / 6)
+    rotate_z(PI / 6)
     unlit()
     texture(img)
     draw_geometry(quad)

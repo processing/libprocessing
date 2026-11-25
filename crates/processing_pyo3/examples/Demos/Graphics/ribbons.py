@@ -35,12 +35,12 @@ def setup():
     arcball = Arcball(width / 2, height / 2, 600)
     read_pdb(pdb_file)
 
-    # ambient(80); lights()
-    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     roughness(0.6)
 
 
 def draw():
+    # ambient(80); lights()
+    directional_light((1.0, 1.0, 1.0), 4000.0, position=(0, 0, 1), look_at=(0, 0, 0))
     background(0.0)
 
     translate(0, 0, 200)

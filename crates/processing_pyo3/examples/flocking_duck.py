@@ -19,6 +19,7 @@ DT = 1.0 / 60.0
 p = None
 boid = None
 mat = None
+sun = None
 flock_pass = None
 integrate_pass = None
 center = None
@@ -51,12 +52,12 @@ def boid_geometry(half_width, length, droop):
 
 
 def setup():
-    global p, boid, mat, flock_pass, integrate_pass, center, extent, max_speed, boid_count
+    global p, boid, mat, sun, flock_pass, integrate_pass, center, extent, max_speed, boid_count
 
     size(900, 700)
     mode_3d()
 
-    directional_light((0.95, 0.9, 0.85), 800.0)
+    sun = create_directional_light((0.95, 0.9, 0.85), 800.0)
 
     gltf = load_gltf("gltf/Duck.glb")
     duck = gltf.geometry("LOD3spShape")
@@ -121,9 +122,10 @@ def draw():
 
     t = elapsed_time * 0.2
     r = extent * 1.1
-    camera_position(center[0] + cos(t) * r, center[1] + extent * 0.35, center[2] + sin(t) * r)
+    camera_position(center[0] + cos(t) * r, center[1] - extent * 0.35, center[2] + sin(t) * r)
     camera_look_at(center[0], center[1], center[2])
     background(10, 12, 18)
+    light(sun)
 
     material(mat)
     particles(p, boid)

@@ -42,13 +42,13 @@ def draw():
 
     sval = constrain(sval, 1.0, 2.0)
 
-    translate(nmx * sval - 100, -(nmy * sval - 100), -50)
+    translate(nmx * sval - 100, nmy * sval - 100, -50)
     scale(sval)
     rotate_z(PI / 9 - sval + 1.0)
     rotate_x(PI / sval / 8 - 0.125)
     rotate_y(sval / 8 - 0.125)
 
-    translate(-width / 2, height / 2, 0)
+    translate(-width / 2, -height / 2, 0)
 
     for i in range(0, img.height, res):
         for j in range(0, img.width, res):
@@ -57,7 +57,7 @@ def draw():
             bb = img_pixels[j][i].b
             tt = (rr + gg + bb) * 255
             stroke(rr, gg, gg)
-            line(i, -j, tt / 10 - 20, i, -j, tt / 10)  # GAP: 3D line(x1, y1, z1, x2, y2, z2)
+            line(i, j, tt / 10 - 20, i, j, tt / 10)  # GAP: 3D line(x1, y1, z1, x2, y2, z2)
 
 
 run()
