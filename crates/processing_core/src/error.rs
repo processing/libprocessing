@@ -56,6 +56,14 @@ pub enum ProcessingError {
     MidiInputNotConnected,
     #[error("MIDI connection failed: {0}")]
     MidiConnectionFailed(String),
+    #[error("Could not listen for OSC on port {0}: {1}")]
+    OscListenFailed(u16, String),
+    #[error("Not listening for OSC; call osc_listen() first")]
+    OscNotListening,
+    #[error("OSC receive failed: {0}")]
+    OscReceiveFailed(String),
+    #[error("OSC send failed: {0}")]
+    OscSendFailed(String),
     #[error("CUDA error: {0}")]
     CudaError(String),
     #[error("Compute shader not found")]

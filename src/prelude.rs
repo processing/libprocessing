@@ -10,6 +10,11 @@ pub use processing_midi::{
     midi_disconnect, midi_disconnect_input, midi_list_input_ports, midi_list_ports,
     midi_message_kind, midi_note_off, midi_note_on, midi_play_notes, midi_read, midi_refresh_ports,
 };
+#[cfg(not(target_arch = "wasm32"))]
+pub use processing_osc::{
+    OscArray, OscMessage, OscType, ReceivedOscMessage, osc_listen, osc_message_text, osc_read,
+    osc_send, osc_stop,
+};
 pub use processing_render::{
     render::command::{
         ArcMode, BlendMode, DrawCommand, LightKind, ShapeKind, ShapeMode, StrokeCapMode,

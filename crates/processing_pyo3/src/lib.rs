@@ -23,6 +23,7 @@ pub(crate) mod material;
 pub(crate) mod math;
 mod midi;
 mod monitor;
+mod osc;
 pub(crate) mod particles;
 pub(crate) mod shader;
 mod surface;
@@ -567,6 +568,8 @@ pub mod processing_py {
     use super::midi::PyMidiMessage;
     #[pymodule_export]
     use super::monitor::Monitor;
+    #[pymodule_export]
+    use super::osc::PyOscMessage;
     #[pymodule_export]
     use super::particles::Attribute;
     #[pymodule_export]
@@ -2930,6 +2933,36 @@ pub mod processing_py {
     #[pyfunction]
     fn midi_read() -> PyResult<Vec<midi::PyMidiMessage>> {
         midi::read()
+    }
+
+    /// Listen for OSC messages on `port` and return the port. Pass 0 to let
+    /// the system pick a free one. Calling it again switches ports.
+    #[pyfunction]
+    fn osc_listen(port: u16) -> PyResult<u16> {
+        osc::listen(port)
+    }
+    /// Stop listening for OSC messages.
+    #[pyfunction]
+    fn osc_stop() -> PyResult<()> {
+        osc::stop()
+    }
+    /// Send an OSC message, e.g. `osc_send("127.0.0.1", 9000, "/xy", 0.5, 0.25)`.
+    /// Arguments can be int, float, str, bool, bytes, None or lists of those.
+    /// Returns the sent `OscMessage`, with `host`/`port` set to where it went.
+    #[pyfunction]
+    #[pyo3(signature = (host, port, address, *args))]
+    fn osc_send(
+        host: &str,
+        port: u16,
+        address: &str,
+        args: &Bound<'_, pyo3::types::PyTuple>,
+    ) -> PyResult<osc::PyOscMessage> {
+        osc::send(host, port, address, args)
+    }
+    /// Every OSC message received since the last call, oldest first.
+    #[pyfunction]
+    fn osc_read() -> PyResult<Vec<osc::PyOscMessage>> {
+        osc::read()
     }
 
     #[pyfunction]
