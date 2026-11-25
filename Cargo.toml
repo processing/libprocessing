@@ -71,6 +71,7 @@ processing_cuda = { path = "crates/processing_cuda" }
 processing_pyo3 = { path = "crates/processing_pyo3" }
 processing_render = { path = "crates/processing_render" }
 processing_midi = { path = "crates/processing_midi" }
+processing_osc = { path = "crates/processing_osc" }
 processing_audio = { path = "crates/processing_audio" }
 processing_input = { path = "crates/processing_input" }
 processing_glfw = { path = "crates/processing_glfw" }
@@ -83,6 +84,7 @@ bevy = { workspace = true }
 processing_core = { workspace = true }
 processing_render = { workspace = true }
 processing_midi = { workspace = true }
+processing_osc = { workspace = true }
 processing_audio = { workspace = true }
 processing_input = { workspace = true }
 processing_webcam = { workspace = true, optional = true }
@@ -164,6 +166,10 @@ path = "examples/pbr.rs"
 [[example]]
 name = "midi"
 path = "examples/midi.rs"
+
+[[example]]
+name = "osc"
+path = "examples/osc.rs"
 
 [[example]]
 name = "gltf_load"
